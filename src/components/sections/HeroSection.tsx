@@ -2,16 +2,20 @@ import { ArrowRight, Shield, Clock, CheckCircle, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 
+const phrases = ["proteja seu negócio", "seja exclusivo!", "torne ela única!"];
+
 const HeroSection = () => {
   const [displayedText, setDisplayedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
-  const fullText = "proteja seu negócio";
+  const [phraseIndex, setPhraseIndex] = useState(0);
 
   useEffect(() => {
+    const currentPhrase = phrases[phraseIndex];
+    
     if (isTyping) {
-      if (displayedText.length < fullText.length) {
+      if (displayedText.length < currentPhrase.length) {
         const timeout = setTimeout(() => {
-          setDisplayedText(fullText.slice(0, displayedText.length + 1));
+          setDisplayedText(currentPhrase.slice(0, displayedText.length + 1));
         }, 100);
         return () => clearTimeout(timeout);
       } else {
@@ -23,11 +27,12 @@ const HeroSection = () => {
       }
     } else {
       const timeout = setTimeout(() => {
+        setPhraseIndex((prev) => (prev + 1) % phrases.length);
         setIsTyping(true);
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [displayedText, isTyping]);
+  }, [displayedText, isTyping, phraseIndex]);
 
   return (
     <section id="home" className="relative min-h-screen flex items-center hero-glow overflow-hidden">
