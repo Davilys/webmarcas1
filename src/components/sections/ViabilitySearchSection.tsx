@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Search, AlertCircle, CheckCircle, AlertTriangle, ArrowRight, MessageCircle, ShieldX, Copy, Check } from "lucide-react";
+import { useState, useRef } from "react";
+import { Search, AlertCircle, CheckCircle, AlertTriangle, ArrowRight, MessageCircle, ShieldX, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { checkViability, type ViabilityResult } from "@/lib/api/viability";
+import webmarcasIcon from "@/assets/webmarcas-icon.png";
 
 type ViabilityLevel = "high" | "medium" | "low" | "blocked" | null;
 
@@ -12,9 +13,9 @@ const ViabilitySearchSection = () => {
   const [businessArea, setBusinessArea] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [result, setResult] = useState<ViabilityResult | null>(null);
-  const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,19 +50,248 @@ const ViabilitySearchSection = () => {
     setResult(null);
     setBrandName("");
     setBusinessArea("");
-    setCopied(false);
   };
 
-  const copyLaudo = () => {
-    if (result?.laudo) {
-      navigator.clipboard.writeText(result.laudo);
-      setCopied(true);
-      toast({
-        title: "Laudo copiado!",
-        description: "O laudo foi copiado para a área de transferência.",
-      });
-      setTimeout(() => setCopied(false), 3000);
+  const getViabilityText = (level: ViabilityLevel) => {
+    switch (level) {
+      case "high": return "✅ Viável";
+      case "medium": return "⚠️ Baixa viabilidade";
+      case "low": return "❌ Alto risco de colidência";
+      case "blocked": return "❌ Marca bloqueada";
+      default: return "";
     }
+  };
+
+  const printLaudo = () => {
+    const currentDate = new Date().toLocaleString('pt-BR');
+    const viabilityText = getViabilityText(result?.level || null);
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão habilitados.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Laudo Técnico de Viabilidade - WebMarcas</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 20mm;
+          }
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #1a1a2e;
+            background: white;
+            padding: 40px;
+          }
+          .header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border-bottom: 3px solid #0ea5e9;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .logo {
+            width: 80px;
+            height: 80px;
+          }
+          .company-info h1 {
+            font-size: 28px;
+            color: #0ea5e9;
+            margin-bottom: 5px;
+          }
+          .company-info p {
+            color: #64748b;
+            font-size: 14px;
+          }
+          .title {
+            text-align: center;
+            font-size: 24px;
+            color: #1a1a2e;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 8px;
+            border-left: 4px solid #0ea5e9;
+          }
+          .info-section {
+            margin-bottom: 25px;
+          }
+          .info-section h3 {
+            font-size: 16px;
+            color: #0ea5e9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+          }
+          .info-item {
+            background: #f8fafc;
+            padding: 12px 16px;
+            border-radius: 6px;
+            border-left: 3px solid #0ea5e9;
+          }
+          .info-item label {
+            display: block;
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 4px;
+          }
+          .info-item span {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a2e;
+          }
+          .result-box {
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+          }
+          .result-high {
+            background: #dcfce7;
+            color: #166534;
+            border: 2px solid #22c55e;
+          }
+          .result-medium {
+            background: #fef9c3;
+            color: #854d0e;
+            border: 2px solid #eab308;
+          }
+          .result-low, .result-blocked {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 2px solid #ef4444;
+          }
+          .laudo-content {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 25px;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.8;
+          }
+          .laudo-content h4 {
+            color: #0ea5e9;
+            margin-bottom: 15px;
+            font-size: 16px;
+          }
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+          }
+          .footer p {
+            margin-bottom: 5px;
+          }
+          .footer .site {
+            color: #0ea5e9;
+            font-weight: 600;
+          }
+          .footer .disclaimer {
+            margin-top: 15px;
+            padding: 10px;
+            background: #fef3c7;
+            border-radius: 6px;
+            color: #92400e;
+            font-style: italic;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <img src="${webmarcasIcon}" alt="WebMarcas" class="logo" />
+          <div class="company-info">
+            <h1>WebMarcas</h1>
+            <p>Registro de Marcas</p>
+          </div>
+        </div>
+
+        <div class="title">
+          📋 Laudo Técnico de Viabilidade de Marca
+        </div>
+
+        <div class="info-section">
+          <h3>Dados da Consulta</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Nome da Marca</label>
+              <span>${brandName}</span>
+            </div>
+            <div class="info-item">
+              <label>Ramo de Atividade</label>
+              <span>${businessArea}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Resultado da Análise</h3>
+          <div class="result-box result-${result?.level || 'low'}">
+            ${viabilityText}
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Parecer Técnico Completo</h3>
+          <div class="laudo-content">
+            ${result?.laudo || result?.description || 'Análise não disponível'}
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>Documento gerado automaticamente pelo sistema WebMarcas</p>
+          <p class="site">www.webmarcas.net</p>
+          <p>Data e hora da geração: ${currentDate}</p>
+          <div class="disclaimer">
+            ⚠️ Este laudo tem caráter técnico-informativo e não substitui análise jurídica completa.
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Wait for image to load before printing
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
   };
 
   const handleRegisterClick = () => {
@@ -217,20 +447,11 @@ const ViabilitySearchSection = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={copyLaudo}
+                      onClick={printLaudo}
                       className="text-muted-foreground hover:text-foreground"
                     >
-                      {copied ? (
-                        <>
-                          <Check className="w-4 h-4 mr-1" />
-                          Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4 mr-1" />
-                          Copiar
-                        </>
-                      )}
+                      <Printer className="w-4 h-4 mr-1" />
+                      Imprimir / Salvar Laudo
                     </Button>
                   </div>
                   <div className="bg-secondary/50 rounded-xl p-4 max-h-80 overflow-y-auto">
