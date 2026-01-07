@@ -34,7 +34,7 @@ const Header = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <a href="#home" className="flex items-center gap-2">
+          <a href="/" className="flex items-center gap-2">
             <img src={webmarcasLogo} alt="WebMarcas" className="h-10 w-auto" />
             <span className="font-display text-xl font-bold">
               Web<span className="gradient-text">Marcas</span>

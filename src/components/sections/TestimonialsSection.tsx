@@ -210,8 +210,8 @@ const TestimonialsSection = () => {
         {/* Carousel Container */}
         <div className="space-y-6 -mx-4 md:-mx-8 lg:-mx-16">
           {/* Row 1 - Left to Right */}
-          <div className="relative overflow-hidden group">
-            <div className="flex gap-6 animate-scroll-left hover:[animation-play-state:paused]">
+          <div className="relative overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent group">
+            <div className="flex gap-6 animate-scroll-left hover:[animation-play-state:paused] cursor-grab active:cursor-grabbing">
               {/* Duplicate for seamless loop */}
               {[...testimonials, ...testimonials, ...testimonials].map((testimonial, index) => (
                 <TestimonialCard key={`row1-${index}`} testimonial={testimonial} />
@@ -220,8 +220,8 @@ const TestimonialsSection = () => {
           </div>
 
           {/* Row 2 - Right to Left */}
-          <div className="relative overflow-hidden group">
-            <div className="flex gap-6 animate-scroll-right hover:[animation-play-state:paused]">
+          <div className="relative overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent group">
+            <div className="flex gap-6 animate-scroll-right hover:[animation-play-state:paused] cursor-grab active:cursor-grabbing">
               {/* Duplicate for seamless loop */}
               {[...testimonials2, ...testimonials2, ...testimonials2].map((testimonial, index) => (
                 <TestimonialCard key={`row2-${index}`} testimonial={testimonial} />
