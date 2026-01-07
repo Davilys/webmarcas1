@@ -253,6 +253,33 @@
     border-color: hsl(190, 100%, 50%);
     background: hsla(190, 100%, 50%, 0.1);
   }
+
+  /* Testimonials carousel animations */
+  @keyframes scroll-left {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-33.333%);
+    }
+  }
+
+  @keyframes scroll-right {
+    0% {
+      transform: translateX(-33.333%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  .animate-scroll-left {
+    animation: scroll-left 40s linear infinite;
+  }
+
+  .animate-scroll-right {
+    animation: scroll-right 40s linear infinite;
+  }
 }
 
 /* Custom scrollbar */
