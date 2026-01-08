@@ -77,13 +77,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   if (isAdmin === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+          <p className="text-muted-foreground">Verificando permissões...</p>
+        </div>
       </div>
     );
   }
 
-  const NavContent = () => (
+  const navContent = (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b">
         <Link to="/admin/dashboard" className="flex items-center gap-2">
@@ -99,6 +102,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <nav className="space-y-1">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.href;
+            const IconComponent = item.icon;
             return (
               <Link
                 key={item.href}
@@ -111,7 +115,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                <item.icon className="h-5 w-5" />
+                <IconComponent className="h-5 w-5" />
                 {item.label}
                 {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
               </Link>
@@ -144,7 +148,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col border-r bg-card">
-        <NavContent />
+        {navContent}
       </aside>
 
       {/* Mobile Header */}
@@ -156,7 +160,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-64">
-            <NavContent />
+            {navContent}
           </SheetContent>
         </Sheet>
 
@@ -165,7 +169,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <Shield className="h-4 w-4 text-primary" />
         </Link>
 
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/admin/notificacoes')}>
           <Bell className="h-5 w-5" />
         </Button>
       </header>
