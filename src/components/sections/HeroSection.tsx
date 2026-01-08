@@ -1,6 +1,7 @@
-import { ArrowRight, Shield, Clock, CheckCircle, Award } from "lucide-react";
+import { ArrowRight, Shield, Clock, CheckCircle, Award, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { getNextFridayFormatted } from "@/lib/dateUtils";
 
 const phrases = ["proteja seu negócio", "seja exclusivo!", "torne ela única!"];
 
@@ -65,7 +66,7 @@ const HeroSection = () => {
           </p>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-slide-up" style={{ animationDelay: "0.2s" }}>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6 animate-slide-up" style={{ animationDelay: "0.2s" }}>
             <Button variant="hero" size="xl" asChild>
               <a href="#consultar" className="group">
                 Consultar viabilidade
@@ -77,6 +78,14 @@ const HeroSection = () => {
                 Registrar por R$699
               </a>
             </Button>
+          </div>
+
+          {/* Urgency Banner */}
+          <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-primary/10 border border-primary/20 max-w-md mx-auto mb-16 animate-slide-up" style={{ animationDelay: "0.25s" }}>
+            <Flame className="w-5 h-5 text-destructive" />
+            <p className="text-sm font-medium text-foreground">
+              Oferta válida até <span className="font-bold text-destructive">{getNextFridayFormatted()}</span>
+            </p>
           </div>
 
           {/* Trust badges */}
