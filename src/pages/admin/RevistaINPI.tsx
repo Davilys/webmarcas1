@@ -212,8 +212,11 @@ export default function RevistaINPI() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf') {
-      toast.error('Por favor, selecione um arquivo PDF');
+    const allowedExtensions = ['pdf', 'xml', 'xlsx', 'xls'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (!ext || !allowedExtensions.includes(ext)) {
+      toast.error('Envie um arquivo .pdf, .xml, .xlsx ou .xls');
       return;
     }
 
@@ -438,12 +441,12 @@ export default function RevistaINPI() {
               ) : (
                 <Upload className="h-4 w-4" />
               )}
-              {uploading ? 'Enviando...' : processing ? 'Analisando...' : 'Enviar PDF da Revista'}
+              {uploading ? 'Enviando...' : processing ? 'Analisando...' : 'Enviar Revista (PDF/XML/Excel)'}
             </Label>
             <Input
               id="pdf-upload"
               type="file"
-              accept=".pdf"
+              accept=".pdf,.xml,.xlsx,.xls"
               onChange={handleFileUpload}
               disabled={uploading || processing}
               className="hidden"
@@ -764,12 +767,12 @@ export default function RevistaINPI() {
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90 transition-colors"
               >
                 <Upload className="h-5 w-5" />
-                Enviar PDF da Revista INPI
-              </Label>
-              <Input
-                id="pdf-upload-empty"
-                type="file"
-                accept=".pdf"
+                 Enviar Revista (PDF/XML/Excel)
+               </Label>
+               <Input
+                 id="pdf-upload-empty"
+                 type="file"
+                 accept=".pdf,.xml,.xlsx,.xls"
                 onChange={handleFileUpload}
                 disabled={uploading}
                 className="hidden"
