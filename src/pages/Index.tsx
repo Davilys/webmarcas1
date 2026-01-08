@@ -1,6 +1,7 @@
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import WhatsAppButton from "@/components/layout/WhatsAppButton";
+import SocialProofNotification from "@/components/SocialProofNotification";
 import HeroSection from "@/components/sections/HeroSection";
 import BenefitsSection from "@/components/sections/BenefitsSection";
 import HowItWorksSection from "@/components/sections/HowItWorksSection";
@@ -26,6 +27,7 @@ const Index = () => {
       </main>
       <Footer />
       <WhatsAppButton />
+      <SocialProofNotification />
     </div>
   );
 };
