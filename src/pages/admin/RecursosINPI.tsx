@@ -8,37 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import {
-  FileText,
-  Upload,
-  Loader2,
-  Edit3,
-  Check,
-  Download,
-  Printer,
-  FileCheck,
-  History,
-  Plus,
-  Eye,
-  Search,
-  X,
-  Calendar
-} from 'lucide-react';
+import { FileText, Upload, Loader2, Edit3, Check, Download, Printer, FileCheck, History, Plus, Eye, Search, X, Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { INPIResourcePDFPreview } from '@/components/admin/INPIResourcePDFPreview';
@@ -76,7 +49,7 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
 
 export default function RecursosINPI() {
   const [step, setStep] = useState<Step>('list');
-  const [resourceType, setResourceType] = useState<string>('');
+  const [resourceType, setResourceType] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
@@ -88,11 +61,9 @@ export default function RecursosINPI() {
   const [isLoading, setIsLoading] = useState(true);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [selectedResource, setSelectedResource] = useState<INPIResource | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDate, setSearchDate] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchResources();
@@ -104,7 +75,6 @@ export default function RecursosINPI() {
         .from('inpi_resources')
         .select('*')
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setResources(data || []);
     } catch (error) {
@@ -129,46 +99,33 @@ export default function RecursosINPI() {
 
   const processDocument = async () => {
     if (!file || !resourceType) return;
-
     setIsProcessing(true);
     setStep('processing');
 
     try {
-      // Convert file to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onload = () => {
           const result = reader.result as string;
-          const base64 = result.split(',')[1];
-          resolve(base64);
+          resolve(result.split(',')[1]);
         };
         reader.onerror = reject;
       });
       reader.readAsDataURL(file);
       const fileBase64 = await base64Promise;
 
-      // Call edge function
       const { data, error } = await supabase.functions.invoke('process-inpi-resource', {
-        body: {
-          fileBase64,
-          fileType: file.type,
-          resourceType
-        }
+        body: { fileBase64, fileType: file.type, resourceType }
       });
 
       if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao processar documento');
-      }
+      if (!data.success) throw new Error(data.error || 'Erro ao processar documento');
 
       setExtractedData(data.extracted_data);
       setDraftContent(data.resource_content);
 
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Save to database
       const { data: insertedResource, error: insertError } = await supabase
         .from('inpi_resources')
         .insert({
@@ -187,11 +144,9 @@ export default function RecursosINPI() {
         .single();
 
       if (insertError) throw insertError;
-
       setCurrentResourceId(insertedResource.id);
       setStep('review');
       toast.success('Documento processado com sucesso!');
-
     } catch (error) {
       console.error('Error processing document:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao processar documento');
@@ -206,39 +161,27 @@ export default function RecursosINPI() {
       toast.error('Por favor, descreva os ajustes desejados');
       return;
     }
-
     setIsAdjusting(true);
 
     try {
       const { data, error } = await supabase.functions.invoke('adjust-inpi-resource', {
-        body: {
-          currentContent: draftContent,
-          adjustmentInstructions: adjustmentNotes
-        }
+        body: { currentContent: draftContent, adjustmentInstructions: adjustmentNotes }
       });
 
       if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao ajustar recurso');
-      }
+      if (!data.success) throw new Error(data.error || 'Erro ao ajustar recurso');
 
       setDraftContent(data.adjusted_content);
 
-      // Update in database
       if (currentResourceId) {
         await supabase
           .from('inpi_resources')
-          .update({
-            draft_content: data.adjusted_content,
-            adjustments_history: supabase.rpc ? undefined : undefined // TODO: append to history
-          })
+          .update({ draft_content: data.adjusted_content })
           .eq('id', currentResourceId);
       }
 
       setAdjustmentNotes('');
       toast.success('Recurso ajustado com sucesso!');
-
     } catch (error) {
       console.error('Error adjusting resource:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao ajustar recurso');
@@ -249,31 +192,18 @@ export default function RecursosINPI() {
 
   const handleApproveResource = async () => {
     if (!currentResourceId) return;
-
     try {
-      const now = new Date().toISOString();
-      
       await supabase
         .from('inpi_resources')
-        .update({
-          final_content: draftContent,
-          status: 'approved',
-          approved_at: now
-        })
+        .update({ final_content: draftContent, status: 'approved', approved_at: new Date().toISOString() })
         .eq('id', currentResourceId);
-
       setStep('approved');
       toast.success('Recurso aprovado! Você pode gerar o PDF agora.');
       fetchResources();
-
     } catch (error) {
       console.error('Error approving resource:', error);
       toast.error('Erro ao aprovar recurso');
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const resetFlow = () => {
@@ -285,30 +215,26 @@ export default function RecursosINPI() {
     setAdjustmentNotes('');
     setCurrentResourceId(null);
     setSelectedResource(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const openResourcePreview = (resource: INPIResource) => {
-    setSelectedResource(resource);
-    setShowPDFPreview(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft':
-        return <Badge variant="secondary">Rascunho</Badge>;
-      case 'pending_review':
-        return <Badge variant="outline" className="border-yellow-500 text-yellow-600">Em Revisão</Badge>;
-      case 'approved':
-        return <Badge variant="default" className="bg-green-600">Aprovado</Badge>;
-      case 'finalized':
-        return <Badge variant="default" className="bg-blue-600">Finalizado</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+      case 'draft': return <Badge variant="secondary">Rascunho</Badge>;
+      case 'pending_review': return <Badge variant="outline" className="border-yellow-500 text-yellow-600">Em Revisão</Badge>;
+      case 'approved': return <Badge className="bg-green-600">Aprovado</Badge>;
+      case 'finalized': return <Badge className="bg-blue-600">Finalizado</Badge>;
+      default: return <Badge variant="secondary">{status}</Badge>;
     }
   };
+
+  const filteredResources = resources.filter((resource) => {
+    const matchesQuery = !searchQuery || 
+      resource.brand_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      resource.process_number?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDate = !searchDate || format(new Date(resource.created_at), 'yyyy-MM-dd') === searchDate;
+    return matchesQuery && matchesDate;
+  });
 
   return (
     <AdminLayout>
@@ -316,9 +242,7 @@ export default function RecursosINPI() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Recursos INPI</h1>
-            <p className="text-muted-foreground">
-              Geração de recursos administrativos de marcas perante o INPI
-            </p>
+            <p className="text-muted-foreground">Geração de recursos administrativos de marcas perante o INPI</p>
           </div>
           {step === 'list' && (
             <Button onClick={() => setStep('select-type')}>
@@ -327,13 +251,10 @@ export default function RecursosINPI() {
             </Button>
           )}
           {step !== 'list' && (
-            <Button variant="outline" onClick={resetFlow}>
-              Voltar à Lista
-            </Button>
+            <Button variant="outline" onClick={resetFlow}>Voltar à Lista</Button>
           )}
         </div>
 
-        {/* Step: List */}
         {step === 'list' && (
           <Card>
             <CardHeader>
@@ -343,7 +264,6 @@ export default function RecursosINPI() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Search Bar */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -354,27 +274,16 @@ export default function RecursosINPI() {
                     className="pl-9"
                   />
                   {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
+                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       <X className="h-4 w-4" />
                     </button>
                   )}
                 </div>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="date"
-                    value={searchDate}
-                    onChange={(e) => setSearchDate(e.target.value)}
-                    className="pl-9 w-full sm:w-44"
-                  />
+                  <Input type="date" value={searchDate} onChange={(e) => setSearchDate(e.target.value)} className="pl-9 w-full sm:w-44" />
                   {searchDate && (
-                    <button
-                      onClick={() => setSearchDate('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
+                    <button onClick={() => setSearchDate('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       <X className="h-4 w-4" />
                     </button>
                   )}
@@ -382,164 +291,95 @@ export default function RecursosINPI() {
               </div>
 
               {isLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : resources.length === 0 ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : filteredResources.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum recurso criado ainda.</p>
-                  <p className="text-sm">Clique em "Criar Recurso Administrativo" para começar.</p>
+                  <p>{resources.length === 0 ? 'Nenhum recurso criado ainda.' : 'Nenhum resultado encontrado.'}</p>
                 </div>
               ) : (
-                <>
-                  {/* Filtered Resources Table */}
-                  {(() => {
-                    const filteredResources = resources.filter((resource) => {
-                      const matchesQuery = !searchQuery || 
-                        (resource.brand_name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                        (resource.process_number?.toLowerCase().includes(searchQuery.toLowerCase()));
-                      
-                      const matchesDate = !searchDate || 
-                        format(new Date(resource.created_at), 'yyyy-MM-dd') === searchDate;
-                      
-                      return matchesQuery && matchesDate;
-                    });
-
-                    if (filteredResources.length === 0) {
-                      return (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>Nenhum resultado encontrado.</p>
-                          <p className="text-sm">Tente ajustar os filtros de pesquisa.</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Marca</TableHead>
-                            <TableHead>Processo</TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Data</TableHead>
-                            <TableHead>Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredResources.map((resource) => (
-                            <TableRow key={resource.id}>
-                              <TableCell className="font-medium">{resource.brand_name || '-'}</TableCell>
-                              <TableCell>{resource.process_number || '-'}</TableCell>
-                              <TableCell>{RESOURCE_TYPE_LABELS[resource.resource_type] || resource.resource_type}</TableCell>
-                              <TableCell>{getStatusBadge(resource.status)}</TableCell>
-                              <TableCell>
-                                {format(new Date(resource.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openResourcePreview(resource)}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    );
-                  })()}
-                </>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Marca</TableHead>
+                      <TableHead>Processo</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredResources.map((resource) => (
+                      <TableRow key={resource.id}>
+                        <TableCell className="font-medium">{resource.brand_name || '-'}</TableCell>
+                        <TableCell>{resource.process_number || '-'}</TableCell>
+                        <TableCell>{RESOURCE_TYPE_LABELS[resource.resource_type] || resource.resource_type}</TableCell>
+                        <TableCell>{getStatusBadge(resource.status)}</TableCell>
+                        <TableCell>{format(new Date(resource.created_at), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => { setSelectedResource(resource); setShowPDFPreview(true); }}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Step: Select Type */}
         {step === 'select-type' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Selecione o Tipo de Recurso</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Selecione o Tipo de Recurso</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <RadioGroup
-                value={resourceType}
-                onValueChange={setResourceType}
-                className="space-y-4"
-              >
+              <RadioGroup value={resourceType} onValueChange={setResourceType} className="space-y-4">
                 <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="indeferimento" id="indeferimento" />
                   <Label htmlFor="indeferimento" className="flex-1 cursor-pointer">
                     <div className="font-medium">Recurso contra Indeferimento</div>
-                    <div className="text-sm text-muted-foreground">
-                      Para marcas que tiveram o pedido indeferido pelo INPI
-                    </div>
+                    <div className="text-sm text-muted-foreground">Para marcas que tiveram o pedido indeferido pelo INPI</div>
                   </Label>
                 </div>
                 <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="exigencia_merito" id="exigencia_merito" />
                   <Label htmlFor="exigencia_merito" className="flex-1 cursor-pointer">
                     <div className="font-medium">Cumprimento de Exigência de Mérito</div>
-                    <div className="text-sm text-muted-foreground">
-                      Para atender exigências técnicas formuladas pelo INPI
-                    </div>
+                    <div className="text-sm text-muted-foreground">Para atender exigências técnicas formuladas pelo INPI</div>
                   </Label>
                 </div>
                 <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="oposicao" id="oposicao" />
                   <Label htmlFor="oposicao" className="flex-1 cursor-pointer">
                     <div className="font-medium">Manifestação à Oposição</div>
-                    <div className="text-sm text-muted-foreground">
-                      Para responder a oposições de terceiros contra a marca
-                    </div>
+                    <div className="text-sm text-muted-foreground">Para responder a oposições de terceiros contra a marca</div>
                   </Label>
                 </div>
               </RadioGroup>
-
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!resourceType}
-                className="w-full"
-              >
+              <Button onClick={() => fileInputRef.current?.click()} disabled={!resourceType} className="w-full">
                 <Upload className="mr-2 h-4 w-4" />
                 Continuar e Anexar PDF do INPI
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
+              <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
             </CardContent>
           </Card>
         )}
 
-        {/* Step: Upload Confirmation */}
         {step === 'upload' && file && (
           <Card>
-            <CardHeader>
-              <CardTitle>Documento Selecionado</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Documento Selecionado</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                 <FileText className="h-10 w-10 text-primary" />
                 <div className="flex-1">
                   <p className="font-medium">{file.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {(file.size / 1024).toFixed(2)} KB • {RESOURCE_TYPE_LABELS[resourceType]}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(2)} KB • {RESOURCE_TYPE_LABELS[resourceType]}</p>
                 </div>
               </div>
-
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setStep('select-type')}>
-                  Voltar
-                </Button>
+                <Button variant="outline" onClick={() => setStep('select-type')}>Voltar</Button>
                 <Button onClick={processDocument} className="flex-1">
                   <FileCheck className="mr-2 h-4 w-4" />
                   Processar Documento
@@ -549,7 +389,6 @@ export default function RecursosINPI() {
           </Card>
         )}
 
-        {/* Step: Processing */}
         {step === 'processing' && (
           <Card>
             <CardContent className="py-12">
@@ -557,52 +396,30 @@ export default function RecursosINPI() {
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                 <div>
                   <h3 className="text-lg font-semibold">Processando Documento</h3>
-                  <p className="text-muted-foreground">
-                    A IA está analisando o documento e elaborando o recurso...
-                  </p>
+                  <p className="text-muted-foreground">A IA está analisando o documento e elaborando o recurso...</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Step: Review */}
         {step === 'review' && (
           <div className="space-y-6">
-            {/* Extracted Data */}
             {extractedData && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Dados Extraídos do Documento</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-lg">Dados Extraídos do Documento</CardTitle></CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Processo:</span>
-                      <p className="font-medium">{extractedData.process_number || '-'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Marca:</span>
-                      <p className="font-medium">{extractedData.brand_name || '-'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Classe NCL:</span>
-                      <p className="font-medium">{extractedData.ncl_class || '-'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Titular:</span>
-                      <p className="font-medium">{extractedData.holder || '-'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Fundamento Legal:</span>
-                      <p className="font-medium">{extractedData.legal_basis || '-'}</p>
-                    </div>
+                    <div><span className="text-muted-foreground">Processo:</span><p className="font-medium">{extractedData.process_number || '-'}</p></div>
+                    <div><span className="text-muted-foreground">Marca:</span><p className="font-medium">{extractedData.brand_name || '-'}</p></div>
+                    <div><span className="text-muted-foreground">Classe NCL:</span><p className="font-medium">{extractedData.ncl_class || '-'}</p></div>
+                    <div><span className="text-muted-foreground">Titular:</span><p className="font-medium">{extractedData.holder || '-'}</p></div>
+                    <div className="col-span-2"><span className="text-muted-foreground">Fundamento Legal:</span><p className="font-medium">{extractedData.legal_basis || '-'}</p></div>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Draft Content */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -612,16 +429,10 @@ export default function RecursosINPI() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-white dark:bg-gray-900 border rounded-lg p-6 max-h-[500px] overflow-y-auto">
-                  <pre className="whitespace-pre-wrap font-serif text-sm leading-relaxed">
-                    {draftContent}
-                  </pre>
+                  <pre className="whitespace-pre-wrap font-serif text-sm leading-relaxed">{draftContent}</pre>
                 </div>
-
-                {/* Adjustment Field */}
                 <div className="space-y-2">
-                  <Label htmlFor="adjustments">
-                    📝 Orientações para Ajuste do Recurso
-                  </Label>
+                  <Label htmlFor="adjustments">📝 Orientações para Ajuste do Recurso</Label>
                   <Textarea
                     id="adjustments"
                     placeholder="Escreva exatamente o que deseja ajustar ou corrigir. A IA deve modificar SOMENTE os pontos indicados."
@@ -629,28 +440,14 @@ export default function RecursosINPI() {
                     onChange={(e) => setAdjustmentNotes(e.target.value)}
                     rows={4}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Descreva as alterações necessárias. A IA ajustará apenas os trechos indicados.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Descreva as alterações necessárias. A IA ajustará apenas os trechos indicados.</p>
                 </div>
-
                 <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleAdjustResource}
-                    disabled={isAdjusting || !adjustmentNotes.trim()}
-                  >
-                    {isAdjusting ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Edit3 className="mr-2 h-4 w-4" />
-                    )}
+                  <Button variant="outline" onClick={handleAdjustResource} disabled={isAdjusting || !adjustmentNotes.trim()}>
+                    {isAdjusting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Edit3 className="mr-2 h-4 w-4" />}
                     Ajustar Recurso
                   </Button>
-                  <Button
-                    onClick={handleApproveResource}
-                    className="flex-1"
-                  >
+                  <Button onClick={handleApproveResource} className="flex-1">
                     <Check className="mr-2 h-4 w-4" />
                     Aprovar Recurso Final
                   </Button>
@@ -660,7 +457,6 @@ export default function RecursosINPI() {
           </div>
         )}
 
-        {/* Step: Approved */}
         {step === 'approved' && (
           <Card>
             <CardHeader>
@@ -670,19 +466,16 @@ export default function RecursosINPI() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-muted-foreground">
-                O recurso foi aprovado e está pronto para geração do PDF final com papel timbrado.
-              </p>
-
+              <p className="text-muted-foreground">O recurso foi aprovado e está pronto para geração do PDF final com papel timbrado.</p>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={handlePrint}>
+                <Button variant="outline" onClick={() => window.print()}>
                   <Printer className="mr-2 h-4 w-4" />
                   Imprimir
                 </Button>
                 <Button
                   onClick={() => {
                     if (currentResourceId) {
-                      const resource = resources.find(r => r.id === currentResourceId) || {
+                      const resource: INPIResource = {
                         id: currentResourceId,
                         resource_type: resourceType,
                         process_number: extractedData?.process_number || null,
@@ -705,15 +498,11 @@ export default function RecursosINPI() {
                   Gerar PDF com Papel Timbrado
                 </Button>
               </div>
-
-              <Button variant="ghost" onClick={resetFlow} className="w-full">
-                Criar Novo Recurso
-              </Button>
+              <Button variant="ghost" onClick={resetFlow} className="w-full">Criar Novo Recurso</Button>
             </CardContent>
           </Card>
         )}
 
-        {/* PDF Preview Dialog */}
         <Dialog open={showPDFPreview} onOpenChange={setShowPDFPreview}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
