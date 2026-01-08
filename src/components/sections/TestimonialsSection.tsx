@@ -1,4 +1,5 @@
 import { Star, Quote } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Import avatars
 import avatar1 from "@/assets/avatars/avatar-1.jpg";
@@ -188,6 +189,8 @@ const TestimonialCard = ({ testimonial }: TestimonialCardProps) => (
 );
 
 const TestimonialsSection = () => {
+  const { t } = useLanguage();
+
   return (
     <section className="section-padding bg-background relative overflow-hidden">
       {/* Background effects */}
@@ -197,13 +200,13 @@ const TestimonialsSection = () => {
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="badge-premium mb-4 inline-flex">Depoimentos</span>
+          <span className="badge-premium mb-4 inline-flex">{t("testimonials.badge")}</span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-            O que nossos clientes{" "}
-            <span className="gradient-text">dizem</span>
+            {t("testimonials.title")}{" "}
+            <span className="gradient-text">{t("testimonials.titleHighlight")}</span>
           </h2>
           <p className="text-muted-foreground text-lg">
-            Milhares de marcas protegidas e clientes satisfeitos em todo o Brasil.
+            {t("testimonials.subtitle")}
           </p>
         </div>
 

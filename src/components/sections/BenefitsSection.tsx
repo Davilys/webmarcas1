@@ -6,41 +6,44 @@ import {
   Scale, 
   Headphones 
 } from "lucide-react";
-
-const benefits = [
-  {
-    icon: Shield,
-    title: "Proteção Nacional",
-    description: "Sua marca protegida em todo território brasileiro, impedindo que outros usem seu nome.",
-  },
-  {
-    icon: FileCheck,
-    title: "Laudo de Viabilidade",
-    description: "Análise prévia gratuita que avalia as chances de sucesso do seu registro.",
-  },
-  {
-    icon: Clock,
-    title: "Protocolo em 48h",
-    description: "Após aprovação do pagamento, protocolamos sua marca no INPI em até 48 horas.",
-  },
-  {
-    icon: Scale,
-    title: "Segurança Jurídica",
-    description: "Processo conduzido por especialistas em propriedade intelectual.",
-  },
-  {
-    icon: Users,
-    title: "Acompanhamento Completo",
-    description: "Monitoramos todo o processo no INPI e respondemos a todas as exigências.",
-  },
-  {
-    icon: Headphones,
-    title: "Suporte Dedicado",
-    description: "Atendimento humanizado via WhatsApp e área do cliente exclusiva.",
-  },
-];
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const BenefitsSection = () => {
+  const { t } = useLanguage();
+
+  const benefits = [
+    {
+      icon: Shield,
+      title: t("benefits.protection.title"),
+      description: t("benefits.protection.desc"),
+    },
+    {
+      icon: FileCheck,
+      title: t("benefits.report.title"),
+      description: t("benefits.report.desc"),
+    },
+    {
+      icon: Clock,
+      title: t("benefits.protocol.title"),
+      description: t("benefits.protocol.desc"),
+    },
+    {
+      icon: Scale,
+      title: t("benefits.legal.title"),
+      description: t("benefits.legal.desc"),
+    },
+    {
+      icon: Users,
+      title: t("benefits.tracking.title"),
+      description: t("benefits.tracking.desc"),
+    },
+    {
+      icon: Headphones,
+      title: t("benefits.support.title"),
+      description: t("benefits.support.desc"),
+    },
+  ];
+
   return (
     <section id="beneficios" className="section-padding bg-card relative overflow-hidden">
       {/* Background decoration */}
@@ -49,14 +52,13 @@ const BenefitsSection = () => {
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="badge-premium mb-4 inline-flex">Por que a WebMarcas?</span>
+          <span className="badge-premium mb-4 inline-flex">{t("benefits.badge")}</span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-            Por que registrar com a{" "}
-            <span className="gradient-text">WebMarcas</span>?
+            {t("benefits.title")}{" "}
+            <span className="gradient-text">{t("benefits.titleHighlight")}</span>?
           </h2>
           <p className="text-muted-foreground text-lg">
-            Combinamos experiência jurídica com tecnologia para oferecer o melhor 
-            serviço de registro de marcas do Brasil.
+            {t("benefits.subtitle")}
           </p>
         </div>
 

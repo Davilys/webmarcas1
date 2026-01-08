@@ -1,7 +1,10 @@
 import { ArrowRight, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const CTASection = () => {
+  const { t } = useLanguage();
+
   return (
     <section className="section-padding relative overflow-hidden">
       {/* Background */}
@@ -17,19 +20,18 @@ const CTASection = () => {
 
           {/* Content */}
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-            Proteja sua marca{" "}
-            <span className="gradient-text">hoje mesmo</span>
+            {t("cta.title")}{" "}
+            <span className="gradient-text">{t("cta.titleHighlight")}</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-            Não deixe para depois. O dono da marca é quem registra primeiro. 
-            Inicie agora e garanta a proteção do seu negócio.
+            {t("cta.subtitle")}
           </p>
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button variant="hero" size="xl" asChild>
               <a href="#consultar" className="group">
-                Consultar viabilidade grátis
+                {t("cta.button1")}
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
             </Button>
@@ -39,7 +41,7 @@ const CTASection = () => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Falar com especialista
+                {t("cta.button2")}
               </a>
             </Button>
           </div>

@@ -1,39 +1,42 @@
 import { Search, FileText, CreditCard, FileSignature, CheckCircle } from "lucide-react";
-
-const steps = [
-  {
-    icon: Search,
-    step: "01",
-    title: "Consulte a Viabilidade",
-    description: "Faça uma busca gratuita para verificar se sua marca pode ser registrada.",
-  },
-  {
-    icon: FileText,
-    step: "02",
-    title: "Preencha os Dados",
-    description: "Informe os dados da sua empresa e da marca que deseja proteger.",
-  },
-  {
-    icon: CreditCard,
-    step: "03",
-    title: "Escolha o Pagamento",
-    description: "Selecione a forma de pagamento: à vista ou parcelado em até 6x.",
-  },
-  {
-    icon: FileSignature,
-    step: "04",
-    title: "Assine o Contrato",
-    description: "Contrato digital gerado automaticamente. Assinatura com um clique.",
-  },
-  {
-    icon: CheckCircle,
-    step: "05",
-    title: "Acompanhe o Processo",
-    description: "Acesse sua área exclusiva e acompanhe todo o andamento no INPI.",
-  },
-];
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const HowItWorksSection = () => {
+  const { t } = useLanguage();
+
+  const steps = [
+    {
+      icon: Search,
+      step: "01",
+      title: t("howItWorks.step1.title"),
+      description: t("howItWorks.step1.desc"),
+    },
+    {
+      icon: FileText,
+      step: "02",
+      title: t("howItWorks.step2.title"),
+      description: t("howItWorks.step2.desc"),
+    },
+    {
+      icon: CreditCard,
+      step: "03",
+      title: t("howItWorks.step3.title"),
+      description: t("howItWorks.step3.desc"),
+    },
+    {
+      icon: FileSignature,
+      step: "04",
+      title: t("howItWorks.step4.title"),
+      description: t("howItWorks.step4.desc"),
+    },
+    {
+      icon: CheckCircle,
+      step: "05",
+      title: t("howItWorks.step5.title"),
+      description: t("howItWorks.step5.desc"),
+    },
+  ];
+
   return (
     <section id="como-funciona" className="section-padding relative overflow-hidden">
       {/* Background */}
@@ -43,13 +46,13 @@ const HowItWorksSection = () => {
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="badge-premium mb-4 inline-flex">Passo a Passo</span>
+          <span className="badge-premium mb-4 inline-flex">{t("howItWorks.badge")}</span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-            Como funciona o{" "}
-            <span className="gradient-text">registro</span>?
+            {t("howItWorks.title")}{" "}
+            <span className="gradient-text">{t("howItWorks.titleHighlight")}</span>?
           </h2>
           <p className="text-muted-foreground text-lg">
-            Processo simples, rápido e 100% online. Você não precisa sair de casa.
+            {t("howItWorks.subtitle")}
           </p>
         </div>
 
@@ -76,7 +79,7 @@ const HowItWorksSection = () => {
               <div className="glass-card flex-1 p-6">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-md">
-                    PASSO {step.step}
+                    {t("howItWorks.step")} {step.step}
                   </span>
                   <h3 className="font-display text-xl font-semibold">{step.title}</h3>
                 </div>

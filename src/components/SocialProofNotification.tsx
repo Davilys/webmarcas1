@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { CheckCircle, TrendingUp, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Simulated data for social proof
 const simulatedNames = [
@@ -16,20 +17,6 @@ const simulatedBrands = [
   "Gourmet Express", "Fit & Health", "Digital Agency", "Pet Love", "Clean House"
 ];
 
-const actionTemplates = [
-  { template: "{name} acabou de registrar a marca: {brand}", icon: "check" },
-  { template: "{name} consultou a marca: {brand} agora", icon: "check" },
-  { template: "{name} garantiu o registro da marca: {brand}", icon: "shield" },
-  { template: "{name} iniciou o registro da marca: {brand}", icon: "trending" },
-  { template: "{name} protegeu sua marca há 1 minuto", icon: "shield" },
-];
-
-const statsNotifications = [
-  { message: "+10.000 marcas já foram registradas na WebMarcas", icon: "trending" },
-  { message: "98% de taxa de sucesso em registros", icon: "check" },
-  { message: "Mais de 500 marcas registradas este mês", icon: "trending" },
-];
-
 interface Notification {
   id: number;
   message: string;
@@ -37,6 +24,7 @@ interface Notification {
 }
 
 const SocialProofNotification = () => {
+  const { t } = useLanguage();
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [lastNameIndex, setLastNameIndex] = useState(-1);
@@ -51,13 +39,27 @@ const SocialProofNotification = () => {
   }, []);
 
   const generateNotification = useCallback((): Notification => {
+    const statsNotifications = [
+      { message: t("social.stat1"), icon: "trending" as const },
+      { message: t("social.stat2"), icon: "check" as const },
+      { message: t("social.stat3"), icon: "trending" as const },
+    ];
+
+    const actionTemplates = [
+      { template: `{name} ${t("social.registered")} {brand}`, icon: "check" as const },
+      { template: `{name} ${t("social.consulted")} {brand}`, icon: "check" as const },
+      { template: `{name} ${t("social.secured")} {brand}`, icon: "shield" as const },
+      { template: `{name} ${t("social.started")} {brand}`, icon: "trending" as const },
+      { template: `{name} ${t("social.protected")}`, icon: "shield" as const },
+    ];
+
     // Every 5th notification, show a stats notification
     if (notificationCount > 0 && notificationCount % 5 === 0) {
       const stat = statsNotifications[Math.floor(Math.random() * statsNotifications.length)];
       return {
         id: Date.now(),
         message: stat.message,
-        icon: stat.icon as "check" | "shield" | "trending",
+        icon: stat.icon,
       };
     }
 
@@ -76,9 +78,9 @@ const SocialProofNotification = () => {
     return {
       id: Date.now(),
       message,
-      icon: action.icon as "check" | "shield" | "trending",
+      icon: action.icon,
     };
-  }, [getRandomIndex, lastNameIndex, notificationCount]);
+  }, [getRandomIndex, lastNameIndex, notificationCount, t]);
 
   useEffect(() => {
     // Initial delay of 1 second before first notification
@@ -134,7 +136,7 @@ const SocialProofNotification = () => {
             {notification.message}
           </p>
           <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
-            Agora mesmo
+            {t("social.now")}
           </p>
         </div>
       </div>
