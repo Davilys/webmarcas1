@@ -16,8 +16,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary - Blue accent */
-    --primary: 205 100% 50%;
+    /* Primary - Blue accent (stronger) */
+    --primary: 210 100% 40%;
     --primary-foreground: 0 0% 100%;
 
     /* Secondary - Light gray */
@@ -39,32 +39,32 @@
     /* Borders */
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 205 100% 50%;
+    --ring: 210 100% 40%;
 
     --radius: 0.75rem;
 
     /* Custom WebMarcas tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(205 100% 50%) 0%, hsl(220 100% 60%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(152 76% 45%) 0%, hsl(170 70% 40%) 100%);
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsla(205, 100%, 50%, 0.08), transparent);
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 40%) 0%, hsl(220 100% 50%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(152 76% 40%) 0%, hsl(170 70% 35%) 100%);
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsla(210, 100%, 40%, 0.1), transparent);
     --gradient-card: linear-gradient(180deg, hsla(0, 0%, 100%, 1) 0%, hsla(210, 40%, 98%, 1) 100%);
     
     --glass-bg: hsla(0, 0%, 100%, 0.9);
     --glass-border: hsla(214, 32%, 91%, 1);
     
-    --shadow-glow: 0 0 60px hsla(205, 100%, 50%, 0.1);
+    --shadow-glow: 0 0 60px hsla(210, 100%, 40%, 0.15);
     --shadow-card: 0 4px 24px hsla(222, 47%, 11%, 0.08);
-    --shadow-button: 0 4px 16px hsla(205, 100%, 50%, 0.25);
+    --shadow-button: 0 4px 16px hsla(210, 100%, 40%, 0.3);
 
     /* Sidebar (keeping for compatibility) */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 205 100% 50%;
+    --sidebar-primary: 210 100% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 40% 96%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 205 100% 50%;
+    --sidebar-ring: 210 100% 40%;
   }
 
   .dark {
@@ -164,7 +164,7 @@
   }
 
   .btn-glow:hover {
-    box-shadow: 0 6px 24px hsla(205, 100%, 50%, 0.35);
+    box-shadow: 0 6px 24px hsla(210, 100%, 40%, 0.4);
     transform: translateY(-2px);
   }
 
@@ -220,9 +220,9 @@
   /* Badge styling */
   .badge-premium {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium;
-    background: hsla(205, 100%, 50%, 0.08);
-    border: 1px solid hsla(205, 100%, 50%, 0.25);
-    color: hsl(205, 100%, 45%);
+    background: hsla(210, 100%, 40%, 0.1);
+    border: 1px solid hsla(210, 100%, 40%, 0.3);
+    color: hsl(210, 100%, 35%);
   }
 
   /* Section styling */
@@ -242,7 +242,7 @@
 
   .feature-card:hover {
     transform: translateY(-4px);
-    border-color: hsla(205, 100%, 50%, 0.3);
+    border-color: hsla(210, 100%, 40%, 0.4);
     box-shadow: var(--shadow-glow);
   }
 
@@ -257,12 +257,12 @@
   }
 
   .radio-card:hover {
-    border-color: hsla(205, 100%, 50%, 0.5);
+    border-color: hsla(210, 100%, 40%, 0.5);
   }
 
   .radio-card.selected {
-    border-color: hsl(205, 100%, 50%);
-    background: hsla(205, 100%, 50%, 0.05);
+    border-color: hsl(210, 100%, 40%);
+    background: hsla(210, 100%, 40%, 0.08);
   }
 
   /* Testimonials carousel animations */
