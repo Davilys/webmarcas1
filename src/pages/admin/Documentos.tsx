@@ -4,18 +4,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Plus, Upload, FileText, Download, Eye } from 'lucide-react';
+import { Search, Plus, FileText, Download, Eye, Trash2, MoreVertical, Filter, X, Image, File as FileIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { DocumentUploader } from '@/components/shared/DocumentUploader';
+import { DocumentPreview } from '@/components/shared/DocumentPreview';
 
 interface Document {
   id: string;
   name: string;
   file_url: string;
   document_type: string | null;
+  mime_type: string | null;
   file_size: number | null;
   created_at: string | null;
   user_id: string | null;
@@ -37,12 +42,12 @@ interface Process {
 }
 
 const documentTypes = [
-  { value: 'contrato', label: 'Contrato' },
-  { value: 'procuracao', label: 'Procuração' },
-  { value: 'certificado', label: 'Certificado' },
-  { value: 'comprovante', label: 'Comprovante' },
-  { value: 'parecer', label: 'Parecer INPI' },
-  { value: 'outros', label: 'Outros' },
+  { value: 'contrato', label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
+  { value: 'procuracao', label: 'Procuração', color: 'bg-purple-100 text-purple-700' },
+  { value: 'certificado', label: 'Certificado', color: 'bg-green-100 text-green-700' },
+  { value: 'comprovante', label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
+  { value: 'parecer', label: 'Parecer INPI', color: 'bg-orange-100 text-orange-700' },
+  { value: 'outros', label: 'Outros', color: 'bg-gray-100 text-gray-700' },
 ];
 
 export default function AdminDocumentos() {
@@ -50,10 +55,11 @@ export default function AdminDocumentos() {
   const [clients, setClients] = useState<Client[]>([]);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     document_type: 'outros',
@@ -92,35 +98,18 @@ export default function AdminDocumentos() {
     setProcesses(data || []);
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!selectedFile || !formData.user_id) {
-      toast.error('Selecione um arquivo e um cliente');
+  const handleUploadComplete = async (fileUrl: string, fileName: string, fileSize: number) => {
+    if (!formData.user_id) {
+      toast.error('Selecione um cliente primeiro');
       return;
     }
 
-    setUploading(true);
-
     try {
-      const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${formData.user_id}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-
       const { error: insertError } = await supabase.from('documents').insert({
-        name: formData.name || selectedFile.name,
-        file_url: urlData.publicUrl,
+        name: formData.name || fileName,
+        file_url: fileUrl,
         document_type: formData.document_type,
-        file_size: selectedFile.size,
+        file_size: fileSize,
         user_id: formData.user_id,
         process_id: formData.process_id || null,
         uploaded_by: 'admin',
@@ -128,34 +117,59 @@ export default function AdminDocumentos() {
 
       if (insertError) throw insertError;
 
-      toast.success('Documento enviado com sucesso');
       fetchDocuments();
       setDialogOpen(false);
       resetForm();
     } catch (error) {
       console.error(error);
-      toast.error('Erro ao enviar documento');
-    } finally {
-      setUploading(false);
+      toast.error('Erro ao salvar documento');
+    }
+  };
+
+  const handleDeleteDocument = async (doc: Document) => {
+    if (!confirm(`Excluir "${doc.name}"?`)) return;
+
+    try {
+      const urlParts = doc.file_url.split('/documents/');
+      if (urlParts.length > 1) {
+        const filePath = urlParts[1];
+        await supabase.storage.from('documents').remove([filePath]);
+      }
+
+      const { error } = await supabase.from('documents').delete().eq('id', doc.id);
+      if (error) throw error;
+
+      toast.success('Documento excluído');
+      fetchDocuments();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao excluir documento');
     }
   };
 
   const resetForm = () => {
     setFormData({ name: '', document_type: 'outros', user_id: '', process_id: '' });
-    setSelectedFile(null);
   };
 
-  const filteredDocuments = documents.filter(d =>
-    d.name.toLowerCase().includes(search.toLowerCase()) ||
-    (d.profiles as any)?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    (d.brand_processes as any)?.brand_name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredDocuments = documents.filter(d => {
+    const matchSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
+      (d.profiles as any)?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      (d.brand_processes as any)?.brand_name?.toLowerCase().includes(search.toLowerCase());
+    const matchType = typeFilter === 'all' || d.document_type === typeFilter;
+    return matchSearch && matchType;
+  });
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (url: string) => {
+    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(url)) return <Image className="h-4 w-4 text-blue-500" />;
+    if (/\.pdf$/i.test(url)) return <FileText className="h-4 w-4 text-red-500" />;
+    return <FileIcon className="h-4 w-4 text-gray-500" />;
   };
 
   const clientProcesses = processes.filter(p => p.user_id === formData.user_id);
@@ -168,7 +182,7 @@ export default function AdminDocumentos() {
             <h1 className="text-2xl font-bold">Documentos</h1>
             <p className="text-muted-foreground">Gerencie documentos dos clientes</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <div className="relative flex-1 sm:w-80">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -178,6 +192,26 @@ export default function AdminDocumentos() {
                 className="pl-10"
               />
             </div>
+            
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-40">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {documentTypes.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {typeFilter !== 'all' && (
+              <Button variant="ghost" size="icon" onClick={() => setTypeFilter('all')}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
                 <Button>
@@ -189,7 +223,7 @@ export default function AdminDocumentos() {
                 <DialogHeader>
                   <DialogTitle>Enviar Documento</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleUpload} className="space-y-4">
+                <div className="space-y-4">
                   <div>
                     <Label>Cliente *</Label>
                     <Select value={formData.user_id} onValueChange={(v) => setFormData({ ...formData, user_id: v, process_id: '' })}>
@@ -248,34 +282,17 @@ export default function AdminDocumentos() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label>Arquivo *</Label>
-                    <div className="mt-1">
-                      <label className="flex items-center justify-center w-full h-32 px-4 transition bg-muted border-2 border-dashed rounded-lg cursor-pointer hover:border-primary">
-                        <div className="flex flex-col items-center">
-                          <Upload className="w-8 h-8 text-muted-foreground" />
-                          <span className="mt-2 text-sm text-muted-foreground">
-                            {selectedFile ? selectedFile.name : 'Clique para selecionar'}
-                          </span>
-                        </div>
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                        />
-                      </label>
+                  {formData.user_id ? (
+                    <DocumentUploader 
+                      userId={formData.user_id}
+                      onUploadComplete={handleUploadComplete}
+                    />
+                  ) : (
+                    <div className="p-8 border-2 border-dashed rounded-xl text-center text-muted-foreground">
+                      <p>Selecione um cliente para habilitar o upload</p>
                     </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={uploading}>
-                      {uploading ? 'Enviando...' : 'Enviar Documento'}
-                    </Button>
-                  </div>
-                </form>
+                  )}
+                </div>
               </DialogContent>
             </Dialog>
           </div>
@@ -286,7 +303,7 @@ export default function AdminDocumentos() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>Documento</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead className="hidden md:table-cell">Cliente</TableHead>
                   <TableHead className="hidden lg:table-cell">Processo</TableHead>
@@ -312,43 +329,73 @@ export default function AdminDocumentos() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{doc.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted">
-                          {documentTypes.find(t => t.value === doc.document_type)?.label || doc.document_type}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {(doc.profiles as any)?.full_name || (doc.profiles as any)?.email || '-'}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {(doc.brand_processes as any)?.brand_name || '-'}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">{formatFileSize(doc.file_size)}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </a>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredDocuments.map((doc) => {
+                    const typeConfig = documentTypes.find(t => t.value === doc.document_type);
+                    return (
+                      <TableRow key={doc.id} className="group">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            {getFileIcon(doc.file_url)}
+                            <span className="font-medium">{doc.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={typeConfig?.color || ''}>
+                            {typeConfig?.label || doc.document_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {(doc.profiles as any)?.full_name || (doc.profiles as any)?.email || '-'}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {(doc.brand_processes as any)?.brand_name || '-'}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">{formatFileSize(doc.file_size)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => { setPreviewDoc(doc); setPreviewOpen(true); }}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                Visualizar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <a href={doc.file_url} download={doc.name} target="_blank" rel="noopener noreferrer">
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Baixar
+                                </a>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleDeleteDocument(doc)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
+
+        <DocumentPreview
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          document={previewDoc}
+        />
       </div>
     </AdminLayout>
   );

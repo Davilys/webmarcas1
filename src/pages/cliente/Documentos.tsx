@@ -6,18 +6,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { 
   FolderOpen, 
   Search, 
   Download, 
   FileText, 
-  File, 
   Eye,
-  Upload
+  Upload,
+  Image,
+  File as FileIcon
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
+import { DocumentUploader } from '@/components/shared/DocumentUploader';
+import { DocumentPreview } from '@/components/shared/DocumentPreview';
 
 interface Document {
   id: string;
@@ -25,17 +32,18 @@ interface Document {
   document_type: string;
   file_url: string;
   file_size: number | null;
+  mime_type: string | null;
   created_at: string;
 }
 
 const typeLabels: Record<string, { label: string; color: string }> = {
-  contrato: { label: 'Contrato', color: 'bg-blue-500' },
-  laudo: { label: 'Laudo', color: 'bg-green-500' },
-  notificacao: { label: 'Notificação', color: 'bg-yellow-500' },
-  certificado: { label: 'Certificado', color: 'bg-purple-500' },
-  rpi: { label: 'RPI', color: 'bg-orange-500' },
-  comprovante: { label: 'Comprovante', color: 'bg-cyan-500' },
-  outro: { label: 'Outro', color: 'bg-gray-500' },
+  contrato: { label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
+  procuracao: { label: 'Procuração', color: 'bg-purple-100 text-purple-700' },
+  certificado: { label: 'Certificado', color: 'bg-green-100 text-green-700' },
+  comprovante: { label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
+  parecer: { label: 'Parecer INPI', color: 'bg-orange-100 text-orange-700' },
+  rpi: { label: 'RPI', color: 'bg-yellow-100 text-yellow-700' },
+  outros: { label: 'Outros', color: 'bg-gray-100 text-gray-700' },
 };
 
 export default function Documentos() {
@@ -44,6 +52,13 @@ export default function Documentos() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [uploadForm, setUploadForm] = useState({
+    name: '',
+    document_type: 'outros'
+  });
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -79,6 +94,40 @@ export default function Documentos() {
     setLoading(false);
   };
 
+  const handleUploadComplete = async (fileUrl: string, fileName: string, fileSize: number) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('documents').insert({
+        name: uploadForm.name || fileName,
+        file_url: fileUrl,
+        document_type: uploadForm.document_type,
+        file_size: fileSize,
+        user_id: user.id,
+        uploaded_by: 'client',
+      });
+
+      if (error) throw error;
+
+      fetchDocuments(user.id);
+      setUploadDialogOpen(false);
+      setUploadForm({ name: '', document_type: 'outros' });
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao salvar documento');
+    }
+  };
+
+  const handleDownload = (doc: Document) => {
+    const link = window.document.createElement('a');
+    link.href = doc.file_url;
+    link.download = doc.name;
+    link.target = '_blank';
+    window.document.body.appendChild(link);
+    link.click();
+    window.document.body.removeChild(link);
+  };
+
   const filteredDocs = documents.filter(doc =>
     doc.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -88,6 +137,12 @@ export default function Documentos() {
     const kb = bytes / 1024;
     if (kb < 1024) return `${kb.toFixed(1)} KB`;
     return `${(kb / 1024).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (doc: Document) => {
+    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_url)) return <Image className="h-6 w-6 text-blue-500" />;
+    if (/\.pdf$/i.test(doc.file_url)) return <FileText className="h-6 w-6 text-red-500" />;
+    return <FileIcon className="h-6 w-6 text-gray-500" />;
   };
 
   return (
@@ -100,10 +155,54 @@ export default function Documentos() {
               Acesse todos os documentos do seu processo
             </p>
           </div>
-          <Button>
-            <Upload className="mr-2 h-4 w-4" />
-            Enviar Documento
-          </Button>
+          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Upload className="mr-2 h-4 w-4" />
+                Enviar Documento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Enviar Documento</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Nome do documento</Label>
+                    <Input
+                      value={uploadForm.name}
+                      onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
+                      placeholder="Ex: Comprovante de endereço"
+                    />
+                  </div>
+                  <div>
+                    <Label>Tipo</Label>
+                    <Select 
+                      value={uploadForm.document_type} 
+                      onValueChange={(v) => setUploadForm({ ...uploadForm, document_type: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(typeLabels).map(([value, { label }]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {user && (
+                  <DocumentUploader 
+                    userId={user.id}
+                    onUploadComplete={handleUploadComplete}
+                  />
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Card>
@@ -136,20 +235,20 @@ export default function Documentos() {
             ) : (
               <div className="space-y-3">
                 {filteredDocs.map((doc) => {
-                  const typeConfig = typeLabels[doc.document_type] || typeLabels.outro;
+                  const typeConfig = typeLabels[doc.document_type] || typeLabels.outros;
                   return (
                     <div
                       key={doc.id}
-                      className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                      className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors group"
                     >
                       <div className="flex items-center gap-4">
                         <div className="p-2 bg-muted rounded-lg">
-                          <FileText className="h-6 w-6 text-muted-foreground" />
+                          {getFileIcon(doc)}
                         </div>
                         <div>
                           <p className="font-medium">{doc.name}</p>
                           <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="secondary" className={`text-xs ${typeConfig.color}`}>
                               {typeConfig.label}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
@@ -164,11 +263,19 @@ export default function Documentos() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon">
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => { setPreviewDoc(doc); setPreviewOpen(true); }}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleDownload(doc)}
+                        >
                           <Download className="h-4 w-4" />
                         </Button>
                       </div>
@@ -179,6 +286,12 @@ export default function Documentos() {
             )}
           </CardContent>
         </Card>
+
+        <DocumentPreview
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          document={previewDoc}
+        />
       </div>
     </ClientLayout>
   );
