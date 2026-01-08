@@ -3,6 +3,7 @@ import { Menu, X, Moon, Sun, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
+import { Link } from "react-router-dom";
 import webmarcasLogo from "@/assets/webmarcas-logo.png";
 import {
   DropdownMenu,
@@ -111,7 +112,7 @@ const Header = () => {
             </Button>
 
             <Button variant="ghost" size="sm" asChild>
-              <a href="#area-cliente">{t("nav.clientArea")}</a>
+              <Link to="/cliente/login">{t("nav.clientArea")}</Link>
             </Button>
             <Button variant="primary" size="sm" className="btn-glow" asChild>
               <a href="#consultar">{t("nav.checkBrand")}</a>
@@ -184,7 +185,7 @@ const Header = () => {
             ))}
             <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
               <Button variant="ghost" asChild>
-                <a href="#area-cliente">{t("nav.clientArea")}</a>
+                <Link to="/cliente/login">{t("nav.clientArea")}</Link>
               </Button>
               <Button variant="primary" className="btn-glow" asChild>
                 <a href="#consultar">{t("nav.checkBrand")}</a>
