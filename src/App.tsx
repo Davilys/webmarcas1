@@ -27,6 +27,7 @@ import AdminDocumentos from "./pages/admin/Documentos";
 import AdminFinanceiro from "./pages/admin/Financeiro";
 import AdminNotificacoes from "./pages/admin/Notificacoes";
 import AdminConfiguracoes from "./pages/admin/Configuracoes";
+import AdminRecursosINPI from "./pages/admin/RecursosINPI";
 
 // Initialize query client
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/admin/documentos" element={<AdminDocumentos />} />
               <Route path="/admin/financeiro" element={<AdminFinanceiro />} />
               <Route path="/admin/notificacoes" element={<AdminNotificacoes />} />
+              <Route path="/admin/recursos-inpi" element={<AdminRecursosINPI />} />
               <Route path="/admin/configuracoes" element={<AdminConfiguracoes />} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

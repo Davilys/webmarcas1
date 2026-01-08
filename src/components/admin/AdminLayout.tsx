@@ -17,6 +17,7 @@ import {
   Menu,
   Shield,
   ChevronRight,
+  Scale,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ const menuItems = [
   { icon: FolderOpen, label: 'Documentos', href: '/admin/documentos' },
   { icon: CreditCard, label: 'Financeiro', href: '/admin/financeiro' },
   { icon: Bell, label: 'Notificações', href: '/admin/notificacoes' },
+  { icon: Scale, label: 'Recursos INPI', href: '/admin/recursos-inpi' },
   { icon: Settings, label: 'Configurações', href: '/admin/configuracoes' },
 ];
 

@@ -225,6 +225,69 @@ export type Database = {
           },
         ]
       }
+      inpi_resources: {
+        Row: {
+          adjustments_history: Json | null
+          approved_at: string | null
+          brand_name: string | null
+          created_at: string
+          draft_content: string | null
+          examiner_or_opponent: string | null
+          final_content: string | null
+          final_pdf_path: string | null
+          holder: string | null
+          id: string
+          legal_basis: string | null
+          ncl_class: string | null
+          original_pdf_path: string | null
+          process_number: string | null
+          resource_type: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          adjustments_history?: Json | null
+          approved_at?: string | null
+          brand_name?: string | null
+          created_at?: string
+          draft_content?: string | null
+          examiner_or_opponent?: string | null
+          final_content?: string | null
+          final_pdf_path?: string | null
+          holder?: string | null
+          id?: string
+          legal_basis?: string | null
+          ncl_class?: string | null
+          original_pdf_path?: string | null
+          process_number?: string | null
+          resource_type: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          adjustments_history?: Json | null
+          approved_at?: string | null
+          brand_name?: string | null
+          created_at?: string
+          draft_content?: string | null
+          examiner_or_opponent?: string | null
+          final_content?: string | null
+          final_pdf_path?: string | null
+          holder?: string | null
+          id?: string
+          legal_basis?: string | null
+          ncl_class?: string | null
+          original_pdf_path?: string | null
+          process_number?: string | null
+          resource_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           amount: number
