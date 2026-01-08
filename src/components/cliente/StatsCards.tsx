@@ -84,19 +84,23 @@ export function StatsCards({ userId }: StatsCardsProps) {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card key={card.title}>
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
+      {cards.map((card, index) => (
+        <Card 
+          key={card.title} 
+          className="interactive-card overflow-hidden group"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {card.title}
             </CardTitle>
-            <div className={`p-2 rounded-lg ${card.bgColor}`}>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
+            <div className={`p-2.5 rounded-xl ${card.bgColor} transition-transform duration-300 group-hover:scale-110`}>
+              <card.icon className={`h-5 w-5 ${card.color}`} />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{card.value}</div>
+            <div className="text-3xl font-bold tracking-tight">{card.value}</div>
+            <div className={`h-1 w-12 mt-3 rounded-full ${card.bgColor} transition-all duration-500 group-hover:w-full`} />
           </CardContent>
         </Card>
       ))}

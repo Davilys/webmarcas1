@@ -69,7 +69,7 @@ export function RecentNotifications({ userId }: RecentNotificationsProps) {
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Bell className="h-5 w-5" />
@@ -82,19 +82,19 @@ export function RecentNotifications({ userId }: RecentNotificationsProps) {
             Nenhuma notificação
           </p>
         ) : (
-          <div className="space-y-3">
-            {notifications.map((notification) => {
+          <div className="space-y-3 stagger-children">
+            {notifications.map((notification, index) => {
               const config = typeConfig[notification.type] || typeConfig.info;
               const Icon = config.icon;
               return (
                 <div
                   key={notification.id}
                   className={cn(
-                    'flex items-start gap-3 p-3 rounded-lg border',
-                    !notification.read && 'bg-muted/50'
+                    'flex items-start gap-3 p-3 rounded-xl border transition-all duration-200 hover:shadow-sm hover:translate-x-1 cursor-pointer',
+                    !notification.read && 'bg-muted/50 border-primary/20'
                   )}
                 >
-                  <div className={cn('p-2 rounded-lg', config.bg)}>
+                  <div className={cn('p-2 rounded-xl transition-transform duration-300 hover:scale-110', config.bg)}>
                     <Icon className={cn('h-4 w-4', config.color)} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -109,6 +109,9 @@ export function RecentNotifications({ userId }: RecentNotificationsProps) {
                       })}
                     </p>
                   </div>
+                  {!notification.read && (
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  )}
                 </div>
               );
             })}

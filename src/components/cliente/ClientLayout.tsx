@@ -54,7 +54,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
 
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">
-          {menuItems.map((item) => {
+          {menuItems.map((item, index) => {
             const isActive = location.pathname === item.href;
             return (
               <Link
@@ -62,15 +62,16 @@ export function ClientLayout({ children }: ClientLayoutProps) {
                 to={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground hover:translate-x-1'
                 )}
+                style={{ animationDelay: `${index * 0.05}s` }}
               >
-                <item.icon className="h-5 w-5" />
+                <item.icon className={cn("h-5 w-5 transition-transform", isActive && "scale-110")} />
                 {item.label}
-                {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                {isActive && <ChevronRight className="ml-auto h-4 w-4 animate-pulse" />}
               </Link>
             );
           })}
@@ -121,7 +122,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
 
       {/* Main Content */}
       <main className="lg:pl-64">
-        <div className="p-6 lg:p-8">{children}</div>
+        <div className="p-6 lg:p-8 animate-page-enter">{children}</div>
       </main>
     </div>
   );

@@ -91,24 +91,26 @@ export function ProcessList({ userId, limit }: ProcessListProps) {
             <p>Nenhum processo encontrado</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {processes.map((process) => {
+          <div className="space-y-3 stagger-children">
+            {processes.map((process, index) => {
               const status = statusConfig[process.status] || statusConfig.em_andamento;
               return (
                 <Link
                   key={process.id}
                   to={`/cliente/processos/${process.id}`}
-                  className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-4 rounded-xl border hover:bg-muted/50 hover:border-primary/30 hover:shadow-sm transition-all duration-200 group"
                 >
                   <div className="space-y-1">
-                    <p className="font-medium">{process.brand_name}</p>
+                    <p className="font-medium group-hover:text-primary transition-colors">{process.brand_name}</p>
                     <p className="text-sm text-muted-foreground">
                       {process.process_number || 'Aguardando protocolo'}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant={status.variant}>{status.label}</Badge>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <Badge variant={status.variant} className="transition-transform group-hover:scale-105">
+                      {status.label}
+                    </Badge>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
                   </div>
                 </Link>
               );
