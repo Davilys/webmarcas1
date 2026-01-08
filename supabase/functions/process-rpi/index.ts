@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +9,12 @@ const corsHeaders = {
 };
 
 const ATTORNEY_NAME = "Davilys Danques Oliveira Cunha";
+const ATTORNEY_VARIATIONS = [
+  "davilys danques oliveira cunha",
+  "davilys danques de oliveira cunha",
+  "davilys d. oliveira cunha",
+  "davilys d oliveira cunha",
+];
 
 function normalizeString(str: string): string {
   return str
@@ -17,196 +25,252 @@ function normalizeString(str: string): string {
     .trim();
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+function guessExtFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const pathname = u.pathname;
+    const last = pathname.split("/").pop() || "";
+    const ext = last.includes(".") ? last.split(".").pop() : null;
+    return ext?.toLowerCase() || null;
+  } catch {
+    return null;
   }
+}
+
+function splitIntoChunks(text: string, maxChars: number): string[] {
+  if (!text) return [];
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += maxChars) chunks.push(text.slice(i, i + maxChars));
+  return chunks;
+}
+
+async function extractTextFromPdf(pdfBytes: Uint8Array): Promise<string> {
+  // Using legacy build + disable worker (Edge environment)
+  const loadingTask = (pdfjsLib as any).getDocument({ data: pdfBytes, disableWorker: true } as any);
+  const pdf = await loadingTask.promise;
+
+  let out = "";
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const strings = content.items
+      .map((it: any) => (typeof it.str === "string" ? it.str : ""))
+      .filter(Boolean);
+    out += `\n\n--- PÁGINA ${pageNum} ---\n` + strings.join(" ");
+  }
+
+  return out;
+}
+
+async function extractTextFromXml(bytes: Uint8Array): Promise<string> {
+  return new TextDecoder().decode(bytes);
+}
+
+async function extractTextFromExcel(bytes: Uint8Array): Promise<string> {
+  const wb = XLSX.read(bytes, { type: "array" });
+  const parts: string[] = [];
+
+  for (const sheetName of wb.SheetNames.slice(0, 5)) {
+    const ws = wb.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    parts.push(`\n\n--- PLANILHA: ${sheetName} ---\n${csv}`);
+  }
+
+  return parts.join("\n");
+}
+
+type AttorneyProcess = {
+  process_number: string;
+  brand_name?: string;
+  ncl_classes?: string[];
+  dispatch_code?: string;
+  dispatch_type?: string;
+  dispatch_text?: string;
+  holder_name?: string;
+  publication_date?: string;
+};
+
+async function aiExtractFromChunk(args: {
+  apiKey: string;
+  chunk: string;
+}): Promise<AttorneyProcess[]> {
+  const { apiKey, chunk } = args;
+
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: `Você é um especialista em RPI do INPI (MARCAS). Extraia processos onde o procurador seja "${ATTORNEY_NAME}" (incluindo variações próximas) e retorne somente JSON válido.`,
+        },
+        {
+          role: "user",
+          content: `Texto (parte do documento) abaixo. Encontre processos de MARCAS cujo procurador seja ${ATTORNEY_NAME} ou variações.
+
+Retorne APENAS JSON no formato:
+{"attorney_processes":[{"process_number":"...","brand_name":"...","ncl_classes":["35"],"dispatch_code":"...","dispatch_type":"...","dispatch_text":"...","holder_name":"...","publication_date":"YYYY-MM-DD"}]}
+
+TEXTO:\n${chunk}`,
+        },
+      ],
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!resp.ok) {
+    const t = await resp.text();
+    const err = new Error(`AI error ${resp.status}: ${t}`);
+    // @ts-ignore
+    err.status = resp.status;
+    throw err;
+  }
+
+  const data = await resp.json();
+  const content = data.choices?.[0]?.message?.content || "";
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return [];
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    const arr = parsed.attorney_processes;
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { rpiUploadId, fileUrl } = await req.json();
-    
+
     if (!rpiUploadId || !fileUrl) {
-      return new Response(
-        JSON.stringify({ error: "rpiUploadId and fileUrl are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "rpiUploadId and fileUrl are required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Update status to processing
-    await supabase
-      .from("rpi_uploads")
-      .update({ status: "processing" })
-      .eq("id", rpiUploadId);
+    await supabase.from("rpi_uploads").update({ status: "processing" }).eq("id", rpiUploadId);
 
-    console.log("Sending PDF URL to AI for analysis...");
-
-    // Call Lovable AI with the PDF URL directly - let the AI gateway handle the file
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `Você é um especialista em análise de Revistas da Propriedade Industrial (RPI) do INPI brasileiro. 
-Extraia TODOS os processos de MARCAS onde o procurador seja "${ATTORNEY_NAME}" ou variações próximas.
-
-IMPORTANTE:
-- Extraia APENAS processos de MARCAS (ignore patentes, desenhos industriais)
-- Procure variações do nome: Davilys Danques Oliveira Cunha, Davilys Danques de Oliveira Cunha, Davilys D. Oliveira Cunha, etc.
-- Analise TODAS as páginas do documento
-
-Para cada processo, extraia:
-1. Número do processo (formato numérico)
-2. Nome da marca
-3. Classe(s) NCL
-4. Código do despacho
-5. Tipo/descrição do despacho
-6. Nome do titular
-7. Data da publicação
-
-Retorne JSON estruturado.`
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analise este PDF da RPI e extraia TODOS os processos de MARCAS do procurador "${ATTORNEY_NAME}" ou variações do nome.
-
-Retorne APENAS JSON válido no formato:
-{
-  "rpi_number": "número da RPI",
-  "rpi_date": "YYYY-MM-DD",
-  "total_brand_processes": número total de processos de marca na revista,
-  "attorney_processes": [
-    {
-      "process_number": "número",
-      "brand_name": "marca",
-      "ncl_classes": ["35"],
-      "dispatch_code": "código",
-      "dispatch_type": "tipo",
-      "dispatch_text": "texto resumido",
-      "holder_name": "titular",
-      "publication_date": "YYYY-MM-DD"
-    }
-  ],
-  "summary": "resumo da análise"
-}`
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: fileUrl
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 16000,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", aiResponse.status, errorText);
-      
-      // Handle rate limits
-      if (aiResponse.status === 429) {
-        await supabase
-          .from("rpi_uploads")
-          .update({ status: "error", summary: "Limite de requisições excedido. Tente novamente em alguns minutos." })
-          .eq("id", rpiUploadId);
-        
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
+    // Download file bytes from signed URL
+    const fileResp = await fetch(fileUrl);
+    if (!fileResp.ok) {
       await supabase
         .from("rpi_uploads")
-        .update({ status: "error", summary: "Erro ao processar PDF com IA" })
+        .update({ status: "error", summary: "Não foi possível baixar o arquivo do storage." })
         .eq("id", rpiUploadId);
-      
-      return new Response(
-        JSON.stringify({ error: "Failed to analyze PDF" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      return new Response(JSON.stringify({ error: "Failed to download file" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const aiResult = await aiResponse.json();
-    const content = aiResult.choices?.[0]?.message?.content || "";
-    
-    console.log("AI Response received, parsing...");
+    const bytes = new Uint8Array(await fileResp.arrayBuffer());
+    const ext = guessExtFromUrl(fileUrl);
 
-    // Extract JSON from response
-    let extractedData;
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        extractedData = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("No JSON found in response");
-      }
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError, "Content:", content.substring(0, 500));
-      
+    let fullText = "";
+    if (ext === "pdf") {
+      console.log("Extracting text from PDF...");
+      fullText = await extractTextFromPdf(bytes);
+    } else if (ext === "xml") {
+      console.log("Reading XML...");
+      fullText = await extractTextFromXml(bytes);
+    } else if (ext === "xlsx" || ext === "xls") {
+      console.log("Reading Excel...");
+      fullText = await extractTextFromExcel(bytes);
+    } else {
       await supabase
         .from("rpi_uploads")
-        .update({ status: "error", summary: "Erro ao interpretar resposta da IA" })
+        .update({ status: "error", summary: "Formato não suportado. Envie PDF, XML, XLSX ou XLS." })
         .eq("id", rpiUploadId);
-      
-      return new Response(
-        JSON.stringify({ error: "Failed to parse AI response" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      return new Response(JSON.stringify({ error: "Unsupported file format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const attorneyProcesses = extractedData.attorney_processes || [];
-    
-    console.log(`Found ${attorneyProcesses.length} attorney processes`);
+    // Chunk text to avoid huge single AI requests
+    const chunks = splitIntoChunks(fullText, 80_000);
+    console.log(`Text extracted. Chunks: ${chunks.length}`);
 
-    // Fetch existing clients and processes for matching
+    const collected: AttorneyProcess[] = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      console.log(`AI chunk ${i + 1}/${chunks.length}`);
+      try {
+        const found = await aiExtractFromChunk({ apiKey: LOVABLE_API_KEY, chunk: chunks[i] });
+        collected.push(...found);
+      } catch (e) {
+        const status = (e as any)?.status;
+        if (status === 429) {
+          await supabase
+            .from("rpi_uploads")
+            .update({ status: "error", summary: "Limite de requisições excedido. Tente novamente em alguns minutos." })
+            .eq("id", rpiUploadId);
+          return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.error("AI chunk error:", e);
+        // continue processing other chunks
+      }
+    }
+
+    // Deduplicate by process_number
+    const byProcess = new Map<string, AttorneyProcess>();
+    for (const p of collected) {
+      const clean = (p.process_number || "").toString().replace(/\D/g, "");
+      if (!clean) continue;
+      if (!byProcess.has(clean)) byProcess.set(clean, { ...p, process_number: clean });
+    }
+
+    const attorneyProcesses = Array.from(byProcess.values());
+
+    // Match with existing processes
     const { data: existingProcesses } = await supabase
       .from("brand_processes")
-      .select("id, process_number, brand_name, user_id, status, pipeline_stage");
+      .select("id, process_number, brand_name, user_id");
 
-    // Match entries with existing clients
-    const matchedEntries = attorneyProcesses.map((entry: any) => {
-      let matchedClientId = null;
-      let matchedProcessId = null;
-      
-      if (entry.process_number && existingProcesses) {
-        const cleanProcessNumber = entry.process_number?.toString().replace(/\D/g, '');
-        const processMatch = existingProcesses.find(
-          p => p.process_number === cleanProcessNumber
-        );
+    const matchedEntries = attorneyProcesses.map((entry) => {
+      let matchedClientId: string | null = null;
+      let matchedProcessId: string | null = null;
+
+      const cleanProcessNumber = entry.process_number?.toString().replace(/\D/g, "");
+
+      if (cleanProcessNumber && existingProcesses) {
+        const processMatch = existingProcesses.find((p) => p.process_number === cleanProcessNumber);
         if (processMatch) {
           matchedProcessId = processMatch.id;
           matchedClientId = processMatch.user_id;
         }
       }
-      
+
       if (!matchedClientId && entry.brand_name && existingProcesses) {
         const brandMatch = existingProcesses.find(
-          p => normalizeString(p.brand_name) === normalizeString(entry.brand_name)
+          (p) => normalizeString(p.brand_name) === normalizeString(entry.brand_name || "")
         );
         if (brandMatch) {
           matchedProcessId = brandMatch.id;
@@ -216,9 +280,9 @@ Retorne APENAS JSON válido no formato:
 
       return {
         rpi_upload_id: rpiUploadId,
-        process_number: entry.process_number?.toString().replace(/\D/g, '') || "",
+        process_number: cleanProcessNumber || "",
         brand_name: entry.brand_name || "",
-        ncl_classes: Array.isArray(entry.ncl_classes) ? entry.ncl_classes : [],
+        ncl_classes: entry.ncl_classes || [],
         dispatch_type: entry.dispatch_type || "",
         dispatch_code: entry.dispatch_code || "",
         dispatch_text: entry.dispatch_text || "",
@@ -231,29 +295,23 @@ Retorne APENAS JSON válido no formato:
       };
     });
 
-    // Insert entries
     if (matchedEntries.length > 0) {
-      const { error: insertError } = await supabase
-        .from("rpi_entries")
-        .insert(matchedEntries);
-      
-      if (insertError) {
-        console.error("Insert error:", insertError);
-      }
+      const { error: insertError } = await supabase.from("rpi_entries").insert(matchedEntries);
+      if (insertError) console.error("Insert error:", insertError);
     }
 
     const matchedCount = matchedEntries.filter((e: any) => e.matched_client_id).length;
 
-    // Update RPI upload with results
     await supabase
       .from("rpi_uploads")
       .update({
         status: "completed",
-        rpi_number: extractedData.rpi_number || null,
-        rpi_date: extractedData.rpi_date || null,
-        total_processes_found: attorneyProcesses.length,
+        total_processes_found: matchedEntries.length,
         total_clients_matched: matchedCount,
-        summary: extractedData.summary || `Encontrados ${attorneyProcesses.length} processos do procurador ${ATTORNEY_NAME}, ${matchedCount} correspondem a clientes WebMarcas.`,
+        summary:
+          matchedEntries.length === 0
+            ? `Nenhum processo do procurador ${ATTORNEY_NAME} foi encontrado neste arquivo.`
+            : `Encontrados ${matchedEntries.length} processos do procurador ${ATTORNEY_NAME}, ${matchedCount} correspondem a clientes.`,
         processed_at: new Date().toISOString(),
       })
       .eq("id", rpiUploadId);
@@ -261,21 +319,21 @@ Retorne APENAS JSON válido no formato:
     return new Response(
       JSON.stringify({
         success: true,
-        rpi_number: extractedData.rpi_number,
-        rpi_date: extractedData.rpi_date,
-        total_processes: attorneyProcesses.length,
+        total_processes: matchedEntries.length,
         matched_clients: matchedCount,
-        summary: extractedData.summary,
+        summary:
+          matchedEntries.length === 0
+            ? `Nenhum processo do procurador ${ATTORNEY_NAME} foi encontrado neste arquivo.`
+            : `Encontrados ${matchedEntries.length} processos do procurador ${ATTORNEY_NAME}, ${matchedCount} correspondem a clientes.`,
         entries: matchedEntries,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-    
   } catch (error) {
     console.error("Process RPI error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
