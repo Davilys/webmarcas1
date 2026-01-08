@@ -21,7 +21,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -35,8 +35,23 @@ export default function Login() {
         return;
       }
 
-      toast.success('Login realizado com sucesso!');
-      navigate('/cliente/dashboard');
+      // Check if user is admin
+      if (data.user) {
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', data.user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        toast.success('Login realizado com sucesso!');
+        
+        if (roleData) {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/cliente/dashboard');
+        }
+      }
     } catch (error) {
       toast.error('Erro ao fazer login');
     } finally {
