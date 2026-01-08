@@ -1,14 +1,29 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ClientLayout } from '@/components/cliente/ClientLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageSquare, Send, Bot, User, Loader2 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { 
+  MessageSquare, 
+  Send, 
+  Bot, 
+  Loader2, 
+  Home, 
+  ExternalLink,
+  Sparkles
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { toast } from 'sonner';
+
+// Import avatars for team display
+import avatar1 from '@/assets/avatars/avatar-1.jpg';
+import avatar2 from '@/assets/avatars/avatar-2.jpg';
+import avatar3 from '@/assets/avatars/avatar-3.jpg';
+import webmarcasIcon from '@/assets/webmarcas-icon.png';
 
 interface Message {
   id: string;
@@ -17,52 +32,58 @@ interface Message {
   created_at: string;
 }
 
-const FAQ_RESPONSES: Record<string, string> = {
-  'status': 'Para verificar o status do seu processo, acesse "Meus Processos" no menu lateral. Lá você encontrará a situação atual de cada registro.',
-  'processo': 'Para verificar o status do seu processo, acesse "Meus Processos" no menu lateral. Lá você encontrará a situação atual de cada registro.',
-  'fatura': 'Suas faturas estão disponíveis em "Financeiro". Você pode ver faturas pendentes, pagas e gerar boletos ou copiar códigos PIX.',
-  'pagar': 'Para pagar, acesse "Financeiro" no menu lateral e clique no botão "Pagar" na fatura desejada. Aceitamos PIX, boleto e cartão.',
-  'pagamento': 'Para pagar, acesse "Financeiro" no menu lateral e clique no botão "Pagar" na fatura desejada. Aceitamos PIX, boleto e cartão.',
-  'documento': 'Todos os seus documentos estão em "Documentos". Você pode visualizar, baixar e enviar novos arquivos.',
-  'contrato': 'Seu contrato está disponível em "Documentos". Você também pode acessar diretamente em "Meus Processos" > selecionar o processo > Documentos.',
-  'prazo': 'Os prazos do INPI variam. Em média: pesquisa 24h, publicação RPI 60-90 dias, exame 12-24 meses, concessão após exame positivo.',
-  'despacho': 'Despacho é uma decisão oficial do INPI publicada na RPI. Pode ser uma exigência, deferimento ou indeferimento.',
-  'rpi': 'RPI (Revista da Propriedade Industrial) é a publicação semanal do INPI onde são divulgados todos os despachos de marcas e patentes.',
-  'exigência': 'Uma exigência é uma solicitação do INPI para complementar informações. Temos prazo de 60 dias para responder.',
-  'renovação': 'A marca deve ser renovada a cada 10 anos. Enviaremos notificação antes do vencimento para você providenciar a renovação.',
-};
+type ViewType = 'home' | 'chat';
+
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-support`;
 
 export default function Suporte() {
   const navigate = useNavigate();
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [userName, setUserName] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentView, setCurrentView] = useState<ViewType>('home');
+  const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (!session) {
           navigate('/cliente/login');
         } else {
           setUser(session.user);
-          fetchMessages(session.user.id);
+          await fetchUserProfile(session.user.id);
+          await fetchMessages(session.user.id);
         }
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         navigate('/cliente/login');
       } else {
         setUser(session.user);
-        fetchMessages(session.user.id);
+        await fetchUserProfile(session.user.id);
+        await fetchMessages(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  const fetchUserProfile = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .single();
+    
+    if (data?.full_name) {
+      setUserName(data.full_name.split(' ')[0]);
+    }
+  };
 
   const fetchMessages = async (userId: string) => {
     const { data } = await supabase
@@ -71,7 +92,13 @@ export default function Suporte() {
       .eq('user_id', userId)
       .order('created_at', { ascending: true });
 
-    setMessages((data as Message[]) || []);
+    const msgs = (data as Message[]) || [];
+    setMessages(msgs);
+    
+    // Count unread (assistant messages from last 24h)
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const unread = msgs.filter(m => m.role === 'assistant' && m.created_at > dayAgo).length;
+    setUnreadCount(Math.min(unread, 9));
   };
 
   useEffect(() => {
@@ -80,181 +107,429 @@ export default function Suporte() {
     }
   }, [messages]);
 
-  const findAnswer = (question: string): string => {
-    const normalized = question.toLowerCase();
-    
-    for (const [keyword, response] of Object.entries(FAQ_RESPONSES)) {
-      if (normalized.includes(keyword)) {
-        return response;
+  const streamChat = useCallback(async (
+    allMessages: { role: string; content: string }[],
+    onDelta: (text: string) => void,
+    onDone: () => void
+  ) => {
+    const resp = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ 
+        messages: allMessages,
+        userName 
+      }),
+    });
+
+    if (!resp.ok) {
+      const error = await resp.json();
+      throw new Error(error.error || "Erro ao conectar com a IA");
+    }
+
+    if (!resp.body) throw new Error("Sem resposta do servidor");
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let textBuffer = "";
+    let streamDone = false;
+
+    while (!streamDone) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      textBuffer += decoder.decode(value, { stream: true });
+
+      let newlineIndex: number;
+      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+        let line = textBuffer.slice(0, newlineIndex);
+        textBuffer = textBuffer.slice(newlineIndex + 1);
+
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (line.startsWith(":") || line.trim() === "") continue;
+        if (!line.startsWith("data: ")) continue;
+
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === "[DONE]") {
+          streamDone = true;
+          break;
+        }
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+          if (content) onDelta(content);
+        } catch {
+          textBuffer = line + "\n" + textBuffer;
+          break;
+        }
       }
     }
-    
-    return 'Não encontrei uma resposta específica para sua pergunta. Para um atendimento personalizado, entre em contato pelo WhatsApp: (XX) XXXXX-XXXX ou aguarde que um de nossos especialistas responderá em breve.';
-  };
 
-  const handleSend = async () => {
-    if (!input.trim() || !user) return;
+    onDone();
+  }, [userName]);
+
+  const handleSend = async (messageText?: string) => {
+    const text = messageText || input.trim();
+    if (!text || !user) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: input,
+      content: text,
       created_at: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+    setCurrentView('chat');
 
     // Save user message
     await supabase.from('chat_messages').insert({
       user_id: user.id,
       role: 'user',
-      content: input,
+      content: text,
     });
 
-    // Generate response
-    const response = findAnswer(input);
+    let assistantContent = "";
+    const assistantId = crypto.randomUUID();
 
-    const assistantMessage: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: response,
-      created_at: new Date().toISOString(),
+    const updateAssistant = (chunk: string) => {
+      assistantContent += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === 'assistant' && last.id === assistantId) {
+          return prev.map((m, i) => 
+            i === prev.length - 1 ? { ...m, content: assistantContent } : m
+          );
+        }
+        return [...prev, {
+          id: assistantId,
+          role: 'assistant' as const,
+          content: assistantContent,
+          created_at: new Date().toISOString(),
+        }];
+      });
     };
 
-    // Simulate typing delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const chatHistory = messages.map(m => ({ role: m.role, content: m.content }));
+      chatHistory.push({ role: 'user', content: text });
 
-    setMessages((prev) => [...prev, assistantMessage]);
-
-    // Save assistant message
-    await supabase.from('chat_messages').insert({
-      user_id: user.id,
-      role: 'assistant',
-      content: response,
-    });
-
-    setLoading(false);
+      await streamChat(
+        chatHistory,
+        updateAssistant,
+        async () => {
+          setLoading(false);
+          // Save assistant message
+          if (assistantContent) {
+            await supabase.from('chat_messages').insert({
+              user_id: user.id,
+              role: 'assistant',
+              content: assistantContent,
+            });
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar mensagem');
+      setLoading(false);
+    }
   };
 
   const quickQuestions = [
     'Qual o status do meu processo?',
     'Como pagar minha fatura?',
-    'O que é um despacho?',
-    'Qual o prazo do registro?',
+    'Quanto tempo leva o registro?',
+    'O que é NCL?',
   ];
+
+  const externalLinks = [
+    { label: 'Base de Marcas INPI', url: 'https://busca.inpi.gov.br/pePI/' },
+    { label: 'Tabela de Taxas INPI', url: 'https://www.gov.br/inpi/pt-br/servicos/marcas/guia-basico/taxas' },
+    { label: 'Falar no WhatsApp', url: 'https://wa.me/5511999999999' },
+  ];
+
+  const HomeView = () => (
+    <div className="flex flex-col h-full">
+      {/* Header with gradient */}
+      <div className="bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground p-6 rounded-t-xl">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <div className="bg-white/20 p-2 rounded-lg">
+              <Bot className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="flex -space-x-2">
+            <Avatar className="w-8 h-8 border-2 border-primary">
+              <AvatarImage src={avatar1} />
+              <AvatarFallback>W</AvatarFallback>
+            </Avatar>
+            <Avatar className="w-8 h-8 border-2 border-primary">
+              <AvatarImage src={avatar2} />
+              <AvatarFallback>M</AvatarFallback>
+            </Avatar>
+            <Avatar className="w-8 h-8 border-2 border-primary">
+              <AvatarImage src={avatar3} />
+              <AvatarFallback>B</AvatarFallback>
+            </Avatar>
+          </div>
+        </div>
+        
+        <h2 className="text-2xl font-bold mb-1">
+          Olá {userName || 'visitante'} 👋
+        </h2>
+        <p className="text-primary-foreground/80 text-lg">
+          Como podemos ajudar?
+        </p>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 p-4 space-y-3 overflow-auto bg-background">
+        {/* Send message button */}
+        <button
+          onClick={() => setCurrentView('chat')}
+          className="w-full flex items-center justify-between p-4 bg-card hover:bg-accent rounded-xl border transition-colors group"
+        >
+          <div className="text-left">
+            <p className="font-medium text-foreground">Envie uma mensagem</p>
+            <p className="text-sm text-muted-foreground">
+              Nossa IA responde na hora
+            </p>
+          </div>
+          <div className="bg-primary/10 p-2 rounded-lg group-hover:bg-primary/20 transition-colors">
+            <Send className="h-5 w-5 text-primary" />
+          </div>
+        </button>
+
+        {/* Quick questions */}
+        <div className="grid grid-cols-2 gap-2">
+          {quickQuestions.map((q) => (
+            <button
+              key={q}
+              onClick={() => handleSend(q)}
+              className="p-3 text-left text-sm bg-card hover:bg-accent rounded-xl border transition-colors"
+            >
+              <Sparkles className="h-4 w-4 text-primary mb-1" />
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {/* External links */}
+        <div className="pt-2 space-y-2">
+          {externalLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between p-4 bg-card hover:bg-accent rounded-xl border transition-colors"
+            >
+              <span className="text-sm font-medium">{link.label}</span>
+              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom navigation */}
+      <div className="border-t bg-card p-2 flex rounded-b-xl">
+        <button
+          onClick={() => setCurrentView('home')}
+          className={cn(
+            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
+            currentView === 'home' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Home className="h-5 w-5" />
+          <span className="text-xs font-medium">Início</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('chat')}
+          className={cn(
+            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors relative",
+            currentView === 'chat' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <div className="relative">
+            <MessageSquare className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          <span className="text-xs font-medium">Mensagens</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  const ChatView = () => (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-3 p-4 border-b bg-card rounded-t-xl">
+        <Avatar className="w-10 h-10">
+          <AvatarImage src={webmarcasIcon} />
+          <AvatarFallback className="bg-primary text-primary-foreground">
+            <Bot className="h-5 w-5" />
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1">
+          <h3 className="font-semibold">Assistente WebMarcas</h3>
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            Online agora
+          </p>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <ScrollArea ref={scrollRef} className="flex-1 p-4">
+        <div className="space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center py-8">
+              <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Bot className="h-8 w-8 text-primary" />
+              </div>
+              <h4 className="font-medium mb-2">Olá! Sou a assistente da WebMarcas 🎯</h4>
+              <p className="text-sm text-muted-foreground mb-4">
+                Posso ajudar com dúvidas sobre registro de marcas, processos INPI e muito mais.
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {quickQuestions.slice(0, 2).map((q) => (
+                  <Button
+                    key={q}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSend(q)}
+                    className="text-xs"
+                  >
+                    {q}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                'flex gap-3',
+                message.role === 'user' ? 'justify-end' : 'justify-start'
+              )}
+            >
+              {message.role === 'assistant' && (
+                <Avatar className="w-8 h-8 flex-shrink-0">
+                  <AvatarImage src={webmarcasIcon} />
+                  <AvatarFallback className="bg-primary/10">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              <div
+                className={cn(
+                  'max-w-[80%] rounded-2xl px-4 py-2.5',
+                  message.role === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-md'
+                    : 'bg-muted rounded-bl-md'
+                )}
+              >
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                  {message.content}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {loading && messages[messages.length - 1]?.role !== 'assistant' && (
+            <div className="flex gap-3">
+              <Avatar className="w-8 h-8 flex-shrink-0">
+                <AvatarImage src={webmarcasIcon} />
+                <AvatarFallback className="bg-primary/10">
+                  <Bot className="h-4 w-4 text-primary" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Input */}
+      <div className="p-4 border-t bg-card rounded-b-xl">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="flex gap-2"
+        >
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Digite sua mensagem..."
+            disabled={loading}
+            className="flex-1 rounded-full bg-muted border-0 focus-visible:ring-1"
+          />
+          <Button 
+            type="submit" 
+            disabled={loading || !input.trim()}
+            size="icon"
+            className="rounded-full"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </div>
+
+      {/* Bottom navigation */}
+      <div className="border-t bg-card p-2 flex">
+        <button
+          onClick={() => setCurrentView('home')}
+          className={cn(
+            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
+            currentView === 'home' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Home className="h-5 w-5" />
+          <span className="text-xs font-medium">Início</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('chat')}
+          className={cn(
+            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors relative",
+            currentView === 'chat' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <MessageSquare className="h-5 w-5" />
+          <span className="text-xs font-medium">Mensagens</span>
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <ClientLayout>
-      <div className="space-y-6 h-[calc(100vh-12rem)]">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Suporte IA</h1>
-          <p className="text-muted-foreground">
-            Tire suas dúvidas com nossa assistente virtual
-          </p>
+      <div className="max-w-lg mx-auto h-[calc(100vh-8rem)]">
+        <div className="bg-card rounded-xl shadow-lg border h-full overflow-hidden flex flex-col">
+          {currentView === 'home' ? <HomeView /> : <ChatView />}
         </div>
-
-        <Card className="h-[calc(100%-5rem)] flex flex-col">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              Assistente WebMarcas
-            </CardTitle>
-            <CardDescription>
-              Pergunte sobre status, documentos, pagamentos e mais
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="flex-1 flex flex-col p-0">
-            <ScrollArea ref={scrollRef} className="flex-1 px-6">
-              <div className="space-y-4 py-4">
-                {messages.length === 0 && (
-                  <div className="text-center py-8">
-                    <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground mb-4">
-                      Olá! Como posso ajudar você hoje?
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {quickQuestions.map((q) => (
-                        <Button
-                          key={q}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setInput(q)}
-                        >
-                          {q}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'flex gap-3',
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    )}
-                  >
-                    {message.role === 'assistant' && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-4 w-4 text-primary" />
-                      </div>
-                    )}
-                    <div
-                      className={cn(
-                        'max-w-[80%] rounded-lg px-4 py-2',
-                        message.role === 'user'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
-                      )}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    </div>
-                    {message.role === 'user' && (
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary-foreground" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {loading && (
-                  <div className="flex gap-3">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="bg-muted rounded-lg px-4 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            <div className="p-4 border-t">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSend();
-                }}
-                className="flex gap-2"
-              >
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Digite sua pergunta..."
-                  disabled={loading}
-                />
-                <Button type="submit" disabled={loading || !input.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </form>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </ClientLayout>
   );
