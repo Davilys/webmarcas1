@@ -68,18 +68,54 @@
   }
 
   .dark {
-    /* Dark theme - keeping for future use */
+    /* Dark theme */
     --background: 240 10% 4%;
     --foreground: 0 0% 98%;
+
     --card: 240 10% 8%;
     --card-foreground: 0 0% 98%;
-    --primary: 205 100% 50%;
+
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 210 100% 50%;
     --primary-foreground: 0 0% 100%;
+
     --secondary: 240 10% 12%;
     --secondary-foreground: 0 0% 98%;
+
     --muted: 240 10% 16%;
-    --muted-foreground: 240 5% 60%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 152 76% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
     --border: 240 10% 18%;
+    --input: 240 10% 18%;
+    --ring: 210 100% 50%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%) 0%, hsl(220 100% 60%) 100%);
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsla(210, 100%, 50%, 0.15), transparent);
+    --gradient-card: linear-gradient(180deg, hsla(240, 10%, 12%, 0.8) 0%, hsla(240, 10%, 8%, 0.9) 100%);
+    
+    --glass-bg: hsla(240, 10%, 10%, 0.6);
+    --glass-border: hsla(0, 0%, 100%, 0.08);
+    
+    --shadow-glow: 0 0 60px hsla(210, 100%, 50%, 0.15);
+    --shadow-card: 0 8px 32px hsla(0, 0%, 0%, 0.3);
+    --shadow-button: 0 4px 20px hsla(210, 100%, 50%, 0.3);
+
+    --sidebar-background: 240 10% 6%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 10% 18%;
+    --sidebar-ring: 210 100% 50%;
   }
 }
 

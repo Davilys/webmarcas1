@@ -1,11 +1,27 @@
 import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Moon, Sun, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import webmarcasLogo from "@/assets/webmarcas-logo.png";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const languages: { code: Language; label: string; flag: string }[] = [
+  { code: "pt", label: "Português", flag: "🇧🇷" },
+  { code: "en", label: "English", flag: "🇺🇸" },
+  { code: "es", label: "Español", flag: "🇪🇸" },
+];
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,12 +32,14 @@ const Header = () => {
   }, []);
 
   const navItems = [
-    { label: "Início", href: "#home" },
-    { label: "Benefícios", href: "#beneficios" },
-    { label: "Como Funciona", href: "#como-funciona" },
-    { label: "Preços", href: "#precos" },
-    { label: "FAQ", href: "#faq" },
+    { label: t("nav.home"), href: "#home" },
+    { label: t("nav.benefits"), href: "#beneficios" },
+    { label: t("nav.howItWorks"), href: "#como-funciona" },
+    { label: t("nav.pricing"), href: "#precos" },
+    { label: t("nav.faq"), href: "#faq" },
   ];
+
+  const currentLang = languages.find((l) => l.code === language);
 
   return (
     <header
@@ -54,24 +72,99 @@ const Header = () => {
             ))}
           </nav>
 
-          {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Desktop CTA + Controls */}
+          <div className="hidden md:flex items-center gap-2">
+            {/* Language Selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-9 h-9">
+                  <span className="text-lg">{currentLang?.flag}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {languages.map((lang) => (
+                  <DropdownMenuItem
+                    key={lang.code}
+                    onClick={() => setLanguage(lang.code)}
+                    className={language === lang.code ? "bg-secondary" : ""}
+                  >
+                    <span className="mr-2">{lang.flag}</span>
+                    {lang.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Theme Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="w-9 h-9"
+              aria-label="Alternar tema"
+            >
+              {theme === "light" ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </Button>
+
             <Button variant="ghost" size="sm" asChild>
-              <a href="#area-cliente">Área do Cliente</a>
+              <a href="#area-cliente">{t("nav.clientArea")}</a>
             </Button>
             <Button variant="primary" size="sm" className="btn-glow" asChild>
-              <a href="#consultar">Consultar Marca</a>
+              <a href="#consultar">{t("nav.checkBrand")}</a>
             </Button>
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            className="md:hidden p-2 text-foreground"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Menu"
-          >
-            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          {/* Mobile Controls */}
+          <div className="flex md:hidden items-center gap-2">
+            {/* Language Selector Mobile */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-9 h-9">
+                  <span className="text-lg">{currentLang?.flag}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {languages.map((lang) => (
+                  <DropdownMenuItem
+                    key={lang.code}
+                    onClick={() => setLanguage(lang.code)}
+                    className={language === lang.code ? "bg-secondary" : ""}
+                  >
+                    <span className="mr-2">{lang.flag}</span>
+                    {lang.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Theme Toggle Mobile */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="w-9 h-9"
+              aria-label="Alternar tema"
+            >
+              {theme === "light" ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </Button>
+
+            {/* Mobile Menu Button */}
+            <button
+              className="p-2 text-foreground"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Menu"
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -91,10 +184,10 @@ const Header = () => {
             ))}
             <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
               <Button variant="ghost" asChild>
-                <a href="#area-cliente">Área do Cliente</a>
+                <a href="#area-cliente">{t("nav.clientArea")}</a>
               </Button>
               <Button variant="primary" className="btn-glow" asChild>
-                <a href="#consultar">Consultar Marca</a>
+                <a href="#consultar">{t("nav.checkBrand")}</a>
               </Button>
             </div>
           </nav>
