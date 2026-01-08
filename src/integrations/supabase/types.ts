@@ -14,7 +14,451 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      brand_processes: {
+        Row: {
+          brand_name: string
+          business_area: string | null
+          created_at: string | null
+          deposit_date: string | null
+          expiry_date: string | null
+          grant_date: string | null
+          id: string
+          inpi_protocol: string | null
+          ncl_classes: number[] | null
+          next_step: string | null
+          next_step_date: string | null
+          notes: string | null
+          perfex_project_id: string | null
+          process_number: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          brand_name: string
+          business_area?: string | null
+          created_at?: string | null
+          deposit_date?: string | null
+          expiry_date?: string | null
+          grant_date?: string | null
+          id?: string
+          inpi_protocol?: string | null
+          ncl_classes?: number[] | null
+          next_step?: string | null
+          next_step_date?: string | null
+          notes?: string | null
+          perfex_project_id?: string | null
+          process_number?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          brand_name?: string
+          business_area?: string | null
+          created_at?: string | null
+          deposit_date?: string | null
+          expiry_date?: string | null
+          grant_date?: string | null
+          id?: string
+          inpi_protocol?: string | null
+          ncl_classes?: number[] | null
+          next_step?: string | null
+          next_step_date?: string | null
+          notes?: string | null
+          perfex_project_id?: string | null
+          process_number?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_processes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          role: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          role: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          role?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          contract_html: string | null
+          contract_number: string | null
+          contract_type: string | null
+          created_at: string | null
+          id: string
+          ip_address: string | null
+          perfex_contract_id: string | null
+          process_id: string | null
+          signed_at: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          contract_html?: string | null
+          contract_number?: string | null
+          contract_type?: string | null
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          perfex_contract_id?: string | null
+          process_id?: string | null
+          signed_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          contract_html?: string | null
+          contract_number?: string | null
+          contract_type?: string | null
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          perfex_contract_id?: string | null
+          process_id?: string | null
+          signed_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "brand_processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          created_at: string | null
+          document_type: string | null
+          file_size: number | null
+          file_url: string
+          id: string
+          mime_type: string | null
+          name: string
+          process_id: string | null
+          uploaded_by: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_type?: string | null
+          file_size?: number | null
+          file_url: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          process_id?: string | null
+          uploaded_by?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          document_type?: string | null
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          process_id?: string | null
+          uploaded_by?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "brand_processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount: number
+          asaas_invoice_id: string | null
+          boleto_code: string | null
+          created_at: string | null
+          description: string
+          due_date: string
+          id: string
+          invoice_url: string | null
+          payment_date: string | null
+          payment_method: string | null
+          pix_code: string | null
+          process_id: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount: number
+          asaas_invoice_id?: string | null
+          boleto_code?: string | null
+          created_at?: string | null
+          description: string
+          due_date: string
+          id?: string
+          invoice_url?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          pix_code?: string | null
+          process_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number
+          asaas_invoice_id?: string | null
+          boleto_code?: string | null
+          created_at?: string | null
+          description?: string
+          due_date?: string
+          id?: string
+          invoice_url?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          pix_code?: string | null
+          process_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "brand_processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      login_history: {
+        Row: {
+          id: string
+          ip_address: string | null
+          login_at: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          ip_address?: string | null
+          login_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          ip_address?: string | null
+          login_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "login_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string | null
+          id: string
+          link: string | null
+          message: string
+          read: boolean | null
+          title: string
+          type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          link?: string | null
+          message: string
+          read?: boolean | null
+          title: string
+          type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          link?: string | null
+          message?: string
+          read?: boolean | null
+          title?: string
+          type?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_events: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_date: string | null
+          event_type: string
+          id: string
+          process_id: string | null
+          rpi_number: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_date?: string | null
+          event_type: string
+          id?: string
+          process_id?: string | null
+          rpi_number?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_date?: string | null
+          event_type?: string
+          id?: string
+          process_id?: string | null
+          rpi_number?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_events_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "brand_processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          address: string | null
+          asaas_customer_id: string | null
+          city: string | null
+          company_name: string | null
+          cpf_cnpj: string | null
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          perfex_customer_id: string | null
+          phone: string | null
+          state: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          asaas_customer_id?: string | null
+          city?: string | null
+          company_name?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          perfex_customer_id?: string | null
+          phone?: string | null
+          state?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          asaas_customer_id?: string | null
+          city?: string | null
+          company_name?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          perfex_customer_id?: string | null
+          phone?: string | null
+          state?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
