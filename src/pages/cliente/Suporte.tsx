@@ -172,7 +172,7 @@ export default function Suporte() {
 
   const handleSend = async (messageText?: string) => {
     const text = messageText || input.trim();
-    if (!text || !user) return;
+    if (!text || !user || loading) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -187,31 +187,34 @@ export default function Suporte() {
     setCurrentView('chat');
 
     // Save user message
-    await supabase.from('chat_messages').insert({
-      user_id: user.id,
-      role: 'user',
-      content: text,
-    });
+    try {
+      await supabase.from('chat_messages').insert({
+        user_id: user.id,
+        role: 'user',
+        content: text,
+      });
+    } catch (err) {
+      console.error('Error saving user message:', err);
+    }
 
     let assistantContent = "";
     const assistantId = crypto.randomUUID();
 
+    // Add placeholder for assistant message
+    setMessages((prev) => [...prev, {
+      id: assistantId,
+      role: 'assistant' as const,
+      content: '',
+      created_at: new Date().toISOString(),
+    }]);
+
     const updateAssistant = (chunk: string) => {
       assistantContent += chunk;
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === 'assistant' && last.id === assistantId) {
-          return prev.map((m, i) => 
-            i === prev.length - 1 ? { ...m, content: assistantContent } : m
-          );
-        }
-        return [...prev, {
-          id: assistantId,
-          role: 'assistant' as const,
-          content: assistantContent,
-          created_at: new Date().toISOString(),
-        }];
-      });
+      setMessages((prev) => 
+        prev.map((m) => 
+          m.id === assistantId ? { ...m, content: assistantContent } : m
+        )
+      );
     };
 
     try {
@@ -225,11 +228,15 @@ export default function Suporte() {
           setLoading(false);
           // Save assistant message
           if (assistantContent) {
-            await supabase.from('chat_messages').insert({
-              user_id: user.id,
-              role: 'assistant',
-              content: assistantContent,
-            });
+            try {
+              await supabase.from('chat_messages').insert({
+                user_id: user.id,
+                role: 'assistant',
+                content: assistantContent,
+              });
+            } catch (err) {
+              console.error('Error saving assistant message:', err);
+            }
           }
         }
       );
@@ -237,6 +244,8 @@ export default function Suporte() {
       console.error('Chat error:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao enviar mensagem');
       setLoading(false);
+      // Remove the empty assistant message on error
+      setMessages((prev) => prev.filter(m => m.id !== assistantId));
     }
   };
 
@@ -250,7 +259,7 @@ export default function Suporte() {
   const externalLinks = [
     { label: 'Base de Marcas INPI', url: 'https://busca.inpi.gov.br/pePI/' },
     { label: 'Tabela de Taxas INPI', url: 'https://www.gov.br/inpi/pt-br/servicos/marcas/guia-basico/taxas' },
-    { label: 'Falar no WhatsApp', url: 'https://wa.me/5511999999999' },
+    { label: 'Falar no WhatsApp', url: 'https://wa.me/5511911120225' },
   ];
 
   const HomeView = () => (
