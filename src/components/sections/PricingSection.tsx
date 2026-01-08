@@ -1,5 +1,6 @@
-import { Check, Star, ArrowRight } from "lucide-react";
+import { Check, Star, ArrowRight, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getNextFridayFormatted } from "@/lib/dateUtils";
 
 const features = [
   "Busca de viabilidade completa",
@@ -79,6 +80,14 @@ const PricingSection = () => {
                 </li>
               ))}
             </ul>
+
+            {/* Urgency Banner */}
+            <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 mb-4">
+              <Flame className="w-5 h-5 text-destructive animate-pulse" />
+              <p className="text-sm font-semibold text-destructive">
+                R$699 à vista somente até sexta-feira, {getNextFridayFormatted()}
+              </p>
+            </div>
 
             {/* CTA */}
             <Button
