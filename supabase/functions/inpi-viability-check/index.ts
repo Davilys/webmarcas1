@@ -177,51 +177,162 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
   return BUSINESS_AREA_CLASSES.default;
 }
 
-// Função para gerenciar cookies entre requisições
-function extractAllCookies(headers: Headers, existingCookies: string = ''): string {
-  const cookieMap = new Map<string, string>();
-  
-  // Parse existing cookies
-  if (existingCookies) {
-    existingCookies.split(';').forEach(c => {
-      const parts = c.trim().split('=');
-      if (parts.length >= 2) {
-        cookieMap.set(parts[0], parts.slice(1).join('='));
-      }
-    });
-  }
-  
-  // Try getSetCookie (Deno method for multiple Set-Cookie headers)
+// Função para buscar no WIPO Global Brand Database (API gratuita)
+async function searchWIPO(brandName: string): Promise<{
+  success: boolean;
+  totalResults: number;
+  brands: Array<{
+    processo: string;
+    marca: string;
+    situacao: string;
+    classe: string;
+    titular: string;
+    pais: string;
+  }>;
+  error?: string;
+}> {
   try {
-    const setCookies = headers.getSetCookie?.() || [];
-    for (const cookie of setCookies) {
-      const mainPart = cookie.split(';')[0];
-      const parts = mainPart.split('=');
-      if (parts.length >= 2) {
-        cookieMap.set(parts[0].trim(), parts.slice(1).join('=').trim());
-      }
+    console.log(`[WIPO] ========== INICIANDO BUSCA ==========`);
+    console.log(`[WIPO] Marca: "${brandName}"`);
+    
+    // WIPO Brand Database select API endpoint
+    // Query: similar name search with Brazil filter
+    const query = encodeURIComponent(`brandName:(${brandName})`);
+    const wipoApiUrl = `https://branddb.wipo.int/branddb/select?q=${query}&rows=30&wt=json&sort=score+desc`;
+    
+    console.log(`[WIPO] API URL: ${wipoApiUrl}`);
+
+    const response = await fetch(wipoApiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+    });
+
+    console.log(`[WIPO] Response status: ${response.status}`);
+    
+    const contentType = response.headers.get('content-type');
+    console.log(`[WIPO] Content-Type: ${contentType}`);
+    
+    if (!response.ok) {
+      throw new Error(`WIPO retornou status ${response.status}`);
     }
-  } catch {
-    // Fallback: try to get from raw header
-    const rawCookie = headers.get('set-cookie');
-    if (rawCookie) {
-      // Split by comma but be careful with date values
-      const cookieParts = rawCookie.split(/,(?=\s*[A-Za-z_-]+=)/);
-      for (const cookie of cookieParts) {
-        const mainPart = cookie.split(';')[0];
-        const parts = mainPart.split('=');
-        if (parts.length >= 2) {
-          cookieMap.set(parts[0].trim(), parts.slice(1).join('=').trim());
+
+    // Try to parse as JSON
+    const text = await response.text();
+    console.log(`[WIPO] Response length: ${text.length}, Preview: ${text.substring(0, 200)}`);
+    
+    // Check if response is JSON
+    if (text.startsWith('{') || text.startsWith('[')) {
+      const data = JSON.parse(text);
+      
+      const docs = data.response?.docs || data.docs || [];
+      const numFound = data.response?.numFound || data.numFound || docs.length;
+
+      console.log(`[WIPO] Total encontrado: ${numFound}, Docs: ${docs.length}`);
+
+      const brands = docs.map((doc: any) => ({
+        processo: doc.AN || doc.RN || doc.ID || '',
+        marca: doc.BN || doc.brandName || '',
+        situacao: doc.ST || doc.status || 'Registrado',
+        classe: Array.isArray(doc.NC) ? doc.NC.join(', ') : (doc.NC || ''),
+        titular: doc.HOL || doc.holder || '',
+        pais: doc.OO || doc.origin || ''
+      }));
+
+      // Filtrar para mostrar prioritariamente marcas do Brasil
+      const brazilBrands = brands.filter((b: any) => b.pais === 'BR');
+      const otherBrands = brands.filter((b: any) => b.pais !== 'BR');
+      const sortedBrands = [...brazilBrands, ...otherBrands];
+
+      console.log(`[WIPO] Total: ${numFound}, Marcas BR: ${brazilBrands.length}`);
+
+      return {
+        success: true,
+        totalResults: numFound,
+        brands: sortedBrands.slice(0, 15)
+      };
+    }
+    
+    // Check if it's a captcha/verification page
+    if (text.includes('altcha') || text.includes('challenge') || text.includes('verify') || text.length < 2000) {
+      console.log('[WIPO] Página de verificação detectada - busca automática bloqueada');
+      return {
+        success: false,
+        totalResults: 0,
+        brands: [],
+        error: 'Busca automática temporariamente indisponível. Base de dados protegida.'
+      };
+    }
+    
+    // If HTML with actual content, try to extract data
+    console.log('[WIPO] Resposta HTML recebida, tentando extrair dados...');
+    
+    // Look for trademark entries in HTML
+    const brandNamePattern = new RegExp(brandName, 'gi');
+    const found = text.match(brandNamePattern);
+    
+    if (found && found.length > 0) {
+      console.log(`[WIPO] Encontradas ${found.length} menções da marca no HTML`);
+      
+      // Try to extract structured data from various possible formats
+      const jsonDataMatch = text.match(/var\s+(?:searchResults|data|results)\s*=\s*(\{[\s\S]*?\});/);
+      if (jsonDataMatch) {
+        try {
+          const searchData = JSON.parse(jsonDataMatch[1]);
+          if (searchData.docs) {
+            return {
+              success: true,
+              totalResults: searchData.docs.length,
+              brands: searchData.docs.slice(0, 15).map((doc: any) => ({
+                processo: doc.AN || doc.RN || '',
+                marca: doc.BN || brandName,
+                situacao: doc.ST || 'Encontrado',
+                classe: doc.NC || '',
+                titular: doc.HOL || '',
+                pais: doc.OO || ''
+              }))
+            };
+          }
+        } catch (e) {
+          console.log('[WIPO] Não foi possível extrair JSON do HTML');
         }
       }
+      
+      return {
+        success: true,
+        totalResults: found.length,
+        brands: [{
+          processo: '',
+          marca: brandName.toUpperCase(),
+          situacao: 'Encontrado na base WIPO',
+          classe: '',
+          titular: '',
+          pais: ''
+        }]
+      };
     }
+
+    return {
+      success: true,
+      totalResults: 0,
+      brands: []
+    };
+
+  } catch (error) {
+    console.error('[WIPO] ERRO:', error);
+    return {
+      success: false,
+      totalResults: 0,
+      brands: [],
+      error: error instanceof Error ? error.message : 'Erro desconhecido'
+    };
   }
-  
-  return Array.from(cookieMap.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
 }
 
-// Função para fazer scraping real do INPI
-async function searchINPI(brandName: string): Promise<{
+// Função combinada para buscar em múltiplas fontes
+async function searchBrazilTrademarks(brandName: string): Promise<{
   success: boolean;
   totalResults: number;
   brands: Array<{
@@ -233,218 +344,21 @@ async function searchINPI(brandName: string): Promise<{
   }>;
   error?: string;
 }> {
-  try {
-    console.log(`[INPI] ========== INICIANDO BUSCA ==========`);
-    console.log(`[INPI] Marca: "${brandName}"`);
-    
-    const baseHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      'Cache-Control': 'max-age=0',
-      'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-      'Sec-Ch-Ua-Mobile': '?0',
-      'Sec-Ch-Ua-Platform': '"Windows"',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'same-origin',
-      'Sec-Fetch-User': '?1',
-      'Upgrade-Insecure-Requests': '1',
-    };
-
-    // STEP 1: Página inicial
-    console.log('[INPI] Step 1: Página inicial...');
-    const step1 = await fetch('https://busca.inpi.gov.br/pePI/', {
-      method: 'GET',
-      headers: baseHeaders,
-      redirect: 'follow',
-    });
-    let allCookies = extractAllCookies(step1.headers, '');
-    console.log(`[INPI] Step 1: Status ${step1.status}, Cookies: ${allCookies.substring(0, 100)}`);
-
-    // STEP 2: Continuar sem login
-    console.log('[INPI] Step 2: Continuar sem login...');
-    const step2 = await fetch('https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login', {
-      method: 'GET',
-      headers: { 
-        ...baseHeaders, 
-        'Cookie': allCookies,
-        'Referer': 'https://busca.inpi.gov.br/pePI/'
-      },
-      redirect: 'follow',
-    });
-    allCookies = extractAllCookies(step2.headers, allCookies);
-    const step2Html = await step2.text();
-    console.log(`[INPI] Step 2: Status ${step2.status}, HTML: ${step2Html.length} bytes, Cookies: ${allCookies.substring(0, 100)}`);
-
-    // STEP 3: Acessar busca de marcas
-    console.log('[INPI] Step 3: Acessando busca de marcas...');
-    const step3 = await fetch('https://busca.inpi.gov.br/pePI/servlet/MarcasServletController?Action=iniciaBasica', {
-      method: 'GET',
-      headers: { 
-        ...baseHeaders, 
-        'Cookie': allCookies,
-        'Referer': 'https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login'
-      },
-      redirect: 'follow',
-    });
-    allCookies = extractAllCookies(step3.headers, allCookies);
-    const step3Html = await step3.text();
-    console.log(`[INPI] Step 3: Status ${step3.status}, HTML: ${step3Html.length} bytes`);
-    
-    // Log conteúdo para debug
-    if (step3Html.length > 0) {
-      console.log(`[INPI] Step 3 HTML: ${step3Html.substring(0, 300).replace(/\n/g, ' ')}`);
-    }
-
-    // STEP 4: Executar busca
-    console.log('[INPI] Step 4: Executando busca EXATA...');
-    
-    const formParams = new URLSearchParams();
-    formParams.append('Action', 'SearchMarcas');
-    formParams.append('Marca', brandName.toUpperCase());
-    formParams.append('tipoMarca', 'Exata');
-    formParams.append('NCL', '');
-    formParams.append('Titular', '');
-    formParams.append('Situacao', '');
-    formParams.append('Natureza', '');
-    formParams.append('Apresentacao', '');
-    formParams.append('ProcurarMarca', 'Pesquisar');
-
-    const searchResponse = await fetch('https://busca.inpi.gov.br/pePI/servlet/MarcasServletController', {
-      method: 'POST',
-      headers: {
-        ...baseHeaders,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': allCookies,
-        'Referer': 'https://busca.inpi.gov.br/pePI/servlet/MarcasServletController?Action=iniciaBasica',
-        'Origin': 'https://busca.inpi.gov.br',
-      },
-      body: formParams.toString(),
-      redirect: 'follow',
-    });
-
-    const html = await searchResponse.text();
-    console.log(`[INPI] Step 4: Status ${searchResponse.status}, HTML: ${html.length} bytes`);
-    
-    // Log preview do HTML para debug
-    if (html.length > 0) {
-      console.log(`[INPI] HTML Preview: ${html.substring(0, 500).replace(/\n/g, ' ')}`);
-    }
-
-    // Se HTML muito pequeno, falhou
-    if (html.length < 500) {
-      console.log('[INPI] Resposta muito curta - busca falhou');
-      return {
-        success: false,
-        totalResults: 0,
-        brands: [],
-        error: 'O site do INPI não retornou resultados. O site pode estar bloqueando requisições automatizadas.'
-      };
-    }
-
-    // Verificar se não encontrou resultados
-    if (html.includes('Nenhum resultado') || 
-        html.includes('nenhum resultado') ||
-        html.includes('Não foram encontrados') ||
-        html.includes('não foram encontrados') ||
-        html.includes('0 registro')) {
-      console.log('[INPI] Nenhum resultado encontrado');
-      return {
-        success: true,
-        totalResults: 0,
-        brands: []
-      };
-    }
-
-    // Extrair resultados
-    const brands: Array<{
-      processo: string;
-      marca: string;
-      situacao: string;
-      classe: string;
-      titular: string;
-    }> = [];
-
-    // Procurar por números de processo (9 dígitos começando com 9)
-    const processoRegex = /9\d{8}/g;
-    const processos = new Set<string>();
-    let match;
-    while ((match = processoRegex.exec(html)) !== null) {
-      processos.add(match[0]);
-    }
-
-    // Extrair dados das linhas da tabela
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
-    const rows = html.match(rowRegex) || [];
-    
-    for (const row of rows) {
-      // Verificar se a linha contém um processo
-      const procMatch = row.match(/9\d{8}/);
-      if (procMatch) {
-        // Extrair células
-        const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-        const cells: string[] = [];
-        let cellMatch;
-        while ((cellMatch = cellRegex.exec(row)) !== null) {
-          const content = cellMatch[1]
-            .replace(/<[^>]+>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-          if (content) cells.push(content);
-        }
-
-        if (cells.length >= 3) {
-          brands.push({
-            processo: procMatch[0],
-            marca: cells.find(c => c.toLowerCase().includes(brandName.toLowerCase())) || cells[2] || brandName,
-            situacao: cells.find(c => c.includes('Registro') || c.includes('Pedido') || c.includes('Arquivado')) || cells[3] || '',
-            classe: cells.find(c => /^NCL\s*\d+|^\d{2}$/.test(c)) || '',
-            titular: cells.find(c => c.length > 20 && !c.includes('Registro') && !c.includes('Pedido')) || ''
-          });
-        }
-      }
-    }
-
-    // Se não encontrou via tabela, tentar via processos simples
-    if (brands.length === 0 && processos.size > 0) {
-      processos.forEach(proc => {
-        brands.push({
-          processo: proc,
-          marca: brandName.toUpperCase(),
-          situacao: 'Encontrado no INPI',
-          classe: '',
-          titular: ''
-        });
-      });
-    }
-
-    // Extrair total de resultados
-    const totalMatch = html.match(/(\d+)\s*(?:registro|resultado|marca|processo)/i);
-    const total = totalMatch ? parseInt(totalMatch[1]) : brands.length;
-
-    console.log(`[INPI] ========== RESULTADO ==========`);
-    console.log(`[INPI] Total: ${total}, Marcas extraídas: ${brands.length}`);
-    brands.forEach((b, i) => console.log(`[INPI] ${i+1}. ${b.processo} - ${b.marca} - ${b.situacao}`));
-
-    return {
-      success: true,
-      totalResults: Math.max(total, brands.length),
-      brands
-    };
-
-  } catch (error) {
-    console.error('[INPI] ERRO:', error);
-    return {
-      success: false,
-      totalResults: 0,
-      brands: [],
-      error: error instanceof Error ? error.message : 'Erro desconhecido'
-    };
-  }
+  // Usar WIPO como fonte principal
+  const wipoResult = await searchWIPO(brandName);
+  
+  return {
+    success: wipoResult.success,
+    totalResults: wipoResult.totalResults,
+    brands: wipoResult.brands.map(b => ({
+      processo: b.processo,
+      marca: b.marca,
+      situacao: b.situacao,
+      classe: b.classe,
+      titular: b.titular
+    })),
+    error: wipoResult.error
+  };
 }
 
 Deno.serve(async (req) => {
@@ -491,28 +405,29 @@ Deno.serve(async (req) => {
       minute: '2-digit'
     });
 
-    // BUSCA REAL NO INPI
-    const inpiResult = await searchINPI(brandName);
+    // BUSCA NO WIPO GLOBAL BRAND DATABASE (inclui marcas do Brasil/INPI)
+    const wipoResult = await searchBrazilTrademarks(brandName);
     
     // Get classes for the business area
     const { classes, descriptions } = getClassesForBusinessArea(businessArea);
-    const classesText = descriptions.map((desc) => `${desc}`).join('\n');
+    const classesText = descriptions.map((desc: string) => `${desc}`).join('\n');
     
     // Determinar nível de viabilidade
     let viabilityLevel: 'high' | 'medium' | 'low' = 'high';
     let resultText = '';
     
-    if (inpiResult.success) {
-      if (inpiResult.totalResults === 0) {
+    if (wipoResult.success) {
+      if (wipoResult.totalResults === 0) {
         viabilityLevel = 'high';
-        resultText = `✅ Nenhum resultado encontrado para "${brandName.toUpperCase()}" na base do INPI.
-✅ Não foram encontradas marcas idênticas registradas.
+        resultText = `✅ Nenhum resultado encontrado para "${brandName.toUpperCase()}" na base de dados global.
+✅ Não foram encontradas marcas idênticas ou similares registradas.
 ✅ Sua marca apresenta ALTA viabilidade de registro.`;
       } else {
         // Verificar situações das marcas encontradas
-        const hasActiveRegistration = inpiResult.brands.some(b => 
-          b.situacao.toLowerCase().includes('registro') && 
-          b.situacao.toLowerCase().includes('vigor')
+        const hasActiveRegistration = wipoResult.brands.some((b: { situacao: string }) => 
+          b.situacao.toLowerCase().includes('regist') || 
+          b.situacao.toLowerCase().includes('active') ||
+          b.situacao.toLowerCase().includes('ativo')
         );
         
         if (hasActiveRegistration) {
@@ -521,27 +436,28 @@ Deno.serve(async (req) => {
           viabilityLevel = 'medium';
         }
         
-        resultText = `Foram encontradas ${inpiResult.totalResults} marca(s) na base do INPI:\n\n`;
-        inpiResult.brands.slice(0, 10).forEach((b, i) => {
+        resultText = `Foram encontradas ${wipoResult.totalResults} marca(s) na base global WIPO:\n\n`;
+        wipoResult.brands.slice(0, 10).forEach((b: { marca: string; processo: string; situacao: string; classe: string; titular?: string }, i: number) => {
           resultText += `${i + 1}. ${b.marca}\n`;
           resultText += `   Processo: ${b.processo}\n`;
           if (b.situacao) resultText += `   Situação: ${b.situacao}\n`;
-          if (b.classe) resultText += `   Classe: ${b.classe}\n`;
+          if (b.classe) resultText += `   Classe NCL: ${b.classe}\n`;
+          if (b.titular) resultText += `   Titular: ${b.titular}\n`;
           resultText += '\n';
         });
       }
     } else {
       // Busca falhou - informar no laudo
       viabilityLevel = 'medium';
-      resultText = `⚠️ Não foi possível realizar a busca automática no INPI.
-${inpiResult.error || 'O site pode estar temporariamente indisponível.'}
+      resultText = `⚠️ Não foi possível realizar a busca automática.
+${wipoResult.error || 'O serviço pode estar temporariamente indisponível.'}
 
 Para garantir a precisão, recomendamos que um especialista realize a consulta manual.`;
     }
 
     // Build the laudo
     const laudo = `*LAUDO TÉCNICO DE VIABILIDADE DE MARCA*
-*Pesquisa na Base do INPI*
+*Pesquisa na Base Global WIPO + INPI*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -609,9 +525,9 @@ www.webmarcas.net`;
         classes,
         classDescriptions: descriptions,
         searchDate: brazilTime,
-        inpiResult: {
-          totalResults: inpiResult.totalResults,
-          brands: inpiResult.brands.slice(0, 10)
+        wipoResult: {
+          totalResults: wipoResult.totalResults,
+          brands: wipoResult.brands.slice(0, 10)
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
