@@ -380,7 +380,7 @@ export default function Suporte() {
           </AvatarFallback>
         </Avatar>
         <div className="flex-1">
-          <h3 className="font-semibold">Assistente WebMarcas</h3>
+          <h3 className="font-semibold">Fernanda – Suporte WebMarcas</h3>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             Online agora
@@ -396,9 +396,9 @@ export default function Suporte() {
               <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Bot className="h-8 w-8 text-primary" />
               </div>
-              <h4 className="font-medium mb-2">Olá! Sou a assistente da WebMarcas 🎯</h4>
+              <h4 className="font-medium mb-2">Olá! Sou a Fernanda da WebMarcas 👋</h4>
               <p className="text-sm text-muted-foreground mb-4">
-                Posso ajudar com dúvidas sobre registro de marcas, processos INPI e muito mais.
+                Especialista em registro de marcas no INPI. Como posso ajudar você hoje?
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {quickQuestions.slice(0, 2).map((q) => (
