@@ -177,7 +177,7 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
   return BUSINESS_AREA_CLASSES.default;
 }
 
-// Função para buscar no WIPO Global Brand Database (API gratuita)
+// Função para buscar no WIPO Global Brand Database
 async function searchWIPO(brandName: string): Promise<{
   success: boolean;
   totalResults: number;
@@ -195,58 +195,76 @@ async function searchWIPO(brandName: string): Promise<{
     console.log(`[WIPO] ========== INICIANDO BUSCA ==========`);
     console.log(`[WIPO] Marca: "${brandName}"`);
     
-    // WIPO Brand Database select API endpoint
-    // Query: similar name search with Brazil filter
-    const query = encodeURIComponent(`brandName:(${brandName})`);
-    const wipoApiUrl = `https://branddb.wipo.int/branddb/select?q=${query}&rows=30&wt=json&sort=score+desc`;
+    // Construir a estrutura de busca do WIPO similarname
+    const searchStructure = {
+      _id: Math.random().toString(36).substring(2, 6),
+      boolean: 'AND',
+      bricks: [{
+        _id: Math.random().toString(36).substring(2, 6),
+        key: 'brandName',
+        value: brandName,
+        strategy: 'Simple'
+      }]
+    };
     
-    console.log(`[WIPO] API URL: ${wipoApiUrl}`);
+    // URL exata do WIPO similarname com os parâmetros corretos
+    const params = new URLSearchParams({
+      sort: 'score desc',
+      rows: '30',
+      asStructure: JSON.stringify(searchStructure),
+      fg: '_void_',
+      _: Date.now().toString()
+    });
+    
+    // Endpoint de resultados JSON do WIPO
+    const wipoJsonUrl = `https://branddb.wipo.int/en/similarname/results?${params.toString()}`;
+    
+    console.log(`[WIPO] URL: ${wipoJsonUrl}`);
 
-    const response = await fetch(wipoApiUrl, {
+    const response = await fetch(wipoJsonUrl, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Referer': 'https://branddb.wipo.int/en/similarname',
+        'Origin': 'https://branddb.wipo.int',
+        'X-Requested-With': 'XMLHttpRequest',
       },
     });
 
     console.log(`[WIPO] Response status: ${response.status}`);
     
-    const contentType = response.headers.get('content-type');
-    console.log(`[WIPO] Content-Type: ${contentType}`);
-    
-    if (!response.ok) {
-      throw new Error(`WIPO retornou status ${response.status}`);
-    }
-
-    // Try to parse as JSON
     const text = await response.text();
-    console.log(`[WIPO] Response length: ${text.length}, Preview: ${text.substring(0, 200)}`);
+    console.log(`[WIPO] Response length: ${text.length}`);
+    console.log(`[WIPO] Response preview: ${text.substring(0, 300)}`);
     
-    // Check if response is JSON
+    // Verificar se é JSON válido
     if (text.startsWith('{') || text.startsWith('[')) {
       const data = JSON.parse(text);
+      console.log(`[WIPO] JSON parsed successfully`);
       
-      const docs = data.response?.docs || data.docs || [];
-      const numFound = data.response?.numFound || data.numFound || docs.length;
+      // Estrutura de resposta WIPO
+      const docs = data.response?.docs || data.docs || data.results || [];
+      const numFound = data.response?.numFound || data.numFound || data.total || docs.length;
 
       console.log(`[WIPO] Total encontrado: ${numFound}, Docs: ${docs.length}`);
 
       const brands = docs.map((doc: any) => ({
-        processo: doc.AN || doc.RN || doc.ID || '',
-        marca: doc.BN || doc.brandName || '',
-        situacao: doc.ST || doc.status || 'Registrado',
-        classe: Array.isArray(doc.NC) ? doc.NC.join(', ') : (doc.NC || ''),
-        titular: doc.HOL || doc.holder || '',
-        pais: doc.OO || doc.origin || ''
+        processo: doc.AN || doc.applicationNumber || doc.RN || doc.registrationNumber || '',
+        marca: doc.BN || doc.brandName || doc.name || '',
+        situacao: doc.ST || doc.status || doc.statusDescription || 'Registrado',
+        classe: Array.isArray(doc.NC) ? doc.NC.join(', ') : (doc.NC || doc.niceClasses || ''),
+        titular: doc.HOL || doc.holderName || doc.holder || '',
+        pais: doc.OO || doc.origin || doc.country || ''
       }));
 
-      // Filtrar para mostrar prioritariamente marcas do Brasil
+      // Priorizar marcas do Brasil
       const brazilBrands = brands.filter((b: any) => b.pais === 'BR');
       const otherBrands = brands.filter((b: any) => b.pais !== 'BR');
       const sortedBrands = [...brazilBrands, ...otherBrands];
 
-      console.log(`[WIPO] Total: ${numFound}, Marcas BR: ${brazilBrands.length}`);
+      console.log(`[WIPO] Marcas encontradas: ${brands.length}, BR: ${brazilBrands.length}`);
 
       return {
         success: true,
@@ -255,54 +273,63 @@ async function searchWIPO(brandName: string): Promise<{
       };
     }
     
-    // Check if it's a captcha/verification page
-    if (text.includes('altcha') || text.includes('challenge') || text.includes('verify') || text.length < 2000) {
-      console.log('[WIPO] Página de verificação detectada - busca automática bloqueada');
+    // Se não é JSON, verificar se é página de captcha
+    if (text.includes('altcha') || text.includes('challenge') || text.includes('Just a moment')) {
+      console.log('[WIPO] Página de verificação/captcha detectada');
       return {
         success: false,
         totalResults: 0,
         brands: [],
-        error: 'Busca automática temporariamente indisponível. Base de dados protegida.'
+        error: 'Verificação de segurança do WIPO ativa. A busca automática está temporariamente bloqueada.'
       };
     }
     
-    // If HTML with actual content, try to extract data
-    console.log('[WIPO] Resposta HTML recebida, tentando extrair dados...');
+    // Tentar extrair dados do HTML
+    console.log('[WIPO] Tentando extrair dados do HTML...');
     
-    // Look for trademark entries in HTML
-    const brandNamePattern = new RegExp(brandName, 'gi');
-    const found = text.match(brandNamePattern);
+    // Procurar por dados JSON embutidos no HTML
+    const jsonMatch = text.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/) ||
+                      text.match(/var\s+(?:results|data|searchData)\s*=\s*(\{[\s\S]*?\});/) ||
+                      text.match(/"docs"\s*:\s*\[([\s\S]*?)\]/);
     
-    if (found && found.length > 0) {
-      console.log(`[WIPO] Encontradas ${found.length} menções da marca no HTML`);
-      
-      // Try to extract structured data from various possible formats
-      const jsonDataMatch = text.match(/var\s+(?:searchResults|data|results)\s*=\s*(\{[\s\S]*?\});/);
-      if (jsonDataMatch) {
-        try {
-          const searchData = JSON.parse(jsonDataMatch[1]);
-          if (searchData.docs) {
-            return {
-              success: true,
-              totalResults: searchData.docs.length,
-              brands: searchData.docs.slice(0, 15).map((doc: any) => ({
-                processo: doc.AN || doc.RN || '',
-                marca: doc.BN || brandName,
-                situacao: doc.ST || 'Encontrado',
-                classe: doc.NC || '',
-                titular: doc.HOL || '',
-                pais: doc.OO || ''
-              }))
-            };
-          }
-        } catch (e) {
-          console.log('[WIPO] Não foi possível extrair JSON do HTML');
+    if (jsonMatch) {
+      try {
+        let jsonData;
+        if (jsonMatch[1].startsWith('{')) {
+          jsonData = JSON.parse(jsonMatch[1]);
+        } else {
+          jsonData = { docs: JSON.parse(`[${jsonMatch[1]}]`) };
         }
+        
+        const docs = jsonData.docs || jsonData.results || [];
+        console.log(`[WIPO] Dados extraídos do HTML: ${docs.length} resultados`);
+        
+        return {
+          success: true,
+          totalResults: docs.length,
+          brands: docs.slice(0, 15).map((doc: any) => ({
+            processo: doc.AN || doc.RN || '',
+            marca: doc.BN || brandName.toUpperCase(),
+            situacao: doc.ST || 'Encontrado',
+            classe: doc.NC || '',
+            titular: doc.HOL || '',
+            pais: doc.OO || ''
+          }))
+        };
+      } catch (e) {
+        console.log('[WIPO] Falha ao parsear JSON embutido:', e);
       }
-      
+    }
+    
+    // Procurar menções da marca no HTML
+    const brandRegex = new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const matches = text.match(brandRegex);
+    
+    if (matches && matches.length > 0) {
+      console.log(`[WIPO] Encontradas ${matches.length} menções da marca no HTML`);
       return {
         success: true,
-        totalResults: found.length,
+        totalResults: matches.length,
         brands: [{
           processo: '',
           marca: brandName.toUpperCase(),
@@ -314,6 +341,8 @@ async function searchWIPO(brandName: string): Promise<{
       };
     }
 
+    // Nenhum resultado encontrado
+    console.log('[WIPO] Nenhum resultado encontrado');
     return {
       success: true,
       totalResults: 0,
@@ -326,7 +355,7 @@ async function searchWIPO(brandName: string): Promise<{
       success: false,
       totalResults: 0,
       brands: [],
-      error: error instanceof Error ? error.message : 'Erro desconhecido'
+      error: error instanceof Error ? error.message : 'Erro desconhecido na busca WIPO'
     };
   }
 }
