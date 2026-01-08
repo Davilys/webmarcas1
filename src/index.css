@@ -6,27 +6,27 @@
 
 @layer base {
   :root {
-    /* WebMarcas Dark Theme - Inspired by Shar.com.br */
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
+    /* WebMarcas Light Theme - Clean & Professional */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
 
-    --card: 240 10% 8%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 240 10% 6%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Primary - Cyan/Blue accent */
-    --primary: 190 100% 50%;
-    --primary-foreground: 240 10% 4%;
+    /* Primary - Blue accent */
+    --primary: 205 100% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Subtle dark */
-    --secondary: 240 10% 12%;
-    --secondary-foreground: 0 0% 98%;
+    /* Secondary - Light gray */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
 
     /* Muted */
-    --muted: 240 10% 16%;
-    --muted-foreground: 240 5% 60%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
 
     /* Accent - Green for success/CTA */
     --accent: 152 76% 45%;
@@ -37,38 +37,49 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Borders */
-    --border: 240 10% 18%;
-    --input: 240 10% 18%;
-    --ring: 190 100% 50%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 205 100% 50%;
 
     --radius: 0.75rem;
 
     /* Custom WebMarcas tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(190 100% 50%) 0%, hsl(220 100% 60%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(205 100% 50%) 0%, hsl(220 100% 60%) 100%);
     --gradient-accent: linear-gradient(135deg, hsl(152 76% 45%) 0%, hsl(170 70% 40%) 100%);
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsla(190, 100%, 50%, 0.15), transparent);
-    --gradient-card: linear-gradient(180deg, hsla(240, 10%, 12%, 0.8) 0%, hsla(240, 10%, 8%, 0.9) 100%);
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsla(205, 100%, 50%, 0.08), transparent);
+    --gradient-card: linear-gradient(180deg, hsla(0, 0%, 100%, 1) 0%, hsla(210, 40%, 98%, 1) 100%);
     
-    --glass-bg: hsla(240, 10%, 10%, 0.6);
-    --glass-border: hsla(0, 0%, 100%, 0.08);
+    --glass-bg: hsla(0, 0%, 100%, 0.9);
+    --glass-border: hsla(214, 32%, 91%, 1);
     
-    --shadow-glow: 0 0 60px hsla(190, 100%, 50%, 0.15);
-    --shadow-card: 0 8px 32px hsla(0, 0%, 0%, 0.3);
-    --shadow-button: 0 4px 20px hsla(190, 100%, 50%, 0.3);
+    --shadow-glow: 0 0 60px hsla(205, 100%, 50%, 0.1);
+    --shadow-card: 0 4px 24px hsla(222, 47%, 11%, 0.08);
+    --shadow-button: 0 4px 16px hsla(205, 100%, 50%, 0.25);
 
     /* Sidebar (keeping for compatibility) */
-    --sidebar-background: 240 10% 6%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 190 100% 50%;
-    --sidebar-primary-foreground: 240 10% 4%;
-    --sidebar-accent: 240 10% 12%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 10% 18%;
-    --sidebar-ring: 190 100% 50%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 205 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 205 100% 50%;
   }
 
   .dark {
-    /* Already dark by default */
+    /* Dark theme - keeping for future use */
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 8%;
+    --card-foreground: 0 0% 98%;
+    --primary: 205 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 10% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 10% 16%;
+    --muted-foreground: 240 5% 60%;
+    --border: 240 10% 18%;
   }
 }
 
@@ -153,7 +164,7 @@
   }
 
   .btn-glow:hover {
-    box-shadow: 0 6px 30px hsla(190, 100%, 50%, 0.4);
+    box-shadow: 0 6px 24px hsla(205, 100%, 50%, 0.35);
     transform: translateY(-2px);
   }
 
@@ -169,8 +180,8 @@
 
   /* Pulse glow */
   @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 20px hsla(152, 76%, 45%, 0.4); }
-    50% { box-shadow: 0 0 40px hsla(152, 76%, 45%, 0.6); }
+    0%, 100% { box-shadow: 0 0 20px hsla(152, 76%, 45%, 0.3); }
+    50% { box-shadow: 0 0 40px hsla(152, 76%, 45%, 0.5); }
   }
 
   .animate-pulse-glow {
@@ -209,9 +220,9 @@
   /* Badge styling */
   .badge-premium {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium;
-    background: hsla(190, 100%, 50%, 0.1);
-    border: 1px solid hsla(190, 100%, 50%, 0.3);
-    color: hsl(190, 100%, 65%);
+    background: hsla(205, 100%, 50%, 0.08);
+    border: 1px solid hsla(205, 100%, 50%, 0.25);
+    color: hsl(205, 100%, 45%);
   }
 
   /* Section styling */
@@ -231,7 +242,7 @@
 
   .feature-card:hover {
     transform: translateY(-4px);
-    border-color: hsla(190, 100%, 50%, 0.3);
+    border-color: hsla(205, 100%, 50%, 0.3);
     box-shadow: var(--shadow-glow);
   }
 
@@ -246,12 +257,12 @@
   }
 
   .radio-card:hover {
-    border-color: hsla(190, 100%, 50%, 0.5);
+    border-color: hsla(205, 100%, 50%, 0.5);
   }
 
   .radio-card.selected {
-    border-color: hsl(190, 100%, 50%);
-    background: hsla(190, 100%, 50%, 0.1);
+    border-color: hsl(205, 100%, 50%);
+    background: hsla(205, 100%, 50%, 0.05);
   }
 
   /* Testimonials carousel animations */
@@ -289,14 +300,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(240, 10%, 6%);
+  background: hsl(210, 40%, 96%);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(240, 10%, 20%);
+  background: hsl(214, 32%, 80%);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(240, 10%, 30%);
+  background: hsl(214, 32%, 70%);
 }
