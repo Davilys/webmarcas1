@@ -282,13 +282,32 @@ export default function RevistaINPI() {
         }
       );
 
+      if (response.status === 429) {
+        toast.error('Limite de requisições excedido. Aguarde alguns minutos e tente novamente.');
+        await fetchUploads();
+        return;
+      }
+
+      if (response.status === 402) {
+        toast.error('Créditos de IA esgotados. Adicione créditos para continuar.');
+        await fetchUploads();
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao processar PDF');
+        throw new Error(errorData.error || errorData.details || 'Erro ao processar arquivo');
       }
 
       const result = await response.json();
-      toast.success(`Análise concluída! ${result.total_processes} processos encontrados, ${result.matched_clients} clientes identificados.`);
+      
+      if (result.total_processes === 0) {
+        toast.info(result.summary || 'Nenhum processo do procurador foi encontrado nesta edição.', {
+          duration: 6000,
+        });
+      } else {
+        toast.success(`Análise concluída! ${result.total_processes} processos encontrados, ${result.matched_clients} clientes identificados.`);
+      }
       
       // Refresh uploads list
       const { data: updatedUploads } = await supabase
@@ -309,7 +328,7 @@ export default function RevistaINPI() {
       
     } catch (error) {
       console.error('Process error:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao processar revista');
+      toast.error(error instanceof Error ? error.message : 'Erro ao processar revista. Verifique se o arquivo está correto.');
       
       // Update status to error
       await supabase
@@ -463,11 +482,17 @@ export default function RevistaINPI() {
                   <Loader2 className="h-10 w-10 text-primary animate-spin" />
                   <BookOpen className="h-5 w-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold">Analisando revista do INPI...</h3>
                   <p className="text-sm text-muted-foreground">
                     Extraindo processos do procurador Davilys Danques Oliveira Cunha
                   </p>
+                  <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                    <p>✓ Identificando formato do arquivo (PDF/XML/Excel)</p>
+                    <p>✓ Aplicando OCR se necessário para PDFs digitalizados</p>
+                    <p>✓ Buscando variações do nome do procurador</p>
+                    <p>✓ Extraindo dados completos de cada processo de MARCA</p>
+                  </div>
                 </div>
               </div>
             </CardContent>
