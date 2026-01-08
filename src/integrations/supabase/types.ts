@@ -29,6 +29,7 @@ export type Database = {
           next_step_date: string | null
           notes: string | null
           perfex_project_id: string | null
+          pipeline_stage: string | null
           process_number: string | null
           status: string | null
           updated_at: string | null
@@ -48,6 +49,7 @@ export type Database = {
           next_step_date?: string | null
           notes?: string | null
           perfex_project_id?: string | null
+          pipeline_stage?: string | null
           process_number?: string | null
           status?: string | null
           updated_at?: string | null
@@ -67,6 +69,7 @@ export type Database = {
           next_step_date?: string | null
           notes?: string | null
           perfex_project_id?: string | null
+          pipeline_stage?: string | null
           process_number?: string | null
           status?: string | null
           updated_at?: string | null
@@ -107,6 +110,120 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_activities: {
+        Row: {
+          activity_type: string
+          admin_id: string | null
+          created_at: string | null
+          description: string
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          admin_id?: string | null
+          created_at?: string | null
+          description: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          admin_id?: string | null
+          created_at?: string | null
+          description?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_activities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_appointments: {
+        Row: {
+          admin_id: string
+          completed: boolean | null
+          created_at: string | null
+          description: string | null
+          id: string
+          scheduled_at: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          admin_id: string
+          completed?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          scheduled_at: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          admin_id?: string
+          completed?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          scheduled_at?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_appointments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_notes: {
+        Row: {
+          admin_id: string
+          content: string
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_notes_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -477,13 +594,17 @@ export type Database = {
           asaas_customer_id: string | null
           city: string | null
           company_name: string | null
+          contract_value: number | null
           cpf_cnpj: string | null
           created_at: string | null
           email: string
           full_name: string | null
           id: string
+          last_contact: string | null
+          origin: string | null
           perfex_customer_id: string | null
           phone: string | null
+          priority: string | null
           state: string | null
           updated_at: string | null
           zip_code: string | null
@@ -493,13 +614,17 @@ export type Database = {
           asaas_customer_id?: string | null
           city?: string | null
           company_name?: string | null
+          contract_value?: number | null
           cpf_cnpj?: string | null
           created_at?: string | null
           email: string
           full_name?: string | null
           id: string
+          last_contact?: string | null
+          origin?: string | null
           perfex_customer_id?: string | null
           phone?: string | null
+          priority?: string | null
           state?: string | null
           updated_at?: string | null
           zip_code?: string | null
@@ -509,13 +634,17 @@ export type Database = {
           asaas_customer_id?: string | null
           city?: string | null
           company_name?: string | null
+          contract_value?: number | null
           cpf_cnpj?: string | null
           created_at?: string | null
           email?: string
           full_name?: string | null
           id?: string
+          last_contact?: string | null
+          origin?: string | null
           perfex_customer_id?: string | null
           phone?: string | null
+          priority?: string | null
           state?: string | null
           updated_at?: string | null
           zip_code?: string | null
