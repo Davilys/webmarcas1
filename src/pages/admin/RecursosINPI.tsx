@@ -19,8 +19,12 @@ import {
   FileCheck,
   History,
   Plus,
-  Eye
+  Eye,
+  Search,
+  X,
+  Calendar
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -85,6 +89,10 @@ export default function RecursosINPI() {
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [selectedResource, setSelectedResource] = useState<INPIResource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchDate, setSearchDate] = useState('');
 
   useEffect(() => {
     fetchResources();
@@ -334,7 +342,45 @@ export default function RecursosINPI() {
                 Histórico de Recursos
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Search Bar */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Pesquisar por nome da marca ou número do processo..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={searchDate}
+                    onChange={(e) => setSearchDate(e.target.value)}
+                    className="pl-9 w-full sm:w-44"
+                  />
+                  {searchDate && (
+                    <button
+                      onClick={() => setSearchDate('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {isLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -346,40 +392,68 @@ export default function RecursosINPI() {
                   <p className="text-sm">Clique em "Criar Recurso Administrativo" para começar.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Marca</TableHead>
-                      <TableHead>Processo</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {resources.map((resource) => (
-                      <TableRow key={resource.id}>
-                        <TableCell className="font-medium">{resource.brand_name || '-'}</TableCell>
-                        <TableCell>{resource.process_number || '-'}</TableCell>
-                        <TableCell>{RESOURCE_TYPE_LABELS[resource.resource_type] || resource.resource_type}</TableCell>
-                        <TableCell>{getStatusBadge(resource.status)}</TableCell>
-                        <TableCell>
-                          {format(new Date(resource.created_at), 'dd/MM/yyyy', { locale: ptBR })}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openResourcePreview(resource)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <>
+                  {/* Filtered Resources Table */}
+                  {(() => {
+                    const filteredResources = resources.filter((resource) => {
+                      const matchesQuery = !searchQuery || 
+                        (resource.brand_name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                        (resource.process_number?.toLowerCase().includes(searchQuery.toLowerCase()));
+                      
+                      const matchesDate = !searchDate || 
+                        format(new Date(resource.created_at), 'yyyy-MM-dd') === searchDate;
+                      
+                      return matchesQuery && matchesDate;
+                    });
+
+                    if (filteredResources.length === 0) {
+                      return (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>Nenhum resultado encontrado.</p>
+                          <p className="text-sm">Tente ajustar os filtros de pesquisa.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Marca</TableHead>
+                            <TableHead>Processo</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredResources.map((resource) => (
+                            <TableRow key={resource.id}>
+                              <TableCell className="font-medium">{resource.brand_name || '-'}</TableCell>
+                              <TableCell>{resource.process_number || '-'}</TableCell>
+                              <TableCell>{RESOURCE_TYPE_LABELS[resource.resource_type] || resource.resource_type}</TableCell>
+                              <TableCell>{getStatusBadge(resource.status)}</TableCell>
+                              <TableCell>
+                                {format(new Date(resource.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openResourcePreview(resource)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    );
+                  })()}
+                </>
               )}
             </CardContent>
           </Card>
