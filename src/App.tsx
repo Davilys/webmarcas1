@@ -19,6 +19,15 @@ import ClienteFinanceiro from "./pages/cliente/Financeiro";
 import ClienteSuporte from "./pages/cliente/Suporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 
+// Admin pages
+import AdminDashboard from "./pages/admin/Dashboard";
+import AdminClientes from "./pages/admin/Clientes";
+import AdminProcessos from "./pages/admin/Processos";
+import AdminDocumentos from "./pages/admin/Documentos";
+import AdminFinanceiro from "./pages/admin/Financeiro";
+import AdminNotificacoes from "./pages/admin/Notificacoes";
+import AdminConfiguracoes from "./pages/admin/Configuracoes";
+
 // Initialize query client
 const queryClient = new QueryClient();
 
@@ -43,6 +52,15 @@ const App = () => (
               <Route path="/cliente/financeiro" element={<ClienteFinanceiro />} />
               <Route path="/cliente/suporte" element={<ClienteSuporte />} />
               <Route path="/cliente/configuracoes" element={<ClienteConfiguracoes />} />
+              
+              {/* Painel Administrativo */}
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/clientes" element={<AdminClientes />} />
+              <Route path="/admin/processos" element={<AdminProcessos />} />
+              <Route path="/admin/documentos" element={<AdminDocumentos />} />
+              <Route path="/admin/financeiro" element={<AdminFinanceiro />} />
+              <Route path="/admin/notificacoes" element={<AdminNotificacoes />} />
+              <Route path="/admin/configuracoes" element={<AdminConfiguracoes />} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
