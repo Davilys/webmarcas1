@@ -394,7 +394,7 @@ export default function Suporte() {
     </div>
   );
 
-  const ChatView = () => (
+  const renderChatView = () => (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b bg-card rounded-t-xl">
@@ -492,7 +492,7 @@ export default function Suporte() {
         </div>
       </div>
 
-      {/* Input */}
+      {/* Input - using key to maintain focus */}
       <div className="p-4 border-t bg-card rounded-b-xl">
         <form
           onSubmit={(e) => {
@@ -501,12 +501,12 @@ export default function Suporte() {
           }}
           className="flex gap-2"
         >
-          <Input
+          <input
+            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Digite sua mensagem..."
-            disabled={false}
-            className="flex-1 rounded-full bg-muted border-0 focus-visible:ring-1"
+            className="flex-1 rounded-full bg-muted border-0 px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <Button 
             type="submit" 
@@ -553,7 +553,7 @@ export default function Suporte() {
     <ClientLayout>
       <div className="max-w-lg mx-auto h-[calc(100vh-8rem)]">
         <div className="bg-card rounded-xl shadow-lg border h-full overflow-hidden flex flex-col">
-          {currentView === 'home' ? <HomeView /> : <ChatView />}
+          {currentView === 'home' ? <HomeView /> : renderChatView()}
         </div>
       </div>
     </ClientLayout>
