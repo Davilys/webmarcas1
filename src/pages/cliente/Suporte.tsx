@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { ClientLayout } from '@/components/cliente/ClientLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   MessageSquare, 
@@ -200,21 +199,38 @@ export default function Suporte() {
     let assistantContent = "";
     const assistantId = crypto.randomUUID();
 
+    // Throttle UI updates to avoid freezing while typing
+    const pendingDeltaRef = { current: '' };
+    const rafRef = { current: 0 as number | 0 };
+
     // Add placeholder for assistant message
-    setMessages((prev) => [...prev, {
-      id: assistantId,
-      role: 'assistant' as const,
-      content: '',
-      created_at: new Date().toISOString(),
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantId,
+        role: 'assistant' as const,
+        content: '',
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
+    const flushAssistant = () => {
+      rafRef.current = 0;
+      if (!pendingDeltaRef.current) return;
+
+      assistantContent += pendingDeltaRef.current;
+      pendingDeltaRef.current = '';
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, content: assistantContent } : m))
+      );
+    };
 
     const updateAssistant = (chunk: string) => {
-      assistantContent += chunk;
-      setMessages((prev) => 
-        prev.map((m) => 
-          m.id === assistantId ? { ...m, content: assistantContent } : m
-        )
-      );
+      pendingDeltaRef.current += chunk;
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(flushAssistant);
+      }
     };
 
     try {
@@ -398,7 +414,7 @@ export default function Suporte() {
       </div>
 
       {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 p-4">
+      <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-8">
@@ -474,7 +490,7 @@ export default function Suporte() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Input */}
       <div className="p-4 border-t bg-card rounded-b-xl">
@@ -489,7 +505,7 @@ export default function Suporte() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Digite sua mensagem..."
-            disabled={loading}
+            disabled={false}
             className="flex-1 rounded-full bg-muted border-0 focus-visible:ring-1"
           />
           <Button 
