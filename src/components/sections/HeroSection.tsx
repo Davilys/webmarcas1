@@ -2,7 +2,7 @@ import { ArrowRight, Shield, Clock, CheckCircle, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 
-const phrases = ["seja exclusivo!", "torne ela única!"];
+const phrases = ["proteja seu negócio", "seja exclusivo!", "torne ela única!"];
 
 const HeroSection = () => {
   const [displayedText, setDisplayedText] = useState("");
