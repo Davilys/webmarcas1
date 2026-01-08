@@ -71,9 +71,10 @@ async function extractTextFromExcel(bytes: Uint8Array): Promise<string> {
 }
 
 async function extractTextFromPdf(bytes: Uint8Array): Promise<{ text: string; pages: number }> {
-  // pdfjs-dist (legacy) em Edge precisa do workerSrc configurado, mesmo com disableWorker.
+  // pdfjs-dist em Edge precisa do workerSrc configurado. No esm.sh o worker está em build/.
   (pdfjsLib as any).GlobalWorkerOptions.workerSrc =
-    "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.worker.mjs";
+    "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs";
+
 
   const loadingTask = (pdfjsLib as any).getDocument({ data: bytes, disableWorker: true } as any);
   const pdf = await loadingTask.promise;
