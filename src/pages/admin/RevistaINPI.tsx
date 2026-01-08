@@ -208,19 +208,12 @@ export default function RevistaINPI() {
     setEntries(entriesWithDetails);
   };
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.type !== 'application/pdf') {
       toast.error('Por favor, selecione um arquivo PDF');
-      return;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error(`Arquivo muito grande (${Math.round(file.size / 1024 / 1024)}MB). Máximo permitido: 5MB`);
       return;
     }
 
@@ -234,6 +227,13 @@ export default function RevistaINPI() {
         .upload(`rpi/${fileName}`, file);
 
       if (uploadError) throw uploadError;
+
+      // Get signed URL for the uploaded file (valid for 1 hour)
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(uploadData.path, 3600);
+
+      if (signedUrlError) throw signedUrlError;
 
       // Create RPI upload record
       const { data: rpiUpload, error: insertError } = await supabase
@@ -252,8 +252,8 @@ export default function RevistaINPI() {
       setSelectedUpload(rpiUpload);
       setUploads(prev => [rpiUpload, ...prev]);
 
-      // Process the PDF
-      await processRpi(rpiUpload.id, file);
+      // Process the PDF using signed URL (not file upload)
+      await processRpi(rpiUpload.id, signedUrlData.signedUrl);
       
     } catch (error) {
       console.error('Upload error:', error);
@@ -263,21 +263,18 @@ export default function RevistaINPI() {
     }
   };
 
-  const processRpi = async (rpiUploadId: string, file: File) => {
+  const processRpi = async (rpiUploadId: string, fileUrl: string) => {
     setProcessing(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('rpiUploadId', rpiUploadId);
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-rpi`,
         {
           method: 'POST',
-          body: formData,
+          body: JSON.stringify({ rpiUploadId, fileUrl }),
           headers: {
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'Content-Type': 'application/json',
           },
         }
       );
