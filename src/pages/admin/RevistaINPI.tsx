@@ -283,10 +283,21 @@ export default function RevistaINPI() {
       const result = await response.json();
       toast.success(`Análise concluída! ${result.total_processes} processos encontrados, ${result.matched_clients} clientes identificados.`);
       
-      // Refresh data
-      await fetchUploads();
-      if (selectedUpload) {
-        await fetchEntries(selectedUpload.id);
+      // Refresh uploads list
+      const { data: updatedUploads } = await supabase
+        .from('rpi_uploads')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (updatedUploads) {
+        setUploads(updatedUploads);
+        // Find the newly processed upload and select it
+        const processedUpload = updatedUploads.find(u => u.id === rpiUploadId);
+        if (processedUpload) {
+          setSelectedUpload(processedUpload);
+          // Immediately fetch and display entries
+          await fetchEntries(rpiUploadId);
+        }
       }
       
     } catch (error) {
@@ -572,18 +583,20 @@ export default function RevistaINPI() {
           </Card>
         )}
 
-        {/* Entries Table */}
-        {selectedUpload && selectedUpload.status === 'completed' && (
+        {/* Entries Table - Show after processing or when upload is completed */}
+        {selectedUpload && (selectedUpload.status === 'completed' || entries.length > 0) && (
           <Card>
             <CardHeader>
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Processos Identificados
+                    Processos Identificados na RPI
                   </CardTitle>
                   <CardDescription>
-                    {matchedEntries.length} de {entries.length} processos correspondem a clientes WebMarcas
+                    {matchedEntries.length > 0 
+                      ? `${matchedEntries.length} de ${entries.length} processos correspondem a clientes WebMarcas`
+                      : `${entries.length} processos encontrados`}
                   </CardDescription>
                 </div>
 
@@ -613,49 +626,58 @@ export default function RevistaINPI() {
               </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[500px]">
+              <ScrollArea className="h-[600px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Marca</TableHead>
-                      <TableHead>Processo</TableHead>
-                      <TableHead>Classe</TableHead>
-                      <TableHead>Despacho</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
+                      <TableHead className="w-[180px]">Marca</TableHead>
+                      <TableHead className="w-[130px]">Nº Processo</TableHead>
+                      <TableHead className="w-[80px]">Classe</TableHead>
+                      <TableHead className="w-[250px]">O que saiu (Despacho)</TableHead>
+                      <TableHead className="w-[180px]">Cliente</TableHead>
+                      <TableHead className="w-[100px]">Situação</TableHead>
+                      <TableHead className="text-right w-[100px]">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredEntries.map(entry => (
-                      <TableRow key={entry.id} className="group">
+                      <TableRow key={entry.id} className="group hover:bg-muted/50">
                         <TableCell>
-                          <div className="font-medium">{entry.brand_name || '-'}</div>
-                          <div className="text-xs text-muted-foreground">{entry.holder_name}</div>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {entry.process_number}
+                          <div className="font-semibold text-foreground">{entry.brand_name || '-'}</div>
+                          <div className="text-xs text-muted-foreground truncate max-w-[160px]">{entry.holder_name}</div>
                         </TableCell>
                         <TableCell>
-                          {entry.ncl_classes?.join(', ') || '-'}
+                          <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                            {entry.process_number}
+                          </code>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
+                          <Badge variant="secondary" className="font-mono">
+                            {entry.ncl_classes?.join(', ') || '-'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1.5">
                             {getDispatchBadge(entry.dispatch_type)}
-                            <div className="text-xs text-muted-foreground max-w-[200px] truncate">
-                              {entry.dispatch_text}
-                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-2">
+                              {entry.dispatch_text || 'Sem descrição do despacho'}
+                            </p>
+                            {entry.dispatch_code && (
+                              <span className="text-xs text-muted-foreground font-mono">
+                                Código: {entry.dispatch_code}
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
                           {entry.matched_client_id ? (
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full bg-green-500" />
+                            <div className="flex items-start gap-2">
+                              <div className="h-2 w-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
                               <div>
-                                <div className="font-medium text-sm">
-                                  {entry.client?.full_name || entry.client?.company_name}
+                                <div className="font-medium text-sm text-foreground">
+                                  {entry.client?.full_name || entry.client?.company_name || 'Cliente'}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-xs text-muted-foreground truncate max-w-[150px]">
                                   {entry.client?.email}
                                 </div>
                               </div>
@@ -663,18 +685,19 @@ export default function RevistaINPI() {
                           ) : (
                             <div className="flex items-center gap-2 text-muted-foreground">
                               <div className="h-2 w-2 rounded-full bg-gray-300" />
-                              <span className="text-sm">Não identificado</span>
+                              <span className="text-sm italic">Não identificado</span>
                             </div>
                           )}
                         </TableCell>
                         <TableCell>
                           {entry.update_status === 'updated' ? (
-                            <Badge className="bg-green-100 text-green-800">
+                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                               <CheckCircle className="h-3 w-3 mr-1" />
                               Atualizado
                             </Badge>
                           ) : entry.matched_client_id ? (
-                            <Badge variant="outline" className="text-yellow-600 border-yellow-300">
+                            <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950">
+                              <Clock className="h-3 w-3 mr-1" />
                               Pendente
                             </Badge>
                           ) : (
@@ -688,19 +711,30 @@ export default function RevistaINPI() {
                             <Button
                               size="sm"
                               onClick={() => handleOpenUpdateDialog(entry)}
-                              className="gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="gap-1.5"
                             >
                               <RefreshCw className="h-3 w-3" />
                               Atualizar
                             </Button>
                           )}
+                          {entry.update_status === 'updated' && (
+                            <Button size="sm" variant="ghost" disabled className="text-green-600">
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filteredEntries.length === 0 && (
+                    {filteredEntries.length === 0 && !processing && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                          Nenhum processo encontrado
+                        <TableCell colSpan={7} className="text-center py-12">
+                          <AlertCircle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+                          <p className="text-muted-foreground">Nenhum processo encontrado</p>
+                          {searchTerm && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Tente buscar com termos diferentes
+                            </p>
+                          )}
                         </TableCell>
                       </TableRow>
                     )}
