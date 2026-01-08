@@ -1,33 +1,24 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Eye, FileText, CreditCard, Mail, Phone } from 'lucide-react';
+import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter } from 'lucide-react';
 import { toast } from 'sonner';
+import { ClientKanbanBoard, type ClientWithProcess } from '@/components/admin/clients/ClientKanbanBoard';
+import { ClientListView } from '@/components/admin/clients/ClientListView';
+import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-interface Client {
-  id: string;
-  full_name: string | null;
-  email: string;
-  phone: string | null;
-  company_name: string | null;
-  cpf_cnpj: string | null;
-  city: string | null;
-  state: string | null;
-  created_at: string | null;
-}
+type ViewMode = 'kanban' | 'list';
 
 export default function AdminClientes() {
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientWithProcess[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [clientProcesses, setClientProcesses] = useState<any[]>([]);
-  const [clientInvoices, setClientInvoices] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [selectedClient, setSelectedClient] = useState<ClientWithProcess | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -35,216 +26,164 @@ export default function AdminClientes() {
 
   const fetchClients = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      // Fetch profiles with their processes
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
+      if (profilesError) throw profilesError;
+
+      // Fetch all processes
+      const { data: processes, error: processesError } = await supabase
+        .from('brand_processes')
+        .select('*');
+
+      if (processesError) throw processesError;
+
+      // Combine profiles with their processes
+      const clientsWithProcesses: ClientWithProcess[] = [];
+
+      for (const profile of profiles || []) {
+        const userProcesses = (processes || []).filter(p => p.user_id === profile.id);
+        
+        if (userProcesses.length === 0) {
+          // Client without process
+          clientsWithProcesses.push({
+            id: profile.id,
+            full_name: profile.full_name,
+            email: profile.email,
+            phone: profile.phone,
+            company_name: profile.company_name,
+            priority: profile.priority,
+            origin: profile.origin,
+            contract_value: profile.contract_value,
+            process_id: null,
+            brand_name: null,
+            pipeline_stage: 'protocolado',
+            process_status: null
+          });
+        } else {
+          // One entry per process
+          for (const process of userProcesses) {
+            clientsWithProcesses.push({
+              id: profile.id,
+              full_name: profile.full_name,
+              email: profile.email,
+              phone: profile.phone,
+              company_name: profile.company_name,
+              priority: profile.priority,
+              origin: profile.origin,
+              contract_value: profile.contract_value,
+              process_id: process.id,
+              brand_name: process.brand_name,
+              pipeline_stage: process.pipeline_stage || 'protocolado',
+              process_status: process.status
+            });
+          }
+        }
+      }
+
+      setClients(clientsWithProcesses);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
       toast.error('Erro ao carregar clientes');
-    } else {
-      setClients(data || []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const fetchClientDetails = async (client: Client) => {
+  const handleClientClick = (client: ClientWithProcess) => {
     setSelectedClient(client);
-    
-    const [processesRes, invoicesRes] = await Promise.all([
-      supabase.from('brand_processes').select('*').eq('user_id', client.id),
-      supabase.from('invoices').select('*').eq('user_id', client.id),
-    ]);
-
-    setClientProcesses(processesRes.data || []);
-    setClientInvoices(invoicesRes.data || []);
+    setDetailOpen(true);
   };
 
   const filteredClients = clients.filter(client =>
     client.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     client.email.toLowerCase().includes(search.toLowerCase()) ||
     client.company_name?.toLowerCase().includes(search.toLowerCase()) ||
-    client.cpf_cnpj?.includes(search)
+    client.brand_name?.toLowerCase().includes(search.toLowerCase()) ||
+    client.phone?.includes(search)
   );
-
-  const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; className: string }> = {
-      em_andamento: { label: 'Em Andamento', className: 'bg-orange-100 text-orange-700' },
-      registrada: { label: 'Registrada', className: 'bg-green-100 text-green-700' },
-      pending: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-700' },
-      paid: { label: 'Paga', className: 'bg-green-100 text-green-700' },
-    };
-    const s = statusMap[status] || { label: status, className: 'bg-gray-100 text-gray-700' };
-    return <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.className}`}>{s.label}</span>;
-  };
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Clientes</h1>
-            <p className="text-muted-foreground">Gerencie todos os clientes cadastrados</p>
+        {/* Header */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">CLIENTES JURÍDICO</h1>
+                <p className="text-sm text-muted-foreground">
+                  Pipeline padrão para gerenciamento do relacionamento com clientes
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={fetchClients}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome, email, CNPJ..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
+
+          {/* Search and View Toggle */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="relative flex-1 max-w-xl">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar clientes por nome, empresa, email ou telefone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
+              <ToggleGroupItem value="kanban" aria-label="Visualização Kanban">
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Kanban
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" aria-label="Visualização Lista">
+                <List className="h-4 w-4 mr-2" />
+                Lista
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
         </div>
 
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead className="hidden md:table-cell">Empresa</TableHead>
-                  <TableHead className="hidden lg:table-cell">Cidade/UF</TableHead>
-                  <TableHead className="hidden lg:table-cell">Cadastro</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-                        Carregando...
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredClients.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      Nenhum cliente encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredClients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.full_name || 'Sem nome'}</TableCell>
-                      <TableCell>{client.email}</TableCell>
-                      <TableCell className="hidden md:table-cell">{client.company_name || '-'}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {client.city && client.state ? `${client.city}/${client.state}` : '-'}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {client.created_at ? new Date(client.created_at).toLocaleDateString('pt-BR') : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={() => fetchClientDetails(client)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Detalhes do Cliente</DialogTitle>
-                            </DialogHeader>
-                            {selectedClient && (
-                              <div className="space-y-6">
-                                {/* Client Info */}
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Nome</p>
-                                    <p className="font-medium">{selectedClient.full_name || 'Sem nome'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Empresa</p>
-                                    <p className="font-medium">{selectedClient.company_name || '-'}</p>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground" />
-                                    <p>{selectedClient.email}</p>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground" />
-                                    <p>{selectedClient.phone || '-'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">CPF/CNPJ</p>
-                                    <p className="font-medium">{selectedClient.cpf_cnpj || '-'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Localização</p>
-                                    <p className="font-medium">
-                                      {selectedClient.city && selectedClient.state 
-                                        ? `${selectedClient.city}/${selectedClient.state}` 
-                                        : '-'}
-                                    </p>
-                                  </div>
-                                </div>
+        {/* Content */}
+        {viewMode === 'kanban' ? (
+          <ClientKanbanBoard
+            clients={filteredClients}
+            onClientClick={handleClientClick}
+            onRefresh={fetchClients}
+          />
+        ) : (
+          <ClientListView
+            clients={filteredClients}
+            loading={loading}
+            onClientClick={handleClientClick}
+          />
+        )}
 
-                                {/* Processes */}
-                                <div>
-                                  <h4 className="font-semibold flex items-center gap-2 mb-3">
-                                    <FileText className="h-4 w-4" />
-                                    Processos ({clientProcesses.length})
-                                  </h4>
-                                  {clientProcesses.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {clientProcesses.map((p) => (
-                                        <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                                          <div>
-                                            <p className="font-medium">{p.brand_name}</p>
-                                            <p className="text-sm text-muted-foreground">{p.process_number || 'Sem número'}</p>
-                                          </div>
-                                          {getStatusBadge(p.status)}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">Nenhum processo</p>
-                                  )}
-                                </div>
-
-                                {/* Invoices */}
-                                <div>
-                                  <h4 className="font-semibold flex items-center gap-2 mb-3">
-                                    <CreditCard className="h-4 w-4" />
-                                    Faturas ({clientInvoices.length})
-                                  </h4>
-                                  {clientInvoices.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {clientInvoices.map((i) => (
-                                        <div key={i.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                                          <div>
-                                            <p className="font-medium">{i.description}</p>
-                                            <p className="text-sm text-muted-foreground">
-                                              Vence: {new Date(i.due_date).toLocaleDateString('pt-BR')}
-                                            </p>
-                                          </div>
-                                          <div className="text-right">
-                                            <p className="font-medium">R$ {Number(i.amount).toLocaleString('pt-BR')}</p>
-                                            {getStatusBadge(i.status)}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">Nenhuma fatura</p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        {/* Client Detail Sheet */}
+        <ClientDetailSheet
+          client={selectedClient}
+          open={detailOpen}
+          onOpenChange={setDetailOpen}
+          onUpdate={fetchClients}
+        />
       </div>
     </AdminLayout>
   );
