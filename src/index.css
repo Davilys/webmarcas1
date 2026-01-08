@@ -280,20 +280,6 @@
   .animate-scroll-right {
     animation: scroll-right 20s linear infinite;
   }
-
-  /* CTA Pulse animation */
-  @keyframes pulse-cta {
-    0%, 100% {
-      box-shadow: 0 0 0 0 hsl(var(--primary) / 0.7);
-    }
-    50% {
-      box-shadow: 0 0 0 12px hsl(var(--primary) / 0);
-    }
-  }
-
-  .animate-pulse-cta {
-    animation: pulse-cta 2s ease-in-out infinite;
-  }
 }
 
 /* Custom scrollbar */
