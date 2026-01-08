@@ -10,6 +10,7 @@ import Registro from "./pages/Registro";
 import Obrigado from "./pages/Obrigado";
 import NotFound from "./pages/NotFound";
 
+// Initialize query client
 const queryClient = new QueryClient();
 
 const App = () => (
