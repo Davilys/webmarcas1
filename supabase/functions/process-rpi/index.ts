@@ -14,6 +14,8 @@ const ATTORNEY_VARIATIONS = [
   "davilys d oliveira cunha",
 ];
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit
+
 function normalizeString(str: string): string {
   return str
     .toLowerCase()
@@ -23,52 +25,47 @@ function normalizeString(str: string): string {
     .trim();
 }
 
-function matchesAttorney(text: string): boolean {
-  const normalized = normalizeString(text);
-  return ATTORNEY_VARIATIONS.some(variation => normalized.includes(normalizeString(variation)));
-}
-
 // Map dispatch codes to pipeline stages
 function mapDispatchToStage(dispatchCode: string, dispatchText: string): string {
   const code = dispatchCode?.toUpperCase() || "";
   const text = (dispatchText || "").toLowerCase();
   
-  // Deferimento
   if (code.startsWith("IPAS") || text.includes("deferido") || text.includes("deferimento")) {
     return "deferimento";
   }
-  
-  // Indeferimento
   if (code.startsWith("INPI") && text.includes("indeferido") || text.includes("indeferimento")) {
     return "indeferimento";
   }
-  
-  // Exigência
   if (text.includes("exigência") || text.includes("exigencia") || code.includes("IPAS103")) {
     return "003";
   }
-  
-  // Oposição
   if (text.includes("oposição") || text.includes("oposicao")) {
     return "oposicao";
   }
-  
-  // Certificado
   if (text.includes("certificado") || text.includes("concessão") || text.includes("registro")) {
     return "certificados";
   }
-  
-  // Notificação
   if (text.includes("notificação") || text.includes("notificacao")) {
     return "notificacao_extrajudicial";
   }
-  
-  // Renovação
   if (text.includes("renovação") || text.includes("renovacao") || text.includes("prorrogação")) {
     return "renovacao";
   }
-  
   return "protocolado";
+}
+
+// Convert ArrayBuffer to base64 in chunks to avoid memory issues
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 32768;
+  let binary = '';
+  
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  
+  return btoa(binary);
 }
 
 serve(async (req) => {
@@ -80,10 +77,11 @@ serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const rpiUploadId = formData.get("rpiUploadId") as string;
+    const fileUrl = formData.get("fileUrl") as string;
     
-    if (!file || !rpiUploadId) {
+    if (!rpiUploadId) {
       return new Response(
-        JSON.stringify({ error: "File and rpiUploadId are required" }),
+        JSON.stringify({ error: "rpiUploadId is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -106,9 +104,55 @@ serve(async (req) => {
       .update({ status: "processing" })
       .eq("id", rpiUploadId);
 
-    // Convert file to base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    let base64: string;
+
+    // If file URL is provided, download from storage
+    if (fileUrl) {
+      console.log("Downloading PDF from storage URL...");
+      
+      const pdfResponse = await fetch(fileUrl);
+      if (!pdfResponse.ok) {
+        throw new Error("Failed to download PDF from storage");
+      }
+      
+      const pdfBuffer = await pdfResponse.arrayBuffer();
+      
+      if (pdfBuffer.byteLength > MAX_FILE_SIZE) {
+        await supabase
+          .from("rpi_uploads")
+          .update({ status: "error", summary: `Arquivo muito grande (${Math.round(pdfBuffer.byteLength / 1024 / 1024)}MB). Máximo: 5MB` })
+          .eq("id", rpiUploadId);
+        
+        return new Response(
+          JSON.stringify({ error: "File too large. Maximum size is 5MB" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      base64 = arrayBufferToBase64(pdfBuffer);
+    } else if (file) {
+      console.log("Processing uploaded file...");
+      
+      if (file.size > MAX_FILE_SIZE) {
+        await supabase
+          .from("rpi_uploads")
+          .update({ status: "error", summary: `Arquivo muito grande (${Math.round(file.size / 1024 / 1024)}MB). Máximo: 5MB` })
+          .eq("id", rpiUploadId);
+        
+        return new Response(
+          JSON.stringify({ error: "File too large. Maximum size is 5MB" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const arrayBuffer = await file.arrayBuffer();
+      base64 = arrayBufferToBase64(arrayBuffer);
+    } else {
+      return new Response(
+        JSON.stringify({ error: "Either file or fileUrl is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     console.log("Sending PDF to AI for analysis...");
 
@@ -120,54 +164,53 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-flash",
         messages: [
           {
             role: "system",
             content: `Você é um especialista em análise de Revistas da Propriedade Industrial (RPI) do INPI brasileiro. 
-Sua tarefa é extrair TODOS os processos de MARCAS onde o procurador seja "${ATTORNEY_NAME}" ou variações próximas deste nome.
+Extraia TODOS os processos de MARCAS onde o procurador seja "${ATTORNEY_NAME}" ou variações próximas.
 
 IMPORTANTE:
-- Extraia APENAS processos de MARCAS (ignore patentes, desenhos industriais, indicações geográficas)
-- Procure por variações do nome do procurador: Davilys Danques Oliveira Cunha, Davilys Danques de Oliveira Cunha, etc.
-- Extraia o máximo de informações possíveis de cada processo
+- Extraia APENAS processos de MARCAS
+- Procure variações do nome: Davilys Danques Oliveira Cunha, Davilys Danques de Oliveira Cunha, etc.
 
-Para cada processo encontrado, extraia:
-1. Número do processo (formato: 123456789)
+Para cada processo, extraia:
+1. Número do processo
 2. Nome da marca
-3. Classe(s) NCL (ex: 35, 41, 42)
-4. Código do despacho (ex: IPAS037, IPAS103)
+3. Classe(s) NCL
+4. Código do despacho
 5. Tipo/descrição do despacho
-6. Nome do titular/requerente
-7. Data da publicação (se disponível)
+6. Nome do titular
+7. Data da publicação
 
-Retorne os dados em formato JSON estruturado.`
+Retorne JSON estruturado.`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Analise este PDF da Revista da Propriedade Industrial (RPI) e extraia todos os processos de MARCAS cujo procurador seja "${ATTORNEY_NAME}" ou variações.
+                text: `Analise este PDF da RPI e extraia processos de MARCAS do procurador "${ATTORNEY_NAME}".
 
-Retorne APENAS um JSON válido no seguinte formato, sem texto adicional:
+Retorne APENAS JSON válido:
 {
-  "rpi_number": "número da RPI se identificado",
-  "rpi_date": "data da RPI no formato YYYY-MM-DD se identificada",
-  "total_brand_processes": número total de processos de marcas encontrados na revista,
+  "rpi_number": "número da RPI",
+  "rpi_date": "YYYY-MM-DD",
+  "total_brand_processes": número,
   "attorney_processes": [
     {
-      "process_number": "número do processo",
-      "brand_name": "nome da marca",
-      "ncl_classes": ["35", "41"],
-      "dispatch_code": "código do despacho",
-      "dispatch_type": "tipo do despacho",
-      "dispatch_text": "texto resumido do despacho",
-      "holder_name": "nome do titular",
+      "process_number": "número",
+      "brand_name": "marca",
+      "ncl_classes": ["35"],
+      "dispatch_code": "código",
+      "dispatch_type": "tipo",
+      "dispatch_text": "texto",
+      "holder_name": "titular",
       "publication_date": "YYYY-MM-DD"
     }
   ],
-  "summary": "resumo geral da análise"
+  "summary": "resumo"
 }`
               },
               {
@@ -179,9 +222,12 @@ Retorne APENAS um JSON válido no seguinte formato, sem texto adicional:
             ]
           }
         ],
-        max_tokens: 16000,
+        max_tokens: 8000,
       }),
     });
+
+    // Free memory
+    base64 = "";
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
@@ -233,16 +279,11 @@ Retorne APENAS um JSON válido no seguinte formato, sem texto adicional:
       .from("brand_processes")
       .select("id, process_number, brand_name, user_id, status, pipeline_stage");
 
-    const { data: existingProfiles } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, company_name");
-
     // Match entries with existing clients
     const matchedEntries = attorneyProcesses.map((entry: any) => {
       let matchedClientId = null;
       let matchedProcessId = null;
       
-      // Try to match by process number first
       if (entry.process_number && existingProcesses) {
         const processMatch = existingProcesses.find(
           p => p.process_number === entry.process_number?.replace(/\D/g, '')
@@ -253,7 +294,6 @@ Retorne APENAS um JSON válido no seguinte formato, sem texto adicional:
         }
       }
       
-      // If no process match, try by brand name
       if (!matchedClientId && entry.brand_name && existingProcesses) {
         const brandMatch = existingProcesses.find(
           p => normalizeString(p.brand_name) === normalizeString(entry.brand_name)

@@ -208,12 +208,19 @@ export default function RevistaINPI() {
     setEntries(entriesWithDetails);
   };
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.type !== 'application/pdf') {
       toast.error('Por favor, selecione um arquivo PDF');
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(`Arquivo muito grande (${Math.round(file.size / 1024 / 1024)}MB). Máximo permitido: 5MB`);
       return;
     }
 
