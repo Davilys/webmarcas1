@@ -1,1 +1,22 @@
 project_id = "afuqrzecokubogopgfgt"
+
+[functions.process-rpi]
+verify_jwt = false
+
+[functions.process-inpi-resource]
+verify_jwt = false
+
+[functions.adjust-inpi-resource]
+verify_jwt = false
+
+[functions.chat-support]
+verify_jwt = false
+
+[functions.create-admin-user]
+verify_jwt = false
+
+[functions.inpi-viability-check]
+verify_jwt = false
+
+[functions.process-inpi-document]
+verify_jwt = false

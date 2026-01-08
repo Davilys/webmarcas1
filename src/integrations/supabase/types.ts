@@ -651,6 +651,119 @@ export type Database = {
         }
         Relationships: []
       }
+      rpi_entries: {
+        Row: {
+          attorney_name: string | null
+          brand_name: string | null
+          created_at: string
+          dispatch_code: string | null
+          dispatch_text: string | null
+          dispatch_type: string | null
+          holder_name: string | null
+          id: string
+          matched_client_id: string | null
+          matched_process_id: string | null
+          ncl_classes: string[] | null
+          process_number: string
+          publication_date: string | null
+          rpi_upload_id: string
+          update_status: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          attorney_name?: string | null
+          brand_name?: string | null
+          created_at?: string
+          dispatch_code?: string | null
+          dispatch_text?: string | null
+          dispatch_type?: string | null
+          holder_name?: string | null
+          id?: string
+          matched_client_id?: string | null
+          matched_process_id?: string | null
+          ncl_classes?: string[] | null
+          process_number: string
+          publication_date?: string | null
+          rpi_upload_id: string
+          update_status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          attorney_name?: string | null
+          brand_name?: string | null
+          created_at?: string
+          dispatch_code?: string | null
+          dispatch_text?: string | null
+          dispatch_type?: string | null
+          holder_name?: string | null
+          id?: string
+          matched_client_id?: string | null
+          matched_process_id?: string | null
+          ncl_classes?: string[] | null
+          process_number?: string
+          publication_date?: string | null
+          rpi_upload_id?: string
+          update_status?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rpi_entries_rpi_upload_id_fkey"
+            columns: ["rpi_upload_id"]
+            isOneToOne: false
+            referencedRelation: "rpi_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rpi_uploads: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          processed_at: string | null
+          rpi_date: string | null
+          rpi_number: string | null
+          status: string
+          summary: string | null
+          total_clients_matched: number | null
+          total_processes_found: number | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          processed_at?: string | null
+          rpi_date?: string | null
+          rpi_number?: string | null
+          status?: string
+          summary?: string | null
+          total_clients_matched?: number | null
+          total_processes_found?: number | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          processed_at?: string | null
+          rpi_date?: string | null
+          rpi_number?: string | null
+          status?: string
+          summary?: string | null
+          total_clients_matched?: number | null
+          total_processes_found?: number | null
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
