@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 const corsHeaders = {
@@ -9,12 +8,6 @@ const corsHeaders = {
 };
 
 const ATTORNEY_NAME = "Davilys Danques Oliveira Cunha";
-const ATTORNEY_VARIATIONS = [
-  "davilys danques oliveira cunha",
-  "davilys danques de oliveira cunha",
-  "davilys d. oliveira cunha",
-  "davilys d oliveira cunha",
-];
 
 function normalizeString(str: string): string {
   return str
@@ -42,24 +35,6 @@ function splitIntoChunks(text: string, maxChars: number): string[] {
   const chunks: string[] = [];
   for (let i = 0; i < text.length; i += maxChars) chunks.push(text.slice(i, i + maxChars));
   return chunks;
-}
-
-async function extractTextFromPdf(pdfBytes: Uint8Array): Promise<string> {
-  // Using legacy build + disable worker (Edge environment)
-  const loadingTask = (pdfjsLib as any).getDocument({ data: pdfBytes, disableWorker: true } as any);
-  const pdf = await loadingTask.promise;
-
-  let out = "";
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
-    const strings = content.items
-      .map((it: any) => (typeof it.str === "string" ? it.str : ""))
-      .filter(Boolean);
-    out += `\n\n--- PÁGINA ${pageNum} ---\n` + strings.join(" ");
-  }
-
-  return out;
 }
 
 async function extractTextFromXml(bytes: Uint8Array): Promise<string> {
@@ -90,7 +65,7 @@ type AttorneyProcess = {
   publication_date?: string;
 };
 
-async function aiExtractFromChunk(args: {
+async function aiExtractFromText(args: {
   apiKey: string;
   chunk: string;
 }): Promise<AttorneyProcess[]> {
@@ -107,7 +82,7 @@ async function aiExtractFromChunk(args: {
       messages: [
         {
           role: "system",
-          content: `Você é um especialista em RPI do INPI (MARCAS). Extraia processos onde o procurador seja "${ATTORNEY_NAME}" (incluindo variações próximas) e retorne somente JSON válido.`,
+          content: `Você é um especialista em RPI do INPI (MARCAS). Extraia processos onde o procurador seja "${ATTORNEY_NAME}" (incluindo variações próximas como "Davilys Danques de Oliveira Cunha") e retorne somente JSON válido.`,
         },
         {
           role: "user",
@@ -116,10 +91,81 @@ async function aiExtractFromChunk(args: {
 Retorne APENAS JSON no formato:
 {"attorney_processes":[{"process_number":"...","brand_name":"...","ncl_classes":["35"],"dispatch_code":"...","dispatch_type":"...","dispatch_text":"...","holder_name":"...","publication_date":"YYYY-MM-DD"}]}
 
+Se não encontrar nenhum processo do procurador, retorne: {"attorney_processes":[]}
+
 TEXTO:\n${chunk}`,
         },
       ],
       max_tokens: 4000,
+    }),
+  });
+
+  if (!resp.ok) {
+    const t = await resp.text();
+    const err = new Error(`AI error ${resp.status}: ${t}`);
+    // @ts-ignore
+    err.status = resp.status;
+    throw err;
+  }
+
+  const data = await resp.json();
+  const content = data.choices?.[0]?.message?.content || "";
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return [];
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    const arr = parsed.attorney_processes;
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+async function aiExtractFromPdfUrl(args: {
+  apiKey: string;
+  pdfUrl: string;
+}): Promise<AttorneyProcess[]> {
+  const { apiKey, pdfUrl } = args;
+
+  // Use Gemini's native PDF reading capability via URL
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: `Você é um especialista em RPI do INPI (MARCAS). Analise o documento PDF e extraia TODOS os processos onde o procurador seja "${ATTORNEY_NAME}" (incluindo variações como "Davilys Danques de Oliveira Cunha", "Davilys D. Oliveira Cunha"). Retorne somente JSON válido.`,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              file: {
+                url: pdfUrl,
+              },
+            },
+            {
+              type: "text",
+              text: `Analise este documento da Revista da Propriedade Industrial (RPI) do INPI.
+
+IMPORTANTE: Procure por TODOS os processos onde o procurador seja "${ATTORNEY_NAME}" ou variações do nome.
+
+Retorne APENAS JSON no formato:
+{"attorney_processes":[{"process_number":"...","brand_name":"...","ncl_classes":["35"],"dispatch_code":"...","dispatch_type":"...","dispatch_text":"...","holder_name":"...","publication_date":"YYYY-MM-DD"}]}
+
+Se não encontrar nenhum processo do procurador, retorne: {"attorney_processes":[]}`,
+            },
+          ],
+        },
+      ],
+      max_tokens: 8000,
     }),
   });
 
@@ -172,57 +218,16 @@ serve(async (req) => {
 
     await supabase.from("rpi_uploads").update({ status: "processing" }).eq("id", rpiUploadId);
 
-    // Download file bytes from signed URL
-    const fileResp = await fetch(fileUrl);
-    if (!fileResp.ok) {
-      await supabase
-        .from("rpi_uploads")
-        .update({ status: "error", summary: "Não foi possível baixar o arquivo do storage." })
-        .eq("id", rpiUploadId);
-
-      return new Response(JSON.stringify({ error: "Failed to download file" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const bytes = new Uint8Array(await fileResp.arrayBuffer());
     const ext = guessExtFromUrl(fileUrl);
+    let collected: AttorneyProcess[] = [];
 
-    let fullText = "";
     if (ext === "pdf") {
-      console.log("Extracting text from PDF...");
-      fullText = await extractTextFromPdf(bytes);
-    } else if (ext === "xml") {
-      console.log("Reading XML...");
-      fullText = await extractTextFromXml(bytes);
-    } else if (ext === "xlsx" || ext === "xls") {
-      console.log("Reading Excel...");
-      fullText = await extractTextFromExcel(bytes);
-    } else {
-      await supabase
-        .from("rpi_uploads")
-        .update({ status: "error", summary: "Formato não suportado. Envie PDF, XML, XLSX ou XLS." })
-        .eq("id", rpiUploadId);
-
-      return new Response(JSON.stringify({ error: "Unsupported file format" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Chunk text to avoid huge single AI requests
-    const chunks = splitIntoChunks(fullText, 80_000);
-    console.log(`Text extracted. Chunks: ${chunks.length}`);
-
-    const collected: AttorneyProcess[] = [];
-
-    for (let i = 0; i < chunks.length; i++) {
-      console.log(`AI chunk ${i + 1}/${chunks.length}`);
+      // Use Gemini's native PDF reading via URL - no need to download
+      console.log("Processing PDF via AI with URL...");
       try {
-        const found = await aiExtractFromChunk({ apiKey: LOVABLE_API_KEY, chunk: chunks[i] });
-        collected.push(...found);
+        collected = await aiExtractFromPdfUrl({ apiKey: LOVABLE_API_KEY, pdfUrl: fileUrl });
       } catch (e) {
+        console.error("PDF AI processing error:", e);
         const status = (e as any)?.status;
         if (status === 429) {
           await supabase
@@ -234,8 +239,68 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        console.error("AI chunk error:", e);
-        // continue processing other chunks
+        throw e;
+      }
+    } else {
+      // For XML and Excel, download and extract text locally
+      const fileResp = await fetch(fileUrl);
+      if (!fileResp.ok) {
+        await supabase
+          .from("rpi_uploads")
+          .update({ status: "error", summary: "Não foi possível baixar o arquivo do storage." })
+          .eq("id", rpiUploadId);
+
+        return new Response(JSON.stringify({ error: "Failed to download file" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const bytes = new Uint8Array(await fileResp.arrayBuffer());
+
+      let fullText = "";
+      if (ext === "xml") {
+        console.log("Reading XML...");
+        fullText = await extractTextFromXml(bytes);
+      } else if (ext === "xlsx" || ext === "xls") {
+        console.log("Reading Excel...");
+        fullText = await extractTextFromExcel(bytes);
+      } else {
+        await supabase
+          .from("rpi_uploads")
+          .update({ status: "error", summary: "Formato não suportado. Envie PDF, XML, XLSX ou XLS." })
+          .eq("id", rpiUploadId);
+
+        return new Response(JSON.stringify({ error: "Unsupported file format" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Chunk text to avoid huge single AI requests
+      const chunks = splitIntoChunks(fullText, 80_000);
+      console.log(`Text extracted. Chunks: ${chunks.length}`);
+
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`AI chunk ${i + 1}/${chunks.length}`);
+        try {
+          const found = await aiExtractFromText({ apiKey: LOVABLE_API_KEY, chunk: chunks[i] });
+          collected.push(...found);
+        } catch (e) {
+          const status = (e as any)?.status;
+          if (status === 429) {
+            await supabase
+              .from("rpi_uploads")
+              .update({ status: "error", summary: "Limite de requisições excedido. Tente novamente em alguns minutos." })
+              .eq("id", rpiUploadId);
+            return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+              status: 429,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          console.error("AI chunk error:", e);
+          // continue processing other chunks
+        }
       }
     }
 
