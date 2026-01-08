@@ -20,6 +20,7 @@ import ClienteSuporte from "./pages/cliente/Suporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 
 // Admin pages
+import AdminLogin from "./pages/admin/Login";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminClientes from "./pages/admin/Clientes";
 import AdminProcessos from "./pages/admin/Processos";
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/cliente/configuracoes" element={<ClienteConfiguracoes />} />
               
               {/* Painel Administrativo */}
+              <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/clientes" element={<AdminClientes />} />
               <Route path="/admin/processos" element={<AdminProcessos />} />
