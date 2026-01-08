@@ -10,6 +10,15 @@ import Registro from "./pages/Registro";
 import Obrigado from "./pages/Obrigado";
 import NotFound from "./pages/NotFound";
 
+// Cliente pages
+import ClienteLogin from "./pages/cliente/Login";
+import ClienteDashboard from "./pages/cliente/Dashboard";
+import ClienteProcessos from "./pages/cliente/Processos";
+import ClienteDocumentos from "./pages/cliente/Documentos";
+import ClienteFinanceiro from "./pages/cliente/Financeiro";
+import ClienteSuporte from "./pages/cliente/Suporte";
+import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
+
 // Initialize query client
 const queryClient = new QueryClient();
 
@@ -25,6 +34,16 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/registro" element={<Registro />} />
               <Route path="/obrigado" element={<Obrigado />} />
+              
+              {/* Área do Cliente */}
+              <Route path="/cliente/login" element={<ClienteLogin />} />
+              <Route path="/cliente/dashboard" element={<ClienteDashboard />} />
+              <Route path="/cliente/processos" element={<ClienteProcessos />} />
+              <Route path="/cliente/documentos" element={<ClienteDocumentos />} />
+              <Route path="/cliente/financeiro" element={<ClienteFinanceiro />} />
+              <Route path="/cliente/suporte" element={<ClienteSuporte />} />
+              <Route path="/cliente/configuracoes" element={<ClienteConfiguracoes />} />
+              
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
