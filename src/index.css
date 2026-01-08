@@ -292,7 +292,7 @@
   }
 
   .animate-pulse-cta {
-    animation: pulse-cta 4s ease-in-out infinite;
+    animation: pulse-cta 2s ease-in-out infinite;
   }
 }
 
