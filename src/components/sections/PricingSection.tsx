@@ -96,12 +96,20 @@ const PricingSection = () => {
               className="w-full group"
               onClick={scrollToForm}
             >
-              Registrar minha marca
+              Registrar por R$699
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
 
+            {/* Urgency Below Button */}
+            <div className="flex items-center justify-center gap-2 mt-4 p-2 rounded-lg bg-primary/5 border border-primary/10">
+              <Flame className="w-4 h-4 text-destructive" />
+              <p className="text-xs font-medium text-foreground">
+                Oferta válida até <span className="font-bold text-destructive">{getNextFridayFormatted()}</span>
+              </p>
+            </div>
+
             {/* Disclaimer */}
-            <p className="text-xs text-muted-foreground text-center mt-4">
+            <p className="text-xs text-muted-foreground text-center mt-3">
               * Taxas do INPI (GRU) são cobradas à parte pelo órgão.
             </p>
           </div>

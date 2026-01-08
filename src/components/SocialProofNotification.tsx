@@ -118,22 +118,22 @@ const SocialProofNotification = () => {
     <div
       className={cn(
         "fixed z-40 transition-all duration-500 ease-out",
-        "bottom-20 md:bottom-6 left-4 md:left-6",
+        "top-20 md:top-24 left-4 md:left-6",
         "max-w-[calc(100vw-2rem)] md:max-w-sm",
         isVisible 
           ? "opacity-100 translate-x-0 translate-y-0" 
-          : "opacity-0 -translate-x-4 translate-y-2 pointer-events-none"
+          : "opacity-0 -translate-x-4 -translate-y-2 pointer-events-none"
       )}
     >
-      <div className="glass-card p-4 flex items-start gap-3 border-l-4 border-l-primary shadow-lg">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-          <IconComponent className="w-4 h-4 text-primary" />
+      <div className="glass-card p-3 md:p-4 flex items-start gap-3 border-l-4 border-l-primary shadow-lg">
+        <div className="flex-shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-full bg-primary/10 flex items-center justify-center">
+          <IconComponent className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground leading-snug">
+          <p className="text-xs md:text-sm font-medium text-foreground leading-snug">
             {notification.message}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-[10px] md:text-xs text-muted-foreground mt-1">
             Agora mesmo
           </p>
         </div>
