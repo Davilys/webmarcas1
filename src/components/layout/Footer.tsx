@@ -1,7 +1,26 @@
 import { Mail, Phone, MapPin } from "lucide-react";
 import webmarcasLogo from "@/assets/webmarcas-logo.png";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const Footer = () => {
+  const { t } = useLanguage();
+
+  const quickLinks = [
+    { label: t("nav.home"), href: "#home" },
+    { label: t("nav.benefits"), href: "#beneficios" },
+    { label: t("nav.howItWorks"), href: "#como-funciona" },
+    { label: t("nav.pricing"), href: "#precos" },
+    { label: t("nav.faq"), href: "#faq" },
+  ];
+
+  const services = [
+    t("footer.service1"),
+    t("footer.service2"),
+    t("footer.service3"),
+    t("footer.service4"),
+    t("footer.service5"),
+  ];
+
   return (
     <footer className="bg-card border-t border-border">
       <div className="container mx-auto px-4 py-12 md:py-16">
@@ -15,8 +34,7 @@ const Footer = () => {
               </span>
             </a>
             <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-              Especialistas em registro de marcas no INPI. Proteja seu negócio com 
-              segurança jurídica e processo 100% online.
+              {t("footer.description")}
             </p>
             <div className="flex items-center gap-4">
               <a
@@ -38,15 +56,15 @@ const Footer = () => {
 
           {/* Links */}
           <div>
-            <h4 className="font-display font-semibold mb-4">Links Rápidos</h4>
+            <h4 className="font-display font-semibold mb-4">{t("footer.quickLinks")}</h4>
             <ul className="space-y-3">
-              {["Início", "Benefícios", "Como Funciona", "Preços", "FAQ"].map((item) => (
-                <li key={item}>
+              {quickLinks.map((item) => (
+                <li key={item.href}>
                   <a
-                    href={`#${item.toLowerCase().replace(" ", "-")}`}
+                    href={item.href}
                     className="text-muted-foreground hover:text-foreground transition-colors text-sm"
                   >
-                    {item}
+                    {item.label}
                   </a>
                 </li>
               ))}
@@ -55,15 +73,9 @@ const Footer = () => {
 
           {/* Services */}
           <div>
-            <h4 className="font-display font-semibold mb-4">Serviços</h4>
+            <h4 className="font-display font-semibold mb-4">{t("footer.services")}</h4>
             <ul className="space-y-3">
-              {[
-                "Registro de Marca",
-                "Busca de Viabilidade",
-                "Acompanhamento INPI",
-                "Consultoria Jurídica",
-                "Área do Cliente",
-              ].map((item) => (
+              {services.map((item) => (
                 <li key={item}>
                   <a
                     href="#"
@@ -78,7 +90,7 @@ const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h4 className="font-display font-semibold mb-4">Contato</h4>
+            <h4 className="font-display font-semibold mb-4">{t("footer.contact")}</h4>
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -100,14 +112,14 @@ const Footer = () => {
         <div className="mt-12 pt-8 border-t border-border">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground text-center md:text-left">
-              © {new Date().getFullYear()} WebMarcas. Todos os direitos reservados.
+              © {new Date().getFullYear()} WebMarcas. {t("footer.rights")}
             </p>
             <div className="flex items-center gap-6">
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Política de Privacidade
+                {t("footer.privacy")}
               </a>
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Termos de Uso
+                {t("footer.terms")}
               </a>
             </div>
           </div>
