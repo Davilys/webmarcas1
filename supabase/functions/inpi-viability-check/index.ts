@@ -177,6 +177,31 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
   return BUSINESS_AREA_CLASSES.default;
 }
 
+// Função para gerenciar cookies entre requisições
+function extractAndMergeCookies(existingCookies: string, setCookieHeader: string | null): string {
+  if (!setCookieHeader) return existingCookies;
+  
+  const cookieMap = new Map<string, string>();
+  
+  // Parse existing cookies
+  if (existingCookies) {
+    existingCookies.split(';').forEach(c => {
+      const [name, value] = c.trim().split('=');
+      if (name && value) cookieMap.set(name, value);
+    });
+  }
+  
+  // Parse new cookies (pode ter múltiplos Set-Cookie)
+  const newCookies = setCookieHeader.split(',').map(c => c.trim());
+  newCookies.forEach(cookieStr => {
+    const mainPart = cookieStr.split(';')[0];
+    const [name, value] = mainPart.split('=');
+    if (name && value) cookieMap.set(name.trim(), value.trim());
+  });
+  
+  return Array.from(cookieMap.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
 // Função para fazer scraping real do INPI
 async function searchINPI(brandName: string): Promise<{
   success: boolean;
@@ -184,8 +209,7 @@ async function searchINPI(brandName: string): Promise<{
   brands: Array<{
     processo: string;
     marca: string;
-    apresentacao: string;
-    natureza: string;
+    prioridade: string;
     situacao: string;
     classe: string;
     titular: string;
@@ -194,26 +218,63 @@ async function searchINPI(brandName: string): Promise<{
   error?: string;
 }> {
   try {
-    console.log(`[INPI] Iniciando busca por: ${brandName}`);
+    console.log(`[INPI] ========== INICIANDO BUSCA ==========`);
+    console.log(`[INPI] Marca: "${brandName}"`);
     
-    // Step 1: Acessar página inicial e obter sessão
-    const initialResponse = await fetch('https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login', {
+    let cookies = '';
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+    };
+
+    // STEP 1: Acessar página inicial do INPI
+    console.log('[INPI] Step 1: Acessando página inicial...');
+    const step1 = await fetch('https://busca.inpi.gov.br/pePI/', {
       method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+      headers,
+      redirect: 'manual',
     });
+    cookies = extractAndMergeCookies(cookies, step1.headers.get('set-cookie'));
+    console.log(`[INPI] Step 1: Status ${step1.status}, Cookies: ${cookies.substring(0, 50)}...`);
 
-    // Extrair cookies da sessão
-    const cookies = initialResponse.headers.get('set-cookie') || '';
-    const sessionCookie = cookies.split(';')[0];
-    
-    console.log(`[INPI] Sessão obtida: ${sessionCookie ? 'OK' : 'ERRO'}`);
+    // STEP 2: Clicar em "Continuar sem login"
+    console.log('[INPI] Step 2: Acessando LoginController (Continuar sem login)...');
+    const step2 = await fetch('https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login', {
+      method: 'GET',
+      headers: { ...headers, Cookie: cookies },
+      redirect: 'manual',
+    });
+    cookies = extractAndMergeCookies(cookies, step2.headers.get('set-cookie'));
+    console.log(`[INPI] Step 2: Status ${step2.status}, Cookies: ${cookies.substring(0, 50)}...`);
 
-    // Step 2: Fazer a busca por marca (busca exata)
-    const searchUrl = 'https://busca.inpi.gov.br/pePI/servlet/MarcasServletController';
+    // STEP 3: Acessar página de pesquisa de marcas por número de processo (para iniciar sessão de marcas)
+    console.log('[INPI] Step 3: Acessando página de marcas...');
+    const step3 = await fetch('https://busca.inpi.gov.br/pePI/jsp/marcas/Pesquisa_num_processo.jsp', {
+      method: 'GET',
+      headers: { ...headers, Cookie: cookies, Referer: 'https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login' },
+      redirect: 'manual',
+    });
+    cookies = extractAndMergeCookies(cookies, step3.headers.get('set-cookie'));
+    const step3Html = await step3.text();
+    console.log(`[INPI] Step 3: Status ${step3.status}, HTML: ${step3Html.length} bytes`);
+
+    // STEP 4: Acessar página de pesquisa por nome de marca
+    console.log('[INPI] Step 4: Acessando pesquisa por nome...');
+    const step4 = await fetch('https://busca.inpi.gov.br/pePI/jsp/marcas/Pesquisa_nome.jsp', {
+      method: 'GET',
+      headers: { ...headers, Cookie: cookies, Referer: 'https://busca.inpi.gov.br/pePI/jsp/marcas/Pesquisa_num_processo.jsp' },
+      redirect: 'manual',
+    });
+    cookies = extractAndMergeCookies(cookies, step4.headers.get('set-cookie'));
+    const step4Html = await step4.text();
+    console.log(`[INPI] Step 4: Status ${step4.status}, HTML: ${step4Html.length} bytes`);
+
+    // STEP 5: Executar busca EXATA por nome da marca
+    console.log('[INPI] Step 5: Executando busca EXATA...');
     
     const formData = new URLSearchParams();
     formData.append('Action', 'SearchMarcas');
@@ -221,7 +282,7 @@ async function searchINPI(brandName: string): Promise<{
     formData.append('NumPedido', '');
     formData.append('NumProtocolo', '');
     formData.append('Marca', brandName);
-    formData.append('tipoMarca', 'Exata'); // Busca EXATA
+    formData.append('tipoMarca', 'Exata');
     formData.append('NCL', '');
     formData.append('Titular', '');
     formData.append('Situacao', '');
@@ -229,42 +290,55 @@ async function searchINPI(brandName: string): Promise<{
     formData.append('Apresentacao', '');
     formData.append('Classe', '');
     formData.append('ProcurarMarca', 'Pesquisar');
-    
-    const searchResponse = await fetch(searchUrl, {
+
+    const searchResponse = await fetch('https://busca.inpi.gov.br/pePI/servlet/MarcasServletController', {
       method: 'POST',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        ...headers,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': sessionCookie,
+        'Cookie': cookies,
         'Referer': 'https://busca.inpi.gov.br/pePI/jsp/marcas/Pesquisa_nome.jsp',
         'Origin': 'https://busca.inpi.gov.br',
+        'Cache-Control': 'no-cache',
       },
       body: formData.toString(),
+      redirect: 'follow',
     });
 
     const html = await searchResponse.text();
-    console.log(`[INPI] Resposta recebida: ${html.length} bytes`);
+    console.log(`[INPI] Step 5: Status ${searchResponse.status}, HTML: ${html.length} bytes`);
+    console.log(`[INPI] HTML Preview: ${html.substring(0, 500)}`);
 
     // Parse HTML para extrair resultados
     const brands: Array<{
       processo: string;
       marca: string;
-      apresentacao: string;
-      natureza: string;
+      prioridade: string;
       situacao: string;
       classe: string;
       titular: string;
     }> = [];
+
+    // Verificar se a página é de erro/sessão expirada
+    if (html.includes('Sessão expirada') || html.includes('sessao expirada') || 
+        html.includes('Session expired') || html.length < 1000) {
+      console.log('[INPI] ERRO: Sessão expirada ou página inválida');
+      return {
+        success: false,
+        totalResults: 0,
+        brands: [],
+        rawHtml: html.substring(0, 2000),
+        error: 'Sessão expirada - o site do INPI não respondeu corretamente'
+      };
+    }
 
     // Verificar se não encontrou resultados
     if (html.includes('Nenhum resultado encontrado') || 
         html.includes('nenhum resultado') ||
         html.includes('Não foram encontrados') ||
         html.includes('não foram encontrados') ||
-        html.includes('0 registro')) {
-      console.log('[INPI] Nenhum resultado encontrado');
+        html.includes('Sua pesquisa não retornou resultados')) {
+      console.log('[INPI] Nenhum resultado encontrado (confirmado)');
       return {
         success: true,
         totalResults: 0,
@@ -273,60 +347,111 @@ async function searchINPI(brandName: string): Promise<{
       };
     }
 
-    // Extrair total de resultados
-    const totalMatch = html.match(/(\d+)\s*(?:registro|resultado|marca)/i);
-    const totalResults = totalMatch ? parseInt(totalMatch[1]) : 0;
-
-    // Extrair marcas da tabela de resultados
-    // Pattern para encontrar linhas da tabela de resultados
-    const tableRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([\d\.\/\-]+)<\/td>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<td[^>]*>([^<]+)<\/td>[\s\S]*?<\/tr>/gi;
+    // PARSER: Extrair resultados da tabela
+    // Baseado na imagem do resultado, a estrutura é:
+    // <input type="checkbox"> | Número | Prioridade | Marca | Situação | Titular | Classe
     
-    let match;
-    while ((match = tableRegex.exec(html)) !== null) {
-      if (match[1] && match[2]) {
-        brands.push({
-          processo: match[1].trim(),
-          marca: match[2].trim(),
-          apresentacao: match[3]?.trim() || '',
-          natureza: match[4]?.trim() || '',
-          situacao: match[5]?.trim() || '',
-          classe: '',
-          titular: ''
-        });
-      }
-    }
-
-    // Fallback: tentar outro padrão de extração
-    if (brands.length === 0 && totalResults > 0) {
-      // Procurar por padrões alternativos no HTML
-      const marcaRegex = /processo[:\s]*(\d+)/gi;
-      const marcaNomeRegex = /marca[:\s]*([^<\n]+)/gi;
+    // Tentar múltiplos padrões de extração
+    
+    // Pattern 1: Tabela com checkbox e dados
+    const rowPattern = /<tr[^>]*class="[^"]*(?:normal|destaque|even|odd|linha)[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    
+    while ((rowMatch = rowPattern.exec(html)) !== null) {
+      const rowHtml = rowMatch[1];
       
-      let procMatch;
-      while ((procMatch = marcaRegex.exec(html)) !== null) {
+      // Extrair células da linha
+      const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      
+      while ((cellMatch = cellPattern.exec(rowHtml)) !== null) {
+        // Limpar HTML das células
+        let cellContent = cellMatch[1]
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        cells.push(cellContent);
+      }
+      
+      // A tabela do INPI geralmente tem: Checkbox, Número, Data, Marca, Situação, Titular, Classe
+      if (cells.length >= 4) {
+        // Encontrar número do processo (9 dígitos)
+        const processoMatch = cells.find(c => /^\d{9}$/.test(c.replace(/\D/g, '')));
+        const processo = processoMatch?.replace(/\D/g, '') || cells[1]?.replace(/\D/g, '') || '';
+        
+        if (processo && processo.length >= 6) {
+          brands.push({
+            processo: processo,
+            marca: cells[3] || cells[2] || brandName,
+            prioridade: cells[2] || '',
+            situacao: cells[4] || cells[3] || 'Encontrado',
+            classe: cells[6] || cells[5] || '',
+            titular: cells[5] || cells[4] || ''
+          });
+        }
+      }
+    }
+
+    // Pattern 2: Procurar por links com número de processo
+    if (brands.length === 0) {
+      const linkPattern = /href="[^"]*NumPedido=(\d+)[^"]*"[^>]*>[\s\S]*?<\/a>[\s\S]*?(?:<td[^>]*>([^<]+)<\/td>[\s\S]*?)?(?:<td[^>]*>([^<]+)<\/td>)?/gi;
+      let linkMatch;
+      
+      while ((linkMatch = linkPattern.exec(html)) !== null) {
         brands.push({
-          processo: procMatch[1],
-          marca: brandName,
-          apresentacao: '',
-          natureza: '',
-          situacao: 'Encontrado',
+          processo: linkMatch[1],
+          marca: linkMatch[2]?.trim() || brandName,
+          prioridade: '',
+          situacao: linkMatch[3]?.trim() || 'Encontrado',
           classe: '',
           titular: ''
         });
       }
     }
 
-    console.log(`[INPI] Encontradas ${brands.length} marcas`);
+    // Pattern 3: Buscar por números de processo simples
+    if (brands.length === 0) {
+      const processoPattern = /(\d{9})/g;
+      const foundProcessos = new Set<string>();
+      let procMatch;
+      
+      while ((procMatch = processoPattern.exec(html)) !== null) {
+        const num = procMatch[1];
+        // Filtrar números que parecem ser processos (começam com 9)
+        if (num.startsWith('9') && !foundProcessos.has(num)) {
+          foundProcessos.add(num);
+          brands.push({
+            processo: num,
+            marca: brandName,
+            prioridade: '',
+            situacao: 'Encontrado',
+            classe: '',
+            titular: ''
+          });
+        }
+      }
+    }
+
+    // Extrair total de resultados do HTML
+    const totalMatch = html.match(/(\d+)\s*(?:registro|resultado|marca|processo)/i);
+    const totalResults = totalMatch ? parseInt(totalMatch[1]) : brands.length;
+
+    console.log(`[INPI] ========== RESULTADO ==========`);
+    console.log(`[INPI] Total encontrados: ${totalResults}`);
+    console.log(`[INPI] Marcas extraídas: ${brands.length}`);
+    brands.forEach((b, i) => console.log(`[INPI] ${i+1}. Processo: ${b.processo}, Situação: ${b.situacao}`));
 
     return {
       success: true,
-      totalResults: totalResults || brands.length,
+      totalResults: Math.max(totalResults, brands.length),
       brands,
       rawHtml: html.substring(0, 3000)
     };
 
   } catch (error) {
-    console.error('[INPI] Erro na busca:', error);
+    console.error('[INPI] ERRO GERAL:', error);
     return {
       success: false,
       totalResults: 0,
