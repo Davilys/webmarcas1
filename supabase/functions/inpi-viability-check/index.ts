@@ -178,91 +178,273 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
 }
 
 // Função para gerenciar cookies entre requisições
-function extractAndMergeCookies(existingCookies: string, setCookieHeader: string | null): string {
-  if (!setCookieHeader) return existingCookies;
-  
+function extractAllCookies(headers: Headers, existingCookies: string = ''): string {
   const cookieMap = new Map<string, string>();
   
   // Parse existing cookies
   if (existingCookies) {
     existingCookies.split(';').forEach(c => {
-      const [name, value] = c.trim().split('=');
-      if (name && value) cookieMap.set(name, value);
+      const parts = c.trim().split('=');
+      if (parts.length >= 2) {
+        cookieMap.set(parts[0], parts.slice(1).join('='));
+      }
     });
   }
   
-  // Parse new cookies (pode ter múltiplos Set-Cookie)
-  const newCookies = setCookieHeader.split(',').map(c => c.trim());
-  newCookies.forEach(cookieStr => {
-    const mainPart = cookieStr.split(';')[0];
-    const [name, value] = mainPart.split('=');
-    if (name && value) cookieMap.set(name.trim(), value.trim());
-  });
+  // Try getSetCookie (Deno method for multiple Set-Cookie headers)
+  try {
+    const setCookies = headers.getSetCookie?.() || [];
+    for (const cookie of setCookies) {
+      const mainPart = cookie.split(';')[0];
+      const parts = mainPart.split('=');
+      if (parts.length >= 2) {
+        cookieMap.set(parts[0].trim(), parts.slice(1).join('=').trim());
+      }
+    }
+  } catch {
+    // Fallback: try to get from raw header
+    const rawCookie = headers.get('set-cookie');
+    if (rawCookie) {
+      // Split by comma but be careful with date values
+      const cookieParts = rawCookie.split(/,(?=\s*[A-Za-z_-]+=)/);
+      for (const cookie of cookieParts) {
+        const mainPart = cookie.split(';')[0];
+        const parts = mainPart.split('=');
+        if (parts.length >= 2) {
+          cookieMap.set(parts[0].trim(), parts.slice(1).join('=').trim());
+        }
+      }
+    }
+  }
   
   return Array.from(cookieMap.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
 }
 
-// Análise de viabilidade baseada em padrões do nome da marca
-function analyzeBrandViability(brandName: string): {
-  level: 'high' | 'medium' | 'low';
-  observations: string[];
-} {
-  const normalized = normalizeString(brandName);
-  const observations: string[] = [];
-  let riskScore = 0;
-  
-  // Verificar se contém palavras genéricas
-  const genericWords = ['brasil', 'brazil', 'nacional', 'nacional', 'global', 'world', 'universal', 'premium', 'gold', 'plus', 'pro', 'max', 'super', 'mega', 'ultra', 'express', 'fast', 'quick', 'smart', 'tech', 'digital', 'online', 'web', 'net', 'app', 'solution', 'solucao', 'service', 'servico'];
-  
-  for (const word of genericWords) {
-    if (normalized.includes(word)) {
-      riskScore += 1;
-      observations.push(`Contém termo genérico "${word}" que pode ter muitas marcas similares`);
+// Função para fazer scraping real do INPI
+async function searchINPI(brandName: string): Promise<{
+  success: boolean;
+  totalResults: number;
+  brands: Array<{
+    processo: string;
+    marca: string;
+    situacao: string;
+    classe: string;
+    titular: string;
+  }>;
+  error?: string;
+}> {
+  try {
+    console.log(`[INPI] ========== INICIANDO BUSCA ==========`);
+    console.log(`[INPI] Marca: "${brandName}"`);
+    
+    const baseHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Cache-Control': 'max-age=0',
+      'Sec-Ch-Ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
+    };
+
+    // STEP 1: Página inicial
+    console.log('[INPI] Step 1: Página inicial...');
+    const step1 = await fetch('https://busca.inpi.gov.br/pePI/', {
+      method: 'GET',
+      headers: baseHeaders,
+      redirect: 'follow',
+    });
+    let allCookies = extractAllCookies(step1.headers, '');
+    console.log(`[INPI] Step 1: Status ${step1.status}, Cookies: ${allCookies.substring(0, 100)}`);
+
+    // STEP 2: Continuar sem login
+    console.log('[INPI] Step 2: Continuar sem login...');
+    const step2 = await fetch('https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login', {
+      method: 'GET',
+      headers: { 
+        ...baseHeaders, 
+        'Cookie': allCookies,
+        'Referer': 'https://busca.inpi.gov.br/pePI/'
+      },
+      redirect: 'follow',
+    });
+    allCookies = extractAllCookies(step2.headers, allCookies);
+    const step2Html = await step2.text();
+    console.log(`[INPI] Step 2: Status ${step2.status}, HTML: ${step2Html.length} bytes, Cookies: ${allCookies.substring(0, 100)}`);
+
+    // STEP 3: Acessar busca de marcas
+    console.log('[INPI] Step 3: Acessando busca de marcas...');
+    const step3 = await fetch('https://busca.inpi.gov.br/pePI/servlet/MarcasServletController?Action=iniciaBasica', {
+      method: 'GET',
+      headers: { 
+        ...baseHeaders, 
+        'Cookie': allCookies,
+        'Referer': 'https://busca.inpi.gov.br/pePI/servlet/LoginController?action=login'
+      },
+      redirect: 'follow',
+    });
+    allCookies = extractAllCookies(step3.headers, allCookies);
+    const step3Html = await step3.text();
+    console.log(`[INPI] Step 3: Status ${step3.status}, HTML: ${step3Html.length} bytes`);
+    
+    // Log conteúdo para debug
+    if (step3Html.length > 0) {
+      console.log(`[INPI] Step 3 HTML: ${step3Html.substring(0, 300).replace(/\n/g, ' ')}`);
     }
-  }
-  
-  // Verificar se é muito curto (marcas curtas são mais difíceis de registrar)
-  if (brandName.length <= 3) {
-    riskScore += 2;
-    observations.push('Nome muito curto - maior probabilidade de conflitos');
-  } else if (brandName.length <= 5) {
-    riskScore += 1;
-    observations.push('Nome curto - pode haver marcas similares');
-  }
-  
-  // Verificar se contém apenas números
-  if (/^\d+$/.test(brandName)) {
-    riskScore += 2;
-    observations.push('Contém apenas números - difícil de registrar');
-  }
-  
-  // Nome muito comum ou descritivo
-  const descriptiveWords = ['loja', 'store', 'shop', 'casa', 'center', 'centro', 'grupo', 'group', 'cia', 'company', 'empresa', 'industria', 'comercio', 'fabrica'];
-  
-  for (const word of descriptiveWords) {
-    if (normalized.includes(word)) {
-      riskScore += 1;
-      observations.push(`Termo descritivo "${word}" pode reduzir distintividade`);
+
+    // STEP 4: Executar busca
+    console.log('[INPI] Step 4: Executando busca EXATA...');
+    
+    const formParams = new URLSearchParams();
+    formParams.append('Action', 'SearchMarcas');
+    formParams.append('Marca', brandName.toUpperCase());
+    formParams.append('tipoMarca', 'Exata');
+    formParams.append('NCL', '');
+    formParams.append('Titular', '');
+    formParams.append('Situacao', '');
+    formParams.append('Natureza', '');
+    formParams.append('Apresentacao', '');
+    formParams.append('ProcurarMarca', 'Pesquisar');
+
+    const searchResponse = await fetch('https://busca.inpi.gov.br/pePI/servlet/MarcasServletController', {
+      method: 'POST',
+      headers: {
+        ...baseHeaders,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': allCookies,
+        'Referer': 'https://busca.inpi.gov.br/pePI/servlet/MarcasServletController?Action=iniciaBasica',
+        'Origin': 'https://busca.inpi.gov.br',
+      },
+      body: formParams.toString(),
+      redirect: 'follow',
+    });
+
+    const html = await searchResponse.text();
+    console.log(`[INPI] Step 4: Status ${searchResponse.status}, HTML: ${html.length} bytes`);
+    
+    // Log preview do HTML para debug
+    if (html.length > 0) {
+      console.log(`[INPI] HTML Preview: ${html.substring(0, 500).replace(/\n/g, ' ')}`);
     }
+
+    // Se HTML muito pequeno, falhou
+    if (html.length < 500) {
+      console.log('[INPI] Resposta muito curta - busca falhou');
+      return {
+        success: false,
+        totalResults: 0,
+        brands: [],
+        error: 'O site do INPI não retornou resultados. O site pode estar bloqueando requisições automatizadas.'
+      };
+    }
+
+    // Verificar se não encontrou resultados
+    if (html.includes('Nenhum resultado') || 
+        html.includes('nenhum resultado') ||
+        html.includes('Não foram encontrados') ||
+        html.includes('não foram encontrados') ||
+        html.includes('0 registro')) {
+      console.log('[INPI] Nenhum resultado encontrado');
+      return {
+        success: true,
+        totalResults: 0,
+        brands: []
+      };
+    }
+
+    // Extrair resultados
+    const brands: Array<{
+      processo: string;
+      marca: string;
+      situacao: string;
+      classe: string;
+      titular: string;
+    }> = [];
+
+    // Procurar por números de processo (9 dígitos começando com 9)
+    const processoRegex = /9\d{8}/g;
+    const processos = new Set<string>();
+    let match;
+    while ((match = processoRegex.exec(html)) !== null) {
+      processos.add(match[0]);
+    }
+
+    // Extrair dados das linhas da tabela
+    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
+    const rows = html.match(rowRegex) || [];
+    
+    for (const row of rows) {
+      // Verificar se a linha contém um processo
+      const procMatch = row.match(/9\d{8}/);
+      if (procMatch) {
+        // Extrair células
+        const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+        const cells: string[] = [];
+        let cellMatch;
+        while ((cellMatch = cellRegex.exec(row)) !== null) {
+          const content = cellMatch[1]
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (content) cells.push(content);
+        }
+
+        if (cells.length >= 3) {
+          brands.push({
+            processo: procMatch[0],
+            marca: cells.find(c => c.toLowerCase().includes(brandName.toLowerCase())) || cells[2] || brandName,
+            situacao: cells.find(c => c.includes('Registro') || c.includes('Pedido') || c.includes('Arquivado')) || cells[3] || '',
+            classe: cells.find(c => /^NCL\s*\d+|^\d{2}$/.test(c)) || '',
+            titular: cells.find(c => c.length > 20 && !c.includes('Registro') && !c.includes('Pedido')) || ''
+          });
+        }
+      }
+    }
+
+    // Se não encontrou via tabela, tentar via processos simples
+    if (brands.length === 0 && processos.size > 0) {
+      processos.forEach(proc => {
+        brands.push({
+          processo: proc,
+          marca: brandName.toUpperCase(),
+          situacao: 'Encontrado no INPI',
+          classe: '',
+          titular: ''
+        });
+      });
+    }
+
+    // Extrair total de resultados
+    const totalMatch = html.match(/(\d+)\s*(?:registro|resultado|marca|processo)/i);
+    const total = totalMatch ? parseInt(totalMatch[1]) : brands.length;
+
+    console.log(`[INPI] ========== RESULTADO ==========`);
+    console.log(`[INPI] Total: ${total}, Marcas extraídas: ${brands.length}`);
+    brands.forEach((b, i) => console.log(`[INPI] ${i+1}. ${b.processo} - ${b.marca} - ${b.situacao}`));
+
+    return {
+      success: true,
+      totalResults: Math.max(total, brands.length),
+      brands
+    };
+
+  } catch (error) {
+    console.error('[INPI] ERRO:', error);
+    return {
+      success: false,
+      totalResults: 0,
+      brands: [],
+      error: error instanceof Error ? error.message : 'Erro desconhecido'
+    };
   }
-  
-  // Se não encontrou problemas, é positivo
-  if (observations.length === 0) {
-    observations.push('Nome distintivo e original');
-    observations.push('Boa formação de marca');
-  }
-  
-  // Determinar nível baseado no score
-  let level: 'high' | 'medium' | 'low';
-  if (riskScore >= 3) {
-    level = 'low';
-  } else if (riskScore >= 1) {
-    level = 'medium';
-  } else {
-    level = 'high';
-  }
-  
-  return { level, observations };
 }
 
 Deno.serve(async (req) => {
@@ -309,35 +491,57 @@ Deno.serve(async (req) => {
       minute: '2-digit'
     });
 
-    // Análise de viabilidade baseada no nome da marca
-    console.log(`[INPI] Analisando marca: ${brandName}`);
-    const analysis = analyzeBrandViability(brandName);
+    // BUSCA REAL NO INPI
+    const inpiResult = await searchINPI(brandName);
     
-    // O site do INPI não possui API pública e bloqueia requisições automatizadas
-    // Fornecemos análise baseada em padrões do nome + link para consulta manual
-    const inpiSearchUrl = `https://busca.inpi.gov.br/pePI/`;
-    
-    // Gerar texto da análise
-    let analysisText = `📊 *ANÁLISE DO NOME DA MARCA*\n\n`;
-    analysis.observations.forEach(obs => {
-      analysisText += `• ${obs}\n`;
-    });
-    
-    analysisText += `\n🔗 *CONSULTA MANUAL RECOMENDADA*\n\n`;
-    analysisText += `Para verificar marcas registradas no INPI, acesse:\n${inpiSearchUrl}\n\n`;
-    analysisText += `Passos:\n`;
-    analysisText += `1. Clique em "Continuar"\n`;
-    analysisText += `2. Clique em "Marca" no menu superior\n`;
-    analysisText += `3. Selecione "Exata" no tipo de busca\n`;
-    analysisText += `4. Digite "${brandName.toUpperCase()}" e clique em Pesquisar`;
-
     // Get classes for the business area
     const { classes, descriptions } = getClassesForBusinessArea(businessArea);
     const classesText = descriptions.map((desc) => `${desc}`).join('\n');
+    
+    // Determinar nível de viabilidade
+    let viabilityLevel: 'high' | 'medium' | 'low' = 'high';
+    let resultText = '';
+    
+    if (inpiResult.success) {
+      if (inpiResult.totalResults === 0) {
+        viabilityLevel = 'high';
+        resultText = `✅ Nenhum resultado encontrado para "${brandName.toUpperCase()}" na base do INPI.
+✅ Não foram encontradas marcas idênticas registradas.
+✅ Sua marca apresenta ALTA viabilidade de registro.`;
+      } else {
+        // Verificar situações das marcas encontradas
+        const hasActiveRegistration = inpiResult.brands.some(b => 
+          b.situacao.toLowerCase().includes('registro') && 
+          b.situacao.toLowerCase().includes('vigor')
+        );
+        
+        if (hasActiveRegistration) {
+          viabilityLevel = 'low';
+        } else {
+          viabilityLevel = 'medium';
+        }
+        
+        resultText = `Foram encontradas ${inpiResult.totalResults} marca(s) na base do INPI:\n\n`;
+        inpiResult.brands.slice(0, 10).forEach((b, i) => {
+          resultText += `${i + 1}. ${b.marca}\n`;
+          resultText += `   Processo: ${b.processo}\n`;
+          if (b.situacao) resultText += `   Situação: ${b.situacao}\n`;
+          if (b.classe) resultText += `   Classe: ${b.classe}\n`;
+          resultText += '\n';
+        });
+      }
+    } else {
+      // Busca falhou - informar no laudo
+      viabilityLevel = 'medium';
+      resultText = `⚠️ Não foi possível realizar a busca automática no INPI.
+${inpiResult.error || 'O site pode estar temporariamente indisponível.'}
+
+Para garantir a precisão, recomendamos que um especialista realize a consulta manual.`;
+    }
 
     // Build the laudo
     const laudo = `*LAUDO TÉCNICO DE VIABILIDADE DE MARCA*
-*Análise Preliminar*
+*Pesquisa na Base do INPI*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -345,21 +549,24 @@ Deno.serve(async (req) => {
 
 Marca Pesquisada: ${brandName.toUpperCase()}
 Ramo de Atividade: ${businessArea}
+Tipo de Pesquisa: EXATA
 Data/Hora: ${brazilTime}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${analysisText}
+🔍 *RESULTADO DA PESQUISA*
+
+${resultText}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚖️ *CONCLUSÃO PRELIMINAR*
+⚖️ *CONCLUSÃO TÉCNICA*
 
-${analysis.level === 'high' ? 
-'A marca apresenta boas características para registro. Nome distintivo e bem formado.' :
-analysis.level === 'medium' ?
-'A marca apresenta algumas características que podem dificultar o registro. Recomendamos consulta especializada.' :
-'A marca possui elementos genéricos ou descritivos que podem dificultar o registro. Considere alterações no nome.'}
+${viabilityLevel === 'high' ? 
+'A marca apresenta ALTA VIABILIDADE de registro. Não foram encontradas marcas idênticas nas bases do INPI que possam impedir o registro.' :
+viabilityLevel === 'medium' ?
+'A marca apresenta VIABILIDADE MÉDIA. Podem existir marcas similares. Recomendamos consultar um especialista antes de prosseguir.' :
+'A marca apresenta BAIXA VIABILIDADE. Existem marcas conflitantes registradas que provavelmente impedirão o registro. Sugerimos alteração do nome ou consulta especializada.'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -378,9 +585,6 @@ Se a questão for financeira, orientamos registrar urgente na classe principal.
 
 ⚠️ *IMPORTANTE*
 
-Esta é uma análise preliminar. Para garantir a disponibilidade da marca,
-realize a consulta direta no site do INPI usando o link acima.
-
 O DONO DA MARCA É QUEM REGISTRA PRIMEIRO!
 Não perca tempo.
 
@@ -393,20 +597,22 @@ www.webmarcas.net`;
       JSON.stringify({
         success: true,
         isFamousBrand: false,
-        level: analysis.level,
-        title: analysis.level === 'high' ? 'Alta Viabilidade' : 
-               analysis.level === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
-        description: analysis.level === 'high' 
-          ? 'Sua marca apresenta boas características para registro!'
-          : analysis.level === 'medium'
+        level: viabilityLevel,
+        title: viabilityLevel === 'high' ? 'Alta Viabilidade' : 
+               viabilityLevel === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
+        description: viabilityLevel === 'high' 
+          ? 'Sua marca está disponível para registro! Não encontramos conflitos na base do INPI.'
+          : viabilityLevel === 'medium'
           ? 'Recomendamos consulta especializada antes de prosseguir.'
-          : 'A marca possui elementos que podem dificultar o registro.',
+          : 'Existem marcas conflitantes na base do INPI. Consulte nossos especialistas.',
         laudo,
         classes,
         classDescriptions: descriptions,
         searchDate: brazilTime,
-        inpiSearchUrl,
-        observations: analysis.observations
+        inpiResult: {
+          totalResults: inpiResult.totalResults,
+          brands: inpiResult.brands.slice(0, 10)
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
