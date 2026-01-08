@@ -89,9 +89,9 @@ const HeroSection = () => {
             ].map((item, index) => (
               <div
                 key={index}
-                className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-secondary/50 backdrop-blur-sm"
+                className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-secondary/50 backdrop-blur-sm"
               >
-                <item.icon className="w-6 h-6 text-primary" />
+                <item.icon className="w-9 h-9 text-primary" />
                 <span className="text-xs md:text-sm text-muted-foreground text-center">
                   {item.label}
                 </span>
