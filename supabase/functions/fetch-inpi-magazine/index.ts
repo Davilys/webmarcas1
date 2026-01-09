@@ -27,6 +27,32 @@ function normalizeText(str: string): string {
     .trim();
 }
 
+// Convert Brazilian date format (dd/mm/yyyy) to ISO format (yyyy-mm-dd)
+function convertBrazilianDateToISO(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  
+  // If already in ISO format, return as is
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    return dateStr.split('T')[0];
+  }
+  
+  // Brazilian format: dd/mm/yyyy
+  const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Try other common formats
+  const altMatch = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (altMatch) {
+    const [, day, month, year] = altMatch;
+    return `${year}-${month}-${day}`;
+  }
+  
+  return null; // Return null for invalid dates instead of causing errors
+}
+
 function containsAttorney(text: string): boolean {
   const normalized = normalizeText(text);
   return ATTORNEY_VARIATIONS.some(variation => normalized.includes(normalizeText(variation)));
@@ -513,7 +539,7 @@ serve(async (req) => {
         dispatch_code: proc.dispatchCode,
         dispatch_text: proc.dispatchText,
         dispatch_type: proc.dispatchType,
-        publication_date: proc.publicationDate,
+        publication_date: convertBrazilianDateToISO(proc.publicationDate),
         matched_client_id: existingProcess?.user_id || null,
         matched_process_id: existingProcess?.id || null,
         update_status: 'pending',
