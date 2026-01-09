@@ -88,11 +88,11 @@ serve(async (req) => {
                      'unknown';
     const userAgent = req.headers.get('user-agent') || 'unknown';
     
-    const { contractId, contractHtml, deviceInfo, leadId } = await req.json();
+    const { contractId, contractHtml, deviceInfo, leadId, signatureImage, signatureToken } = await req.json();
     
-    if (!contractId || !contractHtml) {
+    if (!contractId) {
       return new Response(
-        JSON.stringify({ error: 'contractId e contractHtml são obrigatórios' }),
+        JSON.stringify({ error: 'contractId é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -102,8 +102,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Generate SHA-256 hash of contract content
-    const contractHash = await generateSHA256(contractHtml);
+    // Generate SHA-256 hash of contract content + signature
+    const hashContent = (contractHtml || '') + (signatureImage || '');
+    const contractHash = await generateSHA256(hashContent);
     console.log('Contract hash generated:', contractHash);
 
     // Register timestamp in blockchain
@@ -111,7 +112,7 @@ serve(async (req) => {
     console.log('Blockchain timestamp created:', blockchainData);
 
     // Prepare signature data
-    const signatureData = {
+    const signatureData: Record<string, any> = {
       signature_status: 'signed',
       signed_at: blockchainData.timestamp,
       signature_ip: clientIP,
@@ -128,6 +129,11 @@ serve(async (req) => {
         user_agent: userAgent
       }
     };
+
+    // Add client signature image if provided
+    if (signatureImage) {
+      signatureData.client_signature_image = signatureImage;
+    }
 
     // Update contract in database
     const { data: contractData, error: contractError } = await supabase
