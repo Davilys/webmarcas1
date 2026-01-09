@@ -29,3 +29,12 @@ verify_jwt = false
 
 [functions.confirm-payment]
 verify_jwt = false
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.trigger-email-automation]
+verify_jwt = false
+
+[functions.check-abandoned-forms]
+verify_jwt = false
