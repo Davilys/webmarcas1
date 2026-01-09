@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { FileStack, Plus, RefreshCw, Edit, Trash2, Copy, Eye, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { TemplateUploader } from '@/components/admin/contracts/TemplateUploader';
+import { ContractRenderer } from '@/components/contracts/ContractRenderer';
 
 interface ContractTemplate {
   id: string;
@@ -449,14 +450,14 @@ export default function ModelosContrato() {
           </div>
         )}
 
-        {/* Preview Dialog */}
+        {/* Preview Dialog with ContractRenderer */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Pré-visualização do Contrato</DialogTitle>
             </DialogHeader>
-            <div className="border rounded-lg p-6 bg-white whitespace-pre-wrap font-serif">
-              {previewContent}
+            <div className="border rounded-lg p-6 bg-white">
+              <ContractRenderer content={previewContent} showLetterhead={true} />
             </div>
           </DialogContent>
         </Dialog>
