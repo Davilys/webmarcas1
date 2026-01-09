@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -981,7 +981,8 @@ export default function RevistaINPI() {
               </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[600px]">
+              <ScrollArea className="h-[600px] w-full">
+                <div className="min-w-[1100px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1115,6 +1116,8 @@ export default function RevistaINPI() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
+                <ScrollBar orientation="horizontal" />
               </ScrollArea>
             </CardContent>
           </Card>

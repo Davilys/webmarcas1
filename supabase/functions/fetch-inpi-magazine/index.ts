@@ -118,147 +118,177 @@ interface ExtractedProcess {
   publicationDate: string | null;
 }
 
-// Parse INPI XML structure - OPTIMIZED for memory efficiency
+// Parse INPI XML structure - ULTRA-OPTIMIZED for memory efficiency
 function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] {
   const processes: ExtractedProcess[] = [];
+  const MAX_PROCESSES = 300; // Limit to prevent memory issues
+  const BATCH_SIZE = 500; // Process chunks in batches
+  
   console.log(`Parsing XML content, size: ${xmlContent.length} bytes`);
   
-  // Check if XML contains our attorney name at all (quick check)
-  if (!containsAttorney(xmlContent)) {
-    console.log('Attorney name not found in XML content');
+  // Quick check - use simple indexOf which is much faster than regex
+  const lowerContent = xmlContent.toLowerCase();
+  if (!lowerContent.includes('davilys')) {
+    console.log('Attorney name not found in XML content (quick check)');
     return [];
   }
   
-  console.log('Attorney name found in XML! Extracting processes with memory-efficient approach...');
+  console.log('Attorney name found! Starting memory-efficient batch extraction...');
   
-  // Helper to extract text content from XML tags
+  // Helper to extract text content from XML tags (simplified for speed)
   const extractTagContent = (xml: string, tagName: string): string | null => {
-    const regex1 = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
-    const match1 = xml.match(regex1);
-    if (match1) {
-      let content = match1[1].trim();
-      content = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return content || null;
-    }
-    const regex2 = new RegExp(`<${tagName}[^>]*\\s+(?:nome|valor|texto)[^>]*=["']([^"']+)["']`, 'i');
-    const match2 = xml.match(regex2);
-    if (match2) return match2[1].trim();
-    return null;
+    const startTag = `<${tagName}`;
+    const endTag = `</${tagName}>`;
+    const startIdx = xml.indexOf(startTag);
+    if (startIdx === -1) return null;
+    
+    const endIdx = xml.indexOf(endTag, startIdx);
+    if (endIdx === -1) return null;
+    
+    const tagEndIdx = xml.indexOf('>', startIdx);
+    if (tagEndIdx === -1 || tagEndIdx > endIdx) return null;
+    
+    let content = xml.substring(tagEndIdx + 1, endIdx).trim();
+    content = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return content || null;
   };
   
   const extractAttribute = (xml: string, tagName: string, attrName: string): string | null => {
-    const regex = new RegExp(`<${tagName}[^>]*\\s+${attrName}\\s*=\\s*["']([^"']+)["']`, 'i');
-    const match = xml.match(regex);
-    return match ? match[1].trim() : null;
+    const tagStart = xml.indexOf(`<${tagName}`);
+    if (tagStart === -1) return null;
+    
+    const tagEnd = xml.indexOf('>', tagStart);
+    if (tagEnd === -1) return null;
+    
+    const tagContent = xml.substring(tagStart, tagEnd);
+    const attrMatch = tagContent.match(new RegExp(`${attrName}\\s*=\\s*["']([^"']+)["']`, 'i'));
+    return attrMatch ? attrMatch[1].trim() : null;
   };
   
-  // Get publication date from revista tag (just first occurrence)
-  const revistaMatch = xmlContent.slice(0, 2000).match(/<revista[^>]*data[^>]*=["']([^"']+)["']/i);
+  // Get publication date from revista tag (just first 2000 chars)
+  const headerSection = xmlContent.slice(0, 2000);
+  const revistaMatch = headerSection.match(/<revista[^>]*data[^>]*=["']([^"']+)["']/i);
   const publicationDate = revistaMatch ? revistaMatch[1] : null;
   
-  // MEMORY EFFICIENT: Use split to find processo blocks containing attorney name
   // Split by </processo> to get individual blocks
   const processoEndTag = '</processo>';
   const chunks = xmlContent.split(processoEndTag);
+  const totalChunks = chunks.length;
   
-  console.log(`Split into ${chunks.length} chunks for processing`);
+  console.log(`Split into ${totalChunks} chunks, processing in batches of ${BATCH_SIZE}`);
   
-  // Process each chunk that contains attorney name
-  let processedCount = 0;
-  for (let i = 0; i < chunks.length - 1; i++) { // -1 because last chunk is after final </processo>
-    const chunk = chunks[i];
+  // Free original xmlContent reference
+  xmlContent = '';
+  
+  // Process in batches to manage memory
+  for (let batchStart = 0; batchStart < totalChunks && processes.length < MAX_PROCESSES; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks - 1);
     
-    // Skip if this chunk doesn't contain attorney name
-    if (!containsAttorney(chunk)) continue;
-    
-    // Find the start of this processo block
-    const processoStart = chunk.lastIndexOf('<processo');
-    if (processoStart === -1) continue;
-    
-    // Extract just this processo block
-    const block = chunk.substring(processoStart) + processoEndTag;
-    
-    // Extract process number from the block
-    let processNumber: string | null = null;
-    const numAttrMatch = block.match(/numero\s*=\s*["'](\d+)["']/i);
-    if (numAttrMatch) {
-      processNumber = numAttrMatch[1];
-    } else {
-      const numMatch = block.match(/(\d{9,12})/);
-      if (numMatch) processNumber = numMatch[1];
-    }
-    
-    if (!processNumber) continue;
-    
-    const cleanNumber = processNumber.replace(/\D/g, '');
-    
-    // Avoid duplicates
-    if (processes.some(p => p.processNumber === cleanNumber)) continue;
-    
-    // Extract brand name
-    let brandName = 
-      extractTagContent(block, 'marca') ||
-      extractTagContent(block, 'nome') ||
-      extractTagContent(block, 'denominacao') ||
-      extractAttribute(block, 'marca', 'nome') ||
-      extractAttribute(block, 'marca', 'apresentacao');
-    
-    // Clean up any nested XML tags from brand name
-    if (brandName) {
-      brandName = brandName.replace(/<[^>]+>/g, '').trim();
-    }
-    
-    // Extract holder name  
-    const holderName =
-      extractAttribute(block, 'titular', 'nome-razao-social') ||
-      extractTagContent(block, 'titular') ||
-      extractTagContent(block, 'requerente') ||
-      extractTagContent(block, 'depositante');
-    
-    // Extract dispatch info
-    const dispatchCode =
-      extractAttribute(block, 'despacho', 'codigo') ||
-      extractTagContent(block, 'codigo') ||
-      extractTagContent(block, 'cod-despacho');
-    
-    const dispatchText =
-      extractTagContent(block, 'texto-complementar') ||
-      extractTagContent(block, 'descricao') ||
-      extractTagContent(block, 'texto');
-    
-    // Extract NCL classes
-    const nclMatches = block.match(/<classe-nice[^>]*codigo[^>]*=["'](\d+)["']/gi) || [];
-    const nclClasses: string[] = nclMatches.map((m: string) => {
-      const codeMatch = m.match(/codigo[^>]*=["'](\d+)["']/i);
-      return codeMatch ? codeMatch[1] : '';
-    }).filter(Boolean);
-    
-    // If no structured classes, try to find class numbers in text
-    if (nclClasses.length === 0) {
-      const classMatch = block.match(/classe[s]?\s*:?\s*([\d,\s]+)/i);
-      if (classMatch) {
-        const nums = classMatch[1].match(/\d+/g);
-        if (nums) nclClasses.push(...nums);
+    for (let i = batchStart; i < batchEnd && processes.length < MAX_PROCESSES; i++) {
+      const chunk = chunks[i];
+      if (!chunk || chunk.length < 50) continue;
+      
+      // Quick attorney check using simple includes (much faster)
+      const lowerChunk = chunk.toLowerCase();
+      if (!lowerChunk.includes('davilys')) continue;
+      
+      // Find the start of this processo block
+      const processoStart = chunk.lastIndexOf('<processo');
+      if (processoStart === -1) continue;
+      
+      // Extract just this processo block
+      const block = chunk.substring(processoStart) + processoEndTag;
+      
+      // Extract process number from the block
+      let processNumber: string | null = null;
+      const numAttrMatch = block.match(/numero\s*=\s*["'](\d+)["']/i);
+      if (numAttrMatch) {
+        processNumber = numAttrMatch[1];
+      } else {
+        const numMatch = block.match(/(\d{9,12})/);
+        if (numMatch) processNumber = numMatch[1];
       }
+      
+      if (!processNumber) continue;
+      
+      const cleanNumber = processNumber.replace(/\D/g, '');
+      
+      // Avoid duplicates using simple find
+      let isDuplicate = false;
+      for (const p of processes) {
+        if (p.processNumber === cleanNumber) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (isDuplicate) continue;
+      
+      // Extract brand name
+      let brandName = 
+        extractTagContent(block, 'marca') ||
+        extractTagContent(block, 'nome') ||
+        extractTagContent(block, 'denominacao') ||
+        extractAttribute(block, 'marca', 'nome') ||
+        extractAttribute(block, 'marca', 'apresentacao');
+      
+      if (brandName) {
+        brandName = brandName.replace(/<[^>]+>/g, '').trim();
+      }
+      
+      // Extract holder name  
+      const holderName =
+        extractAttribute(block, 'titular', 'nome-razao-social') ||
+        extractTagContent(block, 'titular') ||
+        extractTagContent(block, 'requerente') ||
+        extractTagContent(block, 'depositante');
+      
+      // Extract dispatch info
+      const dispatchCode =
+        extractAttribute(block, 'despacho', 'codigo') ||
+        extractTagContent(block, 'codigo') ||
+        extractTagContent(block, 'cod-despacho');
+      
+      const dispatchText =
+        extractTagContent(block, 'texto-complementar') ||
+        extractTagContent(block, 'descricao') ||
+        extractTagContent(block, 'texto');
+      
+      // Extract NCL classes (simplified)
+      const nclClasses: string[] = [];
+      const nclRegex = /classe-nice[^>]*codigo[^>]*=["'](\d+)["']/gi;
+      let nclMatch;
+      while ((nclMatch = nclRegex.exec(block)) !== null) {
+        nclClasses.push(nclMatch[1]);
+      }
+      
+      if (nclClasses.length === 0) {
+        const classMatch = block.match(/classe[s]?\s*:?\s*([\d,\s]+)/i);
+        if (classMatch) {
+          const nums = classMatch[1].match(/\d+/g);
+          if (nums) nclClasses.push(...nums);
+        }
+      }
+      
+      // Determine dispatch type
+      const dispatchType = determineDispatchType(dispatchCode, dispatchText);
+      
+      processes.push({
+        processNumber: cleanNumber,
+        brandName,
+        holderName,
+        attorneyName: ATTORNEY_NAME,
+        nclClasses,
+        dispatchCode,
+        dispatchText,
+        dispatchType,
+        publicationDate,
+      });
     }
     
-    // Determine dispatch type
-    const dispatchType = determineDispatchType(dispatchCode, dispatchText);
-    
-    processes.push({
-      processNumber: cleanNumber,
-      brandName,
-      holderName,
-      attorneyName: ATTORNEY_NAME,
-      nclClasses,
-      dispatchCode,
-      dispatchText,
-      dispatchType,
-      publicationDate,
-    });
+    console.log(`Batch ${batchStart}-${batchEnd}: Found ${processes.length} processes so far`);
   }
   
-  console.log(`Processed ${processedCount} chunks, extracted ${processes.length} processes for attorney`);
+  console.log(`Extraction complete: ${processes.length} processes found for attorney`);
   return processes;
 }
 
