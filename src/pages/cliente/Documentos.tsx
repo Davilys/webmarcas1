@@ -43,7 +43,10 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   comprovante: { label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
   parecer: { label: 'Parecer INPI', color: 'bg-orange-100 text-orange-700' },
   rpi: { label: 'RPI', color: 'bg-yellow-100 text-yellow-700' },
-  outros: { label: 'Outros', color: 'bg-gray-100 text-gray-700' },
+  laudo: { label: 'Laudo', color: 'bg-rose-100 text-rose-700' },
+  notificacao: { label: 'Notificação', color: 'bg-amber-100 text-amber-700' },
+  anexo: { label: 'Anexo', color: 'bg-indigo-100 text-indigo-700' },
+  outro: { label: 'Outro', color: 'bg-gray-100 text-gray-700' },
 };
 
 export default function Documentos() {
@@ -57,7 +60,7 @@ export default function Documentos() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState({
     name: '',
-    document_type: 'outros'
+    document_type: 'outro'
   });
 
   useEffect(() => {
@@ -111,7 +114,7 @@ export default function Documentos() {
 
       fetchDocuments(user.id);
       setUploadDialogOpen(false);
-      setUploadForm({ name: '', document_type: 'outros' });
+      setUploadForm({ name: '', document_type: 'outro' });
     } catch (error) {
       console.error(error);
       toast.error('Erro ao salvar documento');
@@ -235,7 +238,7 @@ export default function Documentos() {
             ) : (
               <div className="space-y-3">
                 {filteredDocs.map((doc) => {
-                  const typeConfig = typeLabels[doc.document_type] || typeLabels.outros;
+                  const typeConfig = typeLabels[doc.document_type] || typeLabels.outro;
                   return (
                     <div
                       key={doc.id}
