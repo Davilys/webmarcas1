@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 
@@ -99,9 +99,11 @@ function normalizeLikelyPdfGarbage(text: string): string {
 async function improveWithAI({
   extractedText,
   fileName,
+  imageDataUrl,
 }: {
   extractedText: string;
   fileName: string;
+  imageDataUrl?: string;
 }): Promise<{ content: string; variables: string[] }> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -117,6 +119,14 @@ Regras obrigatórias:
 - Retorne APENAS o conteúdo do contrato, em texto com quebras de linha (sem markdown, sem explicações).
 `;
 
+  // Build user message - use vision for images, text for documents
+  const userContent = imageDataUrl
+    ? [
+        { type: "text", text: `Arquivo: ${fileName}\n\nExtraia o contrato da imagem e gere um modelo fiel ao original.` },
+        { type: "image_url", image_url: { url: imageDataUrl } },
+      ]
+    : `Arquivo: ${fileName}\n\nConteúdo extraído:\n${extractedText.substring(0, 18000)}`;
+
   const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -127,10 +137,7 @@ Regras obrigatórias:
       model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Arquivo: ${fileName}\n\nConteúdo extraído:\n${extractedText.substring(0, 18000)}`,
-        },
+        { role: "user", content: userContent },
       ],
       temperature: 0.1,
     }),
@@ -194,8 +201,8 @@ serve(async (req) => {
     let imageDataUrl: string | undefined;
 
     if (fileType.startsWith("image/")) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      imageDataUrl = `data:${fileType};base64,${encodeBase64(bytes)}`;
+      const arrayBuffer = await file.arrayBuffer();
+      imageDataUrl = `data:${fileType};base64,${encodeBase64(arrayBuffer)}`;
       extracted = "[IMAGE_INPUT]";
     } else if (fileType === "application/pdf" || lower.endsWith(".pdf")) {
       extracted = await extractPdfText(file);
