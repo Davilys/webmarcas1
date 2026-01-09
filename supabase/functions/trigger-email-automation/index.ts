@@ -10,10 +10,12 @@ const corsHeaders = {
 interface TriggerRequest {
   trigger_event: string;
   lead_id?: string;
+  create_lead?: boolean; // If true, create or update the lead
   data: {
     nome: string;
     email: string;
     marca?: string;
+    phone?: string;
     data_assinatura?: string;
     hash_contrato?: string;
     ip_assinatura?: string;
@@ -26,7 +28,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { trigger_event, lead_id, data }: TriggerRequest = await req.json();
+    const { trigger_event, lead_id, create_lead, data }: TriggerRequest = await req.json();
     
     console.log(`Processing email automation for trigger: ${trigger_event}`);
     console.log('Data received:', data);
@@ -34,6 +36,54 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let actualLeadId = lead_id;
+
+    // If create_lead is true and this is form_started, create/update the lead
+    if (create_lead && trigger_event === 'form_started' && data.email) {
+      // Check if lead exists
+      const { data: existingLead } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('email', data.email)
+        .single();
+
+      if (existingLead) {
+        actualLeadId = existingLead.id;
+        // Update form_started_at if not set
+        await supabase
+          .from('leads')
+          .update({ 
+            form_started_at: new Date().toISOString(),
+            full_name: data.nome,
+            phone: data.phone || null,
+          })
+          .eq('id', existingLead.id)
+          .is('form_started_at', null);
+      } else {
+        // Create new lead
+        const { data: newLead, error: leadError } = await supabase
+          .from('leads')
+          .insert({
+            full_name: data.nome,
+            email: data.email,
+            phone: data.phone || null,
+            form_started_at: new Date().toISOString(),
+            status: 'novo',
+            origin: 'site',
+            company_name: data.marca || null,
+          })
+          .select('id')
+          .single();
+
+        if (leadError) {
+          console.error('Error creating lead:', leadError);
+        } else {
+          actualLeadId = newLead?.id;
+          console.log('Created lead:', actualLeadId);
+        }
+      }
+    }
 
     // Buscar template ativo para o evento
     const { data: template, error: templateError } = await supabase
@@ -125,7 +175,7 @@ const handler = async (req: Request): Promise<Response> => {
         status: 'sent',
         trigger_type: trigger_event,
         template_id: template.id,
-        related_lead_id: lead_id || null,
+        related_lead_id: actualLeadId || null,
       });
 
     if (logError) {

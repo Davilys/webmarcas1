@@ -117,32 +117,15 @@ const RegistrationFormSection = () => {
     setFormStartedTriggered(true);
     
     try {
-      // Create/update lead with form_started_at
-      const { error: leadError } = await supabase
-        .from('leads')
-        .upsert({
-          full_name: personalData.fullName,
-          email: personalData.email,
-          phone: personalData.phone || null,
-          form_started_at: new Date().toISOString(),
-          status: 'novo',
-          origin: 'site',
-        }, {
-          onConflict: 'email',
-        });
-
-      if (leadError) {
-        console.error('Error creating/updating lead:', leadError);
-        // Continue anyway, just log the error
-      }
-
-      // Trigger form_started email automation
+      // Trigger form_started email automation (edge function creates the lead)
       await supabase.functions.invoke('trigger-email-automation', {
         body: {
           trigger_event: 'form_started',
+          create_lead: true,
           data: {
             nome: personalData.fullName,
             email: personalData.email,
+            phone: personalData.phone || null,
             marca: brandData.brandName || 'Sua Marca',
           },
         },
