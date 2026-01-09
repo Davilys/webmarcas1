@@ -170,13 +170,14 @@ export default function ModelosContrato() {
 
   const handleDuplicate = async (template: ContractTemplate) => {
     try {
-      const { error } = await supabase.from('contract_templates').insert({
+      const duplicateData = {
         name: `${template.name} (Cópia)`,
         content: template.content,
         contract_type_id: template.contract_type_id,
         is_active: false,
-        variables: template.variables,
-      });
+        variables: template.variables as string[],
+      };
+      const { error } = await supabase.from('contract_templates').insert(duplicateData);
       if (error) throw error;
       toast.success('Modelo duplicado');
       fetchData();
@@ -382,14 +383,14 @@ export default function ModelosContrato() {
                     {template.content.substring(0, 150)}...
                   </p>
                   
-                  {template.variables.length > 0 && (
+                  {Array.isArray(template.variables) && template.variables.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-4">
-                      {template.variables.slice(0, 3).map(v => (
-                        <Badge key={v} variant="outline" className="text-xs">
-                          {v}
+                      {(template.variables as string[]).slice(0, 3).map((v, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {String(v)}
                         </Badge>
                       ))}
-                      {template.variables.length > 3 && (
+                      {Array.isArray(template.variables) && template.variables.length > 3 && (
                         <Badge variant="outline" className="text-xs">
                           +{template.variables.length - 3}
                         </Badge>
