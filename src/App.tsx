@@ -23,7 +23,10 @@ import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 // Admin pages
 import AdminLogin from "./pages/admin/Login";
 import AdminDashboard from "./pages/admin/Dashboard";
+import AdminLeads from "./pages/admin/Leads";
 import AdminClientes from "./pages/admin/Clientes";
+import AdminContratos from "./pages/admin/Contratos";
+import AdminModelosContrato from "./pages/admin/ModelosContrato";
 import AdminProcessos from "./pages/admin/Processos";
 import AdminDocumentos from "./pages/admin/Documentos";
 import AdminFinanceiro from "./pages/admin/Financeiro";
@@ -61,7 +64,10 @@ const App = () => (
               {/* Painel Administrativo */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/leads" element={<AdminLeads />} />
               <Route path="/admin/clientes" element={<AdminClientes />} />
+              <Route path="/admin/contratos" element={<AdminContratos />} />
+              <Route path="/admin/modelos-contrato" element={<AdminModelosContrato />} />
               <Route path="/admin/processos" element={<AdminProcessos />} />
               <Route path="/admin/documentos" element={<AdminDocumentos />} />
               <Route path="/admin/financeiro" element={<AdminFinanceiro />} />

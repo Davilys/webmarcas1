@@ -28,8 +28,8 @@ interface Contract {
   signed_at: string | null;
   visible_to_client: boolean | null;
   user_id: string | null;
-  contract_html: string | null;
-  description: string | null;
+  contract_html?: string | null;
+  description?: string | null;
   contract_type_id: string | null;
 }
 
