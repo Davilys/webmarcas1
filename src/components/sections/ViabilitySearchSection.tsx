@@ -159,6 +159,8 @@ const ViabilitySearchSection = () => {
       businessArea,
       level: result?.level,
     }));
+    // Scroll to top before navigation
+    window.scrollTo({ top: 0, behavior: 'instant' });
     navigate('/registro');
   };
 
