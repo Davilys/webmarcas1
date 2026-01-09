@@ -1,0 +1,227 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { contractId, channels = ['email'] } = await req.json();
+    
+    if (!contractId) {
+      return new Response(
+        JSON.stringify({ error: 'contractId é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Initialize Supabase client with service role
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Fetch contract and user details
+    const { data: contract, error: contractError } = await supabase
+      .from('contracts')
+      .select(`
+        id,
+        subject,
+        signature_token,
+        signature_expires_at,
+        document_type,
+        signatory_name,
+        user_id,
+        profiles:user_id (
+          email,
+          phone,
+          full_name
+        )
+      `)
+      .eq('id', contractId)
+      .single();
+
+    if (contractError || !contract) {
+      console.error('Contract not found:', contractError);
+      return new Response(
+        JSON.stringify({ error: 'Contrato não encontrado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!contract.signature_token) {
+      return new Response(
+        JSON.stringify({ error: 'Link de assinatura não gerado. Gere o link primeiro.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const profile = contract.profiles as any;
+    const recipientEmail = profile?.email;
+    const recipientPhone = profile?.phone;
+    const recipientName = contract.signatory_name || profile?.full_name || 'Cliente';
+    
+    const baseUrl = Deno.env.get('SITE_URL') || 'https://webmarcas.com.br';
+    const signatureUrl = `${baseUrl}/assinar/${contract.signature_token}`;
+    
+    const documentTypeName = contract.document_type === 'procuracao' ? 'Procuração' :
+                             contract.document_type === 'distrato_multa' ? 'Distrato' :
+                             contract.document_type === 'distrato_sem_multa' ? 'Distrato' :
+                             'Documento';
+
+    const results: { channel: string; success: boolean; error?: string }[] = [];
+
+    // Send via Email
+    if (channels.includes('email') && recipientEmail) {
+      try {
+        // Fetch default email account
+        const { data: emailAccount } = await supabase
+          .from('email_accounts')
+          .select('*')
+          .eq('is_default', true)
+          .single();
+
+        if (emailAccount) {
+          // Use send-email edge function
+          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+              to: recipientEmail,
+              subject: `[WebMarcas] ${documentTypeName} pendente de assinatura - ${contract.subject}`,
+              body: `Olá ${recipientName},
+
+Você possui um documento pendente de assinatura eletrônica:
+
+📄 ${documentTypeName}: ${contract.subject}
+
+Clique no link abaixo para assinar digitalmente:
+${signatureUrl}
+
+⚠️ Este link expira em ${new Date(contract.signature_expires_at!).toLocaleDateString('pt-BR')}.
+
+A assinatura eletrônica tem validade jurídica conforme Lei 14.063/2020 e será registrada em blockchain para garantir autenticidade.
+
+Dúvidas? Entre em contato:
+📞 (11) 4200-1656
+📧 contato@webmarcas.com.br
+
+Atenciosamente,
+Equipe WebMarcas`,
+            }),
+          });
+
+          results.push({ 
+            channel: 'email', 
+            success: emailResponse.ok,
+            error: emailResponse.ok ? undefined : 'Erro ao enviar email'
+          });
+        } else {
+          results.push({ channel: 'email', success: false, error: 'Conta de email não configurada' });
+        }
+      } catch (emailError) {
+        console.error('Email error:', emailError);
+        results.push({ channel: 'email', success: false, error: 'Erro ao enviar email' });
+      }
+    }
+
+    // Send via WhatsApp (Evolution API)
+    if (channels.includes('whatsapp') && recipientPhone) {
+      try {
+        // Fetch WhatsApp config
+        const { data: whatsappConfig } = await supabase
+          .from('whatsapp_config')
+          .select('*')
+          .eq('is_active', true)
+          .single();
+
+        if (whatsappConfig && whatsappConfig.server_url && whatsappConfig.api_key) {
+          const phoneNumber = recipientPhone.replace(/\D/g, '');
+          const formattedPhone = phoneNumber.startsWith('55') ? phoneNumber : `55${phoneNumber}`;
+
+          const message = `🔔 *WebMarcas - Documento Pendente*
+
+Olá ${recipientName}!
+
+Você possui um documento pendente de assinatura:
+📄 *${documentTypeName}*: ${contract.subject}
+
+Clique para assinar:
+${signatureUrl}
+
+⚠️ Link válido até ${new Date(contract.signature_expires_at!).toLocaleDateString('pt-BR')}
+
+Dúvidas? (11) 4200-1656`;
+
+          const whatsappResponse = await fetch(
+            `${whatsappConfig.server_url}/message/sendText/${whatsappConfig.instance_name}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': whatsappConfig.api_key,
+              },
+              body: JSON.stringify({
+                number: formattedPhone,
+                text: message,
+              }),
+            }
+          );
+
+          results.push({ 
+            channel: 'whatsapp', 
+            success: whatsappResponse.ok,
+            error: whatsappResponse.ok ? undefined : 'Erro ao enviar WhatsApp'
+          });
+        } else {
+          results.push({ channel: 'whatsapp', success: false, error: 'WhatsApp não configurado' });
+        }
+      } catch (whatsappError) {
+        console.error('WhatsApp error:', whatsappError);
+        results.push({ channel: 'whatsapp', success: false, error: 'Erro ao enviar WhatsApp' });
+      }
+    }
+
+    // Log event
+    await supabase
+      .from('signature_audit_log')
+      .insert({
+        contract_id: contractId,
+        event_type: 'signature_request_sent',
+        event_data: {
+          channels,
+          results,
+          recipient_email: recipientEmail,
+          recipient_phone: recipientPhone,
+        },
+      });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          results,
+          signatureUrl,
+        }
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error: unknown) {
+    console.error('Error in send-signature-request:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ error: 'Erro interno do servidor', details: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
