@@ -105,13 +105,13 @@ Por estarem justas e contratadas, as partes assinam o presente instrumento em 02
 
 São Paulo, {{data_extenso}}.
 
-_______________________________
+CONTRATADA:
 WEB MARCAS PATENTES EIRELI
 CNPJ: 39.528.012/0001-29
 
-_______________________________
+CONTRATANTE:
 {{nome_cliente}}
-CPF: {{cpf}}`;
+CPF/CNPJ: {{cpf_cnpj}}`;
 
 export function useContractTemplate(templateType: string = 'Registro de Marca'): UseContractTemplateResult {
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
@@ -250,10 +250,16 @@ export function replaceContractVariables(
     }
   };
 
+  // CPF or CNPJ for signature section
+  const cpfCnpj = brandData.hasCNPJ && brandData.cnpj 
+    ? brandData.cnpj 
+    : personalData.cpf;
+
   // Replace all variables
   let result = template
     .replace(/\{\{nome_cliente\}\}/g, personalData.fullName)
     .replace(/\{\{cpf\}\}/g, personalData.cpf)
+    .replace(/\{\{cpf_cnpj\}\}/g, cpfCnpj)
     .replace(/\{\{email\}\}/g, personalData.email)
     .replace(/\{\{telefone\}\}/g, personalData.phone)
     .replace(/\{\{marca\}\}/g, brandData.brandName)
