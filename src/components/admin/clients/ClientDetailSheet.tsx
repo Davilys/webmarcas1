@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
@@ -22,7 +23,7 @@ import {
   FileText, CreditCard, MessageSquare, Calendar as CalendarIcon, Paperclip,
   Upload, Loader2, ExternalLink, Plus, Edit, X, Check, 
   MessageCircle, ArrowUpRight, Tag, Zap, AlertTriangle,
-  CheckCircle, XCircle, TrendingUp, Users
+  CheckCircle, XCircle, TrendingUp, Users, Receipt
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
@@ -63,6 +64,51 @@ interface ClientInvoice {
   due_date: string;
 }
 
+const SERVICE_PRICING_OPTIONS = [
+  { 
+    id: 'registro_avista', 
+    label: 'Registro de Marca - À Vista', 
+    value: 699, 
+    description: 'Pagamento único',
+    details: 'R$ 699,00 à vista'
+  },
+  { 
+    id: 'registro_boleto', 
+    label: 'Registro de Marca - Boleto', 
+    value: 1194, 
+    description: '3x de R$ 398,00',
+    details: '3x R$ 398,00 (boleto)'
+  },
+  { 
+    id: 'registro_cartao', 
+    label: 'Registro de Marca - Cartão', 
+    value: 1194, 
+    description: '6x de R$ 199,00',
+    details: '6x R$ 199,00 (cartão)'
+  },
+  { 
+    id: 'exigencia_avista', 
+    label: 'Exigência/Publicação - À Vista', 
+    value: 1412, 
+    description: '1 Salário Mínimo',
+    details: 'R$ 1.412,00 à vista (1 SM)'
+  },
+  { 
+    id: 'exigencia_parcelado', 
+    label: 'Exigência/Publicação - Parcelado', 
+    value: 2388, 
+    description: '6x de R$ 398,00',
+    details: '6x R$ 398,00 (boleto ou cartão)'
+  },
+  { 
+    id: 'personalizado', 
+    label: 'Valor Personalizado', 
+    value: 0, 
+    description: 'Definir valor manualmente',
+    details: 'Informe o valor e motivo'
+  },
+];
+
 const SERVICE_TYPES = [
   { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI' },
   { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI' },
@@ -97,6 +143,10 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     date: new Date(),
     time: '10:00'
   });
+  const [selectedPricing, setSelectedPricing] = useState<string>('');
+  const [customValue, setCustomValue] = useState<number>(0);
+  const [customValueReason, setCustomValueReason] = useState<string>('');
+  const [showPricingDialog, setShowPricingDialog] = useState(false);
   const [editData, setEditData] = useState({
     priority: '',
     origin: '',
@@ -113,6 +163,14 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         contract_value: client.contract_value || 0,
         pipeline_stage: client.pipeline_stage || 'protocolado'
       });
+      // Try to match existing value with a pricing option
+      const matchedOption = SERVICE_PRICING_OPTIONS.find(opt => opt.value === client.contract_value);
+      if (matchedOption) {
+        setSelectedPricing(matchedOption.id);
+      } else if (client.contract_value && client.contract_value > 0) {
+        setSelectedPricing('personalizado');
+        setCustomValue(client.contract_value);
+      }
     }
   }, [client, open]);
 
@@ -427,22 +485,25 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                   </h4>
                   <div className="grid grid-cols-3 gap-3">
                     <motion.div 
-                      className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl"
+                      className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl cursor-pointer"
                       whileHover={{ scale: 1.02 }}
+                      onClick={() => editMode && setShowPricingDialog(true)}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <DollarSign className="h-4 w-4 text-emerald-600" />
                         <p className="text-xs text-muted-foreground">Valor</p>
+                        {editMode && <Edit className="h-3 w-3 text-muted-foreground ml-auto" />}
                       </div>
-                      {editMode ? (
-                        <Input
-                          type="number"
-                          value={editData.contract_value}
-                          onChange={(e) => setEditData({ ...editData, contract_value: Number(e.target.value) })}
-                          className="h-8 mt-1"
-                        />
-                      ) : (
-                        <p className="font-bold text-lg text-emerald-600">R$ {(client.contract_value || 0).toLocaleString('pt-BR')}</p>
+                      <p className="font-bold text-lg text-emerald-600">R$ {(editData.contract_value || 0).toLocaleString('pt-BR')}</p>
+                      {selectedPricing && selectedPricing !== 'personalizado' && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {SERVICE_PRICING_OPTIONS.find(o => o.id === selectedPricing)?.details}
+                        </p>
+                      )}
+                      {selectedPricing === 'personalizado' && customValueReason && (
+                        <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">
+                          {customValueReason}
+                        </p>
                       )}
                     </motion.div>
                     <motion.div 
@@ -996,6 +1057,115 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
           </div>
         </div>
       </SheetContent>
+
+      {/* Pricing Selection Dialog */}
+      <Dialog open={showPricingDialog} onOpenChange={setShowPricingDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-emerald-600" />
+              Selecionar Valor do Serviço
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <RadioGroup 
+              value={selectedPricing} 
+              onValueChange={(value) => {
+                setSelectedPricing(value);
+                const option = SERVICE_PRICING_OPTIONS.find(o => o.id === value);
+                if (option && value !== 'personalizado') {
+                  setEditData({ ...editData, contract_value: option.value });
+                }
+              }}
+            >
+              {SERVICE_PRICING_OPTIONS.map((option) => (
+                <motion.div
+                  key={option.id}
+                  whileHover={{ scale: 1.01 }}
+                  className={cn(
+                    "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
+                    selectedPricing === option.id 
+                      ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20" 
+                      : "border-border hover:border-emerald-300"
+                  )}
+                  onClick={() => {
+                    setSelectedPricing(option.id);
+                    const opt = SERVICE_PRICING_OPTIONS.find(o => o.id === option.id);
+                    if (opt && option.id !== 'personalizado') {
+                      setEditData({ ...editData, contract_value: opt.value });
+                    }
+                  }}
+                >
+                  <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
+                  <div className="flex-1">
+                    <label htmlFor={option.id} className="font-medium cursor-pointer">
+                      {option.label}
+                    </label>
+                    <p className="text-sm text-muted-foreground">{option.description}</p>
+                    {option.id !== 'personalizado' && (
+                      <p className="text-sm font-semibold text-emerald-600 mt-1">
+                        R$ {option.value.toLocaleString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </RadioGroup>
+
+            {/* Custom Value Fields */}
+            <AnimatePresence>
+              {selectedPricing === 'personalizado' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-3 pt-2"
+                >
+                  <div>
+                    <Label>Valor Personalizado (R$)</Label>
+                    <Input
+                      type="number"
+                      placeholder="0,00"
+                      value={customValue || ''}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setCustomValue(value);
+                        setEditData({ ...editData, contract_value: value });
+                      }}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Motivo / Observação</Label>
+                    <Textarea
+                      placeholder="Descreva o motivo deste valor personalizado..."
+                      value={customValueReason}
+                      onChange={(e) => setCustomValueReason(e.target.value)}
+                      rows={2}
+                      className="mt-1 resize-none"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPricingDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowPricingDialog(false);
+                toast.success(`Valor definido: R$ ${editData.contract_value.toLocaleString('pt-BR')}`);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Confirmar Valor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
