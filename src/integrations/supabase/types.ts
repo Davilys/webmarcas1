@@ -694,6 +694,221 @@ export type Database = {
           },
         ]
       }
+      email_accounts: {
+        Row: {
+          created_at: string | null
+          display_name: string | null
+          email_address: string
+          id: string
+          imap_host: string | null
+          imap_port: number | null
+          is_default: boolean | null
+          provider: string
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number | null
+          smtp_user: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_name?: string | null
+          email_address: string
+          id?: string
+          imap_host?: string | null
+          imap_port?: number | null
+          is_default?: boolean | null
+          provider?: string
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_user?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_name?: string | null
+          email_address?: string
+          id?: string
+          imap_host?: string | null
+          imap_port?: number | null
+          is_default?: boolean | null
+          provider?: string
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number | null
+          smtp_user?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_inbox: {
+        Row: {
+          account_id: string | null
+          body_html: string | null
+          body_text: string | null
+          created_at: string | null
+          from_email: string
+          from_name: string | null
+          id: string
+          is_archived: boolean | null
+          is_read: boolean | null
+          is_starred: boolean | null
+          message_id: string | null
+          received_at: string | null
+          subject: string | null
+          to_email: string
+        }
+        Insert: {
+          account_id?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string | null
+          from_email: string
+          from_name?: string | null
+          id?: string
+          is_archived?: boolean | null
+          is_read?: boolean | null
+          is_starred?: boolean | null
+          message_id?: string | null
+          received_at?: string | null
+          subject?: string | null
+          to_email: string
+        }
+        Update: {
+          account_id?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string | null
+          from_email?: string
+          from_name?: string | null
+          id?: string
+          is_archived?: boolean | null
+          is_read?: boolean | null
+          is_starred?: boolean | null
+          message_id?: string | null
+          received_at?: string | null
+          subject?: string | null
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbox_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "email_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_logs: {
+        Row: {
+          bcc_emails: string[] | null
+          body: string
+          cc_emails: string[] | null
+          error_message: string | null
+          from_email: string
+          html_body: string | null
+          id: string
+          related_lead_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string | null
+          subject: string
+          template_id: string | null
+          to_email: string
+          trigger_type: string | null
+        }
+        Insert: {
+          bcc_emails?: string[] | null
+          body: string
+          cc_emails?: string[] | null
+          error_message?: string | null
+          from_email: string
+          html_body?: string | null
+          id?: string
+          related_lead_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string | null
+          subject: string
+          template_id?: string | null
+          to_email: string
+          trigger_type?: string | null
+        }
+        Update: {
+          bcc_emails?: string[] | null
+          body?: string
+          cc_emails?: string[] | null
+          error_message?: string | null
+          from_email?: string
+          html_body?: string | null
+          id?: string
+          related_lead_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string | null
+          subject?: string
+          template_id?: string | null
+          to_email?: string
+          trigger_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_related_lead_id_fkey"
+            columns: ["related_lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          body: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subject: string
+          trigger_event: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subject: string
+          trigger_event?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subject?: string
+          trigger_event?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       import_logs: {
         Row: {
           created_at: string
@@ -873,9 +1088,12 @@ export type Database = {
           cpf_cnpj: string | null
           created_at: string
           email: string | null
+          email_opt_out: boolean | null
           estimated_value: number | null
+          form_started_at: string | null
           full_name: string
           id: string
+          last_reminder_sent_at: string | null
           notes: string | null
           origin: string | null
           phone: string | null
@@ -894,9 +1112,12 @@ export type Database = {
           cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
+          email_opt_out?: boolean | null
           estimated_value?: number | null
+          form_started_at?: string | null
           full_name: string
           id?: string
+          last_reminder_sent_at?: string | null
           notes?: string | null
           origin?: string | null
           phone?: string | null
@@ -915,9 +1136,12 @@ export type Database = {
           cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
+          email_opt_out?: boolean | null
           estimated_value?: number | null
+          form_started_at?: string | null
           full_name?: string
           id?: string
+          last_reminder_sent_at?: string | null
           notes?: string | null
           origin?: string | null
           phone?: string | null

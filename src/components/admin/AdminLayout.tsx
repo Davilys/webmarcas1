@@ -23,6 +23,8 @@ import {
   FileSignature,
   FileStack,
   Database,
+  MessageCircle,
+  Mail,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
@@ -39,6 +41,8 @@ const menuItems = [
   { icon: FileStack, label: 'Modelos de Contrato', href: '/admin/modelos-contrato' },
   { icon: FolderOpen, label: 'Documentos', href: '/admin/documentos' },
   { icon: CreditCard, label: 'Financeiro', href: '/admin/financeiro' },
+  { icon: Mail, label: 'Emails', href: '/admin/emails' },
+  { icon: MessageCircle, label: 'Chat ao Vivo', href: '/admin/chat-ao-vivo' },
   { icon: Bell, label: 'Notificações', href: '/admin/notificacoes' },
   { icon: BookOpen, label: 'Revista INPI', href: '/admin/revista-inpi' },
   { icon: Scale, label: 'Recursos INPI', href: '/admin/recursos-inpi' },
