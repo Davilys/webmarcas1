@@ -7,11 +7,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X } from 'lucide-react';
+import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters } from '@/components/admin/clients/ClientKanbanBoard';
 import { ClientListView } from '@/components/admin/clients/ClientListView';
 import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
+import { ClientImportExportDialog } from '@/components/admin/clients/ClientImportExportDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type ViewMode = 'kanban' | 'list';
@@ -36,6 +37,7 @@ export default function AdminClientes() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [filters, setFilters] = useState<KanbanFilters>({ priority: [], origin: [] });
   const [filterOpen, setFilterOpen] = useState(false);
+  const [importExportOpen, setImportExportOpen] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -142,6 +144,10 @@ export default function AdminClientes() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setImportExportOpen(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Importar / Exportar
+              </Button>
               <Button variant="outline" size="icon" onClick={fetchClients}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
@@ -323,6 +329,23 @@ export default function AdminClientes() {
           open={detailOpen}
           onOpenChange={setDetailOpen}
           onUpdate={fetchClients}
+        />
+
+        {/* Import/Export Dialog */}
+        <ClientImportExportDialog
+          open={importExportOpen}
+          onOpenChange={setImportExportOpen}
+          clients={clients.map(c => ({
+            id: c.id,
+            full_name: c.full_name,
+            email: c.email,
+            phone: c.phone,
+            company_name: c.company_name,
+            origin: c.origin,
+            priority: c.priority,
+            contract_value: c.contract_value,
+          }))}
+          onImportComplete={fetchClients}
         />
       </div>
     </AdminLayout>
