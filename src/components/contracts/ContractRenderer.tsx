@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
-import { Shield, CheckCircle, Lock, Hash, Globe, Clock } from 'lucide-react';
+import { Shield, CheckCircle, Lock, Hash, Globe, Clock, AlertCircle } from 'lucide-react';
 
 export interface BlockchainSignature {
   hash?: string;
@@ -92,18 +92,28 @@ export function ContractRenderer({
         return;
       }
 
-      // Signature lines
-      if (trimmedLine.startsWith('_')) {
+      // Skip signature lines - electronic contracts don't use manual signature lines
+      if (trimmedLine.match(/^_+$/)) {
+        return; // Don't render manual signature lines (______)
+      }
+
+      // Party identification headers (CONTRATADA:, CONTRATANTE:)
+      if (trimmedLine === 'CONTRATADA:' || trimmedLine === 'CONTRATANTE:') {
         elements.push(
-          <div key={index} className="border-t border-foreground w-64 mt-8 mb-1 mx-auto" />
+          <p key={index} className="text-xs font-bold text-center text-foreground mt-6 mb-1">
+            {trimmedLine}
+          </p>
         );
         return;
       }
 
-      // Company name after signature
-      if (trimmedLine.includes('WEB MARCAS PATENTES EIRELI') || trimmedLine.includes('CNPJ:') || trimmedLine.includes('CPF:')) {
+      // Company name and identification details (after party headers)
+      if (trimmedLine.includes('WEB MARCAS PATENTES EIRELI') || 
+          trimmedLine.startsWith('CNPJ:') || 
+          trimmedLine.startsWith('CPF:') ||
+          trimmedLine.startsWith('CPF/CNPJ:')) {
         elements.push(
-          <p key={index} className="text-xs text-center text-muted-foreground mb-4">
+          <p key={index} className="text-xs text-center text-muted-foreground">
             {trimmedLine}
           </p>
         );
@@ -196,82 +206,62 @@ export function ContractRenderer({
 
       {/* Digital Certification Section - shown when contract is signed or preview requested */}
       {(showCertificationSection || blockchainSignature?.hash) && (
-        <div className="mt-8 pt-6 border-t-2 border-primary/20">
+        <div className="mt-8 p-6 bg-sky-50 border border-sky-200 rounded-lg print:bg-sky-50 print:border-sky-200">
           {/* Section Header */}
-          <div className="flex items-center gap-2 mb-4">
-            <Shield className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-base" style={{ color: '#0284c7' }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-sky-100 rounded-full">
+              <Shield className="h-6 w-6 text-sky-600" />
+            </div>
+            <h3 className="text-lg font-bold text-sky-800">
               CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
             </h3>
           </div>
 
           {/* Legal Text */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-xs text-blue-900">
-            <p className="mb-3">
-              Este contrato possui múltiplas camadas de segurança jurídica conforme descritas abaixo:
-            </p>
-            
-            <div className="space-y-2">
-              <div className="flex items-start gap-2">
-                <Hash className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <div>
-                  <strong>1. HASH SHA-256:</strong> O conteúdo integral deste contrato foi processado 
-                  através do algoritmo criptográfico SHA-256, gerando um código único e imutável que 
-                  garante a integridade do documento.
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-2">
-                <Lock className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <div>
-                  <strong>2. REGISTRO EM BLOCKCHAIN:</strong> O hash do contrato foi registrado na 
-                  blockchain do Bitcoin através do protocolo OpenTimestamps, garantindo prova 
-                  irrefutável de existência e data.
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-2">
-                <Globe className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <div>
-                  <strong>3. RASTREIO DE IP:</strong> O endereço IP do dispositivo utilizado para 
-                  aceitar este contrato foi registrado, possibilitando rastreabilidade técnica.
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-2">
-                <Clock className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <div>
-                  <strong>4. TIMESTAMP:</strong> Data e hora exatas da assinatura foram registradas 
-                  em servidor seguro com sincronização NTP.
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <div>
-                  <strong>5. PROVA CRIPTOGRÁFICA:</strong> Um arquivo de prova foi gerado e pode 
-                  ser verificado a qualquer momento em opentimestamps.org.
-                </div>
-              </div>
-            </div>
-            
-            <p className="mt-3 text-xs italic">
-              A aceitação deste contrato por meio digital possui validade jurídica conforme 
-              Lei nº 14.063/2020 e Medida Provisória nº 2.200-2/2001.
-            </p>
-          </div>
+          <p className="text-sm text-sky-700 mb-4 leading-relaxed">
+            Este contrato foi assinado eletronicamente e possui validade jurídica, conforme a 
+            legislação brasileira vigente, incluindo a Lei nº 14.063/2020 e a Medida Provisória 
+            nº 2.200-2/2001.
+          </p>
+
+          <p className="text-sm text-sky-700 mb-3 font-medium">
+            O documento conta com as seguintes camadas de segurança:
+          </p>
+
+          <ul className="text-sm text-sky-700 space-y-2 mb-4">
+            <li className="flex items-start gap-2">
+              <Hash className="w-4 h-4 mt-0.5 flex-shrink-0 text-sky-500" />
+              <span><strong>Hash SHA-256</strong> – Garante a integridade do conteúdo do contrato.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Lock className="w-4 h-4 mt-0.5 flex-shrink-0 text-sky-500" />
+              <span><strong>Registro em Blockchain</strong> – Prova imutável de existência e data (OpenTimestamps).</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Globe className="w-4 h-4 mt-0.5 flex-shrink-0 text-sky-500" />
+              <span><strong>Rastreamento de IP</strong> – Identificação do dispositivo que realizou a assinatura.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Clock className="w-4 h-4 mt-0.5 flex-shrink-0 text-sky-500" />
+              <span><strong>Timestamp</strong> – Data e hora exatas da assinatura sincronizadas via NTP.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-sky-500" />
+              <span><strong>Prova criptográfica</strong> – Arquivo de verificação auditável externamente.</span>
+            </li>
+          </ul>
 
           {/* Signature Data Box - only shown when actually signed */}
-          {blockchainSignature?.hash && (
-            <div className="bg-green-50 border border-green-300 rounded-lg p-4 text-xs">
+          {blockchainSignature?.hash ? (
+            <div className="mt-4 p-4 bg-white border border-green-300 rounded-md shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="font-bold text-green-800">DADOS DA ASSINATURA DIGITAL</span>
+                <span className="font-bold text-green-800">DADOS DA ASSINATURA ELETRÔNICA</span>
               </div>
               
-              <div className="grid grid-cols-1 gap-2 text-green-900 font-mono">
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="font-bold">Hash SHA-256:</span>
+              <div className="grid grid-cols-1 gap-2 text-xs font-mono text-green-900 bg-green-50 p-3 rounded">
+                <div className="flex flex-wrap items-start gap-1">
+                  <span className="font-bold whitespace-nowrap">Hash SHA-256:</span>
                   <span className="break-all text-[10px]">{blockchainSignature.hash}</span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -282,17 +272,44 @@ export function ContractRenderer({
                   <span className="font-bold">Endereço IP:</span>
                   <span>{blockchainSignature.ipAddress || '-'}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold">ID da Transação:</span>
-                  <span className="break-all">{blockchainSignature.txId || '-'}</span>
-                </div>
+                {blockchainSignature.txId && (
+                  <div className="flex items-start gap-1">
+                    <span className="font-bold whitespace-nowrap">ID da Transação:</span>
+                    <span className="break-all">{blockchainSignature.txId}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1">
                   <span className="font-bold">Rede:</span>
                   <span>{blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</span>
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-md">
+              <div className="flex items-center gap-2 text-amber-700">
+                <AlertCircle className="h-4 w-4" />
+                <span className="font-medium text-sm">Aguardando assinatura eletrônica</span>
+              </div>
+              <p className="text-xs text-amber-600 mt-1">
+                Após a assinatura, os dados criptográficos serão exibidos aqui.
+              </p>
+            </div>
           )}
+
+          {/* Footer */}
+          <div className="mt-6 pt-4 border-t border-sky-200 text-center">
+            <p className="text-xs text-sky-600 font-medium">
+              Contrato gerado e assinado eletronicamente pelo sistema WebMarcas
+            </p>
+            <p className="text-xs text-sky-500 mt-1">
+              www.webmarcas.net | contato@webmarcas.net
+            </p>
+            {blockchainSignature?.timestamp && (
+              <p className="text-xs text-sky-600 mt-2 font-medium">
+                Data e hora da assinatura: {new Date(blockchainSignature.timestamp).toLocaleString('pt-BR')}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -352,19 +369,28 @@ export function generateContractPrintHTML(
         return `<p style="font-size: 11px; margin-bottom: 12px; font-weight: 500;">${trimmed}</p>`;
       }
       
-      if (trimmed.startsWith('_')) {
-        return `<div style="border-top: 1px solid #000; width: 250px; margin: 32px auto 4px;"></div>`;
-      }
-      
-      if (trimmed.includes('WEB MARCAS PATENTES EIRELI') || trimmed.includes('CNPJ:') || trimmed.includes('CPF:')) {
-        return `<p style="font-size: 10px; text-align: center; color: #6b7280; margin-bottom: 16px;">${trimmed}</p>`;
-      }
-      
-      if (trimmed.startsWith('São Paulo,')) {
-        return `<p style="font-size: 11px; margin-top: 24px; margin-bottom: 24px;">${trimmed}</p>`;
-      }
-      
-      return `<p style="font-size: 11px; margin-bottom: 12px; line-height: 1.6;">${trimmed}</p>`;
+        // Skip manual signature lines - electronic contracts don't use them
+        if (trimmed.match(/^_+$/)) {
+          return ''; // Don't render manual signature lines
+        }
+        
+        // Party identification headers
+        if (trimmed === 'CONTRATADA:' || trimmed === 'CONTRATANTE:') {
+          return `<p style="font-size: 11px; font-weight: bold; text-align: center; margin-top: 24px; margin-bottom: 4px;">${trimmed}</p>`;
+        }
+        
+        if (trimmed.includes('WEB MARCAS PATENTES EIRELI') || 
+            trimmed.startsWith('CNPJ:') || 
+            trimmed.startsWith('CPF:') ||
+            trimmed.startsWith('CPF/CNPJ:')) {
+          return `<p style="font-size: 10px; text-align: center; color: #6b7280; margin-bottom: 4px;">${trimmed}</p>`;
+        }
+        
+        if (trimmed.startsWith('São Paulo,')) {
+          return `<p style="font-size: 11px; margin-top: 24px; margin-bottom: 24px;">${trimmed}</p>`;
+        }
+        
+        return `<p style="font-size: 11px; margin-bottom: 12px; line-height: 1.6;">${trimmed}</p>`;
     })
     .join('\n');
 
@@ -500,45 +526,58 @@ export function generateContractPrintHTML(
       <h3 style="font-weight: bold; font-size: 14px; color: #0284c7; margin: 0;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
     </div>
     
-    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 16px; margin-bottom: 16px; font-size: 10px; color: #1e3a8a;">
-      <p style="margin-bottom: 12px;">Este contrato possui múltiplas camadas de segurança jurídica conforme descritas abaixo:</p>
+    <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+      <p style="font-size: 11px; color: #0369a1; margin-bottom: 16px; line-height: 1.6;">
+        Este contrato foi assinado eletronicamente e possui validade jurídica, conforme a 
+        legislação brasileira vigente, incluindo a Lei nº 14.063/2020 e a Medida Provisória 
+        nº 2.200-2/2001.
+      </p>
       
-      <div style="margin-bottom: 8px;"><strong>1. HASH SHA-256:</strong> O conteúdo integral deste contrato foi processado através do algoritmo criptográfico SHA-256, gerando um código único e imutável que garante a integridade do documento.</div>
+      <p style="font-size: 11px; color: #0369a1; font-weight: 600; margin-bottom: 12px;">
+        O documento conta com as seguintes camadas de segurança:
+      </p>
       
-      <div style="margin-bottom: 8px;"><strong>2. REGISTRO EM BLOCKCHAIN:</strong> O hash do contrato foi registrado na blockchain do Bitcoin através do protocolo OpenTimestamps, garantindo prova irrefutável de existência e data.</div>
-      
-      <div style="margin-bottom: 8px;"><strong>3. RASTREIO DE IP:</strong> O endereço IP do dispositivo utilizado para aceitar este contrato foi registrado, possibilitando rastreabilidade técnica.</div>
-      
-      <div style="margin-bottom: 8px;"><strong>4. TIMESTAMP:</strong> Data e hora exatas da assinatura foram registradas em servidor seguro com sincronização NTP.</div>
-      
-      <div style="margin-bottom: 8px;"><strong>5. PROVA CRIPTOGRÁFICA:</strong> Um arquivo de prova foi gerado e pode ser verificado a qualquer momento em opentimestamps.org.</div>
-      
-      <p style="margin-top: 12px; font-style: italic; font-size: 9px;">A aceitação deste contrato por meio digital possui validade jurídica conforme Lei nº 14.063/2020 e Medida Provisória nº 2.200-2/2001.</p>
+      <div style="font-size: 10px; color: #0369a1; margin-bottom: 8px;">✦ <strong>Hash SHA-256</strong> – Garante a integridade do conteúdo do contrato.</div>
+      <div style="font-size: 10px; color: #0369a1; margin-bottom: 8px;">🔗 <strong>Registro em Blockchain</strong> – Prova imutável de existência e data (OpenTimestamps).</div>
+      <div style="font-size: 10px; color: #0369a1; margin-bottom: 8px;">📍 <strong>Rastreamento de IP</strong> – Identificação do dispositivo que realizou a assinatura.</div>
+      <div style="font-size: 10px; color: #0369a1; margin-bottom: 8px;">🕐 <strong>Timestamp</strong> – Data e hora exatas da assinatura sincronizadas via NTP.</div>
+      <div style="font-size: 10px; color: #0369a1; margin-bottom: 8px;">🔒 <strong>Prova criptográfica</strong> – Arquivo de verificação auditável externamente.</div>
     </div>
     
     ${blockchainSignature?.hash ? `
     <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; font-size: 10px;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-        <span style="font-weight: bold; color: #166534;">DADOS DA ASSINATURA DIGITAL</span>
+        <span style="font-weight: bold; color: #166534;">DADOS DA ASSINATURA ELETRÔNICA</span>
       </div>
       
-      <div style="font-family: monospace; color: #166534;">
-        <div style="margin-bottom: 4px;"><strong>Hash SHA-256:</strong> <span style="font-size: 9px; word-break: break-all;">${blockchainSignature.hash}</span></div>
-        <div style="margin-bottom: 4px;"><strong>Data/Hora:</strong> ${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</div>
-        <div style="margin-bottom: 4px;"><strong>Endereço IP:</strong> ${blockchainSignature.ipAddress || '-'}</div>
-        <div style="margin-bottom: 4px;"><strong>ID da Transação:</strong> ${blockchainSignature.txId || '-'}</div>
+      <div style="font-family: monospace; color: #166534; background: #dcfce7; padding: 12px; border-radius: 4px;">
+        <div style="margin-bottom: 6px;"><strong>Hash SHA-256:</strong> <span style="font-size: 9px; word-break: break-all;">${blockchainSignature.hash}</span></div>
+        <div style="margin-bottom: 6px;"><strong>Data/Hora:</strong> ${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</div>
+        <div style="margin-bottom: 6px;"><strong>Endereço IP:</strong> ${blockchainSignature.ipAddress || '-'}</div>
+        ${blockchainSignature.txId ? `<div style="margin-bottom: 6px;"><strong>ID da Transação:</strong> ${blockchainSignature.txId}</div>` : ''}
         <div><strong>Rede:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</div>
       </div>
     </div>
-    ` : ''}
+    ` : `
+    <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 16px; font-size: 11px; color: #92400e;">
+      <strong>⏳ Aguardando assinatura eletrônica</strong>
+      <p style="font-size: 10px; margin-top: 4px;">Após a assinatura, os dados criptográficos serão exibidos aqui.</p>
+    </div>
+    `}
+    
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #bae6fd; text-align: center;">
+      <p style="font-size: 10px; color: #0284c7; font-weight: 500;">Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
+      <p style="font-size: 10px; color: #0369a1; margin-top: 4px;">www.webmarcas.net | contato@webmarcas.net</p>
+      ${blockchainSignature?.timestamp ? `<p style="font-size: 10px; color: #0284c7; font-weight: 500; margin-top: 8px;">Data e hora da assinatura: ${new Date(blockchainSignature.timestamp).toLocaleString('pt-BR')}</p>` : ''}
+    </div>
   </div>
   ` : ''}
   
   <div class="footer">
-    <p>Contrato gerado automaticamente pelo sistema WebMarcas</p>
+    <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
     <p>www.webmarcas.net | contato@webmarcas.net</p>
-    <p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>
+    ${blockchainSignature?.timestamp ? `<p>Data e hora da assinatura: ${new Date(blockchainSignature.timestamp).toLocaleString('pt-BR')}</p>` : `<p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>`}
   </div>
 </body>
 </html>`;
