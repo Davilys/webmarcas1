@@ -1,53 +1,35 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, MessageCircle, FileText, Clock, Shield } from "lucide-react";
+import { CheckCircle, MessageCircle, FileText, Clock, Shield, PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import WhatsAppButton from "@/components/layout/WhatsAppButton";
 
-interface RegistrationData {
-  personalData: {
-    fullName: string;
-    cpf: string;
-    email: string;
-    address: string;
-    neighborhood: string;
-    cep: string;
-  };
-  brandData: {
-    companyName: string;
-    cnpj: string;
-    brandName: string;
-    businessArea: string;
-  };
-  paymentOption: string;
-  paymentLabel: string;
-  paymentValue: string;
-  acceptedAt: string;
-}
-
 const Obrigado = () => {
   const navigate = useNavigate();
-  const [registrationData, setRegistrationData] = useState<RegistrationData | null>(null);
+  const [registrationData, setRegistrationData] = useState<any>(null);
+  const [showConfetti, setShowConfetti] = useState(true);
 
   useEffect(() => {
     const data = sessionStorage.getItem("registrationComplete");
     if (data) {
       try {
         setRegistrationData(JSON.parse(data));
-      } catch (e) {
-        console.error("Error parsing registration data:", e);
+      } catch {
         navigate("/registro");
       }
     } else {
       navigate("/registro");
     }
+    
+    // Hide confetti after animation
+    setTimeout(() => setShowConfetti(false), 3000);
   }, [navigate]);
 
   const handleWhatsApp = () => {
     const message = encodeURIComponent(
-      `Olá! Acabei de finalizar meu pedido de registro da marca "${registrationData?.brandData.brandName}". Gostaria de falar com um especialista.`
+      `Olá! Acabei de finalizar meu pedido de registro da marca "${registrationData?.brandData?.brandName}". Gostaria de falar com um especialista.`
     );
     window.open(`https://wa.me/5511999999999?text=${message}`, "_blank");
   };
@@ -66,30 +48,52 @@ const Obrigado = () => {
       <main className="pt-20">
         <section className="section-padding relative overflow-hidden">
           {/* Background */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/10 rounded-full blur-3xl animate-pulse" />
+
+          {/* Confetti Animation */}
+          {showConfetti && (
+            <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+              {[...Array(20)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute animate-bounce"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `-20px`,
+                    animationDelay: `${Math.random() * 2}s`,
+                    animationDuration: `${2 + Math.random() * 2}s`,
+                  }}
+                >
+                  <PartyPopper className="w-6 h-6 text-accent" />
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="container mx-auto px-4 relative z-10">
-            {/* Success Icon */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 mb-6 animate-pulse">
-                <CheckCircle className="w-12 h-12 text-white" />
+            {/* Success Icon with Animation */}
+            <div className="text-center mb-8 animate-scale-in">
+              <div className="inline-flex items-center justify-center w-28 h-28 rounded-full bg-gradient-to-br from-accent to-emerald-600 mb-6 shadow-lg animate-pulse-glow">
+                <CheckCircle className="w-14 h-14 text-white animate-bounce" style={{ animationDuration: '2s' }} />
               </div>
               
-              <span className="badge-premium mb-4 inline-flex">Registro Confirmado</span>
+              <span className="badge-premium mb-4 inline-flex bg-accent/10 text-accent border-accent/30">
+                ✅ {registrationData.paymentConfirmed ? "Pagamento Identificado" : "Aguardando Pagamento"}
+              </span>
               
-              <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-                🎉 Parabéns! Agora sua marca está em{" "}
-                <span className="gradient-text">boas mãos.</span>
+              <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4 animate-fade-in-up">
+                🎉 Parabéns! Sua marca está em{" "}
+                <span className="gradient-text-accent">boas mãos.</span>
               </h1>
               
-              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                Seu pedido de registro foi recebido com sucesso. A partir de agora, nosso time jurídico 
-                iniciará imediatamente o processo de registro da sua marca junto ao INPI.
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                Seu pedido foi recebido com sucesso. Nossa equipe jurídica iniciará imediatamente 
+                o processo de registro junto ao INPI.
               </p>
             </div>
 
             {/* Registration Details Card */}
-            <div className="max-w-2xl mx-auto mb-8">
+            <div className="max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
               <div className="glass-card p-8">
                 <h2 className="font-display text-xl font-semibold mb-6 flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" />
@@ -99,29 +103,27 @@ const Obrigado = () => {
                 <div className="space-y-4">
                   <div className="flex items-start justify-between py-3 border-b border-border">
                     <span className="text-muted-foreground">Cliente</span>
-                    <span className="font-medium text-right">{registrationData.personalData.fullName}</span>
+                    <span className="font-medium text-right">{registrationData.personalData?.fullName}</span>
                   </div>
                   
                   <div className="flex items-start justify-between py-3 border-b border-border">
                     <span className="text-muted-foreground">CPF</span>
-                    <span className="font-medium">{registrationData.personalData.cpf}</span>
+                    <span className="font-medium">{registrationData.personalData?.cpf}</span>
                   </div>
                   
                   <div className="flex items-start justify-between py-3 border-b border-border">
                     <span className="text-muted-foreground">Marca</span>
-                    <span className="font-medium text-primary">{registrationData.brandData.brandName}</span>
+                    <span className="font-medium text-primary">{registrationData.brandData?.brandName}</span>
                   </div>
                   
                   <div className="flex items-start justify-between py-3 border-b border-border">
                     <span className="text-muted-foreground">Ramo de Atividade</span>
-                    <span className="font-medium text-right">{registrationData.brandData.businessArea}</span>
+                    <span className="font-medium text-right">{registrationData.brandData?.businessArea}</span>
                   </div>
                   
                   <div className="flex items-start justify-between py-3 border-b border-border">
-                    <span className="text-muted-foreground">Forma de Pagamento</span>
-                    <span className="font-medium text-right">
-                      {registrationData.paymentLabel} - {registrationData.paymentValue}
-                    </span>
+                    <span className="text-muted-foreground">Valor</span>
+                    <span className="font-medium text-accent">R$ 698,97</span>
                   </div>
                   
                   <div className="flex items-start justify-between py-3">
@@ -129,29 +131,29 @@ const Obrigado = () => {
                       <Clock className="w-4 h-4" />
                       Status
                     </span>
-                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-sm font-medium">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                      Processo em análise jurídica
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/20 text-accent text-sm font-medium">
+                      <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                      Processo iniciado
                     </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* CTA Section */}
-            <div className="max-w-2xl mx-auto text-center">
+            {/* Next Steps */}
+            <div className="max-w-2xl mx-auto text-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
               <div className="glass-card p-8 mb-8">
                 <div className="flex items-center justify-center gap-2 mb-4">
                   <Shield className="w-5 h-5 text-primary" />
                   <h3 className="font-display font-semibold">Próximos Passos</h3>
                 </div>
                 
-                <p className="text-muted-foreground mb-6">
-                  Em breve, você receberá o protocolo oficial do seu pedido e um de nossos 
-                  especialistas entrará em contato para acompanhamento. Todo o acompanhamento 
-                  será feito de forma online e você será avisado sempre que houver movimentação 
-                  oficial no processo.
-                </p>
+                <div className="text-left space-y-3 text-muted-foreground mb-6">
+                  <p>✅ Protocolo do pedido será enviado por e-mail</p>
+                  <p>✅ Prazo médio de análise do INPI: 8-12 meses</p>
+                  <p>✅ Acompanhamento completo via portal do cliente</p>
+                  <p>✅ Suporte por WhatsApp durante todo o processo</p>
+                </div>
 
                 <Button
                   variant="hero"
