@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import ClienteLogin from "./pages/cliente/Login";
 import ClienteDashboard from "./pages/cliente/Dashboard";
 import ClienteProcessos from "./pages/cliente/Processos";
+import ClienteProcessoDetalhe from "./pages/cliente/ProcessoDetalhe";
 import ClienteDocumentos from "./pages/cliente/Documentos";
 import ClienteFinanceiro from "./pages/cliente/Financeiro";
 import ClienteSuporte from "./pages/cliente/Suporte";
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/cliente/login" element={<ClienteLogin />} />
               <Route path="/cliente/dashboard" element={<ClienteDashboard />} />
               <Route path="/cliente/processos" element={<ClienteProcessos />} />
+              <Route path="/cliente/processos/:id" element={<ClienteProcessoDetalhe />} />
               <Route path="/cliente/documentos" element={<ClienteDocumentos />} />
               <Route path="/cliente/financeiro" element={<ClienteFinanceiro />} />
               <Route path="/cliente/suporte" element={<ClienteSuporte />} />
