@@ -87,8 +87,16 @@ async function perfexRequest(
   method: string = 'GET',
   body?: Record<string, unknown>
 ): Promise<unknown> {
-  // Remove trailing slash from URL and build full endpoint
-  const baseUrl = apiUrl.replace(/\/$/, '');
+  // Normalize base URL (handles common misconfigurations in PERFEX_API_URL)
+  // Expected: https://seu-dominio.com (no "/api" suffix)
+  let normalizedApiUrl = (apiUrl || '').trim();
+  if (!/^https?:\/\//i.test(normalizedApiUrl)) {
+    normalizedApiUrl = `https://${normalizedApiUrl.replace(/^\/+/, '')}`;
+  }
+  // If user pasted a full API path (e.g. /api/customers), strip it back to host
+  normalizedApiUrl = normalizedApiUrl.replace(/\/api\b.*$/i, '');
+
+  const baseUrl = normalizedApiUrl.replace(/\/$/, '');
   const url = `${baseUrl}/api/${endpoint}`;
   
   // Try Bearer token first (modern Perfex), then fallback to authtoken header
