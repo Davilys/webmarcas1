@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Copy, Check, FileText, Clock, CreditCard, ChevronDown, ChevronUp, QrCode } from "lucide-react";
+import { Copy, Check, FileText, Clock, CreditCard, ChevronDown, ChevronUp, QrCode, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import WhatsAppButton from "@/components/layout/WhatsAppButton";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AsaasData {
   customerId: string;
+  asaasCustomerId?: string;
   paymentId: string;
   status: string;
   billingType: string;
@@ -42,7 +44,12 @@ interface OrderData {
     companyName: string;
   };
   paymentValue: number;
+  paymentMethod: string;
+  contractHtml?: string;
   acceptedAt: string;
+  leadId?: string;
+  contractId?: string;
+  contractNumber?: string;
   asaas?: AsaasData;
 }
 
@@ -53,6 +60,7 @@ const StatusPedido = () => {
   const [copied, setCopied] = useState(false);
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
   const [showValueDetails, setShowValueDetails] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   // Get PIX code from Asaas data
   const pixCode = orderData?.asaas?.pixQrCode?.payload || "";
@@ -94,14 +102,69 @@ const StatusPedido = () => {
     setTimeout(() => setCopied(false), 3000);
   };
 
-  const handlePaymentConfirmed = () => {
-    // Save order data for thank you page
-    sessionStorage.setItem("registrationComplete", JSON.stringify({
-      ...orderData,
-      paymentConfirmed: true,
-      confirmedAt: new Date().toISOString(),
-    }));
-    navigate("/obrigado");
+  const handlePaymentConfirmed = async () => {
+    if (!orderData) return;
+
+    setIsConfirming(true);
+
+    try {
+      // Call confirm-payment to convert lead to client
+      const { data, error } = await supabase.functions.invoke('confirm-payment', {
+        body: {
+          leadId: orderData.leadId,
+          contractId: orderData.contractId,
+          paymentId: orderData.asaas?.paymentId,
+          asaasCustomerId: orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId,
+          personalData: orderData.personalData,
+          brandData: orderData.brandData,
+          paymentValue: orderData.paymentValue,
+          paymentMethod: orderData.paymentMethod,
+          contractHtml: orderData.contractHtml,
+          signatureData: {
+            ip: '', // Could be fetched from an IP API
+            userAgent: navigator.userAgent,
+            signedAt: orderData.acceptedAt,
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Confirm payment error:', error);
+        throw new Error(error.message || 'Erro ao confirmar pagamento');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao processar confirmação');
+      }
+
+      console.log('Payment confirmed, client created:', data);
+
+      // Save complete order data for thank you page
+      sessionStorage.setItem("registrationComplete", JSON.stringify({
+        ...orderData,
+        paymentConfirmed: true,
+        confirmedAt: new Date().toISOString(),
+        userId: data.userId,
+        processId: data.processId,
+        invoiceId: data.invoiceId,
+      }));
+
+      toast({
+        title: "Pagamento confirmado!",
+        description: "Sua conta foi criada. Você receberá um e-mail com os dados de acesso.",
+      });
+
+      navigate("/obrigado");
+    } catch (err) {
+      console.error('Confirm error:', err);
+      toast({
+        title: "Erro ao confirmar",
+        description: err instanceof Error ? err.message : "Tente novamente em instantes.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   if (!orderData) {
@@ -142,7 +205,7 @@ const StatusPedido = () => {
                 <span className="gradient-text">marca</span>
               </h1>
               <p className="text-muted-foreground">
-                Complete seus dados para emissão da fatura, alguns campos serão autopreenchidos ao digitar.
+                Complete o pagamento para finalizar seu registro. Após a confirmação, você receberá acesso ao painel do cliente.
               </p>
             </div>
 
@@ -167,6 +230,14 @@ const StatusPedido = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Contract Number */}
+                {orderData.contractNumber && (
+                  <div className="mb-4 p-3 bg-secondary/50 rounded-lg text-sm">
+                    <span className="text-muted-foreground">Contrato: </span>
+                    <span className="font-mono font-medium">{orderData.contractNumber}</span>
+                  </div>
+                )}
 
                 {/* QR Code Section */}
                 <div className="mb-6">
@@ -245,7 +316,7 @@ const StatusPedido = () => {
                       className="text-sm text-primary hover:underline flex items-center justify-center gap-2"
                     >
                       <FileText className="w-4 h-4" />
-                      Ver fatura completa no Asaas
+                      Ver fatura completa
                     </a>
                   </div>
                 )}
@@ -270,6 +341,9 @@ const StatusPedido = () => {
                       <p><strong>CPF:</strong> {orderData.personalData.cpf}</p>
                       <p><strong>E-mail:</strong> {orderData.personalData.email}</p>
                       <p><strong>Marca:</strong> {orderData.brandData.brandName}</p>
+                      {orderData.contractNumber && (
+                        <p><strong>Contrato:</strong> {orderData.contractNumber}</p>
+                      )}
                     </div>
                   )}
 
@@ -318,9 +392,21 @@ const StatusPedido = () => {
                 size="lg"
                 className="w-full"
                 onClick={handlePaymentConfirmed}
+                disabled={isConfirming}
               >
-                Já realizei o pagamento
+                {isConfirming ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processando...
+                  </>
+                ) : (
+                  "Já realizei o pagamento"
+                )}
               </Button>
+
+              <p className="text-xs text-muted-foreground text-center mt-4">
+                Ao confirmar, sua conta será criada e você receberá um e-mail com os dados de acesso ao painel do cliente.
+              </p>
             </div>
           </div>
         </section>

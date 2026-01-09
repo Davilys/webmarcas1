@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +33,7 @@ interface PaymentRequest {
   brandData: BrandData;
   paymentMethod: string;
   paymentValue: number;
+  contractHtml?: string;
 }
 
 serve(async (req) => {
@@ -42,20 +44,97 @@ serve(async (req) => {
 
   try {
     const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
     if (!ASAAS_API_KEY) {
       throw new Error('ASAAS_API_KEY not configured');
     }
 
-    const { personalData, brandData, paymentMethod, paymentValue }: PaymentRequest = await req.json();
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Supabase configuration missing');
+    }
+
+    // Create Supabase admin client
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const { personalData, brandData, paymentMethod, paymentValue, contractHtml }: PaymentRequest = await req.json();
 
     console.log('Creating Asaas payment for:', personalData.fullName);
 
-    // 1. Create or find customer in Asaas
+    // ========================================
+    // STEP 1: Create Lead in database
+    // ========================================
     const cpfCnpj = brandData.hasCNPJ && brandData.cnpj 
       ? brandData.cnpj.replace(/\D/g, '') 
       : personalData.cpf.replace(/\D/g, '');
 
-    // Check if customer already exists
+    // Check if lead already exists by email or CPF/CNPJ
+    const { data: existingLead } = await supabaseAdmin
+      .from('leads')
+      .select('id')
+      .or(`email.eq.${personalData.email},cpf_cnpj.eq.${cpfCnpj}`)
+      .limit(1)
+      .single();
+
+    let leadId: string;
+
+    if (existingLead) {
+      leadId = existingLead.id;
+      // Update existing lead
+      await supabaseAdmin
+        .from('leads')
+        .update({
+          full_name: personalData.fullName,
+          email: personalData.email,
+          phone: personalData.phone,
+          cpf_cnpj: cpfCnpj,
+          company_name: brandData.hasCNPJ ? brandData.companyName : null,
+          address: personalData.address,
+          city: personalData.city,
+          state: personalData.state,
+          zip_code: personalData.cep,
+          status: 'em_negociacao',
+          notes: `Marca: ${brandData.brandName} | Ramo: ${brandData.businessArea} | Pagamento: ${paymentMethod}`,
+          estimated_value: paymentValue,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', leadId);
+      console.log('Updated existing lead:', leadId);
+    } else {
+      // Create new lead
+      const { data: newLead, error: leadError } = await supabaseAdmin
+        .from('leads')
+        .insert({
+          full_name: personalData.fullName,
+          email: personalData.email,
+          phone: personalData.phone,
+          cpf_cnpj: cpfCnpj,
+          company_name: brandData.hasCNPJ ? brandData.companyName : null,
+          address: personalData.address,
+          city: personalData.city,
+          state: personalData.state,
+          zip_code: personalData.cep,
+          status: 'novo',
+          origin: 'site',
+          notes: `Marca: ${brandData.brandName} | Ramo: ${brandData.businessArea} | Pagamento: ${paymentMethod}`,
+          estimated_value: paymentValue,
+        })
+        .select('id')
+        .single();
+
+      if (leadError) {
+        console.error('Error creating lead:', leadError);
+        // Don't fail the payment flow if lead creation fails
+      } else {
+        leadId = newLead?.id || '';
+        console.log('Created new lead:', leadId);
+      }
+    }
+
+    // ========================================
+    // STEP 2: Create/Find Customer in Asaas
+    // ========================================
     const existingCustomerResponse = await fetch(
       `${ASAAS_API_URL}/customers?cpfCnpj=${cpfCnpj}`,
       {
@@ -67,11 +146,13 @@ serve(async (req) => {
     );
 
     let customerId: string;
+    let asaasCustomerId: string;
     const existingCustomerData = await existingCustomerResponse.json();
 
     if (existingCustomerData.data && existingCustomerData.data.length > 0) {
       customerId = existingCustomerData.data[0].id;
-      console.log('Found existing customer:', customerId);
+      asaasCustomerId = customerId;
+      console.log('Found existing Asaas customer:', customerId);
     } else {
       // Create new customer
       const customerPayload = {
@@ -107,15 +188,17 @@ serve(async (req) => {
       }
 
       customerId = customerData.id;
-      console.log('Created new customer:', customerId);
+      asaasCustomerId = customerId;
+      console.log('Created new Asaas customer:', customerId);
     }
 
-    // 2. Calculate due date (3 days from now)
+    // ========================================
+    // STEP 3: Create Payment in Asaas
+    // ========================================
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 3);
     const dueDateString = dueDate.toISOString().split('T')[0];
 
-    // 3. Determine billing type based on payment method
     let billingType = 'PIX';
     let installmentCount = 1;
     let installmentValue = paymentValue;
@@ -130,7 +213,6 @@ serve(async (req) => {
       installmentValue = 399;
     }
 
-    // 4. Create payment/charge
     const paymentPayload: Record<string, unknown> = {
       customer: customerId,
       billingType: billingType,
@@ -140,7 +222,6 @@ serve(async (req) => {
       externalReference: `marca_${brandData.brandName.replace(/\s+/g, '_')}_${Date.now()}`,
     };
 
-    // Add installment info for credit card or boleto parcels
     if (installmentCount > 1 && billingType !== 'PIX') {
       paymentPayload.installmentCount = installmentCount;
       paymentPayload.installmentValue = installmentValue;
@@ -167,10 +248,11 @@ serve(async (req) => {
     const paymentId = paymentData.id;
     console.log('Created payment:', paymentId);
 
-    // 5. Get PIX QR Code if payment method is PIX
+    // ========================================
+    // STEP 4: Get PIX QR Code if applicable
+    // ========================================
     let pixQrCode = null;
     if (billingType === 'PIX') {
-      // Wait a moment for the PIX to be generated
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       const qrCodeResponse = await fetch(
@@ -195,11 +277,61 @@ serve(async (req) => {
       }
     }
 
-    // 6. Return response
+    // ========================================
+    // STEP 5: Update Lead with payment info
+    // ========================================
+    if (leadId!) {
+      await supabaseAdmin
+        .from('leads')
+        .update({
+          status: 'em_negociacao',
+          notes: `Marca: ${brandData.brandName} | Ramo: ${brandData.businessArea} | Pagamento: ${paymentMethod} | Asaas: ${paymentId}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', leadId!);
+    }
+
+    // ========================================
+    // STEP 6: Create Contract in database (pending signature)
+    // ========================================
+    const contractNumber = `WM-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+    
+    const { data: contractData, error: contractError } = await supabaseAdmin
+      .from('contracts')
+      .insert({
+        contract_number: contractNumber,
+        subject: `Registro de Marca: ${brandData.brandName}`,
+        description: `Contrato de registro da marca "${brandData.brandName}" no ramo de ${brandData.businessArea}`,
+        contract_type: 'registro_marca',
+        contract_value: paymentValue,
+        start_date: new Date().toISOString().split('T')[0],
+        end_date: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 10 years
+        signature_status: 'not_signed',
+        asaas_payment_id: paymentId,
+        lead_id: leadId! || null,
+        contract_html: contractHtml || null,
+        visible_to_client: true,
+      })
+      .select('id')
+      .single();
+
+    if (contractError) {
+      console.error('Error creating contract:', contractError);
+    } else {
+      console.log('Created contract:', contractData?.id);
+    }
+
+    // ========================================
+    // STEP 7: Return response
+    // ========================================
     const response = {
       success: true,
       customerId,
+      asaasCustomerId,
       paymentId,
+      leadId: leadId! || null,
+      contractId: contractData?.id || null,
+      contractNumber,
       status: paymentData.status,
       billingType,
       value: paymentData.value,
