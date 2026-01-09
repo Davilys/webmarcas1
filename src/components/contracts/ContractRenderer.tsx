@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
 
 interface ContractRendererProps {
   content: string;
@@ -8,7 +9,6 @@ interface ContractRendererProps {
 
 export function ContractRenderer({ content, showLetterhead = true, className = '' }: ContractRendererProps) {
   const renderedContent = useMemo(() => {
-    // Split content into lines
     const lines = content.split('\n');
     const elements: JSX.Element[] = [];
     
@@ -20,20 +20,15 @@ export function ContractRenderer({ content, showLetterhead = true, className = '
         return;
       }
 
-      // Main title (first line with CONTRATO)
+      // Skip the main title as it's in the letterhead now
       if (trimmedLine.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS')) {
-        elements.push(
-          <h1 key={index} className="text-center font-bold text-base text-primary mb-4 leading-tight">
-            {trimmedLine}
-          </h1>
-        );
         return;
       }
 
-      // Clause titles (numbered with CLÁUSULA)
+      // Clause titles - BLUE color as per design
       if (/^\d+\.\s*CLÁUSULA/.test(trimmedLine)) {
         elements.push(
-          <h2 key={index} className="font-bold text-sm text-orange-600 mt-6 mb-2">
+          <h2 key={index} className="font-bold text-sm mt-6 mb-2" style={{ color: '#0284c7' }}>
             {trimmedLine}
           </h2>
         );
@@ -122,20 +117,60 @@ export function ContractRenderer({ content, showLetterhead = true, className = '
   return (
     <div className={`bg-white text-foreground ${className}`}>
       {showLetterhead && (
-        <div className="border-b-2 border-primary pb-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-primary">WebMarcas</h3>
-              <p className="text-xs text-muted-foreground">Registro de Marcas e Patentes</p>
-              <p className="text-xs text-muted-foreground">www.webmarcas.net</p>
-            </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <p>CNPJ: 39.528.012/0001-29</p>
-              <p>Av. Brigadeiro Luís Antônio, 2696</p>
-              <p>São Paulo - SP, CEP 01402-000</p>
-            </div>
+        <>
+          {/* Header with Logo and URL */}
+          <div className="flex items-center justify-between pb-3">
+            <img 
+              src={webmarcasLogo} 
+              alt="WebMarcas" 
+              className="h-12 object-contain"
+            />
+            <span className="text-sm font-medium" style={{ color: '#0284c7' }}>
+              www.webmarcas.net
+            </span>
           </div>
-        </div>
+          
+          {/* Orange/Yellow Gradient Bar */}
+          <div 
+            className="h-2 w-full rounded-sm mb-6"
+            style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)' }}
+          />
+          
+          {/* Blue Title */}
+          <h1 
+            className="text-center text-xl font-bold mb-4"
+            style={{ color: '#0284c7' }}
+          >
+            Acordo do Contrato - Anexo I
+          </h1>
+          
+          {/* Dark Blue Box with Contract Title */}
+          <div 
+            className="text-center py-3 px-4 rounded mb-4"
+            style={{ backgroundColor: '#1e3a5f' }}
+          >
+            <p className="text-white font-semibold text-sm leading-tight">
+              CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br />
+              PARA REGISTRO DE MARCA JUNTO AO INPI
+            </p>
+          </div>
+          
+          {/* Yellow Highlight Section */}
+          <div 
+            className="p-4 rounded mb-6 text-sm"
+            style={{ 
+              backgroundColor: '#fef3c7', 
+              border: '1px solid #f59e0b' 
+            }}
+          >
+            <p className="mb-2">
+              Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
+            </p>
+            <p>
+              Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
+            </p>
+          </div>
+        </>
       )}
       
       <div className="contract-content">
@@ -145,7 +180,22 @@ export function ContractRenderer({ content, showLetterhead = true, className = '
   );
 }
 
-// Generate full HTML for printing/download
+// Base64 logo for PDF generation (will be loaded dynamically)
+const getLogoBase64 = async (): Promise<string> => {
+  try {
+    const response = await fetch('/src/assets/webmarcas-logo-new.png');
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+};
+
+// Generate full HTML for printing/download with the exact letterhead design
 export function generateContractPrintHTML(
   content: string,
   brandName: string,
@@ -155,16 +205,14 @@ export function generateContractPrintHTML(
   // Convert plain text to HTML with proper formatting
   const htmlContent = content
     .split('\n')
+    .filter(line => !line.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS'))
     .map(line => {
       const trimmed = line.trim();
       if (!trimmed) return '<div style="height: 12px;"></div>';
       
-      if (trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS')) {
-        return `<h1 style="text-align: center; font-weight: bold; font-size: 14px; color: #0284c7; margin-bottom: 16px; line-height: 1.4;">${trimmed}</h1>`;
-      }
-      
+      // Clause titles in BLUE
       if (/^\d+\.\s*CLÁUSULA/.test(trimmed)) {
-        return `<h2 style="font-weight: bold; font-size: 12px; color: #ea580c; margin-top: 20px; margin-bottom: 8px;">${trimmed}</h2>`;
+        return `<h2 style="font-weight: bold; font-size: 12px; color: #0284c7; margin-top: 20px; margin-bottom: 8px;">${trimmed}</h2>`;
       }
       
       if (/^\d+\.\d+\s/.test(trimmed)) {
@@ -207,14 +255,14 @@ export function generateContractPrintHTML(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contrato WebMarcas - ${brandName}</title>
   <style>
-    @page { size: A4; margin: 20mm; }
+    @page { size: A4; margin: 15mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       line-height: 1.6; 
       color: #1a1a2e; 
       background: white; 
-      padding: 40px; 
+      padding: 30px; 
       font-size: 11px; 
       max-width: 800px;
       margin: 0 auto;
@@ -222,32 +270,60 @@ export function generateContractPrintHTML(
     .header { 
       display: flex; 
       justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 3px solid #0284c7; 
-      padding-bottom: 16px; 
-      margin-bottom: 24px; 
+      align-items: center;
+      padding-bottom: 12px;
     }
-    .logo-section h1 { 
-      font-size: 24px; 
-      color: #0284c7; 
-      margin-bottom: 4px; 
+    .header-logo {
+      height: 48px;
     }
-    .logo-section p { 
-      color: #6b7280; 
-      font-size: 11px; 
+    .header-url {
+      color: #0284c7;
+      font-weight: 500;
+      font-size: 14px;
     }
-    .contact-section {
-      text-align: right;
-      font-size: 10px;
-      color: #6b7280;
+    .gradient-bar {
+      height: 8px;
+      background: linear-gradient(90deg, #f97316, #fbbf24);
+      border-radius: 2px;
+      margin-bottom: 20px;
     }
-    .highlight { 
+    .main-title {
+      text-align: center;
+      color: #0284c7;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .contract-title-box {
+      background-color: #1e3a5f;
+      color: white;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    .contract-title-box p {
+      font-weight: 600;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .highlight-box { 
       background: #fef3c7; 
-      padding: 12px; 
+      padding: 16px; 
       border-radius: 4px; 
-      margin: 16px 0; 
+      margin-bottom: 24px; 
       border: 1px solid #f59e0b; 
-      font-size: 10px; 
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .highlight-box p {
+      margin-bottom: 8px;
+    }
+    .highlight-box p:last-child {
+      margin-bottom: 0;
+    }
+    .content {
+      margin-top: 16px;
     }
     .footer { 
       margin-top: 40px; 
@@ -263,22 +339,32 @@ export function generateContractPrintHTML(
   </style>
 </head>
 <body>
+  <!-- Header with Logo and URL -->
   <div class="header">
-    <div class="logo-section">
-      <h1>WebMarcas</h1>
-      <p>Registro de Marcas e Patentes</p>
-      <p>www.webmarcas.net</p>
-    </div>
-    <div class="contact-section">
-      <p>CNPJ: 39.528.012/0001-29</p>
-      <p>Av. Brigadeiro Luís Antônio, 2696</p>
-      <p>São Paulo - SP, CEP 01402-000</p>
-    </div>
+    <svg width="180" height="48" viewBox="0 0 180 48" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="8" width="32" height="32" rx="6" fill="#0284c7"/>
+      <text x="16" y="30" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle">W</text>
+      <text x="44" y="28" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#0284c7">Web</text>
+      <text x="76" y="28" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#f97316">Marcas</text>
+    </svg>
+    <span class="header-url">www.webmarcas.net</span>
   </div>
   
-  <div class="highlight">
-    Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.<br/><br/>
-    Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
+  <!-- Orange/Yellow Gradient Bar -->
+  <div class="gradient-bar"></div>
+  
+  <!-- Blue Title -->
+  <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
+  
+  <!-- Dark Blue Box with Contract Title -->
+  <div class="contract-title-box">
+    <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
+  </div>
+  
+  <!-- Yellow Highlight Section -->
+  <div class="highlight-box">
+    <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+    <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
   </div>
   
   <div class="content">
