@@ -31,24 +31,47 @@ function containsAttorney(text: string): boolean {
   return ATTORNEY_VARIATIONS.some(variation => normalized.includes(normalizeText(variation)));
 }
 
-// Calculate the latest RPI number based on current date
-// RPI is published every Tuesday. First RPI of 2024 was #2766 on Jan 2, 2024
-function calculateLatestRpiNumber(): number {
-  const referenceDate = new Date('2024-01-02'); // RPI 2766
-  const referenceNumber = 2766;
-  const today = new Date();
-  
-  // Calculate weeks since reference date
-  const diffTime = today.getTime() - referenceDate.getTime();
-  const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
-  
-  return referenceNumber + diffWeeks;
-}
-
-// Get the last few RPI numbers
-function getRecentRpiNumbers(count: number = 10): number[] {
-  const latest = calculateLatestRpiNumber();
-  return Array.from({ length: count }, (_, i) => latest - i);
+// Fetch the RPI portal page to get available RPI numbers
+async function fetchAvailableRpis(): Promise<{ latest: number; available: number[] }> {
+  try {
+    const response = await fetch('https://revistas.inpi.gov.br/rpi/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch INPI page: ${response.status}`);
+    }
+    
+    const html = await response.text();
+    
+    // Extract RPI numbers from the page - looking for patterns like RM2870.zip
+    const rpiPattern = /RM(\d{4})\.zip/g;
+    const matches = [...html.matchAll(rpiPattern)];
+    
+    const rpiNumbers = [...new Set(matches.map(m => parseInt(m[1])))].sort((a, b) => b - a);
+    
+    if (rpiNumbers.length === 0) {
+      // Fallback: try to extract from PDF links like Marcas2870.pdf
+      const pdfPattern = /Marcas(\d{4})\.pdf/g;
+      const pdfMatches = [...html.matchAll(pdfPattern)];
+      const pdfNumbers = [...new Set(pdfMatches.map(m => parseInt(m[1])))].sort((a, b) => b - a);
+      
+      if (pdfNumbers.length > 0) {
+        return { latest: pdfNumbers[0], available: pdfNumbers.slice(0, 15) };
+      }
+      
+      // Last resort fallback
+      return { latest: 2870, available: [2870, 2869, 2868, 2867, 2866, 2865] };
+    }
+    
+    return { latest: rpiNumbers[0], available: rpiNumbers.slice(0, 15) };
+  } catch (error) {
+    console.error('Error fetching available RPIs:', error);
+    // Fallback to known recent RPIs
+    return { latest: 2870, available: [2870, 2869, 2868, 2867, 2866, 2865] };
+  }
 }
 
 interface ExtractedProcess {
@@ -67,10 +90,6 @@ interface ExtractedProcess {
 function parseRpiXml(xmlContent: string): ExtractedProcess[] {
   const processes: ExtractedProcess[] = [];
   
-  // Find all process blocks - looking for <processo> or <despacho> tags
-  const processRegex = /<processo[^>]*>([\s\S]*?)<\/processo>/gi;
-  const despachoRegex = /<despacho[^>]*>([\s\S]*?)<\/despacho>/gi;
-  
   // Extract value from XML tag
   const extractTag = (xml: string, tagName: string): string | null => {
     const regex = new RegExp(`<${tagName}[^>]*>([^<]*)<\/${tagName}>`, 'i');
@@ -78,59 +97,71 @@ function parseRpiXml(xmlContent: string): ExtractedProcess[] {
     return match ? match[1].trim() : null;
   };
   
-  // Try to find processes in different XML structures
-  let matches = xmlContent.match(processRegex) || [];
+  // The INPI XML structure uses <processo> or <despacho> blocks
+  // Try multiple patterns to find process blocks
+  const blockPatterns = [
+    /<processo[^>]*>([\s\S]*?)<\/processo>/gi,
+    /<despacho[^>]*>([\s\S]*?)<\/despacho>/gi,
+    /<marca[^>]*>([\s\S]*?)<\/marca>/gi,
+    /<registro[^>]*>([\s\S]*?)<\/registro>/gi,
+  ];
   
-  // Also try alternative structures
-  if (matches.length === 0) {
-    // Try looking for marca tags
-    const marcaRegex = /<marca[^>]*>([\s\S]*?)<\/marca>/gi;
-    matches = xmlContent.match(marcaRegex) || [];
+  let allBlocks: string[] = [];
+  
+  for (const pattern of blockPatterns) {
+    const matches = xmlContent.match(pattern) || [];
+    allBlocks = allBlocks.concat(matches);
   }
   
-  // If still no matches, try to parse the entire content looking for number patterns
-  if (matches.length === 0) {
-    // Extract blocks that contain process numbers and attorney name
-    const blocks = xmlContent.split(/(?=<[^>]+numero|<processo|<pedido)/gi);
-    for (const block of blocks) {
-      if (containsAttorney(block)) {
-        // Try to extract process number
-        const numMatch = block.match(/(?:numero|processo|pedido)[^>]*>?\s*(\d{9,12})/i);
-        if (numMatch) {
-          processes.push({
-            processNumber: numMatch[1],
-            brandName: extractTag(block, 'nome') || extractTag(block, 'marca') || extractTag(block, 'denominacao'),
-            holderName: extractTag(block, 'titular') || extractTag(block, 'requerente') || extractTag(block, 'depositante'),
-            attorneyName: extractTag(block, 'procurador') || extractTag(block, 'representante'),
-            nclClasses: (extractTag(block, 'classe') || extractTag(block, 'ncl') || '').split(/[,\s]+/).filter(Boolean),
-            dispatchCode: extractTag(block, 'codigo') || extractTag(block, 'cod_despacho'),
-            dispatchText: extractTag(block, 'texto') || extractTag(block, 'despacho') || extractTag(block, 'descricao'),
-            dispatchType: extractTag(block, 'tipo') || extractTag(block, 'natureza'),
-            publicationDate: extractTag(block, 'data') || extractTag(block, 'publicacao'),
-          });
-        }
+  // If no structured blocks found, try to split by process number patterns
+  if (allBlocks.length === 0) {
+    // Look for blocks that contain attorney name
+    const lines = xmlContent.split(/\n/);
+    let currentBlock = '';
+    
+    for (const line of lines) {
+      currentBlock += line + '\n';
+      
+      // Check if we have a complete block (contains process number and attorney)
+      const hasProcessNumber = /\d{9,12}/.test(currentBlock);
+      const hasAttorney = containsAttorney(currentBlock);
+      
+      if (hasProcessNumber && hasAttorney) {
+        allBlocks.push(currentBlock);
+        currentBlock = '';
+      } else if (currentBlock.length > 5000) {
+        // Reset if block gets too large
+        currentBlock = '';
       }
     }
   }
   
-  // Process each match
-  for (const match of matches) {
-    // Check if this process belongs to our attorney
-    if (!containsAttorney(match)) continue;
+  // Process each block
+  for (const block of allBlocks) {
+    // Check if this block belongs to our attorney
+    if (!containsAttorney(block)) continue;
     
-    const processNumber = extractTag(match, 'numero') || extractTag(match, 'processo') || extractTag(match, 'pedido');
-    if (!processNumber) continue;
+    // Try to extract process number
+    const processNumberMatch = block.match(/(?:numero|processo|pedido)[^>]*>?\s*(\d{9,12})/i) ||
+                               block.match(/(\d{9,12})/);
+    
+    if (!processNumberMatch) continue;
+    
+    const processNumber = processNumberMatch[1].replace(/\D/g, '');
+    
+    // Avoid duplicates
+    if (processes.some(p => p.processNumber === processNumber)) continue;
     
     processes.push({
-      processNumber: processNumber.replace(/\D/g, ''),
-      brandName: extractTag(match, 'nome') || extractTag(match, 'marca') || extractTag(match, 'denominacao'),
-      holderName: extractTag(match, 'titular') || extractTag(match, 'requerente') || extractTag(match, 'depositante'),
-      attorneyName: extractTag(match, 'procurador') || extractTag(match, 'representante'),
-      nclClasses: (extractTag(match, 'classe') || extractTag(match, 'ncl') || '').split(/[,\s]+/).filter(Boolean),
-      dispatchCode: extractTag(match, 'codigo') || extractTag(match, 'cod_despacho'),
-      dispatchText: extractTag(match, 'texto') || extractTag(match, 'despacho') || extractTag(match, 'descricao'),
-      dispatchType: extractTag(match, 'tipo') || extractTag(match, 'natureza'),
-      publicationDate: extractTag(match, 'data') || extractTag(match, 'publicacao'),
+      processNumber,
+      brandName: extractTag(block, 'nome') || extractTag(block, 'marca') || extractTag(block, 'denominacao'),
+      holderName: extractTag(block, 'titular') || extractTag(block, 'requerente') || extractTag(block, 'depositante'),
+      attorneyName: extractTag(block, 'procurador') || extractTag(block, 'representante') || ATTORNEY_NAME,
+      nclClasses: (extractTag(block, 'classe') || extractTag(block, 'ncl') || '').split(/[,\s]+/).filter(Boolean),
+      dispatchCode: extractTag(block, 'codigo') || extractTag(block, 'cod_despacho') || extractTag(block, 'despacho'),
+      dispatchText: extractTag(block, 'texto') || extractTag(block, 'descricao') || extractTag(block, 'complemento'),
+      dispatchType: extractTag(block, 'tipo') || extractTag(block, 'natureza'),
+      publicationDate: extractTag(block, 'data') || extractTag(block, 'publicacao'),
     });
   }
   
@@ -164,51 +195,85 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Determine which RPI to fetch
-    const targetRpi = rpiNumber || calculateLatestRpiNumber();
+    // Fetch available RPIs from the portal
+    const { latest, available } = await fetchAvailableRpis();
+    
+    console.log(`Latest RPI available: ${latest}, requested: ${rpiNumber || 'latest'}`);
     
     // Get list of recent RPIs if mode is 'list'
     if (mode === 'list') {
-      const recentRpis = getRecentRpiNumbers(15);
       return new Response(
         JSON.stringify({ 
           success: true, 
-          latestRpi: recentRpis[0],
-          recentRpis,
-          message: `Última RPI disponível: ${recentRpis[0]}`
+          latestRpi: latest,
+          recentRpis: available,
+          message: `Última RPI disponível: ${latest}`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
+    // Determine which RPI to fetch
+    const targetRpi = rpiNumber || latest;
+    
+    // Check if the requested RPI is available
+    if (!available.includes(targetRpi) && targetRpi > latest) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'XML_NOT_AVAILABLE',
+          message: `A RPI ${targetRpi} ainda não foi publicada. A última disponível é a RPI ${latest}.`,
+          rpiNumber: targetRpi,
+          latestAvailable: latest,
+          suggestedUrl: 'https://revistas.inpi.gov.br/',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+    
     console.log(`Fetching RPI ${targetRpi}...`);
     
-    // Try to download the XML ZIP file
-    // INPI uses format: https://revistas.inpi.gov.br/txt/RM{NUMBER}.zip for brand trademarks
+    // Download the XML ZIP file
     const xmlUrl = `https://revistas.inpi.gov.br/txt/RM${targetRpi}.zip`;
     
     console.log(`Downloading from: ${xmlUrl}`);
     
     let xmlContent: string | null = null;
-    let fileSource = 'xml';
     
     try {
       const response = await fetch(xmlUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/zip, application/octet-stream, */*',
         },
       });
       
       if (response.ok) {
-        const zipData = await response.arrayBuffer();
-        const zip = await JSZip.loadAsync(zipData);
+        const contentType = response.headers.get('content-type') || '';
         
-        // Find the XML file inside the ZIP
-        const xmlFiles = Object.keys(zip.files).filter(name => name.endsWith('.xml'));
-        
-        if (xmlFiles.length > 0) {
-          xmlContent = await zip.files[xmlFiles[0]].async('string');
-          console.log(`XML extracted, size: ${xmlContent.length} bytes`);
+        // Check if we got a ZIP file
+        if (contentType.includes('zip') || contentType.includes('octet-stream')) {
+          const zipData = await response.arrayBuffer();
+          
+          // Verify it's actually a ZIP by checking magic bytes
+          const bytes = new Uint8Array(zipData);
+          if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
+            const zip = await JSZip.loadAsync(zipData);
+            
+            // Find the XML file inside the ZIP
+            const xmlFiles = Object.keys(zip.files).filter(name => 
+              name.endsWith('.xml') || name.endsWith('.XML')
+            );
+            
+            if (xmlFiles.length > 0) {
+              xmlContent = await zip.files[xmlFiles[0]].async('string');
+              console.log(`XML extracted from ${xmlFiles[0]}, size: ${xmlContent.length} bytes`);
+            }
+          } else {
+            console.log('Response is not a valid ZIP file (magic bytes check failed)');
+          }
+        } else {
+          console.log(`Unexpected content type: ${contentType}`);
         }
       } else {
         console.log(`XML download failed with status: ${response.status}`);
@@ -223,9 +288,10 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false, 
           error: 'XML_NOT_AVAILABLE',
-          message: `A RPI ${targetRpi} não está disponível para download automático. Por favor, faça upload manual do arquivo.`,
+          message: `Não foi possível baixar o XML da RPI ${targetRpi}. O arquivo pode não estar disponível ou o formato mudou. Por favor, faça upload manual.`,
           rpiNumber: targetRpi,
-          suggestedUrl: `https://revistas.inpi.gov.br/`,
+          latestAvailable: latest,
+          suggestedUrl: 'https://revistas.inpi.gov.br/',
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
@@ -248,7 +314,7 @@ serve(async (req) => {
           status: 'completed',
           total_processes_found: 0,
           total_clients_matched: 0,
-          summary: `Nenhum processo do procurador ${ATTORNEY_NAME} encontrado nesta edição.`,
+          summary: `Nenhum processo do procurador ${ATTORNEY_NAME} encontrado nesta edição da RPI.`,
           processed_at: new Date().toISOString(),
         })
         .select()
@@ -261,7 +327,7 @@ serve(async (req) => {
           totalProcesses: 0,
           matchedClients: 0,
           uploadId: rpiUpload?.id,
-          message: `RPI ${targetRpi} processada. Nenhum processo do procurador encontrado.`,
+          message: `RPI ${targetRpi} processada. Nenhum processo do procurador encontrado nesta edição.`,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
