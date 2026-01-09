@@ -76,15 +76,18 @@ const RegistrationFormSection = () => {
   // Load viability data from session storage if available
   useEffect(() => {
     const viabilityData = sessionStorage.getItem('viabilityData');
+    console.log('Loading viability data:', viabilityData);
     if (viabilityData) {
       try {
         const parsed = JSON.parse(viabilityData);
-        setBrandData(prev => ({
-          ...prev,
-          brandName: parsed.brandName || "",
-          businessArea: parsed.businessArea || "",
-        }));
-        sessionStorage.removeItem('viabilityData');
+        console.log('Parsed viability data:', parsed);
+        if (parsed.brandName || parsed.businessArea) {
+          setBrandData(prev => ({
+            ...prev,
+            brandName: parsed.brandName || prev.brandName,
+            businessArea: parsed.businessArea || prev.businessArea,
+          }));
+        }
       } catch (e) {
         console.error('Error parsing viability data:', e);
       }
@@ -190,6 +193,8 @@ const RegistrationFormSection = () => {
       acceptedAt: new Date().toISOString(),
     };
 
+    // Clear viability data now that form is submitted
+    sessionStorage.removeItem('viabilityData');
     sessionStorage.setItem("orderData", JSON.stringify(orderData));
     navigate("/status-pedido");
   };
