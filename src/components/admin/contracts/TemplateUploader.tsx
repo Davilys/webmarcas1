@@ -250,7 +250,13 @@ export function TemplateUploader({ contractTypes, onTemplateCreated, open, onOpe
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) handleClose();
+        else onOpenChange(true);
+      }}
+    >
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
