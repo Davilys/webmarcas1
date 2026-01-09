@@ -22,6 +22,7 @@ import {
   UserPlus,
   FileSignature,
   FileStack,
+  Database,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ const menuItems = [
   { icon: Bell, label: 'Notificações', href: '/admin/notificacoes' },
   { icon: BookOpen, label: 'Revista INPI', href: '/admin/revista-inpi' },
   { icon: Scale, label: 'Recursos INPI', href: '/admin/recursos-inpi' },
+  { icon: Database, label: 'Integração Perfex', href: '/admin/integracao-perfex' },
   { icon: Settings, label: 'Configurações', href: '/admin/configuracoes' },
 ];
 
