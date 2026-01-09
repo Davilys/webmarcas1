@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
-import { FileStack, Plus, RefreshCw, Edit, Trash2, Copy, Eye } from 'lucide-react';
+import { FileStack, Plus, RefreshCw, Edit, Trash2, Copy, Eye, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { TemplateUploader } from '@/components/admin/contracts/TemplateUploader';
 
 interface ContractTemplate {
   id: string;
@@ -51,6 +52,7 @@ export default function ModelosContrato() {
   const [contractTypes, setContractTypes] = useState<ContractType[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
@@ -236,6 +238,10 @@ export default function ModelosContrato() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={fetchData}>
               <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" onClick={() => setUploadDialogOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Importar PDF/Excel
             </Button>
             <Dialog open={dialogOpen} onOpenChange={(open) => {
               setDialogOpen(open);
@@ -447,6 +453,14 @@ export default function ModelosContrato() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Template Uploader Dialog */}
+        <TemplateUploader
+          contractTypes={contractTypes}
+          onTemplateCreated={fetchData}
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+        />
       </div>
     </AdminLayout>
   );
