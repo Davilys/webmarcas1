@@ -9,13 +9,20 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, Plus, RefreshCw, FileSignature, MoreHorizontal, 
-  Eye, Edit, Trash2, Download, Send, Filter, CheckCircle, XCircle 
+  Eye, Edit, Trash2, Download, Send, Filter, CheckCircle, XCircle, Database, Loader2 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ContractDetailSheet } from '@/components/admin/contracts/ContractDetailSheet';
 import { CreateContractDialog } from '@/components/admin/contracts/CreateContractDialog';
+
+interface PerfexCustomer {
+  id: string;
+  perfex_id: string;
+  full_name: string | null;
+  phone: string | null;
+}
 
 interface Contract {
   id: string;
@@ -28,18 +35,21 @@ interface Contract {
   signed_at: string | null;
   visible_to_client: boolean | null;
   user_id: string | null;
+  perfex_customer_id: string | null;
   created_at: string | null;
   contract_type_id: string | null;
   contract_html?: string | null;
   description?: string | null;
   contract_type?: { name: string } | null;
   profile?: { full_name: string | null; phone: string | null } | null;
+  perfex_customer?: { full_name: string | null; phone: string | null } | null;
 }
 
 export default function AdminContratos() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [syncingPerfex, setSyncingPerfex] = useState(false);
   const [signatureFilter, setSignatureFilter] = useState<string>('all');
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -57,7 +67,8 @@ export default function AdminContratos() {
         .select(`
           *,
           contract_type:contract_types(name),
-          profile:profiles(full_name, phone)
+          profile:profiles(full_name, phone),
+          perfex_customer:perfex_customers(full_name, phone)
         `)
         .order('created_at', { ascending: false });
 
@@ -68,6 +79,29 @@ export default function AdminContratos() {
       toast.error('Erro ao carregar contratos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncWithPerfex = async () => {
+    setSyncingPerfex(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-perfex', {
+        body: { action: 'import_contracts' }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(data.message || 'Contratos importados do Perfex com sucesso!');
+        await fetchContracts();
+      } else {
+        throw new Error(data?.message || 'Erro na sincronização');
+      }
+    } catch (error) {
+      console.error('Error syncing with Perfex:', error);
+      toast.error('Erro ao sincronizar com Perfex');
+    } finally {
+      setSyncingPerfex(false);
     }
   };
 
@@ -93,10 +127,11 @@ export default function AdminContratos() {
   };
 
   const filteredContracts = contracts.filter(contract => {
+    const clientName = contract.profile?.full_name || contract.perfex_customer?.full_name || '';
     const matchesSearch = 
       contract.contract_number?.toLowerCase().includes(search.toLowerCase()) ||
       contract.subject?.toLowerCase().includes(search.toLowerCase()) ||
-      contract.profile?.full_name?.toLowerCase().includes(search.toLowerCase());
+      clientName.toLowerCase().includes(search.toLowerCase());
     
     const matchesSignature = 
       signatureFilter === 'all' ||
@@ -124,6 +159,18 @@ export default function AdminContratos() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={syncWithPerfex}
+              disabled={syncingPerfex}
+            >
+              {syncingPerfex ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4 mr-2" />
+              )}
+              Sync Perfex
+            </Button>
             <Button variant="outline" size="icon" onClick={fetchContracts}>
               <RefreshCw className="h-4 w-4" />
             </Button>

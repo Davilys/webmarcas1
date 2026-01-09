@@ -510,6 +510,7 @@ export type Database = {
           ip_address: string | null
           lead_id: string | null
           perfex_contract_id: string | null
+          perfex_customer_id: string | null
           process_id: string | null
           signature_ip: string | null
           signature_status: string | null
@@ -536,6 +537,7 @@ export type Database = {
           ip_address?: string | null
           lead_id?: string | null
           perfex_contract_id?: string | null
+          perfex_customer_id?: string | null
           process_id?: string | null
           signature_ip?: string | null
           signature_status?: string | null
@@ -562,6 +564,7 @@ export type Database = {
           ip_address?: string | null
           lead_id?: string | null
           perfex_contract_id?: string | null
+          perfex_customer_id?: string | null
           process_id?: string | null
           signature_ip?: string | null
           signature_status?: string | null
@@ -587,6 +590,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_perfex_customer_id_fkey"
+            columns: ["perfex_customer_id"]
+            isOneToOne: false
+            referencedRelation: "perfex_customers"
             referencedColumns: ["id"]
           },
           {
@@ -967,6 +977,68 @@ export type Database = {
           {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      perfex_customers: {
+        Row: {
+          active: boolean | null
+          address: string | null
+          city: string | null
+          company_name: string | null
+          cpf_cnpj: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          perfex_id: string
+          phone: string | null
+          state: string | null
+          synced_profile_id: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          address?: string | null
+          city?: string | null
+          company_name?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          perfex_id: string
+          phone?: string | null
+          state?: string | null
+          synced_profile_id?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          address?: string | null
+          city?: string | null
+          company_name?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          perfex_id?: string
+          phone?: string | null
+          state?: string | null
+          synced_profile_id?: string | null
+          updated_at?: string | null
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "perfex_customers_synced_profile_id_fkey"
+            columns: ["synced_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload, Download } from 'lucide-react';
+import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload, Download, Database, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters } from '@/components/admin/clients/ClientKanbanBoard';
 import { ClientListView } from '@/components/admin/clients/ClientListView';
@@ -16,6 +16,19 @@ import { ClientImportExportDialog } from '@/components/admin/clients/ClientImpor
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type ViewMode = 'kanban' | 'list';
+
+interface PerfexCustomer {
+  id: string;
+  perfex_id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  company_name: string | null;
+  cpf_cnpj: string | null;
+  active: boolean;
+  synced_profile_id: string | null;
+  created_at: string;
+}
 
 const PRIORITY_OPTIONS = [
   { value: 'high', label: 'Alta', color: 'bg-red-500' },
@@ -30,8 +43,10 @@ const ORIGIN_OPTIONS = [
 
 export default function AdminClientes() {
   const [clients, setClients] = useState<ClientWithProcess[]>([]);
+  const [perfexCustomers, setPerfexCustomers] = useState<PerfexCustomer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [syncingPerfex, setSyncingPerfex] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [selectedClient, setSelectedClient] = useState<ClientWithProcess | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -41,7 +56,45 @@ export default function AdminClientes() {
 
   useEffect(() => {
     fetchClients();
+    fetchPerfexCustomers();
   }, []);
+
+  const fetchPerfexCustomers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('perfex_customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setPerfexCustomers(data || []);
+    } catch (error) {
+      console.error('Error fetching Perfex customers:', error);
+    }
+  };
+
+  const syncWithPerfex = async () => {
+    setSyncingPerfex(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-perfex', {
+        body: { action: 'import_customers' }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(data.message || 'Clientes importados do Perfex com sucesso!');
+        await Promise.all([fetchClients(), fetchPerfexCustomers()]);
+      } else {
+        throw new Error(data?.message || 'Erro na sincronização');
+      }
+    } catch (error) {
+      console.error('Error syncing with Perfex:', error);
+      toast.error('Erro ao sincronizar com Perfex');
+    } finally {
+      setSyncingPerfex(false);
+    }
+  };
 
   const fetchClients = async () => {
     setLoading(true);
@@ -104,6 +157,31 @@ export default function AdminClientes() {
         }
       }
 
+      // Add Perfex customers that are NOT linked to a profile
+      const { data: unlinkedPerfexCustomers } = await supabase
+        .from('perfex_customers')
+        .select('*')
+        .is('synced_profile_id', null);
+
+      for (const perfexCustomer of unlinkedPerfexCustomers || []) {
+        clientsWithProcesses.push({
+          id: perfexCustomer.id,
+          full_name: perfexCustomer.full_name,
+          email: perfexCustomer.email || '',
+          phone: perfexCustomer.phone,
+          company_name: perfexCustomer.company_name,
+          priority: 'medium',
+          origin: 'perfex',
+          contract_value: 0,
+          process_id: null,
+          brand_name: null,
+          pipeline_stage: 'protocolado',
+          process_status: null,
+          isPerfexOnly: true,
+          perfexId: perfexCustomer.perfex_id,
+        } as ClientWithProcess & { isPerfexOnly?: boolean; perfexId?: string });
+      }
+
       setClients(clientsWithProcesses);
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -144,11 +222,23 @@ export default function AdminClientes() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                onClick={syncWithPerfex}
+                disabled={syncingPerfex}
+              >
+                {syncingPerfex ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Database className="h-4 w-4 mr-2" />
+                )}
+                Sync Perfex
+              </Button>
               <Button variant="outline" onClick={() => setImportExportOpen(true)}>
                 <Upload className="h-4 w-4 mr-2" />
                 Importar / Exportar
               </Button>
-              <Button variant="outline" size="icon" onClick={fetchClients}>
+              <Button variant="outline" size="icon" onClick={() => { fetchClients(); fetchPerfexCustomers(); }}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
               
