@@ -35,6 +35,8 @@ import {
   Globe,
   Sparkles,
   Zap,
+  UserPlus,
+  AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -66,6 +68,8 @@ interface RpiEntry {
   matched_client_id: string | null;
   matched_process_id: string | null;
   update_status: string;
+  deadline_date?: string | null;
+  priority?: 'urgent' | 'medium' | null;
   client?: {
     full_name: string | null;
     email: string;
@@ -75,6 +79,13 @@ interface RpiEntry {
     pipeline_stage: string | null;
     status: string | null;
   };
+}
+
+interface Profile {
+  id: string;
+  full_name: string | null;
+  email: string;
+  company_name: string | null;
 }
 
 const PIPELINE_STAGES = [
@@ -146,10 +157,20 @@ export default function RevistaINPI() {
   const [selectedEntry, setSelectedEntry] = useState<RpiEntry | null>(null);
   const [newStage, setNewStage] = useState('');
   const [updating, setUpdating] = useState(false);
+  
+  // Client assignment dialog
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignEntry, setAssignEntry] = useState<RpiEntry | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [availableClients, setAvailableClients] = useState<Profile[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Profile | null>(null);
+  const [assignPriority, setAssignPriority] = useState<'urgent' | 'medium'>('medium');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     fetchUploads();
     fetchAvailableRpis();
+    fetchClients();
   }, []);
 
   useEffect(() => {
@@ -157,6 +178,14 @@ export default function RevistaINPI() {
       fetchEntries(selectedUpload.id);
     }
   }, [selectedUpload]);
+
+  const fetchClients = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, company_name')
+      .order('full_name');
+    setAvailableClients(data || []);
+  };
 
   const fetchAvailableRpis = async () => {
     try {
@@ -509,6 +538,87 @@ export default function RevistaINPI() {
       toast.error('Erro ao atualizar processo');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleOpenAssignDialog = (entry: RpiEntry) => {
+    setAssignEntry(entry);
+    setClientSearch('');
+    setSelectedClient(null);
+    setAssignPriority('medium');
+    setAssignDialogOpen(true);
+  };
+
+  const filteredClients = availableClients.filter(client => {
+    if (!clientSearch) return true;
+    const search = clientSearch.toLowerCase();
+    return (
+      client.full_name?.toLowerCase().includes(search) ||
+      client.email?.toLowerCase().includes(search) ||
+      client.company_name?.toLowerCase().includes(search)
+    );
+  });
+
+  const handleAssignClient = async () => {
+    if (!assignEntry || !selectedClient) return;
+
+    setAssigning(true);
+
+    try {
+      // Calculate deadline (60 days from now)
+      const deadlineDate = new Date();
+      deadlineDate.setDate(deadlineDate.getDate() + 60);
+
+      // Update the RPI entry with client assignment
+      const { error: entryError } = await supabase
+        .from('rpi_entries')
+        .update({
+          matched_client_id: selectedClient.id,
+          update_status: 'pending',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', assignEntry.id);
+
+      if (entryError) throw entryError;
+
+      // Create notification for the client
+      await supabase.from('notifications').insert({
+        user_id: selectedClient.id,
+        title: assignPriority === 'urgent' ? '🚨 URGENTE: Nova Publicação INPI' : 'Nova Publicação INPI',
+        message: `Uma publicação referente ao processo ${assignEntry.process_number} (${assignEntry.brand_name || 'Marca'}) foi vinculada ao seu perfil. Prazo: 60 dias para cumprimento.`,
+        type: assignPriority === 'urgent' ? 'warning' : 'info',
+        link: '/cliente/processos',
+      });
+
+      // Log activity
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('client_activities').insert({
+        user_id: selectedClient.id,
+        admin_id: user?.id,
+        activity_type: 'rpi_publication',
+        description: `Publicação RPI vinculada: ${assignEntry.brand_name} - ${assignEntry.dispatch_type}. Prioridade: ${assignPriority === 'urgent' ? 'Urgente' : 'Média'}. Prazo: 60 dias.`,
+        metadata: {
+          process_number: assignEntry.process_number,
+          dispatch_code: assignEntry.dispatch_code,
+          dispatch_text: assignEntry.dispatch_text,
+          deadline_date: deadlineDate.toISOString(),
+          priority: assignPriority,
+        },
+      });
+
+      toast.success(`Publicação vinculada ao cliente ${selectedClient.full_name || selectedClient.email}!`);
+      setAssignDialogOpen(false);
+
+      // Refresh entries
+      if (selectedUpload) {
+        await fetchEntries(selectedUpload.id);
+      }
+
+    } catch (error) {
+      console.error('Assign error:', error);
+      toast.error('Erro ao vincular cliente');
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -910,12 +1020,15 @@ export default function RevistaINPI() {
                         <TableCell>
                           <div className="space-y-1.5">
                             {getDispatchBadge(entry.dispatch_type)}
-                            <p className="text-xs text-muted-foreground line-clamp-2">
-                              {entry.dispatch_text || 'Sem descrição do despacho'}
-                            </p>
+                            <div className="text-sm">
+                              <span className="font-medium text-foreground">Despacho: </span>
+                              <span className="text-muted-foreground">
+                                {entry.dispatch_text || entry.dispatch_type || 'Sem descrição'}
+                              </span>
+                            </div>
                             {entry.dispatch_code && (
-                              <span className="text-xs text-muted-foreground font-mono">
-                                Código: {entry.dispatch_code}
+                              <span className="text-xs text-muted-foreground/70 font-mono">
+                                ({entry.dispatch_code})
                               </span>
                             )}
                           </div>
@@ -934,45 +1047,56 @@ export default function RevistaINPI() {
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <div className="h-2 w-2 rounded-full bg-gray-300" />
-                              <span className="text-sm italic">Não identificado</span>
-                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenAssignDialog(entry)}
+                              className="gap-1.5 text-xs"
+                            >
+                              <Users className="h-3 w-3" />
+                              Vincular Cliente
+                            </Button>
                           )}
                         </TableCell>
                         <TableCell>
                           {entry.update_status === 'updated' ? (
-                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Atualizado
-                            </Badge>
+                            <div className="space-y-1">
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Atualizado
+                              </Badge>
+                            </div>
                           ) : entry.matched_client_id ? (
-                            <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950">
-                              <Clock className="h-3 w-3 mr-1" />
-                              Pendente
-                            </Badge>
+                            <div className="space-y-1">
+                              <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950">
+                                <Clock className="h-3 w-3 mr-1" />
+                                60 dias
+                              </Badge>
+                            </div>
                           ) : (
                             <Badge variant="outline" className="text-gray-500">
-                              N/A
+                              Aguardando
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {entry.matched_client_id && entry.update_status !== 'updated' && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleOpenUpdateDialog(entry)}
-                              className="gap-1.5"
-                            >
-                              <RefreshCw className="h-3 w-3" />
-                              Atualizar
-                            </Button>
-                          )}
-                          {entry.update_status === 'updated' && (
-                            <Button size="sm" variant="ghost" disabled className="text-green-600">
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {entry.matched_client_id && entry.update_status !== 'updated' && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleOpenUpdateDialog(entry)}
+                                className="gap-1.5"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                Atualizar
+                              </Button>
+                            )}
+                            {entry.update_status === 'updated' && (
+                              <Button size="sm" variant="ghost" disabled className="text-green-600">
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </motion.tr>
                     ))}
@@ -1128,6 +1252,154 @@ export default function RevistaINPI() {
                 <CheckCircle className="h-4 w-4 mr-2" />
               )}
               Confirmar Atualização
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Client Dialog */}
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              Vincular Cliente à Publicação
+            </DialogTitle>
+            <DialogDescription>
+              Selecione o cliente para vincular a esta publicação RPI. O cliente será notificado com prazo de 60 dias.
+            </DialogDescription>
+          </DialogHeader>
+
+          {assignEntry && (
+            <div className="space-y-4">
+              {/* Publication Info */}
+              <div className="rounded-lg bg-muted p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Marca</span>
+                  <span className="font-semibold">{assignEntry.brand_name || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Processo</span>
+                  <span className="font-mono">{assignEntry.process_number}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Titular</span>
+                  <span className="text-sm">{assignEntry.holder_name || '-'}</span>
+                </div>
+                <div className="flex items-start justify-between">
+                  <span className="text-sm text-muted-foreground">Despacho</span>
+                  <div className="text-right">
+                    {getDispatchBadge(assignEntry.dispatch_type)}
+                    <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                      {assignEntry.dispatch_text}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Client Search */}
+              <div className="space-y-2">
+                <Label>Buscar Cliente</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Digite nome, email ou empresa..."
+                    value={clientSearch}
+                    onChange={e => setClientSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              {/* Client List */}
+              <div className="space-y-2">
+                <Label>Selecionar Cliente</Label>
+                <ScrollArea className="h-[200px] border rounded-lg p-2">
+                  {filteredClients.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      {clientSearch ? 'Nenhum cliente encontrado' : 'Digite para buscar clientes'}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredClients.slice(0, 20).map(client => (
+                        <div
+                          key={client.id}
+                          onClick={() => setSelectedClient(client)}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                            selectedClient?.id === client.id
+                              ? 'bg-primary/10 border border-primary'
+                              : 'hover:bg-muted'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">
+                            {client.full_name || client.company_name || 'Sem nome'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{client.email}</div>
+                          {client.company_name && client.full_name && (
+                            <div className="text-xs text-muted-foreground">{client.company_name}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+
+              {/* Priority Selection */}
+              <div className="space-y-2">
+                <Label>Prioridade</Label>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant={assignPriority === 'medium' ? 'default' : 'outline'}
+                    onClick={() => setAssignPriority('medium')}
+                    className="flex-1 gap-2"
+                  >
+                    <Clock className="h-4 w-4" />
+                    Média
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={assignPriority === 'urgent' ? 'destructive' : 'outline'}
+                    onClick={() => setAssignPriority('urgent')}
+                    className="flex-1 gap-2"
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                    Urgente
+                  </Button>
+                </div>
+              </div>
+
+              {/* Deadline Info */}
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950 p-3 flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-amber-600" />
+                <div>
+                  <div className="font-medium text-sm text-amber-800 dark:text-amber-200">
+                    Prazo: 60 dias para cumprimento
+                  </div>
+                  <div className="text-xs text-amber-600 dark:text-amber-400">
+                    O cliente será notificado automaticamente
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleAssignClient} 
+              disabled={assigning || !selectedClient}
+              className="gap-2"
+            >
+              {assigning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              Vincular Cliente
             </Button>
           </DialogFooter>
         </DialogContent>
