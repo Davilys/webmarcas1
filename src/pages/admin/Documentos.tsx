@@ -47,7 +47,11 @@ const documentTypes = [
   { value: 'certificado', label: 'Certificado', color: 'bg-green-100 text-green-700' },
   { value: 'comprovante', label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
   { value: 'parecer', label: 'Parecer INPI', color: 'bg-orange-100 text-orange-700' },
-  { value: 'outros', label: 'Outros', color: 'bg-gray-100 text-gray-700' },
+  { value: 'rpi', label: 'RPI', color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'laudo', label: 'Laudo', color: 'bg-rose-100 text-rose-700' },
+  { value: 'notificacao', label: 'Notificação', color: 'bg-amber-100 text-amber-700' },
+  { value: 'anexo', label: 'Anexo', color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'outro', label: 'Outro', color: 'bg-gray-100 text-gray-700' },
 ];
 
 export default function AdminDocumentos() {
@@ -62,7 +66,7 @@ export default function AdminDocumentos() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    document_type: 'outros',
+    document_type: 'outro',
     user_id: '',
     process_id: '',
   });
@@ -148,7 +152,7 @@ export default function AdminDocumentos() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', document_type: 'outros', user_id: '', process_id: '' });
+    setFormData({ name: '', document_type: 'outro', user_id: '', process_id: '' });
   };
 
   const filteredDocuments = documents.filter(d => {
