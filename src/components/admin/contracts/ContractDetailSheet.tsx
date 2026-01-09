@@ -10,12 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { 
-  Eye, Send, Mail, MoreVertical, Trash2, EyeOff,
-  FileText, Paperclip, MessageSquare, History, CheckSquare, StickyNote, FileStack, Save
+  Eye, Send, Mail, MoreVertical, Trash2, EyeOff, Copy, ExternalLink,
+  FileText, Paperclip, MessageSquare, History, CheckSquare, StickyNote, FileStack, Save, 
+  Link, Loader2, Shield, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DocumentRenderer } from '@/components/contracts/DocumentRenderer';
 
 interface Contract {
   id: string;
@@ -31,11 +33,32 @@ interface Contract {
   contract_html?: string | null;
   description?: string | null;
   contract_type_id: string | null;
+  document_type?: string | null;
+  signature_token?: string | null;
+  signature_expires_at?: string | null;
+  signatory_name?: string | null;
+  signatory_cpf?: string | null;
+  signatory_cnpj?: string | null;
+  client_signature_image?: string | null;
+  blockchain_hash?: string | null;
+  blockchain_timestamp?: string | null;
+  blockchain_tx_id?: string | null;
+  blockchain_network?: string | null;
+  signature_ip?: string | null;
 }
 
 interface ContractType {
   id: string;
   name: string;
+}
+
+interface AuditLog {
+  id: string;
+  event_type: string;
+  event_data: any;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
 }
 
 interface ContractDetailSheetProps {
@@ -44,6 +67,13 @@ interface ContractDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   onUpdate: () => void;
 }
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  contract: 'Contrato',
+  procuracao: 'Procuração',
+  distrato_multa: 'Distrato com Multa',
+  distrato_sem_multa: 'Distrato sem Multa',
+};
 
 export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: ContractDetailSheetProps) {
   const [contractTypes, setContractTypes] = useState<ContractType[]>([]);
@@ -57,11 +87,14 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     visible_to_client: true,
   });
   const [saving, setSaving] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [renewalHistory, setRenewalHistory] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   useEffect(() => {
     fetchContractTypes();
@@ -88,12 +121,13 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
   };
 
   const fetchContractData = async (contractId: string) => {
-    const [commentsRes, notesRes, tasksRes, attachmentsRes, renewalRes] = await Promise.all([
+    const [commentsRes, notesRes, tasksRes, attachmentsRes, renewalRes, auditRes] = await Promise.all([
       supabase.from('contract_comments').select('*').eq('contract_id', contractId).order('created_at', { ascending: false }),
       supabase.from('contract_notes').select('*').eq('contract_id', contractId).order('created_at', { ascending: false }),
       supabase.from('contract_tasks').select('*').eq('contract_id', contractId).order('due_date', { ascending: true }),
       supabase.from('contract_attachments').select('*').eq('contract_id', contractId).order('created_at', { ascending: false }),
       supabase.from('contract_renewal_history').select('*').eq('contract_id', contractId).order('renewed_at', { ascending: false }),
+      supabase.from('signature_audit_log').select('*').eq('contract_id', contractId).order('created_at', { ascending: false }),
     ]);
 
     setComments(commentsRes.data || []);
@@ -101,6 +135,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     setTasks(tasksRes.data || []);
     setAttachments(attachmentsRes.data || []);
     setRenewalHistory(renewalRes.data || []);
+    setAuditLogs(auditRes.data || []);
   };
 
   const handleSave = async () => {
@@ -131,7 +166,97 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     }
   };
 
+  const generateSignatureLink = async () => {
+    if (!contract) return;
+    setGeneratingLink(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-signature-link`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({ contractId: contract.id, expiresInDays: 7 }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Erro ao gerar link');
+      }
+
+      toast.success('Link de assinatura gerado!');
+      onUpdate();
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao gerar link');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const sendSignatureRequest = async () => {
+    if (!contract) return;
+    setSendingRequest(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-signature-request`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'] }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        toast.success('Solicitação de assinatura enviada!');
+        fetchContractData(contract.id);
+      } else {
+        throw new Error(result.error || 'Erro ao enviar solicitação');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao enviar solicitação');
+    } finally {
+      setSendingRequest(false);
+    }
+  };
+
+  const copySignatureLink = () => {
+    if (contract?.signature_token) {
+      const url = `${window.location.origin}/assinar/${contract.signature_token}`;
+      navigator.clipboard.writeText(url);
+      toast.success('Link copiado!');
+    }
+  };
+
+  const getEventTypeLabel = (eventType: string) => {
+    const labels: Record<string, string> = {
+      link_generated: 'Link gerado',
+      link_accessed: 'Link acessado',
+      signature_request_sent: 'Solicitação enviada',
+      document_viewed: 'Documento visualizado',
+      signature_drawn: 'Assinatura desenhada',
+      contract_signed: 'Contrato assinado',
+    };
+    return labels[eventType] || eventType;
+  };
+
   if (!contract) return null;
+
+  const signatureUrl = contract.signature_token 
+    ? `${window.location.origin}/assinar/${contract.signature_token}`
+    : null;
+
+  const isExpired = contract.signature_expires_at 
+    ? new Date(contract.signature_expires_at) < new Date()
+    : false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -142,7 +267,12 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
               <SheetTitle className="text-xl">
                 {contract.subject || `Contrato #${contract.contract_number}`}
               </SheetTitle>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {contract.document_type && contract.document_type !== 'contract' && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    {DOCUMENT_TYPE_LABELS[contract.document_type] || contract.document_type}
+                  </Badge>
+                )}
                 <Badge variant={contract.signature_status === 'signed' ? 'default' : 'destructive'}>
                   {contract.signature_status === 'signed' ? 'Assinado' : 'Não assinado'}
                 </Badge>
@@ -156,11 +286,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm">
                 <Eye className="h-4 w-4 mr-2" />
-                Visualizar contrato
-              </Button>
-              <Button variant="outline" size="sm">
-                <Send className="h-4 w-4 mr-2" />
-                Enviar
+                Visualizar
               </Button>
               <Button variant="outline" size="sm">
                 <Mail className="h-4 w-4" />
@@ -170,18 +296,115 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
               </Button>
             </div>
           </div>
+
+          {/* Signature Link Section */}
+          {contract.signature_status !== 'signed' && (
+            <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Link className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Link de Assinatura</span>
+                </div>
+                {signatureUrl && !isExpired && (
+                  <Badge variant="outline" className="text-xs">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Expira em {format(new Date(contract.signature_expires_at!), 'dd/MM/yyyy', { locale: ptBR })}
+                  </Badge>
+                )}
+                {isExpired && (
+                  <Badge variant="destructive" className="text-xs">Expirado</Badge>
+                )}
+              </div>
+
+              {signatureUrl && !isExpired ? (
+                <div className="flex items-center gap-2">
+                  <Input value={signatureUrl} readOnly className="font-mono text-xs flex-1" />
+                  <Button variant="outline" size="icon" onClick={copySignatureLink}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" asChild>
+                    <a href={signatureUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {isExpired ? 'O link expirou. Gere um novo link.' : 'Nenhum link gerado ainda.'}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={generateSignatureLink}
+                  disabled={generatingLink}
+                >
+                  {generatingLink ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link className="h-4 w-4 mr-2" />
+                  )}
+                  {signatureUrl ? 'Regenerar Link' : 'Gerar Link'}
+                </Button>
+                {signatureUrl && !isExpired && (
+                  <Button 
+                    size="sm"
+                    onClick={sendSignatureRequest}
+                    disabled={sendingRequest}
+                  >
+                    {sendingRequest ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    Enviar para Cliente
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Blockchain Certification */}
+          {contract.signature_status === 'signed' && contract.blockchain_hash && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="h-5 w-5 text-green-600" />
+                <span className="font-medium text-green-800">Certificação Digital</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-green-700 font-medium">Hash SHA-256</p>
+                  <p className="font-mono text-xs truncate">{contract.blockchain_hash}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-green-700 font-medium">Rede</p>
+                  <p className="text-xs">{contract.blockchain_network}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-green-700 font-medium">IP do Signatário</p>
+                  <p className="text-xs">{contract.signature_ip}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-green-700 font-medium">TX ID</p>
+                  <p className="font-mono text-xs truncate">{contract.blockchain_tx_id}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </SheetHeader>
 
         <Tabs defaultValue="info" className="mt-6">
           <TabsList className="grid grid-cols-8 w-full">
-            <TabsTrigger value="info" className="text-xs">Contract Info</TabsTrigger>
-            <TabsTrigger value="contract" className="text-xs">Contrato</TabsTrigger>
+            <TabsTrigger value="info" className="text-xs">Info</TabsTrigger>
+            <TabsTrigger value="contract" className="text-xs">Documento</TabsTrigger>
             <TabsTrigger value="attachments" className="text-xs">Anexos</TabsTrigger>
             <TabsTrigger value="comments" className="text-xs">Comentários</TabsTrigger>
-            <TabsTrigger value="history" className="text-xs">Histórico</TabsTrigger>
+            <TabsTrigger value="audit" className="text-xs">Auditoria</TabsTrigger>
             <TabsTrigger value="tasks" className="text-xs">Tarefas</TabsTrigger>
             <TabsTrigger value="notes" className="text-xs">Notas</TabsTrigger>
-            <TabsTrigger value="templates" className="text-xs">Modelos</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs">Histórico</TabsTrigger>
           </TabsList>
 
           {/* Contract Information Tab */}
@@ -207,8 +430,8 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
 
             <div className="grid gap-4">
               <div className="space-y-2">
-                <Label>Cliente *</Label>
-                <Input disabled value="Cliente vinculado" />
+                <Label>Cliente</Label>
+                <Input disabled value={contract.signatory_name || 'Cliente vinculado'} />
               </div>
 
               <div className="space-y-2">
@@ -236,29 +459,26 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
 
               <div className="space-y-2">
                 <Label>Tipo de contrato</Label>
-                <div className="flex gap-2">
-                  <Select 
-                    value={formData.contract_type_id}
-                    onValueChange={(value) => setFormData({ ...formData, contract_type_id: value })}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {contractTypes.map(type => (
-                        <SelectItem key={type.id} value={type.id}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="icon">+</Button>
-                </div>
+                <Select 
+                  value={formData.contract_type_id}
+                  onValueChange={(value) => setFormData({ ...formData, contract_type_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contractTypes.map(type => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Data de Início *</Label>
+                  <Label>Data de Início</Label>
                   <Input 
                     type="date"
                     value={formData.start_date}
@@ -295,13 +515,29 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
 
           {/* Contract Content Tab */}
           <TabsContent value="contract" className="mt-6">
-            <div className="border rounded-lg p-4 min-h-[400px] bg-muted/30">
+            <div className="border rounded-lg overflow-hidden">
               {contract.contract_html ? (
-                <div dangerouslySetInnerHTML={{ __html: contract.contract_html }} />
+                <DocumentRenderer
+                  documentType={(contract.document_type as any) || 'contract'}
+                  content={contract.contract_html}
+                  clientSignature={contract.client_signature_image}
+                  signatoryName={contract.signatory_name || undefined}
+                  signatoryCpf={contract.signatory_cpf || undefined}
+                  signatoryCnpj={contract.signatory_cnpj || undefined}
+                  showCertificationSection={contract.signature_status === 'signed'}
+                  blockchainSignature={contract.blockchain_hash ? {
+                    hash: contract.blockchain_hash,
+                    timestamp: contract.blockchain_timestamp || '',
+                    txId: contract.blockchain_tx_id || '',
+                    network: contract.blockchain_network || '',
+                    ipAddress: contract.signature_ip || '',
+                  } : undefined}
+                />
               ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhum conteúdo de contrato definido
-                </p>
+                <div className="p-8 text-center text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Nenhum conteúdo de documento definido</p>
+                </div>
               )}
             </div>
           </TabsContent>
@@ -353,21 +589,31 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             </div>
           </TabsContent>
 
-          {/* Renewal History Tab */}
-          <TabsContent value="history" className="mt-6">
-            {renewalHistory.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">Nenhum histórico de renovação</p>
+          {/* Audit Log Tab */}
+          <TabsContent value="audit" className="mt-6">
+            {auditLogs.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">Nenhum registro de auditoria</p>
             ) : (
               <div className="space-y-3">
-                {renewalHistory.map((history) => (
-                  <div key={history.id} className="p-3 border rounded-lg">
-                    <div className="flex justify-between">
-                      <span>Renovação</span>
-                      <span className="text-sm text-muted-foreground">
-                        {format(new Date(history.renewed_at), 'dd/MM/yyyy', { locale: ptBR })}
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant="outline">{getEventTypeLabel(log.event_type)}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })}
                       </span>
                     </div>
-                    {history.notes && <p className="text-sm mt-2">{history.notes}</p>}
+                    {log.ip_address && (
+                      <p className="text-xs text-muted-foreground">IP: {log.ip_address}</p>
+                    )}
+                    {log.event_data && Object.keys(log.event_data).length > 0 && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-muted-foreground cursor-pointer">Ver detalhes</summary>
+                        <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-x-auto">
+                          {JSON.stringify(log.event_data, null, 2)}
+                        </pre>
+                      </details>
+                    )}
                   </div>
                 ))}
               </div>
@@ -423,11 +669,25 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             </div>
           </TabsContent>
 
-          {/* Templates Tab */}
-          <TabsContent value="templates" className="mt-6">
-            <p className="text-muted-foreground text-center py-8">
-              Modelos de contrato disponíveis aparecerão aqui
-            </p>
+          {/* History Tab */}
+          <TabsContent value="history" className="mt-6">
+            {renewalHistory.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">Nenhum histórico de renovação</p>
+            ) : (
+              <div className="space-y-3">
+                {renewalHistory.map((history) => (
+                  <div key={history.id} className="p-3 border rounded-lg">
+                    <div className="flex justify-between">
+                      <span>Renovação</span>
+                      <span className="text-sm text-muted-foreground">
+                        {format(new Date(history.renewed_at), 'dd/MM/yyyy', { locale: ptBR })}
+                      </span>
+                    </div>
+                    {history.notes && <p className="text-sm mt-2">{history.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </SheetContent>
