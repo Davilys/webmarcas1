@@ -14,6 +14,8 @@ import {
   formatCEP,
   formatPhone,
 } from "@/lib/validators";
+import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
+import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
 // Form schemas with real validation
 const personalDataSchema = z.object({
   fullName: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").max(100),
@@ -52,6 +54,9 @@ const RegistrationFormSection = () => {
   const [contractAccepted, setContractAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  
+  // Load contract template from database
+  const { template: contractTemplate, isLoading: isLoadingTemplate } = useContractTemplate('Registro de Marca');
 
   // Form data
   const [personalData, setPersonalData] = useState({
@@ -177,13 +182,6 @@ const RegistrationFormSection = () => {
     document.getElementById('registro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const getCurrentDate = () => {
-    return new Date().toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
-  };
 
   const handleSubmit = async () => {
     if (!contractAccepted) {
@@ -271,6 +269,16 @@ const RegistrationFormSection = () => {
     }
   };
 
+  // Get the processed contract content
+  const getProcessedContract = useCallback(() => {
+    if (!contractTemplate) return '';
+    return replaceContractVariables(contractTemplate.content, {
+      personalData,
+      brandData,
+      paymentMethod
+    });
+  }, [contractTemplate, personalData, brandData, paymentMethod]);
+
   const printContract = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -282,7 +290,13 @@ const RegistrationFormSection = () => {
       return;
     }
 
-    const contractHTML = generateContractHTML();
+    const contractContent = getProcessedContract();
+    const contractHTML = generateContractPrintHTML(
+      contractContent,
+      brandData.brandName,
+      personalData.fullName,
+      personalData.cpf
+    );
     printWindow.document.write(contractHTML);
     printWindow.document.close();
     printWindow.onload = () => {
@@ -292,7 +306,13 @@ const RegistrationFormSection = () => {
   };
 
   const downloadContract = () => {
-    const contractHTML = generateContractHTML();
+    const contractContent = getProcessedContract();
+    const contractHTML = generateContractPrintHTML(
+      contractContent,
+      brandData.brandName,
+      personalData.fullName,
+      personalData.cpf
+    );
     const blob = new Blob([contractHTML], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -305,147 +325,15 @@ const RegistrationFormSection = () => {
   };
 
   const generateContractHTML = () => {
-    return `
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Contrato WebMarcas - ${brandData.brandName}</title>
-  <style>
-    @page { size: A4; margin: 20mm; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.8; color: #1a1a2e; background: white; padding: 40px; font-size: 12px; }
-    .header { display: flex; align-items: center; gap: 20px; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; margin-bottom: 20px; }
-    .company-info h1 { font-size: 24px; color: #0ea5e9; margin-bottom: 5px; }
-    .company-info p { color: #64748b; font-size: 12px; }
-    .title { text-align: center; font-size: 16px; font-weight: bold; color: #1a1a2e; margin: 20px 0; padding: 10px; background: #f0f9ff; border-left: 4px solid #0ea5e9; }
-    .highlight { background: #fef3c7; padding: 10px; border-radius: 4px; margin: 15px 0; border: 1px solid #f59e0b; font-size: 11px; }
-    .clause { margin-bottom: 15px; }
-    .clause h3 { font-size: 13px; color: #0ea5e9; margin-bottom: 5px; }
-    .clause p, .clause ul { margin-bottom: 10px; }
-    .clause ul { padding-left: 20px; }
-    .signature-section { margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 20px; }
-    .signature-line { border-bottom: 1px solid #000; width: 300px; margin: 40px auto 5px; }
-    .signature-name { text-align: center; font-size: 11px; }
-    .footer { margin-top: 30px; text-align: center; color: #64748b; font-size: 10px; }
-    @media print { body { padding: 0; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="company-info">
-      <h1>WebMarcas</h1>
-      <p>Registro de Marcas e Patentes</p>
-      <p>www.webmarcas.net</p>
-    </div>
-  </div>
-  
-  <div class="title">Acordo do Contrato - Anexo I<br/>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI</div>
-  
-  <div class="highlight">
-    Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.<br/><br/>
-    Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
-  </div>
-  
-  <p>Por este instrumento particular de prestação de serviços, que fazem, de um lado:</p>
-  
-  <div class="clause">
-    <p><strong>I) WEB MARCAS PATENTES EIRELI</strong>, com sede na cidade de SÃO PAULO, Estado de SP, na AVENIDA BRIGADEIRO LUIS ANTONIO, Nº: 2696, CEP: 01402-000, inscrita no CNPJ/MF sob o Nº: 39.528.012/0001-29, neste ato representada por seu titular, senhor Davilys Danques de Oliveira Cunha, brasileiro, casado, regularmente inscrito no RG sob o Nº 50.688.779-0 e CPF sob o Nº 393.239.118-79, a seguir denominada <strong>CONTRATADA</strong>.</p>
-  </div>
-  
-  <div class="clause">
-    <p><strong>II) ${brandData.hasCNPJ ? brandData.companyName : personalData.fullName}</strong>${brandData.hasCNPJ ? `, inscrita no CNPJ sob nº ${brandData.cnpj}` : ''}, com sede na ${personalData.address}, ${personalData.neighborhood}, na cidade de ${personalData.city}, estado de ${personalData.state}, CEP ${personalData.cep}, neste ato representada por <strong>${personalData.fullName}</strong>, CPF sob o nº ${personalData.cpf}, com endereço de e-mail para faturamento ${personalData.email} e Tel: ${personalData.phone}, ("Contratante").</p>
-  </div>
-  
-  <p>As partes celebram o presente Acordo de Tarifas, que se regerá pelas cláusulas e condições abaixo:</p>
-  
-  <div class="clause">
-    <h3>1. CLÁUSULA PRIMEIRA – DO OBJETO</h3>
-    <p>1.1 A CONTRATADA prestará os serviços de preparo, protocolo e acompanhamento do pedido de registro da marca "<strong>${brandData.brandName}</strong>" junto ao INPI até a conclusão do processo, no ramo de atividade: ${brandData.businessArea}.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>2. CLÁUSULA SEGUNDA – DA RESPONSABILIDADE SOBRE OS SERVIÇOS CONTRATADOS</h3>
-    <p>2.1 Executar os serviços com responsabilidade e qualidade, fornecer cópia digital dos atos praticados junto ao INPI, comunicar à CONTRATANTE eventuais impedimentos ou exigências.</p>
-    <p>2.2 Acompanhar semanalmente o processo no INPI e informar colidências, exigências ou publicações, garantir o investimento da CONTRATANTE com nova tentativa sem custos adicionais de honorários caso o registro seja negado.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>3. CLÁUSULA TERCEIRA - DAS OBRIGAÇÕES GERAIS DA CONTRATADA</h3>
-    <p>3.1 Enviar cópias digitais por e-mail e relatório anual do processo, executar os serviços conforme o contrato e a legislação e cumprir prazos e exigências do INPI.</p>
-    <p>3.2 Comunicar impedimentos imediatamente, afim de cumprir as normas do INPI para garantir o registro.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>4. CLÁUSULA QUARTA – DAS OBRIGAÇÕES GERAIS DA CONTRATANTE</h3>
-    <p>4.1 A CONTRATANTE obriga-se a efetuar os pagamentos na forma, prazos e condições estabelecidas neste instrumento.</p>
-    <p>4.2 A CONTRATANTE compromete-se a fornecer à CONTRATADA todas as informações, documentos e materiais solicitados, de forma completa e dentro dos prazos estipulados.</p>
-    <p>4.3 A CONTRATANTE poderá solicitar ajustes ou correções nos serviços prestados somente quando houver divergência comprovada com o objeto deste contrato.</p>
-    <p>4.4 A CONTRATANTE reconhece que a CONTRATADA atua como assessoria técnica e jurídica especializada.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>5. CLÁUSULA QUINTA – DAS CONDIÇÕES DE PAGAMENTO</h3>
-    <p>5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida: <strong>PIX 1x de R$ 698,97</strong> (à vista, com 43% de desconto).</p>
-    <p>5.2 Taxas do INPI: As taxas federais obrigatórias serão de responsabilidade exclusiva do CONTRATANTE.</p>
-    <p>5.3 O cadastro do CONTRATANTE junto ao INPI é realizado pela CONTRATADA previamente ao pagamento.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>6. CLÁUSULA SEXTA – DO PRAZO DE VIGÊNCIA</h3>
-    <p>6.1 O presente contrato terá vigência a partir da assinatura e perdurará até o final do decênio de registro de marca junto ao INPI.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>7. CLÁUSULA SÉTIMA – DA INADIMPLÊNCIA</h3>
-    <p>7.1 No caso de inadimplência, a CONTRATANTE estará sujeita a: a) Multa de 10% sobre o valor devido; b) Juros de mora de 10% ao mês; c) Suspensão imediata dos serviços.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>8. CLÁUSULA OITAVA – DA CONFIDENCIALIDADE</h3>
-    <p>8.1 As partes se comprometem a manter em sigilo todas as informações confidenciais trocadas durante a execução do contrato.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>9. CLÁUSULA NONA – DA RESCISÃO</h3>
-    <p>9.1 Este contrato poderá ser rescindido por qualquer das partes mediante aviso prévio de 15 dias.</p>
-    <p>9.2 A CONTRATANTE somente poderá cancelar o contrato se não houver débitos pendentes.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>10. CLÁUSULA DÉCIMA – DAS CONDIÇÕES GERAIS</h3>
-    <p>10.1 Fica pactuada entre as partes a prestação dos serviços de acompanhamento e vigilância do(s) processo(s) referentes às marcas ${brandData.brandName}.</p>
-    <p>10.2 Durante a tramitação do processo junto ao INPI, poderão surgir situações que exijam a apresentação de documentos adicionais.</p>
-  </div>
-  
-  <div class="clause">
-    <h3>12. CLÁUSULA DÉCIMA SEGUNDA – DO FORO</h3>
-    <p>12.1 Para dirimir quaisquer dúvidas relativas ao presente contrato, as partes elegem o Foro da Comarca de São Paulo – SP.</p>
-  </div>
-  
-  <p style="margin-top: 30px;">Por estarem justas e contratadas, as partes assinam o presente em 02 (duas) vias de igual teor e forma.</p>
-  
-  <p style="margin-top: 15px;"><strong>São Paulo, ${getCurrentDate()}.</strong></p>
-  
-  <div class="signature-section">
-    <p><strong>Assinatura autorizada:</strong></p>
-    
-    <div class="signature-line"></div>
-    <p class="signature-name">WebMarcas Patentes - CNPJ/MF sob o nº 39.528.012/0001-29</p>
-    
-    <div class="signature-line"></div>
-    <p class="signature-name">${personalData.fullName} - CPF sob o nº ${personalData.cpf}</p>
-  </div>
-  
-  <div class="footer">
-    <p>Contrato gerado automaticamente pelo sistema WebMarcas</p>
-    <p>www.webmarcas.net</p>
-    <p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>
-  </div>
-</body>
-</html>`;
+    const contractContent = getProcessedContract();
+    return generateContractPrintHTML(
+      contractContent,
+      brandData.brandName,
+      personalData.fullName,
+      personalData.cpf
+    );
   };
+
 
   const steps = [
     { number: 1, label: "Dados Pessoais", icon: User },
@@ -835,112 +723,32 @@ const RegistrationFormSection = () => {
                   </div>
                 </div>
 
-                {/* Contract Preview */}
+                {/* Highlight Box */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-xs">
+                  <p>
+                    Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, 
+                    tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
+                  </p>
+                  <p className="mt-2">
+                    Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de 
+                    Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
+                  </p>
+                </div>
+
+                {/* Contract Preview - Dynamic from database */}
                 <div className="bg-white rounded-xl p-6 max-h-[500px] overflow-y-auto text-sm border border-border shadow-inner">
-                  {/* Contract Header */}
-                  <div className="text-center border-b-2 border-primary pb-4 mb-6">
-                    <h4 className="text-primary font-bold text-lg">WebMarcas</h4>
-                    <p className="text-muted-foreground text-xs">Registro de Marcas e Patentes</p>
-                  </div>
-
-                  <div className="text-center mb-6">
-                    <h4 className="font-bold text-base mb-2">Acordo do Contrato - Anexo I</h4>
-                    <p className="text-sm font-semibold text-foreground">
-                      CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI
-                    </p>
-                  </div>
-                  
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-amber-800 text-xs">
-                    <p>
-                      Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, 
-                      tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
-                    </p>
-                    <p className="mt-2">
-                      Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de 
-                      Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
-                    </p>
-                  </div>
-                  
-                  <p className="mb-4 text-foreground">Por este instrumento particular de prestação de serviços, que fazem, de um lado:</p>
-                  
-                  <p className="mb-4 text-foreground">
-                    <strong>I) WEB MARCAS PATENTES EIRELI</strong>, com sede na cidade de SÃO PAULO, Estado de SP, 
-                    na AVENIDA BRIGADEIRO LUIS ANTONIO, Nº: 2696, CEP: 01402-000, inscrita no CNPJ/MF sob o 
-                    Nº: 39.528.012/0001-29, neste ato representada por seu titular, senhor Davilys Danques de Oliveira Cunha, 
-                    brasileiro, casado, regularmente inscrito no RG sob o Nº 50.688.779-0 e CPF sob o Nº 393.239.118-79, 
-                    a seguir denominada <strong>CONTRATADA</strong>.
-                  </p>
-
-                  <p className="mb-4 text-foreground">
-                    <strong>II) {brandData.hasCNPJ ? brandData.companyName : personalData.fullName}</strong>
-                    {brandData.hasCNPJ && `, inscrita no CNPJ sob nº ${brandData.cnpj}`}, com sede na {personalData.address}, 
-                    {personalData.neighborhood}, na cidade de {personalData.city}, estado de {personalData.state}, 
-                    CEP {personalData.cep}, neste ato representada por <strong>{personalData.fullName}</strong>, 
-                    CPF sob o nº {personalData.cpf}, com endereço de e-mail para faturamento {personalData.email} 
-                    e Tel: {personalData.phone}, ("Contratante").
-                  </p>
-
-                  <p className="mb-4 text-foreground">As partes celebram o presente Acordo de Tarifas, que se regerá pelas cláusulas e condições abaixo:</p>
-
-                  <div className="space-y-4 text-foreground">
-                    <div>
-                      <p className="font-bold text-primary">1. CLÁUSULA PRIMEIRA – DO OBJETO</p>
-                      <p>1.1 A CONTRATADA prestará os serviços de preparo, protocolo e acompanhamento do pedido de registro da marca "<span className="text-primary font-semibold">{brandData.brandName}</span>" junto ao INPI até a conclusão do processo.</p>
+                  {isLoadingTemplate ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      <span className="ml-2 text-muted-foreground">Carregando contrato...</span>
                     </div>
-
-                    <div>
-                      <p className="font-bold text-primary">2. CLÁUSULA SEGUNDA – DA RESPONSABILIDADE SOBRE OS SERVIÇOS CONTRATADOS</p>
-                      <p>2.1 Executar os serviços com responsabilidade e qualidade, fornecer cópia digital dos atos praticados junto ao INPI, comunicar à CONTRATANTE eventuais impedimentos ou exigências.</p>
-                      <p className="mt-2">2.2 Acompanhar semanalmente o processo no INPI e informar colidências, exigências ou publicações, garantir o investimento da CONTRATANTE com nova tentativa sem custos adicionais de honorários caso o registro seja negado.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">3. CLÁUSULA TERCEIRA - DAS OBRIGAÇÕES GERAIS DA CONTRATADA</p>
-                      <p>3.1 Enviar cópias digitais por e-mail e relatório anual do processo, executar os serviços conforme o contrato e a legislação e cumprir prazos e exigências do INPI.</p>
-                      <p className="mt-2">3.2 Comunicar impedimentos imediatamente, afim de cumprir as normas do INPI para garantir o registro.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">4. CLÁUSULA QUARTA – DAS OBRIGAÇÕES GERAIS DA CONTRATANTE</p>
-                      <p>4.1 A CONTRATANTE obriga-se a efetuar os pagamentos na forma, prazos e condições estabelecidas neste instrumento.</p>
-                      <p className="mt-2">4.2 A CONTRATANTE compromete-se a fornecer à CONTRATADA todas as informações, documentos e materiais solicitados.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">5. CLÁUSULA QUINTA – DAS CONDIÇÕES DE PAGAMENTO</p>
-                      <p>5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida: <strong>PIX 1x de R$ 698,97</strong> (à vista, com 43% de desconto).</p>
-                      <p className="mt-2">5.2 Taxas do INPI: As taxas federais obrigatórias serão de responsabilidade exclusiva do CONTRATANTE.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">6. CLÁUSULA SEXTA – DO PRAZO DE VIGÊNCIA</p>
-                      <p>6.1 O presente contrato terá vigência a partir da assinatura e perdurará até o final do decênio de registro de marca junto ao INPI.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">7. CLÁUSULA SÉTIMA – DA INADIMPLÊNCIA</p>
-                      <p>7.1 No caso de inadimplência, a CONTRATANTE estará sujeita a multa de 10% sobre o valor devido, juros de mora de 10% ao mês e suspensão imediata dos serviços.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">8. CLÁUSULA OITAVA – DA CONFIDENCIALIDADE</p>
-                      <p>8.1 As partes se comprometem a manter em sigilo todas as informações confidenciais trocadas durante a execução do contrato.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">9. CLÁUSULA NONA – DA RESCISÃO</p>
-                      <p>9.1 Este contrato poderá ser rescindido por qualquer das partes mediante aviso prévio de 15 dias.</p>
-                    </div>
-
-                    <div>
-                      <p className="font-bold text-primary">12. CLÁUSULA DÉCIMA SEGUNDA – DO FORO</p>
-                      <p>12.1 Para dirimir quaisquer dúvidas relativas ao presente contrato, as partes elegem o Foro da Comarca de São Paulo – SP.</p>
-                    </div>
-                  </div>
-
-                  <p className="mt-6 text-muted-foreground text-xs">
-                    São Paulo, {getCurrentDate()}.
-                  </p>
+                  ) : (
+                    <ContractRenderer 
+                      content={getProcessedContract()} 
+                      showLetterhead={true}
+                      className="text-foreground"
+                    />
+                  )}
                 </div>
 
                 {/* Accept checkbox */}

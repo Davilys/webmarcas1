@@ -32,19 +32,26 @@ interface ContractType {
 
 const AVAILABLE_VARIABLES = [
   { key: '{{nome_cliente}}', label: 'Nome do Cliente' },
-  { key: '{{cpf_cnpj}}', label: 'CPF/CNPJ' },
-  { key: '{{endereco}}', label: 'Endereço' },
-  { key: '{{cidade}}', label: 'Cidade' },
-  { key: '{{estado}}', label: 'Estado' },
-  { key: '{{cep}}', label: 'CEP' },
+  { key: '{{cpf}}', label: 'CPF' },
   { key: '{{email}}', label: 'E-mail' },
   { key: '{{telefone}}', label: 'Telefone' },
   { key: '{{marca}}', label: 'Nome da Marca' },
-  { key: '{{valor}}', label: 'Valor do Contrato' },
+  { key: '{{ramo_atividade}}', label: 'Ramo de Atividade' },
+  { key: '{{endereco_completo}}', label: 'Endereço Completo' },
+  { key: '{{endereco}}', label: 'Endereço' },
+  { key: '{{bairro}}', label: 'Bairro' },
+  { key: '{{cidade}}', label: 'Cidade' },
+  { key: '{{estado}}', label: 'Estado' },
+  { key: '{{cep}}', label: 'CEP' },
+  { key: '{{razao_social_ou_nome}}', label: 'Razão Social ou Nome' },
+  { key: '{{dados_cnpj}}', label: 'Dados CNPJ' },
+  { key: '{{forma_pagamento_detalhada}}', label: 'Forma de Pagamento' },
+  { key: '{{data_extenso}}', label: 'Data por Extenso' },
   { key: '{{data}}', label: 'Data Atual' },
   { key: '{{data_inicio}}', label: 'Data de Início' },
   { key: '{{data_fim}}', label: 'Data Final' },
   { key: '{{numero_contrato}}', label: 'Número do Contrato' },
+  { key: '{{valor}}', label: 'Valor do Contrato' },
 ];
 
 export default function ModelosContrato() {
