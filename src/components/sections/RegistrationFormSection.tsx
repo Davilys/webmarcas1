@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowLeft, Check, User, Building2, FileSignature, Download, Printer } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, User, Building2, FileSignature, Download, Printer, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -72,6 +72,8 @@ const RegistrationFormSection = () => {
     cnpj: "",
     companyName: "",
   });
+
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
 
   // Load viability data from session storage if available
   useEffect(() => {
@@ -151,12 +153,19 @@ const RegistrationFormSection = () => {
       }
     }
 
+    if (stepNumber === 3) {
+      if (!paymentMethod) {
+        setErrors({ paymentMethod: "Selecione uma forma de pagamento" });
+        return false;
+      }
+    }
+
     return true;
   };
 
   const nextStep = () => {
     if (validateStep(step)) {
-      setStep((prev) => Math.min(prev + 1, 3));
+      setStep((prev) => Math.min(prev + 1, 4));
       // Scroll to top of form
       document.getElementById('registro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -189,7 +198,8 @@ const RegistrationFormSection = () => {
     const orderData = {
       personalData,
       brandData,
-      paymentValue: 698.97,
+      paymentMethod,
+      paymentValue: paymentMethod === 'avista' ? 699 : paymentMethod === 'cartao6x' ? 1194 : 1197,
       acceptedAt: new Date().toISOString(),
     };
 
@@ -378,7 +388,8 @@ const RegistrationFormSection = () => {
   const steps = [
     { number: 1, label: "Dados Pessoais", icon: User },
     { number: 2, label: "Dados da Marca", icon: Building2 },
-    { number: 3, label: "Contrato", icon: FileSignature },
+    { number: 3, label: "Pagamento", icon: CreditCard },
+    { number: 4, label: "Contrato", icon: FileSignature },
   ];
 
   return (
@@ -641,8 +652,112 @@ const RegistrationFormSection = () => {
               </div>
             )}
 
-            {/* Step 3: Contract */}
+            {/* Step 3: Payment */}
             {step === 3 && (
+              <div className="space-y-6 animate-fade-in-up">
+                <h3 className="font-display text-xl font-semibold mb-6">Forma de Pagamento</h3>
+
+                <div className="space-y-4">
+                  {/* À Vista */}
+                  <label
+                    className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentMethod === 'avista'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => setPaymentMethod('avista')}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          paymentMethod === 'avista'
+                            ? 'border-primary'
+                            : 'border-muted-foreground'
+                        }`}
+                      >
+                        {paymentMethod === 'avista' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold">À Vista</p>
+                        <p className="text-sm text-muted-foreground">Pagamento único via PIX ou boleto</p>
+                      </div>
+                    </div>
+                    <p className="font-bold text-primary text-lg">R$699,00</p>
+                  </label>
+
+                  {/* Cartão 6x */}
+                  <label
+                    className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentMethod === 'cartao6x'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => setPaymentMethod('cartao6x')}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          paymentMethod === 'cartao6x'
+                            ? 'border-primary'
+                            : 'border-muted-foreground'
+                        }`}
+                      >
+                        {paymentMethod === 'cartao6x' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold">Cartão 6x</p>
+                        <p className="text-sm text-muted-foreground">Sem juros no cartão de crédito</p>
+                      </div>
+                    </div>
+                    <p className="font-bold text-primary text-lg">6x de R$199,00</p>
+                  </label>
+
+                  {/* Boleto 3x */}
+                  <label
+                    className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentMethod === 'boleto3x'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => setPaymentMethod('boleto3x')}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          paymentMethod === 'boleto3x'
+                            ? 'border-primary'
+                            : 'border-muted-foreground'
+                        }`}
+                      >
+                        {paymentMethod === 'boleto3x' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold">Boleto 3x</p>
+                        <p className="text-sm text-muted-foreground">Boleto bancário parcelado</p>
+                      </div>
+                    </div>
+                    <p className="font-bold text-primary text-lg">3x de R$399,00</p>
+                  </label>
+                </div>
+
+                {errors.paymentMethod && (
+                  <p className="text-destructive text-sm">{errors.paymentMethod}</p>
+                )}
+
+                <p className="text-sm text-muted-foreground">
+                  * Taxas do INPI (GRU) são cobradas à parte pelo órgão.
+                </p>
+              </div>
+            )}
+
+            {/* Step 4: Contract */}
+            {step === 4 && (
               <div className="space-y-6 animate-fade-in-up">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-display text-xl font-semibold">Contrato Digital</h3>
@@ -797,7 +912,7 @@ const RegistrationFormSection = () => {
                 <div />
               )}
 
-              {step < 3 ? (
+              {step < 4 ? (
                 <Button variant="hero" onClick={nextStep} className="group ml-auto">
                   Continuar
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
