@@ -229,6 +229,57 @@ serve(async (req) => {
         .eq('id', contractId);
 
       console.log('Updated contract with signature:', contractId);
+
+      // Trigger contract_signed email automation
+      try {
+        await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            trigger_event: 'contract_signed',
+            lead_id: leadId || null,
+            data: {
+              nome: personalData.fullName,
+              email: personalData.email,
+              marca: brandData.brandName,
+              data_assinatura: new Date().toLocaleDateString('pt-BR'),
+              hash_contrato: contractId.substring(0, 12).toUpperCase(),
+              ip_assinatura: signatureData?.ip || 'N/A',
+            },
+          }),
+        });
+        console.log('Triggered contract_signed email automation');
+      } catch (emailError) {
+        console.error('Error triggering contract_signed email:', emailError);
+      }
+    }
+
+    // ========================================
+    // STEP 4.1: Trigger payment_received email automation
+    // ========================================
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          trigger_event: 'payment_received',
+          lead_id: leadId || null,
+          data: {
+            nome: personalData.fullName,
+            email: personalData.email,
+            marca: brandData.brandName,
+          },
+        }),
+      });
+      console.log('Triggered payment_received email automation');
+    } catch (emailError) {
+      console.error('Error triggering payment_received email:', emailError);
     }
 
     // ========================================
