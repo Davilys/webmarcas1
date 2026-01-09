@@ -503,23 +503,32 @@ export type Database = {
           blockchain_proof: string | null
           blockchain_timestamp: string | null
           blockchain_tx_id: string | null
+          client_signature_image: string | null
           contract_html: string | null
           contract_number: string | null
           contract_type: string | null
           contract_type_id: string | null
           contract_value: number | null
+          contractor_signature_image: string | null
           created_at: string | null
           description: string | null
           device_info: Json | null
+          document_type: string | null
           end_date: string | null
           id: string
           ip_address: string | null
           lead_id: string | null
+          penalty_value: number | null
           perfex_contract_id: string | null
           perfex_customer_id: string | null
           process_id: string | null
+          signatory_cnpj: string | null
+          signatory_cpf: string | null
+          signatory_name: string | null
+          signature_expires_at: string | null
           signature_ip: string | null
           signature_status: string | null
+          signature_token: string | null
           signature_user_agent: string | null
           signed_at: string | null
           start_date: string | null
@@ -536,23 +545,32 @@ export type Database = {
           blockchain_proof?: string | null
           blockchain_timestamp?: string | null
           blockchain_tx_id?: string | null
+          client_signature_image?: string | null
           contract_html?: string | null
           contract_number?: string | null
           contract_type?: string | null
           contract_type_id?: string | null
           contract_value?: number | null
+          contractor_signature_image?: string | null
           created_at?: string | null
           description?: string | null
           device_info?: Json | null
+          document_type?: string | null
           end_date?: string | null
           id?: string
           ip_address?: string | null
           lead_id?: string | null
+          penalty_value?: number | null
           perfex_contract_id?: string | null
           perfex_customer_id?: string | null
           process_id?: string | null
+          signatory_cnpj?: string | null
+          signatory_cpf?: string | null
+          signatory_name?: string | null
+          signature_expires_at?: string | null
           signature_ip?: string | null
           signature_status?: string | null
+          signature_token?: string | null
           signature_user_agent?: string | null
           signed_at?: string | null
           start_date?: string | null
@@ -569,23 +587,32 @@ export type Database = {
           blockchain_proof?: string | null
           blockchain_timestamp?: string | null
           blockchain_tx_id?: string | null
+          client_signature_image?: string | null
           contract_html?: string | null
           contract_number?: string | null
           contract_type?: string | null
           contract_type_id?: string | null
           contract_value?: number | null
+          contractor_signature_image?: string | null
           created_at?: string | null
           description?: string | null
           device_info?: Json | null
+          document_type?: string | null
           end_date?: string | null
           id?: string
           ip_address?: string | null
           lead_id?: string | null
+          penalty_value?: number | null
           perfex_contract_id?: string | null
           perfex_customer_id?: string | null
           process_id?: string | null
+          signatory_cnpj?: string | null
+          signatory_cpf?: string | null
+          signatory_name?: string | null
+          signature_expires_at?: string | null
           signature_ip?: string | null
           signature_status?: string | null
+          signature_token?: string | null
           signature_user_agent?: string | null
           signed_at?: string | null
           start_date?: string | null
@@ -1583,6 +1610,44 @@ export type Database = {
           uploaded_by?: string | null
         }
         Relationships: []
+      }
+      signature_audit_log: {
+        Row: {
+          contract_id: string | null
+          created_at: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_audit_log_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
