@@ -746,6 +746,7 @@ const RegistrationFormSection = () => {
                     <ContractRenderer 
                       content={getProcessedContract()} 
                       showLetterhead={true}
+                      showCertificationSection={true}
                       className="text-foreground"
                     />
                   )}
@@ -765,7 +766,8 @@ const RegistrationFormSection = () => {
                   </div>
                   <span className="text-sm text-muted-foreground">
                     Li e aceito os termos do contrato de prestação de serviços. 
-                    Estou ciente de que esta assinatura digital tem validade jurídica.
+                    Estou ciente de que esta assinatura digital tem validade jurídica e será registrada 
+                    em blockchain com rastreio de IP, data/hora e hash criptográfico.
                   </span>
                 </label>
               </div>
