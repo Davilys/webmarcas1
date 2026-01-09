@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Registro from "./pages/Registro";
 import StatusPedido from "./pages/StatusPedido";
 import Obrigado from "./pages/Obrigado";
+import VerificarContrato from "./pages/VerificarContrato";
 import NotFound from "./pages/NotFound";
 
 // Cliente pages
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/registro" element={<Registro />} />
               <Route path="/status-pedido" element={<StatusPedido />} />
               <Route path="/obrigado" element={<Obrigado />} />
+              <Route path="/verificar-contrato" element={<VerificarContrato />} />
               
               {/* Área do Cliente */}
               <Route path="/cliente/login" element={<ClienteLogin />} />
