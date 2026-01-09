@@ -231,52 +231,376 @@ export type Database = {
           },
         ]
       }
-      contracts: {
+      contract_attachments: {
         Row: {
-          contract_html: string | null
-          contract_number: string | null
-          contract_type: string | null
-          created_at: string | null
+          contract_id: string
+          created_at: string
+          file_size: number | null
+          file_url: string
           id: string
-          ip_address: string | null
-          perfex_contract_id: string | null
-          process_id: string | null
-          signed_at: string | null
-          user_agent: string | null
+          mime_type: string | null
+          name: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_attachments_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_comments: {
+        Row: {
+          content: string
+          contract_id: string
+          created_at: string
+          id: string
           user_id: string | null
         }
         Insert: {
-          contract_html?: string | null
-          contract_number?: string | null
-          contract_type?: string | null
-          created_at?: string | null
+          content: string
+          contract_id: string
+          created_at?: string
           id?: string
-          ip_address?: string | null
-          perfex_contract_id?: string | null
-          process_id?: string | null
-          signed_at?: string | null
-          user_agent?: string | null
           user_id?: string | null
         }
         Update: {
-          contract_html?: string | null
-          contract_number?: string | null
-          contract_type?: string | null
-          created_at?: string | null
+          content?: string
+          contract_id?: string
+          created_at?: string
           id?: string
-          ip_address?: string | null
-          perfex_contract_id?: string | null
-          process_id?: string | null
-          signed_at?: string | null
-          user_agent?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contract_comments_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_notes: {
+        Row: {
+          content: string
+          contract_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          contract_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          contract_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_notes_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_renewal_history: {
+        Row: {
+          contract_id: string
+          id: string
+          new_end_date: string | null
+          new_value: number | null
+          notes: string | null
+          previous_end_date: string | null
+          previous_value: number | null
+          renewed_at: string
+          renewed_by: string | null
+        }
+        Insert: {
+          contract_id: string
+          id?: string
+          new_end_date?: string | null
+          new_value?: number | null
+          notes?: string | null
+          previous_end_date?: string | null
+          previous_value?: number | null
+          renewed_at?: string
+          renewed_by?: string | null
+        }
+        Update: {
+          contract_id?: string
+          id?: string
+          new_end_date?: string | null
+          new_value?: number | null
+          notes?: string | null
+          previous_end_date?: string | null
+          previous_value?: number | null
+          renewed_at?: string
+          renewed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_renewal_history_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_tasks: {
+        Row: {
+          assigned_to: string | null
+          completed: boolean | null
+          completed_at: string | null
+          contract_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          title: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed?: boolean | null
+          completed_at?: string | null
+          contract_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          title: string
+        }
+        Update: {
+          assigned_to?: string | null
+          completed?: boolean | null
+          completed_at?: string | null
+          contract_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_tasks_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_templates: {
+        Row: {
+          content: string
+          contract_type_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+          variables: Json | null
+        }
+        Insert: {
+          content: string
+          contract_type_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+          variables?: Json | null
+        }
+        Update: {
+          content?: string
+          contract_type_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_templates_contract_type_id_fkey"
+            columns: ["contract_type_id"]
+            isOneToOne: false
+            referencedRelation: "contract_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_types: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      contracts: {
+        Row: {
+          asaas_payment_id: string | null
+          contract_html: string | null
+          contract_number: string | null
+          contract_type: string | null
+          contract_type_id: string | null
+          contract_value: number | null
+          created_at: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          ip_address: string | null
+          lead_id: string | null
+          perfex_contract_id: string | null
+          process_id: string | null
+          signature_ip: string | null
+          signature_status: string | null
+          signature_user_agent: string | null
+          signed_at: string | null
+          start_date: string | null
+          subject: string | null
+          template_id: string | null
+          user_agent: string | null
+          user_id: string | null
+          visible_to_client: boolean | null
+        }
+        Insert: {
+          asaas_payment_id?: string | null
+          contract_html?: string | null
+          contract_number?: string | null
+          contract_type?: string | null
+          contract_type_id?: string | null
+          contract_value?: number | null
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          ip_address?: string | null
+          lead_id?: string | null
+          perfex_contract_id?: string | null
+          process_id?: string | null
+          signature_ip?: string | null
+          signature_status?: string | null
+          signature_user_agent?: string | null
+          signed_at?: string | null
+          start_date?: string | null
+          subject?: string | null
+          template_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          visible_to_client?: boolean | null
+        }
+        Update: {
+          asaas_payment_id?: string | null
+          contract_html?: string | null
+          contract_number?: string | null
+          contract_type?: string | null
+          contract_type_id?: string | null
+          contract_value?: number | null
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          ip_address?: string | null
+          lead_id?: string | null
+          perfex_contract_id?: string | null
+          process_id?: string | null
+          signature_ip?: string | null
+          signature_status?: string | null
+          signature_user_agent?: string | null
+          signed_at?: string | null
+          start_date?: string | null
+          subject?: string | null
+          template_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          visible_to_client?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_contract_type_id_fkey"
+            columns: ["contract_type_id"]
+            isOneToOne: false
+            referencedRelation: "contract_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contracts_process_id_fkey"
             columns: ["process_id"]
             isOneToOne: false
             referencedRelation: "brand_processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "contract_templates"
             referencedColumns: ["id"]
           },
           {
@@ -341,6 +665,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      import_logs: {
+        Row: {
+          created_at: string
+          errors: Json | null
+          failed_records: number | null
+          file_name: string | null
+          id: string
+          import_type: string
+          imported_by: string | null
+          imported_records: number | null
+          total_records: number | null
+        }
+        Insert: {
+          created_at?: string
+          errors?: Json | null
+          failed_records?: number | null
+          file_name?: string | null
+          id?: string
+          import_type: string
+          imported_by?: string | null
+          imported_records?: number | null
+          total_records?: number | null
+        }
+        Update: {
+          created_at?: string
+          errors?: Json | null
+          failed_records?: number | null
+          file_name?: string | null
+          id?: string
+          import_type?: string
+          imported_by?: string | null
+          imported_records?: number | null
+          total_records?: number | null
+        }
+        Relationships: []
       }
       inpi_resources: {
         Row: {
@@ -473,6 +833,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      leads: {
+        Row: {
+          address: string | null
+          assigned_to: string | null
+          city: string | null
+          company_name: string | null
+          converted_at: string | null
+          converted_to_client_id: string | null
+          cpf_cnpj: string | null
+          created_at: string
+          email: string | null
+          estimated_value: number | null
+          full_name: string
+          id: string
+          notes: string | null
+          origin: string | null
+          phone: string | null
+          state: string | null
+          status: string
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          assigned_to?: string | null
+          city?: string | null
+          company_name?: string | null
+          converted_at?: string | null
+          converted_to_client_id?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          estimated_value?: number | null
+          full_name: string
+          id?: string
+          notes?: string | null
+          origin?: string | null
+          phone?: string | null
+          state?: string | null
+          status?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          assigned_to?: string | null
+          city?: string | null
+          company_name?: string | null
+          converted_at?: string | null
+          converted_to_client_id?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          estimated_value?: number | null
+          full_name?: string
+          id?: string
+          notes?: string | null
+          origin?: string | null
+          phone?: string | null
+          state?: string | null
+          status?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
       }
       login_history: {
         Row: {

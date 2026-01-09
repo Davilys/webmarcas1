@@ -19,6 +19,9 @@ import {
   ChevronRight,
   Scale,
   BookOpen,
+  UserPlus,
+  FileSignature,
+  FileStack,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
@@ -29,7 +32,10 @@ interface AdminLayoutProps {
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
+  { icon: UserPlus, label: 'Leads', href: '/admin/leads' },
   { icon: Users, label: 'Clientes', href: '/admin/clientes' },
+  { icon: FileSignature, label: 'Contratos', href: '/admin/contratos' },
+  { icon: FileStack, label: 'Modelos de Contrato', href: '/admin/modelos-contrato' },
   { icon: FileText, label: 'Processos', href: '/admin/processos' },
   { icon: FolderOpen, label: 'Documentos', href: '/admin/documentos' },
   { icon: CreditCard, label: 'Financeiro', href: '/admin/financeiro' },
