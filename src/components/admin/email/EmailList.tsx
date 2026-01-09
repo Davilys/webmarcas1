@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Mail, Star, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Mail, Star, Clock, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Email, EmailFolder } from '@/pages/admin/Emails';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface EmailListProps {
   folder: EmailFolder;
@@ -19,6 +21,25 @@ interface EmailListProps {
 
 export function EmailList({ folder, onSelectEmail }: EmailListProps) {
   const [search, setSearch] = useState('');
+  const queryClient = useQueryClient();
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sync-imap-inbox', {
+        body: { limit: 50 }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['emails'] });
+      toast.success(`Sincronização concluída! ${data.synced_count} novos emails.`);
+    },
+    onError: (error: any) => {
+      console.error('Sync error:', error);
+      toast.error('Erro ao sincronizar: ' + error.message);
+    }
+  });
 
   const { data: emails, isLoading } = useQuery({
     queryKey: ['emails', folder],
@@ -83,9 +104,22 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
             <Mail className="h-5 w-5" />
             {title}
           </CardTitle>
-          <Badge variant="secondary">
-            {emails?.length || 0} {emails?.length === 1 ? 'email' : 'emails'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {folder === 'inbox' && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-1", syncMutation.isPending && "animate-spin")} />
+                Sincronizar
+              </Button>
+            )}
+            <Badge variant="secondary">
+              {emails?.length || 0} {emails?.length === 1 ? 'email' : 'emails'}
+            </Badge>
+          </div>
         </div>
         <div className="relative mt-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
