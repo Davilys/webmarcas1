@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowLeft, Check, User, Building2, FileSignature, Download, Printer, CreditCard } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, User, Building2, FileSignature, Download, Printer, CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { supabase } from "@/integrations/supabase/client";
 import {
   validateCPF,
   validateCNPJ,
@@ -13,7 +14,6 @@ import {
   formatCEP,
   formatPhone,
 } from "@/lib/validators";
-
 // Form schemas with real validation
 const personalDataSchema = z.object({
   fullName: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").max(100),
@@ -50,6 +50,7 @@ const RegistrationFormSection = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoadingCEP, setIsLoadingCEP] = useState(false);
   const [contractAccepted, setContractAccepted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   // Form data
@@ -184,7 +185,7 @@ const RegistrationFormSection = () => {
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!contractAccepted) {
       toast({
         title: "Assinatura obrigatória",
@@ -194,19 +195,71 @@ const RegistrationFormSection = () => {
       return;
     }
 
-    // Save order data for payment page
-    const orderData = {
-      personalData,
-      brandData,
-      paymentMethod,
-      paymentValue: paymentMethod === 'avista' ? 699 : paymentMethod === 'cartao6x' ? 1194 : 1197,
-      acceptedAt: new Date().toISOString(),
-    };
+    const paymentValue = paymentMethod === 'avista' ? 698.97 : paymentMethod === 'cartao6x' ? 1194 : 1197;
 
-    // Clear viability data now that form is submitted
-    sessionStorage.removeItem('viabilityData');
-    sessionStorage.setItem("orderData", JSON.stringify(orderData));
-    navigate("/status-pedido");
+    setIsSubmitting(true);
+
+    try {
+      // Call Asaas edge function to create payment
+      const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
+        body: {
+          personalData,
+          brandData,
+          paymentMethod,
+          paymentValue,
+        },
+      });
+
+      if (error) {
+        console.error('Asaas payment error:', error);
+        throw new Error(error.message || 'Erro ao processar pagamento');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao criar cobrança');
+      }
+
+      console.log('Asaas payment created:', data);
+
+      // Save order data with Asaas response for payment page
+      const orderData = {
+        personalData,
+        brandData,
+        paymentMethod,
+        paymentValue,
+        acceptedAt: new Date().toISOString(),
+        asaas: {
+          customerId: data.customerId,
+          paymentId: data.paymentId,
+          status: data.status,
+          billingType: data.billingType,
+          dueDate: data.dueDate,
+          invoiceUrl: data.invoiceUrl,
+          bankSlipUrl: data.bankSlipUrl,
+          pixQrCode: data.pixQrCode,
+        },
+      };
+
+      // Clear viability data now that form is submitted
+      sessionStorage.removeItem('viabilityData');
+      sessionStorage.setItem("orderData", JSON.stringify(orderData));
+      
+      toast({
+        title: "Cobrança criada com sucesso!",
+        description: "Você será redirecionado para a página de pagamento.",
+      });
+
+      navigate("/status-pedido");
+    } catch (err) {
+      console.error('Submit error:', err);
+      toast({
+        title: "Erro ao processar",
+        description: err instanceof Error ? err.message : "Tente novamente em instantes.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const printContract = () => {
@@ -921,11 +974,20 @@ const RegistrationFormSection = () => {
                 <Button
                   variant="accent"
                   onClick={handleSubmit}
-                  disabled={!contractAccepted}
+                  disabled={!contractAccepted || isSubmitting}
                   className="group ml-auto"
                 >
-                  <Check className="w-4 h-4 mr-2" />
-                  Aceitar e Continuar
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Aceitar e Continuar
+                    </>
+                  )}
                 </Button>
               )}
             </div>

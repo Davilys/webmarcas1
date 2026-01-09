@@ -7,6 +7,21 @@ import Footer from "@/components/layout/Footer";
 import WhatsAppButton from "@/components/layout/WhatsAppButton";
 import { useToast } from "@/hooks/use-toast";
 
+interface AsaasData {
+  customerId: string;
+  paymentId: string;
+  status: string;
+  billingType: string;
+  dueDate: string;
+  invoiceUrl?: string;
+  bankSlipUrl?: string;
+  pixQrCode?: {
+    encodedImage: string;
+    payload: string;
+    expirationDate?: string;
+  };
+}
+
 interface OrderData {
   personalData: {
     fullName: string;
@@ -28,6 +43,7 @@ interface OrderData {
   };
   paymentValue: number;
   acceptedAt: string;
+  asaas?: AsaasData;
 }
 
 const StatusPedido = () => {
@@ -38,12 +54,14 @@ const StatusPedido = () => {
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
   const [showValueDetails, setShowValueDetails] = useState(false);
 
-  // PIX code mock (in production, this would come from Asaas API)
-  const pixCode = "00020101021226830014br.gov.bcb.pix2558pix.asaas.com/qr/v2/cobv/tr-webmarcas-registro5204000053039865802BR5925WEBMARCAS PATENTES EIREL6009SAO PAULO62140510WebMarcas6304E2C8";
+  // Get PIX code from Asaas data
+  const pixCode = orderData?.asaas?.pixQrCode?.payload || "";
+  const pixQrCodeImage = orderData?.asaas?.pixQrCode?.encodedImage || "";
   
-  // Due date - 3 days from now
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + 3);
+  // Due date from Asaas or fallback to 3 days from now
+  const dueDate = orderData?.asaas?.dueDate 
+    ? new Date(orderData.asaas.dueDate) 
+    : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
   useEffect(() => {
     const data = sessionStorage.getItem("orderData");
@@ -59,6 +77,14 @@ const StatusPedido = () => {
   }, [navigate]);
 
   const handleCopyPix = () => {
+    if (!pixCode) {
+      toast({
+        title: "Código PIX não disponível",
+        description: "Aguarde a geração do código PIX.",
+        variant: "destructive",
+      });
+      return;
+    }
     navigator.clipboard.writeText(pixCode);
     setCopied(true);
     toast({
@@ -128,9 +154,9 @@ const StatusPedido = () => {
                   <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
                     <FileText className="w-6 h-6 text-primary" />
                   </div>
-                  <div>
+                <div>
                     <p className="text-2xl font-bold text-primary">
-                      R$ 698,97
+                      R$ {orderData.paymentValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <CreditCard className="w-4 h-4" />
@@ -152,10 +178,20 @@ const StatusPedido = () => {
                     Abra o app do seu banco e aponte a câmera para o QrCode abaixo
                   </p>
                   
-                  {/* QR Code Placeholder - In production, use actual QR code */}
+                  {/* QR Code from Asaas */}
                   <div className="flex justify-center mb-6">
-                    <div className="w-48 h-48 bg-white p-3 rounded-xl border border-border">
-                      <div className="w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIvPjxyZWN0IHg9IjIwIiB5PSIyMCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMDAwIi8+PHJlY3QgeD0iMTQwIiB5PSIyMCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMDAwIi8+PHJlY3QgeD0iMjAiIHk9IjE0MCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMDAwIi8+PHJlY3QgeD0iNzAiIHk9IjcwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIGZpbGw9IiMwMDAiLz48cmVjdCB4PSI4NSIgeT0iODUiIHdpZHRoPSIzMCIgaGVpZ2h0PSIzMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4=')] bg-contain bg-center bg-no-repeat" />
+                    <div className="w-48 h-48 bg-white p-3 rounded-xl border border-border overflow-hidden">
+                      {pixQrCodeImage ? (
+                        <img 
+                          src={`data:image/png;base64,${pixQrCodeImage}`} 
+                          alt="QR Code PIX" 
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm text-center">
+                          QR Code não disponível
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -173,7 +209,7 @@ const StatusPedido = () => {
                     <input
                       type="text"
                       readOnly
-                      value={pixCode.substring(0, 40) + "..."}
+                      value={pixCode ? (pixCode.length > 40 ? pixCode.substring(0, 40) + "..." : pixCode) : "Aguardando geração..."}
                       className="input-styled flex-1 text-sm font-mono"
                     />
                   </div>
@@ -183,6 +219,7 @@ const StatusPedido = () => {
                     size="lg"
                     className="w-full mt-4"
                     onClick={handleCopyPix}
+                    disabled={!pixCode}
                   >
                     {copied ? (
                       <>
@@ -197,6 +234,21 @@ const StatusPedido = () => {
                     )}
                   </Button>
                 </div>
+
+                {/* Link to invoice if available */}
+                {orderData.asaas?.invoiceUrl && (
+                  <div className="mb-6">
+                    <a 
+                      href={orderData.asaas.invoiceUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline flex items-center justify-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Ver fatura completa no Asaas
+                    </a>
+                  </div>
+                )}
 
                 {/* Collapsible Sections */}
                 <div className="space-y-3">
@@ -237,7 +289,7 @@ const StatusPedido = () => {
                     <div className="p-4 bg-secondary/30 rounded-xl text-sm space-y-2">
                       <div className="flex justify-between">
                         <span>Honorários de preparo e registro</span>
-                        <span>R$ 698,97</span>
+                        <span>R$ {orderData.paymentValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>Desconto à vista (43%)</span>
@@ -245,11 +297,16 @@ const StatusPedido = () => {
                       </div>
                       <div className="border-t border-border pt-2 mt-2 flex justify-between font-bold">
                         <span>Total</span>
-                        <span className="text-primary">R$ 698,97</span>
+                        <span className="text-primary">R$ {orderData.paymentValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
                         * Taxas do INPI (GRU) cobradas à parte pelo órgão federal.
                       </p>
+                      {orderData.asaas?.paymentId && (
+                        <p className="text-xs text-muted-foreground">
+                          ID da cobrança: {orderData.asaas.paymentId}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
