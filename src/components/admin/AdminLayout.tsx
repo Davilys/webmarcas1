@@ -2,8 +2,6 @@ import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
@@ -14,9 +12,7 @@ import {
   Bell,
   Settings,
   LogOut,
-  Menu,
   Shield,
-  ChevronRight,
   Scale,
   BookOpen,
   UserPlus,
@@ -27,7 +23,23 @@ import {
   Mail,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
-import { cn } from '@/lib/utils';
+import logoIcon from '@/assets/webmarcas-icon.png';
+import {
+  Sidebar,
+  SidebarProvider,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger,
+  SidebarInset,
+  SidebarGroup,
+  SidebarGroupContent,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -50,10 +62,92 @@ const menuItems = [
   { icon: Settings, label: 'Configurações', href: '/admin/configuracoes' },
 ];
 
-export function AdminLayout({ children }: AdminLayoutProps) {
+function AdminSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast.success('Logout realizado com sucesso');
+    navigate('/cliente/login');
+  };
+
+  return (
+    <Sidebar collapsible="icon" className="border-r">
+      <SidebarHeader className="border-b p-4">
+        <Link to="/admin/dashboard" className="flex items-center gap-2">
+          {isCollapsed ? (
+            <img src={logoIcon} alt="WebMarcas" className="h-8 w-8" />
+          ) : (
+            <img src={logo} alt="WebMarcas" className="h-10" />
+          )}
+        </Link>
+        {!isCollapsed && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-primary">
+            <Shield className="h-4 w-4" />
+            <span className="font-medium">Painel Administrativo</span>
+          </div>
+        )}
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => {
+                const isActive = location.pathname === item.href;
+                const IconComponent = item.icon;
+                
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.label}
+                    >
+                      <Link to={item.href}>
+                        <IconComponent className="h-5 w-5" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Área do Cliente">
+              <Link to="/cliente/dashboard">
+                <Users className="h-5 w-5" />
+                <span>Área do Cliente</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              tooltip="Sair"
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="h-5 w-5" />
+              <span>Sair</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+export function AdminLayout({ children }: AdminLayoutProps) {
+  const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -84,12 +178,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     checkAdmin();
   }, [navigate]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast.success('Logout realizado com sucesso');
-    navigate('/cliente/login');
-  };
-
   if (isAdmin === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -101,99 +189,25 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  const navContent = (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
-        <Link to="/admin/dashboard" className="flex items-center gap-2">
-          <img src={logo} alt="WebMarcas" className="h-10" />
-        </Link>
-        <div className="mt-2 flex items-center gap-2 text-xs text-primary">
-          <Shield className="h-4 w-4" />
-          <span className="font-medium">Painel Administrativo</span>
-        </div>
-      </div>
-
-      <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-1">
-          {menuItems.map((item, index) => {
-            const isActive = location.pathname === item.href;
-            const IconComponent = item.icon;
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground hover:translate-x-1'
-                )}
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                <IconComponent className={cn("h-5 w-5 transition-transform", isActive && "scale-110")} />
-                {item.label}
-                {isActive && <ChevronRight className="ml-auto h-4 w-4 animate-pulse" />}
-              </Link>
-            );
-          })}
-        </nav>
-      </ScrollArea>
-
-      <div className="p-3 border-t space-y-1">
-        <Link
-          to="/cliente/dashboard"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <Users className="h-5 w-5" />
-          Área do Cliente
-        </Link>
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-muted-foreground hover:text-destructive"
-          onClick={handleLogout}
-        >
-          <LogOut className="mr-2 h-5 w-5" />
-          Sair
-        </Button>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-background">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col border-r bg-card">
-        {navContent}
-      </aside>
-
-      {/* Mobile Header */}
-      <header className="lg:hidden sticky top-0 z-50 flex items-center justify-between h-16 px-4 border-b bg-card">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Menu className="h-6 w-6" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64">
-            {navContent}
-          </SheetContent>
-        </Sheet>
-
-        <Link to="/admin/dashboard" className="flex items-center gap-2">
-          <img src={logo} alt="WebMarcas" className="h-8" />
-          <Shield className="h-4 w-4 text-primary" />
-        </Link>
-
-        <Button variant="ghost" size="icon" onClick={() => navigate('/admin/notificacoes')}>
-          <Bell className="h-5 w-5" />
-        </Button>
-      </header>
-
-      {/* Main Content */}
-      <main className="lg:pl-64">
-        <div className="p-6 lg:p-8 animate-page-enter">{children}</div>
-      </main>
-    </div>
+    <SidebarProvider defaultOpen={true}>
+      <div className="min-h-screen flex w-full bg-background">
+        <AdminSidebar />
+        
+        <SidebarInset className="flex-1">
+          <header className="sticky top-0 z-50 flex items-center gap-4 h-14 px-4 border-b bg-card">
+            <SidebarTrigger className="-ml-1" />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Shield className="h-4 w-4 text-primary" />
+              <span className="font-medium">Painel Administrativo</span>
+            </div>
+          </header>
+          
+          <main className="p-6 lg:p-8 animate-page-enter">
+            {children}
+          </main>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }
