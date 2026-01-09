@@ -200,13 +200,17 @@ const RegistrationFormSection = () => {
     setIsSubmitting(true);
 
     try {
-      // Call Asaas edge function to create payment
+      // Generate contract HTML for storage
+      const contractHtml = generateContractHTML();
+
+      // Call Asaas edge function to create payment and lead
       const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
         body: {
           personalData,
           brandData,
           paymentMethod,
           paymentValue,
+          contractHtml,
         },
       });
 
@@ -227,9 +231,14 @@ const RegistrationFormSection = () => {
         brandData,
         paymentMethod,
         paymentValue,
+        contractHtml,
         acceptedAt: new Date().toISOString(),
+        leadId: data.leadId,
+        contractId: data.contractId,
+        contractNumber: data.contractNumber,
         asaas: {
           customerId: data.customerId,
+          asaasCustomerId: data.asaasCustomerId,
           paymentId: data.paymentId,
           status: data.status,
           billingType: data.billingType,
