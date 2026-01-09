@@ -36,7 +36,6 @@ const menuItems = [
   { icon: Users, label: 'Clientes', href: '/admin/clientes' },
   { icon: FileSignature, label: 'Contratos', href: '/admin/contratos' },
   { icon: FileStack, label: 'Modelos de Contrato', href: '/admin/modelos-contrato' },
-  { icon: FileText, label: 'Processos', href: '/admin/processos' },
   { icon: FolderOpen, label: 'Documentos', href: '/admin/documentos' },
   { icon: CreditCard, label: 'Financeiro', href: '/admin/financeiro' },
   { icon: Bell, label: 'Notificações', href: '/admin/notificacoes' },

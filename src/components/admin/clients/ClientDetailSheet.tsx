@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import {
   User, Phone, Mail, Building2, MapPin, DollarSign, Clock, Star,
   FileText, CreditCard, MessageSquare, Calendar, Activity, Paperclip,
@@ -54,16 +55,15 @@ interface ClientInvoice {
   due_date: string;
 }
 
-const PIPELINE_STAGES = [
-  { id: 'protocolado', label: 'Protocolado' },
-  { id: '003', label: '003' },
-  { id: 'oposicao', label: 'Oposição' },
-  { id: 'indeferimento', label: 'Indeferimento' },
-  { id: 'notificacao', label: 'Notificação Extrajudicial' },
-  { id: 'deferimento', label: 'Deferimento' },
-  { id: 'certificados', label: 'Certificados' },
-  { id: 'renovacao', label: 'Renovação' },
-  { id: 'distrato', label: 'Distrato' },
+import { PIPELINE_STAGES } from './ClientKanbanBoard';
+
+const SERVICE_TYPES = [
+  { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI' },
+  { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI' },
+  { id: 'oposicao', label: 'Manifestação de Oposição', description: 'Defesa contra oposição de terceiros' },
+  { id: 'recurso', label: 'Recurso Administrativo', description: 'Recurso contra indeferimento do INPI' },
+  { id: 'renovacao', label: 'Renovação de Marca', description: 'Renovação do registro decenal' },
+  { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido por terceiros' },
 ];
 
 export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: ClientDetailSheetProps) {
@@ -246,7 +246,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
           <TabsList className="grid grid-cols-7 w-full">
             <TabsTrigger value="overview" className="text-xs">Geral</TabsTrigger>
             <TabsTrigger value="contacts" className="text-xs">Contatos</TabsTrigger>
-            <TabsTrigger value="products" className="text-xs">Produtos</TabsTrigger>
+            <TabsTrigger value="services" className="text-xs">Serviços</TabsTrigger>
             <TabsTrigger value="activities" className="text-xs">Atividades</TabsTrigger>
             <TabsTrigger value="notes" className="text-xs">Notas</TabsTrigger>
             <TabsTrigger value="attachments" className="text-xs">Anexos</TabsTrigger>
@@ -359,25 +359,100 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
             </Card>
           </TabsContent>
 
-          <TabsContent value="products" className="space-y-4 mt-4">
+          <TabsContent value="services" className="space-y-4 mt-4">
             <Card>
               <CardContent className="pt-4">
-                <h4 className="font-semibold mb-4">Serviços Contratados</h4>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold">Serviços Contratados</h4>
+                  {editMode && (
+                    <Select 
+                      value={editData.pipeline_stage} 
+                      onValueChange={async (v) => {
+                        setEditData({ ...editData, pipeline_stage: v });
+                        // Auto-save when stage changes
+                        if (client?.process_id) {
+                          await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
+                          toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
+                          onUpdate();
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-48"><SelectValue placeholder="Fase do processo" /></SelectTrigger>
+                      <SelectContent>
+                        {PIPELINE_STAGES.map(s => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <div>
+                              <p className="font-medium">{s.label}</p>
+                              <p className="text-xs text-muted-foreground">{s.description}</p>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
                 {client.brand_name ? (
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Registro de Marca</p>
-                        <p className="text-sm text-muted-foreground">{client.brand_name}</p>
+                  <div className="space-y-4">
+                    {/* Current Process */}
+                    <div className="p-4 border rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-primary" />
+                          <div>
+                            <p className="font-medium">Registro de Marca</p>
+                            <p className="text-sm text-muted-foreground">{client.brand_name}</p>
+                          </div>
+                        </div>
+                        <Badge variant={client.process_status === 'concedido' ? 'default' : 'secondary'}>
+                          {client.process_status || 'Em Andamento'}
+                        </Badge>
                       </div>
-                      <Badge>{client.process_status || 'Em Andamento'}</Badge>
+
+                      {/* Current Stage Info */}
+                      <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                        <p className="text-xs text-muted-foreground mb-1">Fase Atual</p>
+                        <p className="font-semibold text-primary">
+                          {PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'))?.label}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'))?.description}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-green-600 font-medium">
+                          <DollarSign className="h-4 w-4 inline" />
+                          R$ {(client.contract_value || 0).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-2 text-green-600 font-medium">
-                      R$ {(client.contract_value || 0).toLocaleString('pt-BR')} /mês
-                    </p>
+
+                    {/* Service Type Selection */}
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Tipo de Serviço</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {SERVICE_TYPES.map(service => (
+                          <div
+                            key={service.id}
+                            className={cn(
+                              "p-3 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
+                              service.id === 'pedido_registro' ? "border-primary bg-primary/5" : "border-border"
+                            )}
+                          >
+                            <p className="font-medium text-sm">{service.label}</p>
+                            <p className="text-xs text-muted-foreground">{service.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">Nenhum serviço registrado</p>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhum serviço registrado</p>
+                    <p className="text-sm">Adicione um processo de marca para este cliente</p>
+                  </div>
                 )}
               </CardContent>
             </Card>

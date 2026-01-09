@@ -38,16 +38,16 @@ interface ClientKanbanBoardProps {
   filters?: KanbanFilters;
 }
 
-const PIPELINE_STAGES = [
-  { id: 'protocolado', label: 'PROTOCOLADO', color: 'border-l-blue-500', bgColor: 'bg-blue-50' },
-  { id: '003', label: '003', color: 'border-l-yellow-500', bgColor: 'bg-yellow-50' },
-  { id: 'oposicao', label: 'Oposição', color: 'border-l-orange-500', bgColor: 'bg-orange-50' },
-  { id: 'indeferimento', label: 'Indeferimento', color: 'border-l-red-500', bgColor: 'bg-red-50' },
-  { id: 'notificacao', label: 'Notificação Extrajudicial', color: 'border-l-purple-500', bgColor: 'bg-purple-50' },
-  { id: 'deferimento', label: 'Deferimento', color: 'border-l-green-500', bgColor: 'bg-green-50' },
-  { id: 'certificados', label: 'Certificados', color: 'border-l-teal-500', bgColor: 'bg-teal-50' },
-  { id: 'renovacao', label: 'Renovação', color: 'border-l-cyan-500', bgColor: 'bg-cyan-50' },
-  { id: 'distrato', label: 'Distrato', color: 'border-l-gray-500', bgColor: 'bg-gray-50' },
+export const PIPELINE_STAGES = [
+  { id: 'protocolado', label: 'PROTOCOLADO', color: 'border-l-blue-500', bgColor: 'bg-blue-50', description: 'Pedido de registro enviado ao INPI. Aguardando análise inicial.' },
+  { id: '003', label: '003', color: 'border-l-yellow-500', bgColor: 'bg-yellow-50', description: 'Cumprimento de exigência formal. Documentos adicionais solicitados.' },
+  { id: 'oposicao', label: 'Oposição', color: 'border-l-orange-500', bgColor: 'bg-orange-50', description: 'Terceiro contestou o registro. Manifestação necessária.' },
+  { id: 'indeferimento', label: 'Indeferimento', color: 'border-l-red-500', bgColor: 'bg-red-50', description: 'Pedido indeferido. Recurso pode ser interposto.' },
+  { id: 'notificacao', label: 'Notificação Extrajudicial', color: 'border-l-purple-500', bgColor: 'bg-purple-50', description: 'Notificação enviada a terceiros por uso indevido.' },
+  { id: 'deferimento', label: 'Deferimento', color: 'border-l-green-500', bgColor: 'bg-green-50', description: 'Pedido aprovado! Aguardando pagamento da taxa de concessão.' },
+  { id: 'certificados', label: 'Certificados', color: 'border-l-teal-500', bgColor: 'bg-teal-50', description: 'Marca registrada. Certificado emitido pelo INPI.' },
+  { id: 'renovacao', label: 'Renovação', color: 'border-l-cyan-500', bgColor: 'bg-cyan-50', description: 'Próximo da renovação decenal. Ação necessária.' },
+  { id: 'distrato', label: 'Distrato', color: 'border-l-gray-500', bgColor: 'bg-gray-50', description: 'Cliente encerrou contrato ou serviço cancelado.' },
 ];
 
 export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }: ClientKanbanBoardProps) {
@@ -251,6 +251,13 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
                     </>
                   )}
                 </div>
+
+                {/* Stage Description - Only show when expanded */}
+                {!isCollapsed && (
+                  <p className="mb-2 px-2 py-1.5 text-xs text-muted-foreground bg-white/70 rounded border-l-2 border-primary/30">
+                    {stage.description}
+                  </p>
+                )}
 
                 {/* Stage Value - Only show when expanded */}
                 {!isCollapsed && stageValue > 0 && (
