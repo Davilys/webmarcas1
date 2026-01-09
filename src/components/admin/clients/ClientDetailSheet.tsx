@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -8,17 +9,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
-  User, Phone, Mail, Building2, MapPin, DollarSign, Clock, Star,
-  FileText, CreditCard, MessageSquare, Calendar, Activity, Paperclip,
-  Upload, Loader2, ExternalLink, Plus, Trash2
+  User, Phone, Mail, Building2, DollarSign, Clock, Star,
+  FileText, CreditCard, MessageSquare, Calendar as CalendarIcon, Paperclip,
+  Upload, Loader2, ExternalLink, Plus, Edit, X, Check, 
+  MessageCircle, ArrowUpRight, Tag, Zap, AlertTriangle,
+  CheckCircle, XCircle, TrendingUp, Users
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
+import { PIPELINE_STAGES } from './ClientKanbanBoard';
 
 interface ClientDetailSheetProps {
   client: ClientWithProcess | null;
@@ -33,11 +40,12 @@ interface ClientNote {
   created_at: string;
 }
 
-interface ClientActivity {
+interface ClientAppointment {
   id: string;
-  activity_type: string;
-  description: string;
-  created_at: string;
+  title: string;
+  description: string | null;
+  scheduled_at: string;
+  completed: boolean;
 }
 
 interface ClientDocument {
@@ -55,8 +63,6 @@ interface ClientInvoice {
   due_date: string;
 }
 
-import { PIPELINE_STAGES } from './ClientKanbanBoard';
-
 const SERVICE_TYPES = [
   { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI' },
   { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI' },
@@ -66,15 +72,31 @@ const SERVICE_TYPES = [
   { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido por terceiros' },
 ];
 
+const QUICK_ACTIONS = [
+  { id: 'chat', label: 'Chats', icon: MessageCircle, color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
+  { id: 'move', label: 'Mover', icon: ArrowUpRight, color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
+  { id: 'chance', label: 'Marcar Chance', icon: Star, color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
+  { id: 'lost', label: 'Perdido', icon: AlertTriangle, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
+  { id: 'won', label: 'Ganho', icon: CheckCircle, color: 'bg-green-100 text-green-700 hover:bg-green-200' },
+  { id: 'convert', label: 'Converter', icon: Users, color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
+];
+
 export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: ClientDetailSheetProps) {
   const [notes, setNotes] = useState<ClientNote[]>([]);
-  const [activities, setActivities] = useState<ClientActivity[]>([]);
+  const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [invoices, setInvoices] = useState<ClientInvoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [uploading, setUploading] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [showNewAppointment, setShowNewAppointment] = useState(false);
+  const [newAppointment, setNewAppointment] = useState({
+    title: '',
+    description: '',
+    date: new Date(),
+    time: '10:00'
+  });
   const [editData, setEditData] = useState({
     priority: '',
     origin: '',
@@ -99,15 +121,15 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     setLoading(true);
 
     try {
-      const [notesRes, activitiesRes, docsRes, invoicesRes] = await Promise.all([
+      const [notesRes, appointmentsRes, docsRes, invoicesRes] = await Promise.all([
         supabase.from('client_notes').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
-        supabase.from('client_activities').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
+        supabase.from('client_appointments').select('*').eq('user_id', client.id).order('scheduled_at', { ascending: true }),
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false })
       ]);
 
       setNotes(notesRes.data || []);
-      setActivities(activitiesRes.data || []);
+      setAppointments(appointmentsRes.data || []);
       setDocuments(docsRes.data || []);
       setInvoices(invoicesRes.data || []);
     } catch (error) {
@@ -134,6 +156,49 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       fetchClientData();
     } catch (error) {
       toast.error('Erro ao adicionar nota');
+    }
+  };
+
+  const handleCreateAppointment = async () => {
+    if (!newAppointment.title.trim() || !client) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const scheduledAt = new Date(newAppointment.date);
+      const [hours, minutes] = newAppointment.time.split(':');
+      scheduledAt.setHours(parseInt(hours), parseInt(minutes));
+
+      const { error } = await supabase.from('client_appointments').insert({
+        user_id: client.id,
+        admin_id: user?.id,
+        title: newAppointment.title,
+        description: newAppointment.description,
+        scheduled_at: scheduledAt.toISOString()
+      });
+
+      if (error) throw error;
+      toast.success('Agendamento criado!');
+      setShowNewAppointment(false);
+      setNewAppointment({ title: '', description: '', date: new Date(), time: '10:00' });
+      fetchClientData();
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao criar agendamento');
+    }
+  };
+
+  const handleToggleAppointment = async (appointment: ClientAppointment) => {
+    try {
+      const { error } = await supabase
+        .from('client_appointments')
+        .update({ completed: !appointment.completed })
+        .eq('id', appointment.id);
+
+      if (error) throw error;
+      toast.success(appointment.completed ? 'Agendamento reaberto' : 'Agendamento concluído!');
+      fetchClientData();
+    } catch (error) {
+      toast.error('Erro ao atualizar agendamento');
     }
   };
 
@@ -175,14 +240,12 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     if (!client) return;
 
     try {
-      // Update profile
       await supabase.from('profiles').update({
         priority: editData.priority,
         origin: editData.origin,
         contract_value: editData.contract_value
       }).eq('id', client.id);
 
-      // Update process stage if exists
       if (client.process_id) {
         await supabase.from('brand_processes').update({
           pipeline_stage: editData.pipeline_stage
@@ -197,6 +260,30 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     }
   };
 
+  const handleQuickAction = (actionId: string) => {
+    switch (actionId) {
+      case 'chat':
+        if (client?.phone) {
+          const cleanPhone = client.phone.replace(/\D/g, '');
+          window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+        } else {
+          toast.error('Cliente sem telefone');
+        }
+        break;
+      case 'won':
+        toast.success('Cliente marcado como GANHO! 🎉');
+        break;
+      case 'lost':
+        toast.info('Cliente marcado como PERDIDO');
+        break;
+      case 'chance':
+        toast.success('Marcado como alta chance!');
+        break;
+      default:
+        toast.info(`Ação: ${actionId}`);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid': return <Badge className="bg-green-500">Paga</Badge>;
@@ -208,333 +295,579 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
 
   if (!client) return null;
 
+  const currentStage = PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'));
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-        <SheetHeader className="pb-4 border-b">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold">
-              {client.full_name?.charAt(0) || 'C'}
-            </div>
-            <div className="flex-1">
-              <SheetTitle className="flex items-center gap-2">
-                {client.full_name || 'Sem nome'}
-                <Badge className={client.priority === 'high' ? 'bg-red-500' : client.priority === 'low' ? 'bg-green-500' : 'bg-yellow-500'}>
-                  {client.priority === 'high' ? 'Alta' : client.priority === 'low' ? 'Baixa' : 'Média'}
-                </Badge>
-              </SheetTitle>
-              <p className="text-sm text-muted-foreground">ID: {client.id.slice(0, 8)}...</p>
-              <div className="flex gap-2 mt-2">
-                <Badge variant="outline">{client.origin === 'whatsapp' ? 'WhatsApp' : 'Site'}</Badge>
-                <Badge variant="outline">
-                  Etapa: {PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'))?.label}
-                </Badge>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
+        {/* Header with Gradient */}
+        <div className={cn(
+          "p-6 bg-gradient-to-r text-white",
+          currentStage?.color || "from-blue-500 to-blue-600"
+        )}>
+          <SheetHeader>
+            <div className="flex items-start gap-4">
+              <motion.div 
+                className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-2xl font-bold"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 200 }}
+              >
+                {client.full_name?.charAt(0) || 'C'}
+              </motion.div>
+              <div className="flex-1">
+                <SheetTitle className="text-white flex items-center gap-2 text-xl">
+                  {client.full_name || 'Sem nome'}
+                  <Badge className={cn(
+                    "ml-2",
+                    client.priority === 'high' ? 'bg-red-500' : 
+                    client.priority === 'low' ? 'bg-green-500' : 'bg-yellow-500'
+                  )}>
+                    {client.priority === 'high' ? 'Alta' : client.priority === 'low' ? 'Baixa' : 'Média'}
+                  </Badge>
+                </SheetTitle>
+                <p className="text-sm text-white/70 mt-1">ID: {client.id.slice(0, 8)}...</p>
+                <div className="flex gap-2 mt-3">
+                  <Badge variant="secondary" className="bg-white/20 text-white border-0">
+                    {client.origin === 'whatsapp' ? '💬 WhatsApp' : '🌐 Site'}
+                  </Badge>
+                  <Badge variant="secondary" className="bg-white/20 text-white border-0">
+                    📍 {currentStage?.label}
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="bg-white/20 hover:bg-white/30 text-white border-0"
+                  onClick={() => setEditMode(!editMode)}
+                >
+                  {editMode ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+                </Button>
+                {editMode && (
+                  <Button 
+                    size="sm" 
+                    className="bg-white text-primary hover:bg-white/90"
+                    onClick={handleSaveChanges}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditMode(!editMode)}>
-                {editMode ? 'Cancelar' : 'Editar'}
-              </Button>
-              {editMode && (
-                <Button size="sm" onClick={handleSaveChanges}>Salvar</Button>
-              )}
+          </SheetHeader>
+
+          {/* Quick Actions */}
+          <div className="mt-4 pt-4 border-t border-white/20">
+            <p className="text-xs text-white/60 mb-2 flex items-center gap-1">
+              <Zap className="h-3 w-3" /> Ações Rápidas
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_ACTIONS.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <motion.button
+                    key={action.id}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors",
+                      action.color
+                    )}
+                    onClick={() => handleQuickAction(action.id)}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {action.label}
+                  </motion.button>
+                );
+              })}
             </div>
           </div>
-        </SheetHeader>
+        </div>
 
-        <Tabs defaultValue="overview" className="mt-4">
-          <TabsList className="grid grid-cols-7 w-full">
-            <TabsTrigger value="overview" className="text-xs">Geral</TabsTrigger>
-            <TabsTrigger value="contacts" className="text-xs">Contatos</TabsTrigger>
-            <TabsTrigger value="services" className="text-xs">Serviços</TabsTrigger>
-            <TabsTrigger value="activities" className="text-xs">Atividades</TabsTrigger>
-            <TabsTrigger value="notes" className="text-xs">Notas</TabsTrigger>
-            <TabsTrigger value="attachments" className="text-xs">Anexos</TabsTrigger>
-            <TabsTrigger value="financial" className="text-xs">Financeiro</TabsTrigger>
-          </TabsList>
+        {/* Tabs Content */}
+        <div className="p-4">
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid grid-cols-6 w-full mb-4">
+              <TabsTrigger value="overview" className="text-xs">
+                <User className="h-3 w-3 mr-1" />
+                Geral
+              </TabsTrigger>
+              <TabsTrigger value="contacts" className="text-xs">
+                <Phone className="h-3 w-3 mr-1" />
+                Contatos
+              </TabsTrigger>
+              <TabsTrigger value="services" className="text-xs">
+                <FileText className="h-3 w-3 mr-1" />
+                Serviços
+              </TabsTrigger>
+              <TabsTrigger value="appointments" className="text-xs">
+                <CalendarIcon className="h-3 w-3 mr-1" />
+                Agendamentos
+              </TabsTrigger>
+              <TabsTrigger value="attachments" className="text-xs">
+                <Paperclip className="h-3 w-3 mr-1" />
+                Anexos
+              </TabsTrigger>
+              <TabsTrigger value="financial" className="text-xs">
+                <CreditCard className="h-3 w-3 mr-1" />
+                Financeiro
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="overview" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4">
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <Star className="h-4 w-4" />
-                  Status do Lead
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Valor</p>
-                    {editMode ? (
-                      <Input
-                        type="number"
-                        value={editData.contract_value}
-                        onChange={(e) => setEditData({ ...editData, contract_value: Number(e.target.value) })}
-                        className="mt-1"
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-4 mt-0">
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-500" />
+                    Status do Lead
+                    <Badge variant="outline" className="ml-auto">● Aberto</Badge>
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <motion.div 
+                      className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl"
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="h-4 w-4 text-emerald-600" />
+                        <p className="text-xs text-muted-foreground">Valor</p>
+                      </div>
+                      {editMode ? (
+                        <Input
+                          type="number"
+                          value={editData.contract_value}
+                          onChange={(e) => setEditData({ ...editData, contract_value: Number(e.target.value) })}
+                          className="h-8 mt-1"
+                        />
+                      ) : (
+                        <p className="font-bold text-lg text-emerald-600">R$ {(client.contract_value || 0).toLocaleString('pt-BR')}</p>
+                      )}
+                    </motion.div>
+                    <motion.div 
+                      className="p-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/20 dark:to-slate-800/20 rounded-xl"
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock className="h-4 w-4 text-slate-600" />
+                        <p className="text-xs text-muted-foreground">Último Contato</p>
+                      </div>
+                      <p className="font-medium">Nunca</p>
+                    </motion.div>
+                    <motion.div 
+                      className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl"
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Star className="h-4 w-4 text-orange-600" />
+                        <p className="text-xs text-muted-foreground">Prioridade</p>
+                      </div>
+                      {editMode ? (
+                        <Select value={editData.priority} onValueChange={(v) => setEditData({ ...editData, priority: v })}>
+                          <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Baixa</SelectItem>
+                            <SelectItem value="medium">Média</SelectItem>
+                            <SelectItem value="high">Alta</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="font-medium capitalize">{client.priority || 'Média'}</p>
+                      )}
+                    </motion.div>
+                  </div>
+
+                  {/* Tags Section */}
+                  <div className="mt-6 p-4 bg-muted/30 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Tags</span>
+                      </div>
+                      <Button variant="outline" size="sm" className="h-7 text-xs">
+                        <Plus className="h-3 w-3 mr-1" />
+                        Gerenciar
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma tag atribuída. Clique em "Gerenciar" para adicionar tags.
+                    </p>
+                  </div>
+
+                  {/* Notes Section */}
+                  <div className="mt-4">
+                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      Notas Internas
+                    </h4>
+                    <div className="space-y-2 mb-3">
+                      <Textarea
+                        placeholder="Adicionar uma nota interna..."
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        rows={2}
+                        className="resize-none"
                       />
-                    ) : (
-                      <p className="font-bold text-green-600">R$ {(client.contract_value || 0).toLocaleString('pt-BR')}</p>
+                      <Button onClick={handleAddNote} disabled={!newNote.trim()} size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Adicionar Nota
+                      </Button>
+                    </div>
+                    {notes.length > 0 && (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {notes.slice(0, 3).map(note => (
+                          <div key={note.id} className="p-3 bg-muted rounded-lg text-sm">
+                            <p>{note.content}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {format(new Date(note.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Último Contato</p>
-                    <p className="font-medium">Nunca</p>
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Prioridade</p>
-                    {editMode ? (
-                      <Select value={editData.priority} onValueChange={(v) => setEditData({ ...editData, priority: v })}>
-                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Baixa</SelectItem>
-                          <SelectItem value="medium">Média</SelectItem>
-                          <SelectItem value="high">Alta</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <p className="font-medium capitalize">{client.priority || 'Média'}</p>
-                    )}
-                  </div>
-                </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-                {editMode && (
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Origem</Label>
-                      <Select value={editData.origin} onValueChange={(v) => setEditData({ ...editData, origin: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="site">Site</SelectItem>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                        </SelectContent>
-                      </Select>
+            {/* Contacts Tab */}
+            <TabsContent value="contacts" className="space-y-4 mt-0">
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4 space-y-4">
+                  <motion.div 
+                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl"
+                    whileHover={{ x: 5 }}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                      {client.full_name?.charAt(0) || 'C'}
                     </div>
                     <div>
-                      <Label>Etapa do Funil</Label>
-                      <Select value={editData.pipeline_stage} onValueChange={(v) => setEditData({ ...editData, pipeline_stage: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      <p className="text-xs text-muted-foreground">NOME COMPLETO</p>
+                      <p className="font-semibold">{client.full_name || 'Contato'}</p>
+                    </div>
+                  </motion.div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <motion.div 
+                      className="flex items-center gap-3 p-4 border rounded-xl"
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <Mail className="h-5 w-5 text-blue-500" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">EMAIL</p>
+                        <p className="font-medium text-sm">{client.email || 'N/A'}</p>
+                      </div>
+                    </motion.div>
+                    <motion.div 
+                      className="flex items-center gap-3 p-4 border rounded-xl"
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <Building2 className="h-5 w-5 text-purple-500" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">EMPRESA</p>
+                        <p className="font-medium text-sm">{client.company_name || 'N/A'}</p>
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  <motion.div 
+                    className="flex items-center gap-3 p-4 border rounded-xl"
+                    whileHover={{ scale: 1.01 }}
+                  >
+                    <Phone className="h-5 w-5 text-green-500" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground">TELEFONE</p>
+                      <p className="font-medium">{client.phone || 'N/A'}</p>
+                    </div>
+                    {client.phone && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                        onClick={() => {
+                          const cleanPhone = client.phone!.replace(/\D/g, '');
+                          window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+                        }}
+                      >
+                        <MessageCircle className="h-4 w-4 mr-1" />
+                        WhatsApp
+                      </Button>
+                    )}
+                  </motion.div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Services Tab */}
+            <TabsContent value="services" className="space-y-4 mt-0">
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Serviços Contratados
+                    </h4>
+                    {editMode && (
+                      <Select 
+                        value={editData.pipeline_stage} 
+                        onValueChange={async (v) => {
+                          setEditData({ ...editData, pipeline_stage: v });
+                          if (client?.process_id) {
+                            await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
+                            toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
+                            onUpdate();
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-48"><SelectValue placeholder="Fase do processo" /></SelectTrigger>
                         <SelectContent>
                           {PIPELINE_STAGES.map(s => (
                             <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          <TabsContent value="contacts" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4 space-y-4">
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Nome</p>
-                    <p className="font-medium">{client.full_name || '-'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">E-mail</p>
-                    <p className="font-medium">{client.email}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Telefone</p>
-                    <p className="font-medium">{client.phone || '-'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Empresa</p>
-                    <p className="font-medium">{client.company_name || '-'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="services" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold">Serviços Contratados</h4>
-                  {editMode && (
-                    <Select 
-                      value={editData.pipeline_stage} 
-                      onValueChange={async (v) => {
-                        setEditData({ ...editData, pipeline_stage: v });
-                        // Auto-save when stage changes
-                        if (client?.process_id) {
-                          await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
-                          toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
-                          onUpdate();
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-48"><SelectValue placeholder="Fase do processo" /></SelectTrigger>
-                      <SelectContent>
-                        {PIPELINE_STAGES.map(s => (
-                          <SelectItem key={s.id} value={s.id}>
+                  {client.brand_name ? (
+                    <div className="space-y-4">
+                      <motion.div 
+                        className="p-4 border rounded-xl bg-gradient-to-br from-primary/5 to-primary/10"
+                        whileHover={{ scale: 1.01 }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-primary" />
                             <div>
-                              <p className="font-medium">{s.label}</p>
-                              <p className="text-xs text-muted-foreground">{s.description}</p>
+                              <p className="font-medium">Registro de Marca</p>
+                              <p className="text-sm text-muted-foreground">{client.brand_name}</p>
                             </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
+                          </div>
+                          <Badge variant={client.process_status === 'concedido' ? 'default' : 'secondary'}>
+                            {client.process_status || 'Em Andamento'}
+                          </Badge>
+                        </div>
 
-                {client.brand_name ? (
-                  <div className="space-y-4">
-                    {/* Current Process */}
-                    <div className="p-4 border rounded-lg bg-muted/30">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-primary" />
+                        <div className={cn(
+                          "p-3 rounded-lg border",
+                          currentStage?.bgColor,
+                          currentStage?.borderColor
+                        )}>
+                          <p className="text-xs text-muted-foreground mb-1">Fase Atual</p>
+                          <p className={cn("font-semibold", currentStage?.textColor)}>
+                            {currentStage?.label}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {currentStage?.description}
+                          </p>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <p className="text-emerald-600 font-medium">
+                            <DollarSign className="h-4 w-4 inline" />
+                            R$ {(client.contract_value || 0).toLocaleString('pt-BR')}
+                          </p>
+                        </div>
+                      </motion.div>
+
+                      <div>
+                        <Label className="text-sm font-medium mb-2 block">Tipo de Serviço</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {SERVICE_TYPES.map(service => (
+                            <motion.div
+                              key={service.id}
+                              whileHover={{ scale: 1.02 }}
+                              className={cn(
+                                "p-3 rounded-lg border cursor-pointer transition-all",
+                                service.id === 'pedido_registro' ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                              )}
+                            >
+                              <p className="font-medium text-sm">{service.label}</p>
+                              <p className="text-xs text-muted-foreground">{service.description}</p>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Nenhum serviço registrado</p>
+                      <p className="text-sm">Adicione um processo de marca para este cliente</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Appointments Tab - NEW */}
+            <TabsContent value="appointments" className="space-y-4 mt-0">
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        Agendamentos do Lead
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        Gerencie todos os compromissos e reuniões relacionados a este lead
+                      </p>
+                    </div>
+                    <Dialog open={showNewAppointment} onOpenChange={setShowNewAppointment}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-blue-600 hover:bg-blue-700">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Novo Agendamento
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Criar Agendamento</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
                           <div>
-                            <p className="font-medium">Registro de Marca</p>
-                            <p className="text-sm text-muted-foreground">{client.brand_name}</p>
+                            <Label>Título</Label>
+                            <Input 
+                              placeholder="Ex: Reunião de apresentação"
+                              value={newAppointment.title}
+                              onChange={(e) => setNewAppointment({ ...newAppointment, title: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Descrição</Label>
+                            <Textarea 
+                              placeholder="Detalhes do agendamento..."
+                              value={newAppointment.description}
+                              onChange={(e) => setNewAppointment({ ...newAppointment, description: e.target.value })}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label>Data</Label>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {format(newAppointment.date, "dd/MM/yyyy")}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={newAppointment.date}
+                                    onSelect={(date) => date && setNewAppointment({ ...newAppointment, date })}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <div>
+                              <Label>Horário</Label>
+                              <Input 
+                                type="time"
+                                value={newAppointment.time}
+                                onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
+                              />
+                            </div>
                           </div>
                         </div>
-                        <Badge variant={client.process_status === 'concedido' ? 'default' : 'secondary'}>
-                          {client.process_status || 'Em Andamento'}
-                        </Badge>
-                      </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setShowNewAppointment(false)}>Cancelar</Button>
+                          <Button onClick={handleCreateAppointment}>Criar Agendamento</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
 
-                      {/* Current Stage Info */}
-                      <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-                        <p className="text-xs text-muted-foreground mb-1">Fase Atual</p>
-                        <p className="font-semibold text-primary">
-                          {PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'))?.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'))?.description}
-                        </p>
+                  {loading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                  ) : appointments.length === 0 ? (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-center py-12"
+                    >
+                      <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+                        <CalendarIcon className="h-10 w-10 text-blue-500" />
                       </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <p className="text-green-600 font-medium">
-                          <DollarSign className="h-4 w-4 inline" />
-                          R$ {(client.contract_value || 0).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Service Type Selection */}
-                    <div>
-                      <Label className="text-sm font-medium mb-2 block">Tipo de Serviço</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {SERVICE_TYPES.map(service => (
-                          <div
-                            key={service.id}
+                      <p className="font-medium text-lg mb-1">Nenhum agendamento encontrado</p>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Este lead ainda não possui agendamentos vinculados.
+                      </p>
+                      <Button 
+                        className="bg-blue-600 hover:bg-blue-700"
+                        onClick={() => setShowNewAppointment(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Criar Primeiro Agendamento
+                      </Button>
+                    </motion.div>
+                  ) : (
+                    <div className="space-y-3">
+                      <AnimatePresence>
+                        {appointments.map((apt, index) => (
+                          <motion.div
+                            key={apt.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
                             className={cn(
-                              "p-3 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
-                              service.id === 'pedido_registro' ? "border-primary bg-primary/5" : "border-border"
+                              "flex items-center gap-4 p-4 border rounded-xl transition-all",
+                              apt.completed 
+                                ? "bg-green-50 border-green-200 dark:bg-green-900/20" 
+                                : "bg-white dark:bg-slate-900 hover:shadow-md"
                             )}
                           >
-                            <p className="font-medium text-sm">{service.label}</p>
-                            <p className="text-xs text-muted-foreground">{service.description}</p>
-                          </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-8 w-8 rounded-full",
+                                apt.completed ? "bg-green-500 text-white" : "border-2"
+                              )}
+                              onClick={() => handleToggleAppointment(apt)}
+                            >
+                              {apt.completed && <Check className="h-4 w-4" />}
+                            </Button>
+                            <div className="flex-1">
+                              <p className={cn(
+                                "font-medium",
+                                apt.completed && "line-through text-muted-foreground"
+                              )}>
+                                {apt.title}
+                              </p>
+                              {apt.description && (
+                                <p className="text-sm text-muted-foreground">{apt.description}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-sm">
+                                {format(new Date(apt.scheduled_at), "dd/MM/yyyy")}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(apt.scheduled_at), "HH:mm")}
+                              </p>
+                            </div>
+                          </motion.div>
                         ))}
-                      </div>
+                      </AnimatePresence>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Nenhum serviço registrado</p>
-                    <p className="text-sm">Adicione um processo de marca para este cliente</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <TabsContent value="activities" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4">
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <Activity className="h-4 w-4" />
-                  Histórico de Atividades
-                </h4>
-                {loading ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                ) : activities.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">Nenhuma atividade registrada</p>
-                ) : (
-                  <div className="space-y-3">
-                    {activities.map(act => (
-                      <div key={act.id} className="p-3 bg-muted rounded-lg">
-                        <p className="font-medium text-sm">{act.activity_type}</p>
-                        <p className="text-sm text-muted-foreground">{act.description}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(act.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="notes" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4">
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Notas Internas
-                </h4>
-                <div className="space-y-3 mb-4">
-                  <Textarea
-                    placeholder="Adicionar uma nota interna..."
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    rows={3}
-                  />
-                  <Button onClick={handleAddNote} disabled={!newNote.trim()}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Nota
-                  </Button>
-                </div>
-                {loading ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                ) : notes.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">Nenhuma nota</p>
-                ) : (
-                  <div className="space-y-3">
-                    {notes.map(note => (
-                      <div key={note.id} className="p-3 bg-muted rounded-lg">
-                        <p className="text-sm">{note.content}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(note.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="attachments" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold flex items-center gap-2">
-                    <Paperclip className="h-4 w-4" />
-                    Anexos do Lead
-                  </h4>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={fetchClientData}>Atualizar</Button>
+            {/* Attachments Tab */}
+            <TabsContent value="attachments" className="space-y-4 mt-0">
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Anexos do Lead
+                    </h4>
                     <label>
                       <Button size="sm" className="bg-orange-500 hover:bg-orange-600" disabled={uploading} asChild>
                         <span>
@@ -545,86 +878,123 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                       <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
                     </label>
                   </div>
-                </div>
 
-                {loading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                ) : documents.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-100 flex items-center justify-center">
-                      <Paperclip className="h-8 w-8 text-orange-500" />
+                  {loading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                  ) : documents.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-100 flex items-center justify-center">
+                        <Paperclip className="h-8 w-8 text-orange-500" />
+                      </div>
+                      <p className="font-medium">Nenhum anexo ainda</p>
+                      <p className="text-sm text-muted-foreground">Adicione documentos, imagens ou arquivos relacionados a este lead.</p>
+                      <label>
+                        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Adicionar Primeiro Anexo
+                          </span>
+                        </Button>
+                        <input type="file" className="hidden" onChange={handleFileUpload} />
+                      </label>
                     </div>
-                    <p className="font-medium">Nenhum anexo ainda</p>
-                    <p className="text-sm text-muted-foreground">Adicione documentos, imagens ou arquivos relacionados a este lead.</p>
-                    <label>
-                      <Button className="mt-4 bg-orange-500 hover:bg-orange-600" asChild>
-                        <span>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Adicionar Primeiro Anexo
-                        </span>
-                      </Button>
-                      <input type="file" className="hidden" onChange={handleFileUpload} />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {documents.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <div className="space-y-2">
+                      {documents.map(doc => (
+                        <motion.div 
+                          key={doc.id} 
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                          whileHover={{ x: 5 }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-5 w-5 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(doc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                              </p>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="icon" asChild>
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Financial Tab */}
+            <TabsContent value="financial" className="space-y-4 mt-0">
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    Faturas
+                  </h4>
+                  {loading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                  ) : invoices.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">Nenhuma fatura</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {invoices.map(inv => (
+                        <motion.div 
+                          key={inv.id} 
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                          whileHover={{ scale: 1.01 }}
+                        >
                           <div>
-                            <p className="font-medium text-sm">{doc.name}</p>
+                            <p className="font-medium text-sm">{inv.description}</p>
                             <p className="text-xs text-muted-foreground">
-                              {format(new Date(doc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                              Vence: {format(new Date(inv.due_date), "dd/MM/yyyy", { locale: ptBR })}
                             </p>
                           </div>
-                        </div>
-                        <Button variant="ghost" size="icon" asChild>
-                          <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                          <div className="text-right">
+                            <p className="font-bold">R$ {Number(inv.amount).toLocaleString('pt-BR')}</p>
+                            {getStatusBadge(inv.status)}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
 
-          <TabsContent value="financial" className="space-y-4 mt-4">
-            <Card>
-              <CardContent className="pt-4">
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Faturas
-                </h4>
-                {loading ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                ) : invoices.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">Nenhuma fatura</p>
-                ) : (
-                  <div className="space-y-3">
-                    {invoices.map(inv => (
-                      <div key={inv.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-medium text-sm">{inv.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Vence: {format(new Date(inv.due_date), "dd/MM/yyyy", { locale: ptBR })}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold">R$ {Number(inv.amount).toLocaleString('pt-BR')}</p>
-                          {getStatusBadge(inv.status)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Footer */}
+        <div className="sticky bottom-0 p-4 bg-background border-t flex items-center justify-between">
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              Aberto
+            </span>
+            <span>$ R$ {(client.contract_value || 0).toLocaleString('pt-BR')}</span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Nunca
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button variant="outline" className="gap-2">
+              <ExternalLink className="h-4 w-4" />
+              Ver Completo
+            </Button>
+            <Button onClick={() => setEditMode(true)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );
