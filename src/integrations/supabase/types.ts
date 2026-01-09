@@ -1184,6 +1184,44 @@ export type Database = {
           },
         ]
       }
+      notification_logs: {
+        Row: {
+          channel: string
+          error_message: string | null
+          id: string
+          notification_id: string | null
+          recipient: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          channel: string
+          error_message?: string | null
+          id?: string
+          notification_id?: string | null
+          recipient?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          channel?: string
+          error_message?: string | null
+          id?: string
+          notification_id?: string | null
+          recipient?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_logs_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_templates: {
         Row: {
           category: string
@@ -1225,6 +1263,7 @@ export type Database = {
       }
       notifications: {
         Row: {
+          channels: Json | null
           created_at: string | null
           id: string
           link: string | null
@@ -1235,6 +1274,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          channels?: Json | null
           created_at?: string | null
           id?: string
           link?: string | null
@@ -1245,6 +1285,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          channels?: Json | null
           created_at?: string | null
           id?: string
           link?: string | null
@@ -1561,6 +1602,33 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_config: {
+        Row: {
+          api_key: string
+          company_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          api_key: string
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          api_key?: string
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
         }
         Relationships: []
       }
