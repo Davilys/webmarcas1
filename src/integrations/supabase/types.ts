@@ -1611,7 +1611,9 @@ export type Database = {
           company_id: string | null
           created_at: string | null
           id: string
+          instance_name: string | null
           is_active: boolean | null
+          server_url: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1619,7 +1621,9 @@ export type Database = {
           company_id?: string | null
           created_at?: string | null
           id?: string
+          instance_name?: string | null
           is_active?: boolean | null
+          server_url?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1627,7 +1631,9 @@ export type Database = {
           company_id?: string | null
           created_at?: string | null
           id?: string
+          instance_name?: string | null
           is_active?: boolean | null
+          server_url?: string | null
           updated_at?: string | null
         }
         Relationships: []
