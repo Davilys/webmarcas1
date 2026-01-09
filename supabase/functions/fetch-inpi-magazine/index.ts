@@ -118,36 +118,31 @@ interface ExtractedProcess {
   publicationDate: string | null;
 }
 
-// Parse INPI XML structure - handles official format
+// Parse INPI XML structure - OPTIMIZED for memory efficiency
 function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] {
   const processes: ExtractedProcess[] = [];
   console.log(`Parsing XML content, size: ${xmlContent.length} bytes`);
   
-  // Check if XML contains our attorney name at all
+  // Check if XML contains our attorney name at all (quick check)
   if (!containsAttorney(xmlContent)) {
     console.log('Attorney name not found in XML content');
     return [];
   }
   
-  console.log('Attorney name found in XML! Extracting processes...');
+  console.log('Attorney name found in XML! Extracting processes with memory-efficient approach...');
   
-  // Helper to extract text content from XML tags and clean nested tags
+  // Helper to extract text content from XML tags
   const extractTagContent = (xml: string, tagName: string): string | null => {
-    // Try with attributes
     const regex1 = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
     const match1 = xml.match(regex1);
     if (match1) {
       let content = match1[1].trim();
-      // Clean any nested XML tags
       content = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       return content || null;
     }
-    
-    // Try self-closing with attribute value
     const regex2 = new RegExp(`<${tagName}[^>]*\\s+(?:nome|valor|texto)[^>]*=["']([^"']+)["']`, 'i');
     const match2 = xml.match(regex2);
     if (match2) return match2[1].trim();
-    
     return null;
   };
   
@@ -157,116 +152,90 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
     return match ? match[1].trim() : null;
   };
   
-  // Try to find <revista> tag for date info
-  const revistaMatch = xmlContent.match(/<revista[^>]*data[^>]*=["']([^"']+)["']/i);
+  // Get publication date from revista tag (just first occurrence)
+  const revistaMatch = xmlContent.slice(0, 2000).match(/<revista[^>]*data[^>]*=["']([^"']+)["']/i);
   const publicationDate = revistaMatch ? revistaMatch[1] : null;
   
-  // Find all process blocks - INPI uses <processo> tags
-  const processPatterns = [
-    /<processo[^>]*numero[^>]*=["'](\d+)["'][^>]*>([\s\S]*?)<\/processo>/gi,
-    /<processo[^>]*>([\s\S]*?)<\/processo>/gi,
-    /<despacho[^>]*>([\s\S]*?)<\/despacho>/gi,
-  ];
+  // MEMORY EFFICIENT: Use split to find processo blocks containing attorney name
+  // Split by </processo> to get individual blocks
+  const processoEndTag = '</processo>';
+  const chunks = xmlContent.split(processoEndTag);
   
-  let allBlocks: Array<{ number: string | null; content: string }> = [];
+  console.log(`Split into ${chunks.length} chunks for processing`);
   
-  // Pattern 1: processo with numero attribute
-  const pattern1 = /<processo[^>]*numero[^>]*=["'](\d+)["'][^>]*>([\s\S]*?)<\/processo>/gi;
-  let match;
-  while ((match = pattern1.exec(xmlContent)) !== null) {
-    allBlocks.push({ number: match[1], content: match[0] });
-  }
-  
-  // Pattern 2: processo without numero attribute
-  if (allBlocks.length === 0) {
-    const pattern2 = /<processo[^>]*>([\s\S]*?)<\/processo>/gi;
-    while ((match = pattern2.exec(xmlContent)) !== null) {
-      const numberMatch = match[1].match(/(\d{9,12})/);
-      allBlocks.push({ number: numberMatch ? numberMatch[1] : null, content: match[0] });
-    }
-  }
-  
-  // Pattern 3: Split by process number patterns if no XML structure
-  if (allBlocks.length === 0) {
-    console.log('No standard XML blocks found, trying text-based extraction...');
+  // Process each chunk that contains attorney name
+  let processedCount = 0;
+  for (let i = 0; i < chunks.length - 1; i++) { // -1 because last chunk is after final </processo>
+    const chunk = chunks[i];
     
-    // Split by process numbers
-    const parts = xmlContent.split(/(?=\d{9,12})/);
-    for (const part of parts) {
-      const numMatch = part.match(/^(\d{9,12})/);
-      if (numMatch && containsAttorney(part)) {
-        allBlocks.push({ number: numMatch[1], content: part });
-      }
-    }
-  }
-  
-  console.log(`Found ${allBlocks.length} potential process blocks`);
-  
-  // Process each block
-  for (const block of allBlocks) {
-    // Check if this block belongs to our attorney
-    if (!containsAttorney(block.content)) continue;
+    // Skip if this chunk doesn't contain attorney name
+    if (!containsAttorney(chunk)) continue;
     
-    // Extract or use the process number
-    let processNumber = block.number;
-    if (!processNumber) {
-      const numMatch = block.content.match(/(\d{9,12})/);
-      if (!numMatch) continue;
-      processNumber = numMatch[1];
+    // Find the start of this processo block
+    const processoStart = chunk.lastIndexOf('<processo');
+    if (processoStart === -1) continue;
+    
+    // Extract just this processo block
+    const block = chunk.substring(processoStart) + processoEndTag;
+    
+    // Extract process number from the block
+    let processNumber: string | null = null;
+    const numAttrMatch = block.match(/numero\s*=\s*["'](\d+)["']/i);
+    if (numAttrMatch) {
+      processNumber = numAttrMatch[1];
+    } else {
+      const numMatch = block.match(/(\d{9,12})/);
+      if (numMatch) processNumber = numMatch[1];
     }
+    
+    if (!processNumber) continue;
     
     const cleanNumber = processNumber.replace(/\D/g, '');
     
     // Avoid duplicates
     if (processes.some(p => p.processNumber === cleanNumber)) continue;
     
-    // Extract brand name - clean up XML tags from content
+    // Extract brand name
     let brandName = 
-      extractTagContent(block.content, 'marca') ||
-      extractTagContent(block.content, 'nome') ||
-      extractTagContent(block.content, 'denominacao') ||
-      extractAttribute(block.content, 'marca', 'nome') ||
-      extractAttribute(block.content, 'marca', 'apresentacao');
+      extractTagContent(block, 'marca') ||
+      extractTagContent(block, 'nome') ||
+      extractTagContent(block, 'denominacao') ||
+      extractAttribute(block, 'marca', 'nome') ||
+      extractAttribute(block, 'marca', 'apresentacao');
     
     // Clean up any nested XML tags from brand name
     if (brandName) {
-      // Remove any XML tags like <nome>...</nome> from the content
       brandName = brandName.replace(/<[^>]+>/g, '').trim();
-      // Also extract from <nome> if present
-      const nomeMatch = brandName.match(/<nome>([^<]+)<\/nome>/i);
-      if (nomeMatch) {
-        brandName = nomeMatch[1].trim();
-      }
     }
     
     // Extract holder name  
     const holderName =
-      extractAttribute(block.content, 'titular', 'nome-razao-social') ||
-      extractTagContent(block.content, 'titular') ||
-      extractTagContent(block.content, 'requerente') ||
-      extractTagContent(block.content, 'depositante');
+      extractAttribute(block, 'titular', 'nome-razao-social') ||
+      extractTagContent(block, 'titular') ||
+      extractTagContent(block, 'requerente') ||
+      extractTagContent(block, 'depositante');
     
     // Extract dispatch info
     const dispatchCode =
-      extractAttribute(block.content, 'despacho', 'codigo') ||
-      extractTagContent(block.content, 'codigo') ||
-      extractTagContent(block.content, 'cod-despacho');
+      extractAttribute(block, 'despacho', 'codigo') ||
+      extractTagContent(block, 'codigo') ||
+      extractTagContent(block, 'cod-despacho');
     
     const dispatchText =
-      extractTagContent(block.content, 'texto-complementar') ||
-      extractTagContent(block.content, 'descricao') ||
-      extractTagContent(block.content, 'texto');
+      extractTagContent(block, 'texto-complementar') ||
+      extractTagContent(block, 'descricao') ||
+      extractTagContent(block, 'texto');
     
     // Extract NCL classes
-    const nclMatches = block.content.match(/<classe-nice[^>]*codigo[^>]*=["'](\d+)["']/gi) || [];
-    const nclClasses = nclMatches.map(m => {
+    const nclMatches = block.match(/<classe-nice[^>]*codigo[^>]*=["'](\d+)["']/gi) || [];
+    const nclClasses: string[] = nclMatches.map((m: string) => {
       const codeMatch = m.match(/codigo[^>]*=["'](\d+)["']/i);
       return codeMatch ? codeMatch[1] : '';
     }).filter(Boolean);
     
     // If no structured classes, try to find class numbers in text
     if (nclClasses.length === 0) {
-      const classMatch = block.content.match(/classe[s]?\s*:?\s*([\d,\s]+)/i);
+      const classMatch = block.match(/classe[s]?\s*:?\s*([\d,\s]+)/i);
       if (classMatch) {
         const nums = classMatch[1].match(/\d+/g);
         if (nums) nclClasses.push(...nums);
@@ -289,7 +258,7 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
     });
   }
   
-  console.log(`Extracted ${processes.length} processes for attorney`);
+  console.log(`Processed ${processedCount} chunks, extracted ${processes.length} processes for attorney`);
   return processes;
 }
 
