@@ -199,9 +199,12 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
                   <div className="flex items-center justify-center p-4 bg-white rounded border">
                     <div className="text-center">
                       <p className="text-xs text-gray-500 mb-2">QR Code de Verificação</p>
-                      <div className="w-24 h-24 bg-gray-100 flex items-center justify-center">
-                        <span className="text-xs text-gray-400">QR</span>
-                      </div>
+                      <QRCodeSVG 
+                        value={`${VERIFICATION_BASE_URL}?hash=${blockchainSignature.hash}`}
+                        size={96}
+                        level="M"
+                        includeMargin={false}
+                      />
                     </div>
                   </div>
                 </div>
