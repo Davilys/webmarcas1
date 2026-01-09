@@ -1,15 +1,20 @@
 import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Eye, MessageCircle, Mail, Phone, Building2, DollarSign, 
-  ChevronDown, ChevronRight, GripVertical, ExternalLink 
+  ChevronDown, ChevronRight, GripVertical, Star, Calendar,
+  MoreHorizontal, Trash2, UserPlus, CheckCircle, XCircle,
+  ArrowRight, Sparkles, Clock, Hash
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export interface ClientWithProcess {
   id: string;
@@ -24,6 +29,8 @@ export interface ClientWithProcess {
   brand_name: string | null;
   pipeline_stage: string | null;
   process_status: string | null;
+  created_at?: string;
+  last_contact?: string;
 }
 
 export interface KanbanFilters {
@@ -39,21 +46,29 @@ interface ClientKanbanBoardProps {
 }
 
 export const PIPELINE_STAGES = [
-  { id: 'protocolado', label: 'PROTOCOLADO', color: 'border-l-blue-500', bgColor: 'bg-blue-50', description: 'Pedido de registro enviado ao INPI. Aguardando análise inicial.' },
-  { id: '003', label: '003', color: 'border-l-yellow-500', bgColor: 'bg-yellow-50', description: 'Cumprimento de exigência formal. Documentos adicionais solicitados.' },
-  { id: 'oposicao', label: 'Oposição', color: 'border-l-orange-500', bgColor: 'bg-orange-50', description: 'Terceiro contestou o registro. Manifestação necessária.' },
-  { id: 'indeferimento', label: 'Indeferimento', color: 'border-l-red-500', bgColor: 'bg-red-50', description: 'Pedido indeferido. Recurso pode ser interposto.' },
-  { id: 'notificacao', label: 'Notificação Extrajudicial', color: 'border-l-purple-500', bgColor: 'bg-purple-50', description: 'Notificação enviada a terceiros por uso indevido.' },
-  { id: 'deferimento', label: 'Deferimento', color: 'border-l-green-500', bgColor: 'bg-green-50', description: 'Pedido aprovado! Aguardando pagamento da taxa de concessão.' },
-  { id: 'certificados', label: 'Certificados', color: 'border-l-teal-500', bgColor: 'bg-teal-50', description: 'Marca registrada. Certificado emitido pelo INPI.' },
-  { id: 'renovacao', label: 'Renovação', color: 'border-l-cyan-500', bgColor: 'bg-cyan-50', description: 'Próximo da renovação decenal. Ação necessária.' },
-  { id: 'distrato', label: 'Distrato', color: 'border-l-gray-500', bgColor: 'bg-gray-50', description: 'Cliente encerrou contrato ou serviço cancelado.' },
+  { id: 'protocolado', label: 'PROTOCOLADO', color: 'from-blue-500 to-blue-600', borderColor: 'border-blue-500', bgColor: 'bg-blue-50 dark:bg-blue-950/30', textColor: 'text-blue-700 dark:text-blue-300', description: 'Pedido de registro enviado ao INPI. Aguardando análise inicial.' },
+  { id: '003', label: '003', color: 'from-yellow-500 to-amber-500', borderColor: 'border-yellow-500', bgColor: 'bg-yellow-50 dark:bg-yellow-950/30', textColor: 'text-yellow-700 dark:text-yellow-300', description: 'Cumprimento de exigência formal. Documentos adicionais solicitados.' },
+  { id: 'oposicao', label: 'Oposição', color: 'from-orange-500 to-orange-600', borderColor: 'border-orange-500', bgColor: 'bg-orange-50 dark:bg-orange-950/30', textColor: 'text-orange-700 dark:text-orange-300', description: 'Terceiro contestou o registro. Manifestação necessária.' },
+  { id: 'indeferimento', label: 'Indeferimento', color: 'from-red-500 to-red-600', borderColor: 'border-red-500', bgColor: 'bg-red-50 dark:bg-red-950/30', textColor: 'text-red-700 dark:text-red-300', description: 'Pedido indeferido. Recurso pode ser interposto.' },
+  { id: 'notificacao', label: 'Notificação Extrajudicial', color: 'from-purple-500 to-purple-600', borderColor: 'border-purple-500', bgColor: 'bg-purple-50 dark:bg-purple-950/30', textColor: 'text-purple-700 dark:text-purple-300', description: 'Notificação enviada a terceiros por uso indevido.' },
+  { id: 'deferimento', label: 'Deferimento', color: 'from-emerald-500 to-emerald-600', borderColor: 'border-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/30', textColor: 'text-emerald-700 dark:text-emerald-300', description: 'Pedido aprovado! Aguardando pagamento da taxa de concessão.' },
+  { id: 'certificados', label: 'Certificados', color: 'from-teal-500 to-teal-600', borderColor: 'border-teal-500', bgColor: 'bg-teal-50 dark:bg-teal-950/30', textColor: 'text-teal-700 dark:text-teal-300', description: 'Marca registrada. Certificado emitido pelo INPI.' },
+  { id: 'renovacao', label: 'Renovação', color: 'from-cyan-500 to-cyan-600', borderColor: 'border-cyan-500', bgColor: 'bg-cyan-50 dark:bg-cyan-950/30', textColor: 'text-cyan-700 dark:text-cyan-300', description: 'Próximo da renovação decenal. Ação necessária.' },
+  { id: 'distrato', label: 'Distrato', color: 'from-gray-500 to-gray-600', borderColor: 'border-gray-500', bgColor: 'bg-gray-50 dark:bg-gray-950/30', textColor: 'text-gray-700 dark:text-gray-300', description: 'Cliente encerrou contrato ou serviço cancelado.' },
 ];
+
+const ORIGIN_CONFIG: Record<string, { icon: typeof MessageCircle; color: string; bg: string; label: string }> = {
+  'whatsapp': { icon: MessageCircle, color: 'text-green-600', bg: 'bg-green-100', label: 'WA' },
+  'site': { icon: Building2, color: 'text-blue-600', bg: 'bg-blue-100', label: 'Site' },
+  'instagram': { icon: Sparkles, color: 'text-pink-600', bg: 'bg-pink-100', label: 'IG' },
+  'indicacao': { icon: UserPlus, color: 'text-purple-600', bg: 'bg-purple-100', label: 'Ind' },
+};
 
 export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }: ClientKanbanBoardProps) {
   const [draggedClient, setDraggedClient] = useState<ClientWithProcess | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   // Apply filters
   const filteredClients = useMemo(() => {
@@ -71,14 +86,9 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
   const handleDragStart = (e: React.DragEvent, client: ClientWithProcess) => {
     setDraggedClient(client);
     e.dataTransfer.effectAllowed = 'move';
-    // Add drag image styling
-    const target = e.target as HTMLElement;
-    target.classList.add('opacity-50');
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
-    const target = e.target as HTMLElement;
-    target.classList.remove('opacity-50');
+  const handleDragEnd = () => {
     setDraggedClient(null);
     setDragOverStage(null);
   };
@@ -117,7 +127,7 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
       if (error) throw error;
       
       const stageName = PIPELINE_STAGES.find(s => s.id === stageId)?.label;
-      toast.success(`Cliente movido para ${stageName}`);
+      toast.success(`✅ Cliente movido para ${stageName}`);
       onRefresh();
     } catch (error) {
       console.error('Error moving client:', error);
@@ -146,20 +156,11 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
     });
   };
 
-  const getPriorityBadge = (priority: string | null) => {
+  const getPriorityConfig = (priority: string | null) => {
     switch (priority) {
-      case 'high': return <Badge className="bg-red-500 text-white text-xs">ALTA</Badge>;
-      case 'medium': return <Badge className="bg-yellow-500 text-white text-xs">MÉDIA</Badge>;
-      case 'low': return <Badge className="bg-green-500 text-white text-xs">BAIXA</Badge>;
-      default: return <Badge variant="secondary" className="text-xs">MÉDIA</Badge>;
-    }
-  };
-
-  const getOriginBadge = (origin: string | null) => {
-    switch (origin) {
-      case 'whatsapp': return <Badge variant="outline" className="text-xs border-green-500 text-green-600">WhatsApp</Badge>;
-      case 'site': return <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">Site</Badge>;
-      default: return <Badge variant="outline" className="text-xs">Site</Badge>;
+      case 'high': return { label: 'HIGH', color: 'bg-red-500 text-white', ring: 'ring-red-400' };
+      case 'low': return { label: 'LOW', color: 'bg-green-500 text-white', ring: 'ring-green-400' };
+      default: return { label: 'MEDIUM', color: 'bg-yellow-500 text-white', ring: 'ring-yellow-400' };
     }
   };
 
@@ -178,37 +179,56 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
 
   return (
     <div className="space-y-4">
-      {/* Summary Stats */}
-      <div className="flex flex-wrap gap-4 justify-end">
-        <div className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
-          <span className="text-sm text-muted-foreground">Clientes:</span>
+      {/* Summary Stats - Animated */}
+      <motion.div 
+        className="flex flex-wrap gap-3 justify-end"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <motion.div 
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm border"
+          whileHover={{ scale: 1.02 }}
+        >
+          <Building2 className="h-4 w-4 text-slate-600" />
+          <span className="text-sm text-muted-foreground">Total:</span>
           <span className="font-bold">{filteredClients.length}</span>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg">
-          <DollarSign className="h-4 w-4" />
-          <span className="text-sm">Valor Total:</span>
-          <span className="font-bold">R$ {totalValue.toLocaleString('pt-BR')}</span>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg">
-          <span className="text-sm">Ativos:</span>
-          <span className="font-bold">{activeClients}</span>
-        </div>
-      </div>
+        </motion.div>
+        <motion.div 
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-950/30 rounded-xl shadow-sm border border-emerald-200 dark:border-emerald-800"
+          whileHover={{ scale: 1.02 }}
+        >
+          <DollarSign className="h-4 w-4 text-emerald-600" />
+          <span className="text-sm text-emerald-700 dark:text-emerald-300">Valor:</span>
+          <span className="font-bold text-emerald-700 dark:text-emerald-300">R$ {totalValue.toLocaleString('pt-BR')}</span>
+        </motion.div>
+        <motion.div 
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-950/30 rounded-xl shadow-sm border border-blue-200 dark:border-blue-800"
+          whileHover={{ scale: 1.02 }}
+        >
+          <CheckCircle className="h-4 w-4 text-blue-600" />
+          <span className="text-sm text-blue-700 dark:text-blue-300">Ativos:</span>
+          <span className="font-bold text-blue-700 dark:text-blue-300">{activeClients}</span>
+        </motion.div>
+      </motion.div>
 
       {/* Kanban Board */}
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {PIPELINE_STAGES.map((stage) => {
+      <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
+        {PIPELINE_STAGES.map((stage, stageIndex) => {
           const stageClients = getClientsForStage(stage.id);
           const stageValue = getStageValue(stage.id);
           const isCollapsed = collapsedStages.has(stage.id);
           const isDragOver = dragOverStage === stage.id;
 
           return (
-            <div
+            <motion.div
               key={stage.id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: stageIndex * 0.05 }}
               className={cn(
-                "flex-shrink-0 transition-all duration-200",
-                isCollapsed ? "w-14" : "w-72"
+                "flex-shrink-0 transition-all duration-300",
+                isCollapsed ? "w-14" : "w-80"
               )}
               onDragOver={(e) => handleDragOver(e, stage.id)}
               onDragLeave={handleDragLeave}
@@ -216,164 +236,292 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
             >
               <div 
                 className={cn(
-                  "rounded-lg p-3 min-h-[500px] border-l-4 transition-all duration-200",
-                  stage.color,
-                  isDragOver ? `${stage.bgColor} ring-2 ring-primary ring-offset-2` : "bg-muted/50",
-                  isCollapsed && "px-2"
+                  "rounded-2xl min-h-[600px] transition-all duration-300 border-t-4",
+                  stage.borderColor,
+                  isDragOver 
+                    ? `${stage.bgColor} ring-2 ring-primary ring-offset-2 shadow-lg` 
+                    : "bg-muted/30 hover:bg-muted/50",
+                  isCollapsed ? "p-2" : "p-3"
                 )}
               >
                 {/* Column Header */}
                 <div 
                   className={cn(
-                    "flex items-center gap-2 mb-3 cursor-pointer",
+                    "flex items-center gap-2 mb-3 cursor-pointer group",
                     isCollapsed && "flex-col"
                   )}
                   onClick={() => toggleStageCollapse(stage.id)}
                 >
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  </Button>
+                  <motion.div
+                    whileHover={{ rotate: isCollapsed ? 90 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 opacity-60 group-hover:opacity-100">
+                      {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                  </motion.div>
                   
                   {isCollapsed ? (
                     <div className="flex flex-col items-center gap-2">
                       <span 
-                        className="font-semibold text-xs writing-mode-vertical whitespace-nowrap"
+                        className={cn("font-bold text-xs whitespace-nowrap", stage.textColor)}
                         style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
                       >
                         {stage.label}
                       </span>
-                      <Badge variant="secondary" className="text-xs">{stageClients.length}</Badge>
+                      <Badge className={cn("text-xs", `bg-gradient-to-r ${stage.color} text-white border-0`)}>
+                        {stageClients.length}
+                      </Badge>
                     </div>
                   ) : (
                     <>
-                      <h3 className="font-semibold text-sm flex-1 truncate">{stage.label}</h3>
-                      <Badge variant="secondary">{stageClients.length}</Badge>
+                      <div className="flex-1">
+                        <h3 className={cn("font-bold text-sm", stage.textColor)}>{stage.label}</h3>
+                        <p className="text-[10px] text-muted-foreground">Pipeline</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Badge variant="outline" className="text-xs">
+                              <Sparkles className="h-3 w-3 mr-1" />
+                              IA
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>Automação IA ativa</TooltipContent>
+                        </Tooltip>
+                        <Badge className={cn("text-xs font-bold", `bg-gradient-to-r ${stage.color} text-white border-0`)}>
+                          {stageClients.length}
+                        </Badge>
+                      </div>
                     </>
                   )}
                 </div>
 
-                {/* Stage Description - Only show when expanded */}
-                {!isCollapsed && (
-                  <p className="mb-2 px-2 py-1.5 text-xs text-muted-foreground bg-white/70 rounded border-l-2 border-primary/30">
-                    {stage.description}
-                  </p>
-                )}
-
                 {/* Stage Value - Only show when expanded */}
                 {!isCollapsed && stageValue > 0 && (
-                  <div className="mb-3 px-2 py-1 bg-white/50 rounded text-xs text-center">
-                    <span className="text-muted-foreground">Total: </span>
-                    <span className="font-semibold text-green-600">
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mb-3 px-3 py-2 bg-white/70 dark:bg-black/20 rounded-xl text-center border"
+                  >
+                    <span className="text-xs text-muted-foreground">Total: </span>
+                    <span className="font-bold text-emerald-600">
                       R$ {stageValue.toLocaleString('pt-BR')}
                     </span>
-                  </div>
+                  </motion.div>
                 )}
 
                 {/* Cards */}
                 {!isCollapsed && (
                   <div className="space-y-3">
-                    {stageClients.length === 0 ? (
-                      <div 
-                        className={cn(
-                          "text-center py-8 text-muted-foreground text-sm rounded-lg border-2 border-dashed transition-colors",
-                          isDragOver ? "border-primary bg-primary/5" : "border-transparent"
-                        )}
-                      >
-                        <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-muted flex items-center justify-center">
-                          <Building2 className="h-6 w-6 opacity-50" />
-                        </div>
-                        <p>Nenhum cliente</p>
-                        <p className="text-xs">Arraste clientes aqui</p>
-                      </div>
-                    ) : (
-                      stageClients.map((client) => (
-                        <Card
-                          key={client.id + (client.process_id || '')}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, client)}
-                          onDragEnd={handleDragEnd}
+                    <AnimatePresence>
+                      {stageClients.length === 0 ? (
+                        <motion.div 
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
                           className={cn(
-                            "p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all bg-white group",
-                            draggedClient?.id === client.id && draggedClient?.process_id === client.process_id && "ring-2 ring-primary"
+                            "text-center py-10 rounded-xl border-2 border-dashed transition-all",
+                            isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/20"
                           )}
                         >
-                          <div className="space-y-2">
-                            {/* Drag Handle + Badges */}
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-1">
-                                <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <div className="flex gap-1 flex-wrap">
-                                  <Badge className="bg-green-100 text-green-700 text-xs">ATIVO</Badge>
-                                  {getPriorityBadge(client.priority)}
-                                </div>
-                              </div>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6" 
-                                  onClick={(e) => openWhatsApp(client.phone, e)}
-                                  title="WhatsApp"
-                                >
-                                  <MessageCircle className="h-3 w-3 text-green-600" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6" 
-                                  onClick={(e) => { e.stopPropagation(); onClientClick(client); }}
-                                  title="Ver detalhes"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-
-                            {/* Client Info */}
-                            <div 
-                              className="cursor-pointer"
-                              onClick={() => onClientClick(client)}
-                            >
-                              <p className="font-semibold text-sm">{client.full_name || 'Sem nome'}</p>
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Building2 className="h-3 w-3" />
-                                {client.brand_name || client.company_name || 'Empresa não informada'}
-                              </p>
-                            </div>
-
-                            {/* Contract Value */}
-                            {client.contract_value && client.contract_value > 0 && (
-                              <p className="text-sm font-medium text-green-600">
-                                <DollarSign className="h-3 w-3 inline" />
-                                R$ {client.contract_value.toLocaleString('pt-BR')} /mês
-                              </p>
-                            )}
-
-                            {/* Contact Info */}
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Mail className="h-3 w-3" />
-                              <span className="truncate">{client.email}</span>
-                            </div>
-
-                            {client.phone && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Phone className="h-3 w-3" />
-                                <span>{client.phone}</span>
-                              </div>
-                            )}
-
-                            {/* Origin Badge */}
-                            <div className="pt-1">
-                              {getOriginBadge(client.origin)}
-                            </div>
+                          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-muted flex items-center justify-center">
+                            <Building2 className="h-7 w-7 opacity-40" />
                           </div>
-                        </Card>
-                      ))
-                    )}
+                          <p className="text-sm text-muted-foreground">Nenhum cliente</p>
+                          <p className="text-xs text-muted-foreground/70">Arraste clientes aqui</p>
+                        </motion.div>
+                      ) : (
+                        stageClients.map((client, index) => {
+                          const priorityConfig = getPriorityConfig(client.priority);
+                          const originConfig = ORIGIN_CONFIG[client.origin || 'site'] || ORIGIN_CONFIG.site;
+                          const OriginIcon = originConfig.icon;
+                          const isHovered = hoveredCard === client.id;
+                          const isDragging = draggedClient?.id === client.id;
+
+                          return (
+                            <motion.div
+                              key={client.id + (client.process_id || '')}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ 
+                                opacity: isDragging ? 0.5 : 1, 
+                                y: 0,
+                                scale: isDragging ? 1.02 : 1,
+                                rotate: isDragging ? 2 : 0
+                              }}
+                              exit={{ opacity: 0, scale: 0.9 }}
+                              transition={{ duration: 0.2, delay: index * 0.03 }}
+                              whileHover={{ 
+                                y: -4, 
+                                boxShadow: "0 12px 40px -10px rgba(0,0,0,0.15)",
+                              }}
+                              onHoverStart={() => setHoveredCard(client.id)}
+                              onHoverEnd={() => setHoveredCard(null)}
+                            >
+                              <Card
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, client)}
+                                onDragEnd={handleDragEnd}
+                                className={cn(
+                                  "p-0 cursor-grab active:cursor-grabbing transition-all duration-200 overflow-hidden border-0 shadow-md hover:shadow-xl bg-white dark:bg-slate-900",
+                                  isDragging && "ring-2 ring-primary shadow-2xl"
+                                )}
+                              >
+                                {/* Color Strip Top */}
+                                <div className={cn("h-1 w-full bg-gradient-to-r", stage.color)} />
+                                
+                                <div className="p-3">
+                                  {/* Top Row - Number, Origin, Actions */}
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                                        <Hash className="h-2.5 w-2.5 mr-0.5" />
+                                        {client.id.slice(0, 4)}
+                                      </Badge>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <div className={cn("p-1 rounded-md", originConfig.bg)}>
+                                            <OriginIcon className={cn("h-3 w-3", originConfig.color)} />
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>{originConfig.label}</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                    
+                                    <motion.div 
+                                      className="flex items-center gap-1"
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: isHovered ? 1 : 0.5 }}
+                                    >
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6 hover:bg-green-100 hover:text-green-600"
+                                            onClick={(e) => openWhatsApp(client.phone, e)}
+                                          >
+                                            <MessageCircle className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>WhatsApp</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6 hover:bg-blue-100 hover:text-blue-600"
+                                            onClick={(e) => { e.stopPropagation(); onClientClick(client); }}
+                                          >
+                                            <Eye className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Ver detalhes</TooltipContent>
+                                      </Tooltip>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-6 w-6"
+                                      >
+                                        <MoreHorizontal className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </motion.div>
+                                  </div>
+
+                                  {/* Client Name & Company */}
+                                  <div 
+                                    className="cursor-pointer mb-3"
+                                    onClick={() => onClientClick(client)}
+                                  >
+                                    <p className="font-bold text-sm mb-0.5 line-clamp-1">
+                                      {client.full_name || 'Sem nome'}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground line-clamp-1">
+                                      {client.brand_name || client.company_name || 'Empresa não informada'}
+                                    </p>
+                                  </div>
+
+                                  {/* Info Grid */}
+                                  <div className="grid grid-cols-2 gap-2 mb-3">
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                      <Phone className="h-3 w-3" />
+                                      <span className="truncate">{client.phone || 'N/A'}</span>
+                                    </div>
+                                    {client.contract_value && client.contract_value > 0 ? (
+                                      <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                                        <DollarSign className="h-3 w-3" />
+                                        <span>R$ {client.contract_value.toLocaleString('pt-BR')}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <DollarSign className="h-3 w-3" />
+                                        <span>R$ 0</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Badges Row */}
+                                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                                    <Badge className={cn("text-[10px] px-1.5 py-0", priorityConfig.color)}>
+                                      {priorityConfig.label}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                      {client.origin === 'whatsapp' ? 'what...' : client.origin || 'site'}
+                                    </Badge>
+                                  </div>
+
+                                  {/* Bottom Row - Contact & Date */}
+                                  <div className="flex items-center justify-between pt-2 border-t text-[10px] text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      <span>Nunca</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>
+                                        {client.created_at 
+                                          ? formatDistanceToNow(new Date(client.created_at), { locale: ptBR, addSuffix: false })
+                                          : 'há 1 mês'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <UserPlus className="h-3 w-3" />
+                                      <span>+</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Quick Action on Hover */}
+                                  <AnimatePresence>
+                                    {isHovered && (
+                                      <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="mt-2 pt-2 border-t"
+                                      >
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          className="w-full h-7 text-xs"
+                                          onClick={() => onClientClick(client)}
+                                        >
+                                          <ArrowRight className="h-3 w-3 mr-1" />
+                                          Novo
+                                        </Button>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </Card>
+                            </motion.div>
+                          );
+                        })
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
