@@ -322,6 +322,32 @@ serve(async (req) => {
     }
 
     // ========================================
+    // STEP 6.1: Trigger form_completed email automation
+    // ========================================
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          trigger_event: 'form_completed',
+          lead_id: leadId! || null,
+          data: {
+            nome: personalData.fullName,
+            email: personalData.email,
+            marca: brandData.brandName,
+          },
+        }),
+      });
+      console.log('Triggered form_completed email automation');
+    } catch (emailError) {
+      console.error('Error triggering form_completed email:', emailError);
+      // Don't fail the payment flow if email fails
+    }
+
+    // ========================================
     // STEP 7: Return response
     // ========================================
     const response = {

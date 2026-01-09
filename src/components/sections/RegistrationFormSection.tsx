@@ -81,6 +81,9 @@ const RegistrationFormSection = () => {
 
   const [paymentMethod, setPaymentMethod] = useState<string>("");
 
+  // Track if form_started email was already triggered
+  const [formStartedTriggered, setFormStartedTriggered] = useState(false);
+
   // Load viability data from session storage if available
   useEffect(() => {
     const viabilityData = sessionStorage.getItem('viabilityData');
@@ -101,6 +104,62 @@ const RegistrationFormSection = () => {
       }
     }
   }, []);
+
+  // Trigger form_started email when user starts filling personal data
+  const triggerFormStarted = useCallback(async () => {
+    if (formStartedTriggered) return;
+    if (!personalData.fullName || !personalData.email) return;
+    
+    // Basic email validation before triggering
+    if (!personalData.email.includes('@')) return;
+    
+    console.log('Triggering form_started email for:', personalData.email);
+    setFormStartedTriggered(true);
+    
+    try {
+      // Create/update lead with form_started_at
+      const { error: leadError } = await supabase
+        .from('leads')
+        .upsert({
+          full_name: personalData.fullName,
+          email: personalData.email,
+          phone: personalData.phone || null,
+          form_started_at: new Date().toISOString(),
+          status: 'novo',
+          origin: 'site',
+        }, {
+          onConflict: 'email',
+        });
+
+      if (leadError) {
+        console.error('Error creating/updating lead:', leadError);
+        // Continue anyway, just log the error
+      }
+
+      // Trigger form_started email automation
+      await supabase.functions.invoke('trigger-email-automation', {
+        body: {
+          trigger_event: 'form_started',
+          data: {
+            nome: personalData.fullName,
+            email: personalData.email,
+            marca: brandData.brandName || 'Sua Marca',
+          },
+        },
+      });
+      console.log('Form started email triggered successfully');
+    } catch (error) {
+      console.error('Error triggering form_started:', error);
+      // Don't block the user flow
+    }
+  }, [formStartedTriggered, personalData, brandData.brandName]);
+
+  // Trigger form_started when user advances to step 2
+  useEffect(() => {
+    if (step === 2 && !formStartedTriggered) {
+      triggerFormStarted();
+    }
+  }, [step, formStartedTriggered, triggerFormStarted]);
 
   // CEP auto-fill
   const handleCEPChange = useCallback(async (cep: string) => {
