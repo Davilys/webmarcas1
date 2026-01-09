@@ -9,6 +9,8 @@ const corsHeaders = {
 interface PerfexCustomer {
   userid: string;
   company: string;
+  firstname?: string;
+  lastname?: string;
   vat: string; // CPF/CNPJ
   phonenumber: string;
   city: string;
@@ -17,7 +19,7 @@ interface PerfexCustomer {
   address: string;
   email: string;
   default_language: string;
-  active: number;
+  active: number | string;
   datecreated: string;
 }
 
@@ -162,66 +164,93 @@ serve(async (req) => {
       }
     }
     
-    // Import customers from Perfex to our system
+    // Import customers from Perfex to our system (now saves to perfex_customers table)
     if (action === 'import_customers') {
       const customers = await perfexRequest(perfexApiUrl, perfexApiToken, 'customers') as PerfexCustomer[];
       
       let imported = 0;
       let updated = 0;
+      let linked = 0;
       let errors = 0;
       
       for (const customer of customers) {
         try {
-          // Check if customer already exists by perfex_customer_id
-          const { data: existing } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('perfex_customer_id', customer.userid)
-            .single();
+          const perfexId = customer.userid?.toString();
           
-          if (existing) {
-            // Update existing
+          // First, check if we already have this customer in perfex_customers
+          const { data: existingPerfexCustomer } = await supabase
+            .from('perfex_customers')
+            .select('id, synced_profile_id')
+            .eq('perfex_id', perfexId)
+            .single();
+
+          // Check if customer exists in profiles by email
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id, perfex_customer_id')
+            .eq('email', customer.email)
+            .single();
+
+          const customerData = {
+            perfex_id: perfexId,
+            full_name: customer.company || `${customer.firstname || ''} ${customer.lastname || ''}`.trim() || 'Cliente Perfex',
+            email: customer.email || null,
+            phone: customer.phonenumber || null,
+            company_name: customer.company || null,
+            cpf_cnpj: customer.vat || null,
+            address: customer.address || null,
+            city: customer.city || null,
+            state: customer.state || null,
+            zip_code: customer.zip || null,
+            active: customer.active === 1 || customer.active === '1',
+            synced_profile_id: existingProfile?.id || null,
+          };
+
+          if (existingPerfexCustomer) {
+            // Update existing perfex_customer
             await supabase
-              .from('profiles')
-              .update({
-                company_name: customer.company || null,
-                cpf_cnpj: customer.vat || null,
-                phone: customer.phonenumber || null,
-                city: customer.city || null,
-                state: customer.state || null,
-                zip_code: customer.zip || null,
-                address: customer.address || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existing.id);
+              .from('perfex_customers')
+              .update(customerData)
+              .eq('id', existingPerfexCustomer.id);
             updated++;
+
+            // If we found a matching profile and it's not linked yet, link it
+            if (existingProfile && !existingPerfexCustomer.synced_profile_id) {
+              await supabase
+                .from('perfex_customers')
+                .update({ synced_profile_id: existingProfile.id })
+                .eq('id', existingPerfexCustomer.id);
+              
+              // Also update the profile with perfex_customer_id
+              if (!existingProfile.perfex_customer_id) {
+                await supabase
+                  .from('profiles')
+                  .update({ perfex_customer_id: perfexId })
+                  .eq('id', existingProfile.id);
+              }
+              linked++;
+            }
           } else {
-            // Check by email
-            const { data: existingByEmail } = await supabase
-              .from('profiles')
-              .select('id, perfex_customer_id')
-              .eq('email', customer.email)
-              .single();
+            // Insert new perfex_customer
+            const { error: insertError } = await supabase
+              .from('perfex_customers')
+              .insert(customerData);
             
-            if (existingByEmail && !existingByEmail.perfex_customer_id) {
-              // Link existing profile to Perfex
+            if (insertError) {
+              console.error(`Error inserting customer ${perfexId}:`, insertError);
+              errors++;
+              continue;
+            }
+            imported++;
+
+            // If matching profile exists, link it
+            if (existingProfile && !existingProfile.perfex_customer_id) {
               await supabase
                 .from('profiles')
-                .update({
-                  perfex_customer_id: customer.userid,
-                  company_name: customer.company || null,
-                  cpf_cnpj: customer.vat || null,
-                  phone: customer.phonenumber || null,
-                  city: customer.city || null,
-                  state: customer.state || null,
-                  zip_code: customer.zip || null,
-                  address: customer.address || null,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', existingByEmail.id);
-              updated++;
+                .update({ perfex_customer_id: perfexId })
+                .eq('id', existingProfile.id);
+              linked++;
             }
-            // Note: We can't create new profiles without auth.users entry
           }
         } catch (err) {
           console.error(`Error processing customer ${customer.userid}:`, err);
@@ -232,8 +261,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: `Importação concluída: ${updated} atualizados, ${errors} erros`,
-          stats: { total: customers.length, updated, errors }
+          message: `Importação concluída: ${imported} novos, ${updated} atualizados, ${linked} vinculados, ${errors} erros`,
+          stats: { total: customers.length, imported, updated, linked, errors }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -406,6 +435,8 @@ serve(async (req) => {
       
       for (const contract of contracts) {
         try {
+          const clientId = contract.client?.toString();
+          
           // Check if contract exists by perfex_contract_id
           const { data: existing } = await supabase
             .from('contracts')
@@ -413,11 +444,18 @@ serve(async (req) => {
             .eq('perfex_contract_id', contract.id)
             .single();
           
-          // Find client by perfex_customer_id
-          const { data: client } = await supabase
+          // Find user by perfex_customer_id in profiles
+          const { data: profile } = await supabase
             .from('profiles')
             .select('id')
-            .eq('perfex_customer_id', contract.client)
+            .eq('perfex_customer_id', clientId)
+            .single();
+
+          // Find perfex_customer by perfex_id
+          const { data: perfexCustomer } = await supabase
+            .from('perfex_customers')
+            .select('id')
+            .eq('perfex_id', clientId)
             .single();
           
           const contractData = {
@@ -430,7 +468,9 @@ serve(async (req) => {
             contract_html: contract.content || null,
             signature_status: contract.signed === 1 ? 'signed' : 'not_signed',
             visible_to_client: contract.not_visible_to_client !== 1,
-            user_id: client?.id || null,
+            user_id: profile?.id || null,
+            perfex_customer_id: perfexCustomer?.id || null,
+            contract_type: 'registro_marca',
           };
           
           if (existing) {
@@ -440,9 +480,15 @@ serve(async (req) => {
               .eq('id', existing.id);
             updated++;
           } else {
-            await supabase
+            const { error: insertError } = await supabase
               .from('contracts')
               .insert(contractData);
+            
+            if (insertError) {
+              console.error(`Error inserting contract ${contract.id}:`, insertError);
+              errors++;
+              continue;
+            }
             imported++;
           }
         } catch (err) {
