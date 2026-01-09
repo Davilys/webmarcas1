@@ -87,11 +87,15 @@ async function perfexRequest(
   method: string = 'GET',
   body?: Record<string, unknown>
 ): Promise<unknown> {
-  const url = `${apiUrl.replace(/\/$/, '')}/api/${endpoint}`;
+  // Remove trailing slash from URL and build full endpoint
+  const baseUrl = apiUrl.replace(/\/$/, '');
+  const url = `${baseUrl}/api/${endpoint}`;
   
+  // Try Bearer token first (modern Perfex), then fallback to authtoken header
   const headers: Record<string, string> = {
-    'authtoken': apiToken,
+    'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   };
   
   const options: RequestInit = {
@@ -103,14 +107,34 @@ async function perfexRequest(
     options.body = JSON.stringify(body);
   }
   
-  const response = await fetch(url, options);
+  console.log(`Perfex API Request: ${method} ${url}`);
+  
+  let response = await fetch(url, options);
+  
+  // If Bearer auth fails with 405 or 401, try with authtoken header
+  if (response.status === 405 || response.status === 401) {
+    console.log('Bearer auth failed, trying authtoken header...');
+    const altHeaders: Record<string, string> = {
+      'authtoken': apiToken,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    
+    response = await fetch(url, {
+      ...options,
+      headers: altHeaders,
+    });
+  }
   
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`Perfex API error: ${response.status} - ${errorText}`);
     throw new Error(`Perfex API error: ${response.status} - ${errorText}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  console.log(`Perfex API Response: ${JSON.stringify(result).substring(0, 200)}...`);
+  return result;
 }
 
 serve(async (req) => {
