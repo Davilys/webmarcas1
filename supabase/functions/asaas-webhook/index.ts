@@ -1,0 +1,334 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, asaas-access-token',
+};
+
+// Asaas webhook event types
+type AsaasPaymentStatus = 
+  | 'PENDING'
+  | 'RECEIVED'
+  | 'CONFIRMED'
+  | 'OVERDUE'
+  | 'REFUNDED'
+  | 'RECEIVED_IN_CASH'
+  | 'REFUND_REQUESTED'
+  | 'REFUND_IN_PROGRESS'
+  | 'CHARGEBACK_REQUESTED'
+  | 'CHARGEBACK_DISPUTE'
+  | 'AWAITING_CHARGEBACK_REVERSAL'
+  | 'DUNNING_REQUESTED'
+  | 'DUNNING_RECEIVED'
+  | 'AWAITING_RISK_ANALYSIS';
+
+interface AsaasPaymentEvent {
+  event: string;
+  payment: {
+    id: string;
+    customer: string;
+    value: number;
+    netValue: number;
+    status: AsaasPaymentStatus;
+    billingType: string;
+    confirmedDate?: string;
+    paymentDate?: string;
+    clientPaymentDate?: string;
+    invoiceUrl?: string;
+    externalReference?: string;
+    description?: string;
+  };
+}
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Supabase configuration missing');
+    }
+
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const webhookData: AsaasPaymentEvent = await req.json();
+    
+    console.log('Received Asaas webhook:', JSON.stringify(webhookData));
+
+    const { event, payment } = webhookData;
+
+    if (!payment || !payment.id) {
+      console.log('No payment data in webhook');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No payment to process' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    const paymentId = payment.id;
+    const paymentStatus = payment.status;
+
+    console.log(`Processing payment ${paymentId} with status ${paymentStatus}`);
+
+    // Find the contract associated with this payment
+    const { data: contract, error: contractError } = await supabaseAdmin
+      .from('contracts')
+      .select('*, leads(*)')
+      .eq('asaas_payment_id', paymentId)
+      .single();
+
+    if (contractError || !contract) {
+      console.log('Contract not found for payment:', paymentId);
+      // Try to find by invoice
+      const { data: invoice } = await supabaseAdmin
+        .from('invoices')
+        .select('*')
+        .eq('asaas_invoice_id', paymentId)
+        .single();
+
+      if (invoice) {
+        // Update invoice status based on payment status
+        const invoiceStatus = getInvoiceStatus(paymentStatus);
+        await supabaseAdmin
+          .from('invoices')
+          .update({
+            status: invoiceStatus,
+            payment_date: payment.paymentDate || payment.confirmedDate || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', invoice.id);
+        console.log(`Updated invoice ${invoice.id} to status ${invoiceStatus}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: 'Invoice updated if found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    // Handle payment status changes
+    if (paymentStatus === 'RECEIVED' || paymentStatus === 'CONFIRMED' || paymentStatus === 'RECEIVED_IN_CASH') {
+      console.log('Payment confirmed! Processing conversion...');
+
+      // Get lead data
+      const lead = contract.leads;
+      
+      if (!lead) {
+        console.log('No lead associated with contract');
+        return new Response(
+          JSON.stringify({ success: false, message: 'No lead found' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      // Check if already processed (user already created)
+      if (contract.user_id) {
+        console.log('Contract already has a user, updating status only');
+        
+        // Update invoice status
+        await supabaseAdmin
+          .from('invoices')
+          .update({
+            status: 'paid',
+            payment_date: payment.paymentDate || payment.confirmedDate || new Date().toISOString().split('T')[0],
+            updated_at: new Date().toISOString(),
+          })
+          .eq('asaas_invoice_id', paymentId);
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Already processed' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      // Parse data from lead and contract
+      const personalData = {
+        fullName: lead.full_name,
+        cpf: lead.cpf_cnpj || '',
+        email: lead.email,
+        phone: lead.phone || '',
+        cep: lead.zip_code || '',
+        address: lead.address || '',
+        neighborhood: '',
+        city: lead.city || '',
+        state: lead.state || '',
+      };
+
+      // Extract brand name from contract description or notes
+      const brandName = extractBrandName(contract.subject || contract.description || lead.notes || '');
+      const businessArea = extractBusinessArea(lead.notes || '');
+
+      const brandData = {
+        brandName: brandName,
+        businessArea: businessArea,
+        hasCNPJ: (lead.cpf_cnpj?.length || 0) > 11,
+        cnpj: (lead.cpf_cnpj?.length || 0) > 11 ? lead.cpf_cnpj : '',
+        companyName: lead.company_name || '',
+      };
+
+      // Call confirm-payment to create user, profile, process, etc.
+      const confirmResponse = await fetch(`${SUPABASE_URL}/functions/v1/confirm-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          leadId: lead.id,
+          contractId: contract.id,
+          paymentId: paymentId,
+          asaasCustomerId: payment.customer,
+          personalData,
+          brandData,
+          paymentValue: contract.contract_value || payment.value,
+          paymentMethod: getPaymentMethod(payment.billingType),
+          contractHtml: contract.contract_html,
+          signatureData: {
+            ip: contract.signature_ip || 'Webhook Asaas',
+            userAgent: contract.signature_user_agent || 'Asaas Webhook',
+            signedAt: contract.signed_at || new Date().toISOString(),
+          },
+        }),
+      });
+
+      const confirmResult = await confirmResponse.json();
+      console.log('Confirm payment result:', JSON.stringify(confirmResult));
+
+      if (confirmResult.success) {
+        // Update invoice to paid
+        await supabaseAdmin
+          .from('invoices')
+          .update({
+            status: 'paid',
+            payment_date: payment.paymentDate || payment.confirmedDate || new Date().toISOString().split('T')[0],
+            user_id: confirmResult.userId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('asaas_invoice_id', paymentId);
+
+        console.log('Payment fully processed!');
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Payment confirmed and user created',
+            userId: confirmResult.userId,
+            processId: confirmResult.processId,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      } else {
+        console.error('Error in confirm-payment:', confirmResult.error);
+        return new Response(
+          JSON.stringify({ success: false, error: confirmResult.error }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+    }
+
+    // Handle other status changes
+    if (paymentStatus === 'OVERDUE') {
+      // Update invoice and contract status
+      await supabaseAdmin
+        .from('invoices')
+        .update({ status: 'overdue', updated_at: new Date().toISOString() })
+        .eq('asaas_invoice_id', paymentId);
+
+      // Create notification for admins
+      console.log('Payment overdue:', paymentId);
+    }
+
+    if (paymentStatus === 'REFUNDED' || paymentStatus === 'REFUND_REQUESTED') {
+      await supabaseAdmin
+        .from('invoices')
+        .update({ status: 'refunded', updated_at: new Date().toISOString() })
+        .eq('asaas_invoice_id', paymentId);
+      
+      console.log('Payment refunded:', paymentId);
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, message: `Processed event: ${event}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    );
+
+  } catch (error: unknown) {
+    console.error('Error in asaas-webhook:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return new Response(
+      JSON.stringify({ success: false, error: errorMessage }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
+});
+
+// Helper functions
+function getInvoiceStatus(asaasStatus: AsaasPaymentStatus): string {
+  const statusMap: Record<AsaasPaymentStatus, string> = {
+    'PENDING': 'pending',
+    'RECEIVED': 'paid',
+    'CONFIRMED': 'paid',
+    'RECEIVED_IN_CASH': 'paid',
+    'OVERDUE': 'overdue',
+    'REFUNDED': 'refunded',
+    'REFUND_REQUESTED': 'refund_requested',
+    'REFUND_IN_PROGRESS': 'refund_requested',
+    'CHARGEBACK_REQUESTED': 'disputed',
+    'CHARGEBACK_DISPUTE': 'disputed',
+    'AWAITING_CHARGEBACK_REVERSAL': 'disputed',
+    'DUNNING_REQUESTED': 'overdue',
+    'DUNNING_RECEIVED': 'paid',
+    'AWAITING_RISK_ANALYSIS': 'pending',
+  };
+  return statusMap[asaasStatus] || 'pending';
+}
+
+function getPaymentMethod(billingType: string): string {
+  const methodMap: Record<string, string> = {
+    'PIX': 'avista',
+    'BOLETO': 'boleto3x',
+    'CREDIT_CARD': 'cartao6x',
+  };
+  return methodMap[billingType] || 'avista';
+}
+
+function extractBrandName(text: string): string {
+  // Try to extract brand name from "Registro de Marca: BRANDNAME" or "marca: BRANDNAME"
+  const patterns = [
+    /Registro de Marca:\s*(.+?)(?:\s*\||$)/i,
+    /marca[:\s]+["']?([^"'|]+)["']?/i,
+    /Marca:\s*(.+?)(?:\s*\||$)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return 'Marca não identificada';
+}
+
+function extractBusinessArea(text: string): string {
+  // Try to extract business area from "Ramo: AREA" pattern
+  const patterns = [
+    /Ramo:\s*(.+?)(?:\s*\||$)/i,
+    /ramo de atividade:\s*(.+?)(?:\s*\||$)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return 'Não especificado';
+}
