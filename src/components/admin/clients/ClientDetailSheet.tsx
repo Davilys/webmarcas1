@@ -264,14 +264,38 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     const file = e.target.files?.[0];
     if (!file || !client) return;
 
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('Arquivo muito grande. Máximo 10MB.');
+      return;
+    }
+
     setUploading(true);
     try {
-      const fileName = `${client.id}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
+      const fileName = `clients/${client.id}/${Date.now()}_${file.name}`;
+      console.log('Uploading file:', fileName);
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('documents')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        if (uploadError.message.includes('row-level security')) {
+          toast.error('Erro de permissão. Verifique as configurações de storage.');
+        } else if (uploadError.message.includes('Bucket not found')) {
+          toast.error('Bucket de documentos não configurado.');
+        } else {
+          toast.error(`Erro no upload: ${uploadError.message}`);
+        }
+        return;
+      }
+
+      console.log('Upload successful:', uploadData);
 
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
 
@@ -280,17 +304,26 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         name: file.name,
         file_url: urlData.publicUrl,
         document_type: 'anexo',
-        uploaded_by: 'admin'
+        uploaded_by: 'admin',
+        file_size: file.size,
+        mime_type: file.type
       });
 
-      if (dbError) throw dbError;
-      toast.success('Documento anexado');
+      if (dbError) {
+        console.error('Database insert error:', dbError);
+        toast.error(`Erro ao salvar documento: ${dbError.message}`);
+        return;
+      }
+
+      toast.success('Documento anexado com sucesso!');
       fetchClientData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('Erro ao enviar documento');
+      toast.error(`Erro inesperado: ${error?.message || 'Tente novamente'}`);
     } finally {
       setUploading(false);
+      // Reset input
+      e.target.value = '';
     }
   };
 
