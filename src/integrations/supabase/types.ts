@@ -498,6 +498,11 @@ export type Database = {
       contracts: {
         Row: {
           asaas_payment_id: string | null
+          blockchain_hash: string | null
+          blockchain_network: string | null
+          blockchain_proof: string | null
+          blockchain_timestamp: string | null
+          blockchain_tx_id: string | null
           contract_html: string | null
           contract_number: string | null
           contract_type: string | null
@@ -505,6 +510,7 @@ export type Database = {
           contract_value: number | null
           created_at: string | null
           description: string | null
+          device_info: Json | null
           end_date: string | null
           id: string
           ip_address: string | null
@@ -525,6 +531,11 @@ export type Database = {
         }
         Insert: {
           asaas_payment_id?: string | null
+          blockchain_hash?: string | null
+          blockchain_network?: string | null
+          blockchain_proof?: string | null
+          blockchain_timestamp?: string | null
+          blockchain_tx_id?: string | null
           contract_html?: string | null
           contract_number?: string | null
           contract_type?: string | null
@@ -532,6 +543,7 @@ export type Database = {
           contract_value?: number | null
           created_at?: string | null
           description?: string | null
+          device_info?: Json | null
           end_date?: string | null
           id?: string
           ip_address?: string | null
@@ -552,6 +564,11 @@ export type Database = {
         }
         Update: {
           asaas_payment_id?: string | null
+          blockchain_hash?: string | null
+          blockchain_network?: string | null
+          blockchain_proof?: string | null
+          blockchain_timestamp?: string | null
+          blockchain_tx_id?: string | null
           contract_html?: string | null
           contract_number?: string | null
           contract_type?: string | null
@@ -559,6 +576,7 @@ export type Database = {
           contract_value?: number | null
           created_at?: string | null
           description?: string | null
+          device_info?: Json | null
           end_date?: string | null
           id?: string
           ip_address?: string | null
