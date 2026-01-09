@@ -1,13 +1,30 @@
 import { useMemo } from 'react';
 import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
+import { Shield, CheckCircle, Lock, Hash, Globe, Clock } from 'lucide-react';
+
+export interface BlockchainSignature {
+  hash?: string;
+  timestamp?: string;
+  txId?: string;
+  network?: string;
+  ipAddress?: string;
+}
 
 interface ContractRendererProps {
   content: string;
   showLetterhead?: boolean;
   className?: string;
+  blockchainSignature?: BlockchainSignature;
+  showCertificationSection?: boolean;
 }
 
-export function ContractRenderer({ content, showLetterhead = true, className = '' }: ContractRendererProps) {
+export function ContractRenderer({ 
+  content, 
+  showLetterhead = true, 
+  className = '',
+  blockchainSignature,
+  showCertificationSection = false
+}: ContractRendererProps) {
   const renderedContent = useMemo(() => {
     const lines = content.split('\n');
     const elements: JSX.Element[] = [];
@@ -176,6 +193,108 @@ export function ContractRenderer({ content, showLetterhead = true, className = '
       <div className="contract-content">
         {renderedContent}
       </div>
+
+      {/* Digital Certification Section - shown when contract is signed or preview requested */}
+      {(showCertificationSection || blockchainSignature?.hash) && (
+        <div className="mt-8 pt-6 border-t-2 border-primary/20">
+          {/* Section Header */}
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-base" style={{ color: '#0284c7' }}>
+              CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
+            </h3>
+          </div>
+
+          {/* Legal Text */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-xs text-blue-900">
+            <p className="mb-3">
+              Este contrato possui múltiplas camadas de segurança jurídica conforme descritas abaixo:
+            </p>
+            
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Hash className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+                <div>
+                  <strong>1. HASH SHA-256:</strong> O conteúdo integral deste contrato foi processado 
+                  através do algoritmo criptográfico SHA-256, gerando um código único e imutável que 
+                  garante a integridade do documento.
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-2">
+                <Lock className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+                <div>
+                  <strong>2. REGISTRO EM BLOCKCHAIN:</strong> O hash do contrato foi registrado na 
+                  blockchain do Bitcoin através do protocolo OpenTimestamps, garantindo prova 
+                  irrefutável de existência e data.
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-2">
+                <Globe className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+                <div>
+                  <strong>3. RASTREIO DE IP:</strong> O endereço IP do dispositivo utilizado para 
+                  aceitar este contrato foi registrado, possibilitando rastreabilidade técnica.
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-2">
+                <Clock className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+                <div>
+                  <strong>4. TIMESTAMP:</strong> Data e hora exatas da assinatura foram registradas 
+                  em servidor seguro com sincronização NTP.
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+                <div>
+                  <strong>5. PROVA CRIPTOGRÁFICA:</strong> Um arquivo de prova foi gerado e pode 
+                  ser verificado a qualquer momento em opentimestamps.org.
+                </div>
+              </div>
+            </div>
+            
+            <p className="mt-3 text-xs italic">
+              A aceitação deste contrato por meio digital possui validade jurídica conforme 
+              Lei nº 14.063/2020 e Medida Provisória nº 2.200-2/2001.
+            </p>
+          </div>
+
+          {/* Signature Data Box - only shown when actually signed */}
+          {blockchainSignature?.hash && (
+            <div className="bg-green-50 border border-green-300 rounded-lg p-4 text-xs">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="font-bold text-green-800">DADOS DA ASSINATURA DIGITAL</span>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-2 text-green-900 font-mono">
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="font-bold">Hash SHA-256:</span>
+                  <span className="break-all text-[10px]">{blockchainSignature.hash}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold">Data/Hora:</span>
+                  <span>{blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold">Endereço IP:</span>
+                  <span>{blockchainSignature.ipAddress || '-'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold">ID da Transação:</span>
+                  <span className="break-all">{blockchainSignature.txId || '-'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold">Rede:</span>
+                  <span>{blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -200,7 +319,9 @@ export function generateContractPrintHTML(
   content: string,
   brandName: string,
   clientName: string,
-  clientCpf: string
+  clientCpf: string,
+  blockchainSignature?: BlockchainSignature,
+  showCertificationSection: boolean = true
 ): string {
   // Convert plain text to HTML with proper formatting
   const htmlContent = content
@@ -370,6 +491,49 @@ export function generateContractPrintHTML(
   <div class="content">
     ${htmlContent}
   </div>
+  
+  ${showCertificationSection ? `
+  <!-- Digital Certification Section -->
+  <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #bfdbfe;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      <h3 style="font-weight: bold; font-size: 14px; color: #0284c7; margin: 0;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
+    </div>
+    
+    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 16px; margin-bottom: 16px; font-size: 10px; color: #1e3a8a;">
+      <p style="margin-bottom: 12px;">Este contrato possui múltiplas camadas de segurança jurídica conforme descritas abaixo:</p>
+      
+      <div style="margin-bottom: 8px;"><strong>1. HASH SHA-256:</strong> O conteúdo integral deste contrato foi processado através do algoritmo criptográfico SHA-256, gerando um código único e imutável que garante a integridade do documento.</div>
+      
+      <div style="margin-bottom: 8px;"><strong>2. REGISTRO EM BLOCKCHAIN:</strong> O hash do contrato foi registrado na blockchain do Bitcoin através do protocolo OpenTimestamps, garantindo prova irrefutável de existência e data.</div>
+      
+      <div style="margin-bottom: 8px;"><strong>3. RASTREIO DE IP:</strong> O endereço IP do dispositivo utilizado para aceitar este contrato foi registrado, possibilitando rastreabilidade técnica.</div>
+      
+      <div style="margin-bottom: 8px;"><strong>4. TIMESTAMP:</strong> Data e hora exatas da assinatura foram registradas em servidor seguro com sincronização NTP.</div>
+      
+      <div style="margin-bottom: 8px;"><strong>5. PROVA CRIPTOGRÁFICA:</strong> Um arquivo de prova foi gerado e pode ser verificado a qualquer momento em opentimestamps.org.</div>
+      
+      <p style="margin-top: 12px; font-style: italic; font-size: 9px;">A aceitação deste contrato por meio digital possui validade jurídica conforme Lei nº 14.063/2020 e Medida Provisória nº 2.200-2/2001.</p>
+    </div>
+    
+    ${blockchainSignature?.hash ? `
+    <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; font-size: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <span style="font-weight: bold; color: #166534;">DADOS DA ASSINATURA DIGITAL</span>
+      </div>
+      
+      <div style="font-family: monospace; color: #166534;">
+        <div style="margin-bottom: 4px;"><strong>Hash SHA-256:</strong> <span style="font-size: 9px; word-break: break-all;">${blockchainSignature.hash}</span></div>
+        <div style="margin-bottom: 4px;"><strong>Data/Hora:</strong> ${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</div>
+        <div style="margin-bottom: 4px;"><strong>Endereço IP:</strong> ${blockchainSignature.ipAddress || '-'}</div>
+        <div style="margin-bottom: 4px;"><strong>ID da Transação:</strong> ${blockchainSignature.txId || '-'}</div>
+        <div><strong>Rede:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</div>
+      </div>
+    </div>
+    ` : ''}
+  </div>
+  ` : ''}
   
   <div class="footer">
     <p>Contrato gerado automaticamente pelo sistema WebMarcas</p>

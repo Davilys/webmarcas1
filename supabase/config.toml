@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.create-asaas-payment]
 verify_jwt = false
+
+[functions.sign-contract-blockchain]
+verify_jwt = false
+
+[functions.confirm-payment]
+verify_jwt = false
