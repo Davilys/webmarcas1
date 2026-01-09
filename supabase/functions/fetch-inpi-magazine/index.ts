@@ -131,12 +131,17 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
   
   console.log('Attorney name found in XML! Extracting processes...');
   
-  // Helper to extract text content from XML tags
+  // Helper to extract text content from XML tags and clean nested tags
   const extractTagContent = (xml: string, tagName: string): string | null => {
     // Try with attributes
     const regex1 = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
     const match1 = xml.match(regex1);
-    if (match1) return match1[1].trim();
+    if (match1) {
+      let content = match1[1].trim();
+      // Clean any nested XML tags
+      content = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return content || null;
+    }
     
     // Try self-closing with attribute value
     const regex2 = new RegExp(`<${tagName}[^>]*\\s+(?:nome|valor|texto)[^>]*=["']([^"']+)["']`, 'i');
@@ -215,13 +220,24 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
     // Avoid duplicates
     if (processes.some(p => p.processNumber === cleanNumber)) continue;
     
-    // Extract brand name
-    const brandName = 
+    // Extract brand name - clean up XML tags from content
+    let brandName = 
       extractTagContent(block.content, 'marca') ||
       extractTagContent(block.content, 'nome') ||
       extractTagContent(block.content, 'denominacao') ||
       extractAttribute(block.content, 'marca', 'nome') ||
       extractAttribute(block.content, 'marca', 'apresentacao');
+    
+    // Clean up any nested XML tags from brand name
+    if (brandName) {
+      // Remove any XML tags like <nome>...</nome> from the content
+      brandName = brandName.replace(/<[^>]+>/g, '').trim();
+      // Also extract from <nome> if present
+      const nomeMatch = brandName.match(/<nome>([^<]+)<\/nome>/i);
+      if (nomeMatch) {
+        brandName = nomeMatch[1].trim();
+      }
+    }
     
     // Extract holder name  
     const holderName =
