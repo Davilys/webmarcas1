@@ -107,8 +107,7 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
     e.preventDefault();
     setDragOverStage(null);
     
-    if (!draggedClient || !draggedClient.process_id) {
-      toast.error('Cliente sem processo não pode ser movido');
+    if (!draggedClient) {
       setDraggedClient(null);
       return;
     }
@@ -119,12 +118,27 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
     }
 
     try {
-      const { error } = await supabase
-        .from('brand_processes')
-        .update({ pipeline_stage: stageId })
-        .eq('id', draggedClient.process_id);
+      if (draggedClient.process_id) {
+        // Cliente já tem processo - apenas atualiza o estágio
+        const { error } = await supabase
+          .from('brand_processes')
+          .update({ pipeline_stage: stageId })
+          .eq('id', draggedClient.process_id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Cliente sem processo - cria um novo processo com o estágio selecionado
+        const { error } = await supabase
+          .from('brand_processes')
+          .insert({
+            user_id: draggedClient.id,
+            brand_name: draggedClient.company_name || draggedClient.full_name || 'Sem nome',
+            pipeline_stage: stageId,
+            status: 'em_andamento'
+          });
+
+        if (error) throw error;
+      }
       
       const stageName = PIPELINE_STAGES.find(s => s.id === stageId)?.label;
       toast.success(`✅ Cliente movido para ${stageName}`);
