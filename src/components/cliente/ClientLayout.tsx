@@ -24,13 +24,64 @@ interface ClientLayoutProps {
   children: ReactNode;
 }
 
-const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/cliente/dashboard' },
-  { icon: FileText, label: 'Meus Processos', href: '/cliente/processos' },
-  { icon: FolderOpen, label: 'Documentos', href: '/cliente/documentos' },
-  { icon: CreditCard, label: 'Financeiro', href: '/cliente/financeiro' },
-  { icon: MessageSquare, label: 'Suporte IA', href: '/cliente/suporte' },
-  { icon: Settings, label: 'Configurações', href: '/cliente/configuracoes' },
+interface MenuItem {
+  icon: typeof LayoutDashboard;
+  label: string;
+  subtitle: string;
+  href: string;
+  iconColor: string;
+  iconBg: string;
+}
+
+const menuItems: MenuItem[] = [
+  { 
+    icon: LayoutDashboard, 
+    label: 'Dashboard', 
+    subtitle: 'Visão geral',
+    href: '/cliente/dashboard',
+    iconColor: 'text-blue-500',
+    iconBg: 'bg-blue-100 dark:bg-blue-900/30'
+  },
+  { 
+    icon: FileText, 
+    label: 'Meus Processos', 
+    subtitle: 'Acompanhe suas marcas',
+    href: '/cliente/processos',
+    iconColor: 'text-violet-500',
+    iconBg: 'bg-violet-100 dark:bg-violet-900/30'
+  },
+  { 
+    icon: FolderOpen, 
+    label: 'Documentos', 
+    subtitle: 'Arquivos e certificados',
+    href: '/cliente/documentos',
+    iconColor: 'text-amber-500',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/30'
+  },
+  { 
+    icon: CreditCard, 
+    label: 'Financeiro', 
+    subtitle: 'Faturas e pagamentos',
+    href: '/cliente/financeiro',
+    iconColor: 'text-emerald-500',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30'
+  },
+  { 
+    icon: MessageSquare, 
+    label: 'Suporte IA', 
+    subtitle: 'Tire suas dúvidas',
+    href: '/cliente/suporte',
+    iconColor: 'text-pink-500',
+    iconBg: 'bg-pink-100 dark:bg-pink-900/30'
+  },
+  { 
+    icon: Settings, 
+    label: 'Configurações', 
+    subtitle: 'Preferências da conta',
+    href: '/cliente/configuracoes',
+    iconColor: 'text-slate-500',
+    iconBg: 'bg-slate-100 dark:bg-slate-900/30'
+  },
 ];
 
 export function ClientLayout({ children }: ClientLayoutProps) {
@@ -46,14 +97,14 @@ export function ClientLayout({ children }: ClientLayoutProps) {
 
   const NavContent = () => (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
-        <Link to="/">
+      <div className="p-4 border-b border-border/50">
+        <Link to="/" className="flex items-center gap-3">
           <img src={logo} alt="WebMarcas" className="h-10" />
         </Link>
       </div>
 
       <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-1">
+        <nav className="space-y-1.5">
           {menuItems.map((item, index) => {
             const isActive = location.pathname === item.href;
             return (
@@ -62,30 +113,55 @@ export function ClientLayout({ children }: ClientLayoutProps) {
                 to={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                  'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
                   isActive
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground hover:translate-x-1'
+                    ? 'bg-primary/10 shadow-sm'
+                    : 'hover:bg-muted/50 hover:shadow-sm'
                 )}
                 style={{ animationDelay: `${index * 0.05}s` }}
               >
-                <item.icon className={cn("h-5 w-5 transition-transform", isActive && "scale-110")} />
-                {item.label}
-                {isActive && <ChevronRight className="ml-auto h-4 w-4 animate-pulse" />}
+                <div className={cn(
+                  "flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200",
+                  item.iconBg,
+                  isActive && "scale-110 shadow-md",
+                  !isActive && "group-hover:scale-105"
+                )}>
+                  <item.icon className={cn("h-5 w-5", item.iconColor)} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className={cn(
+                    "block text-sm font-medium truncate transition-colors",
+                    isActive ? "text-primary" : "text-foreground"
+                  )}>
+                    {item.label}
+                  </span>
+                  <span className="block text-xs text-muted-foreground truncate">
+                    {item.subtitle}
+                  </span>
+                </div>
+                <ChevronRight className={cn(
+                  "h-4 w-4 text-muted-foreground/50 transition-all duration-200",
+                  isActive ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0"
+                )} />
               </Link>
             );
           })}
         </nav>
       </ScrollArea>
 
-      <div className="p-3 border-t">
+      <div className="p-3 border-t border-border/50">
         <Button
           variant="ghost"
-          className="w-full justify-start text-muted-foreground hover:text-destructive"
+          className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl"
           onClick={handleLogout}
         >
-          <LogOut className="mr-2 h-5 w-5" />
-          Sair
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30">
+            <LogOut className="h-5 w-5 text-red-500" />
+          </div>
+          <div className="flex-1 text-left">
+            <span className="block text-sm font-medium">Sair</span>
+            <span className="block text-xs text-muted-foreground">Encerrar sessão</span>
+          </div>
         </Button>
       </div>
     </div>
@@ -94,19 +170,19 @@ export function ClientLayout({ children }: ClientLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col border-r bg-card">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm">
         <NavContent />
       </aside>
 
       {/* Mobile Header */}
-      <header className="lg:hidden sticky top-0 z-50 flex items-center justify-between h-16 px-4 border-b bg-card">
+      <header className="lg:hidden sticky top-0 z-50 flex items-center justify-between h-16 px-4 border-b border-border/50 bg-card/80 backdrop-blur-sm">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="rounded-xl">
               <Menu className="h-6 w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64">
+          <SheetContent side="left" className="p-0 w-72">
             <NavContent />
           </SheetContent>
         </Sheet>
@@ -115,13 +191,13 @@ export function ClientLayout({ children }: ClientLayoutProps) {
           <img src={logo} alt="WebMarcas" className="h-8" />
         </Link>
 
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" className="rounded-xl">
           <Bell className="h-5 w-5" />
         </Button>
       </header>
 
       {/* Main Content */}
-      <main className="lg:pl-64">
+      <main className="lg:pl-72">
         <div className="p-6 lg:p-8 animate-page-enter">{children}</div>
       </main>
     </div>

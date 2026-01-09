@@ -322,6 +322,32 @@ serve(async (req) => {
     }
 
     // ========================================
+    // STEP 6.5: Create Invoice in database with payment details
+    // ========================================
+    const invoiceDescription = `Registro de marca: ${brandData.brandName}`;
+    const { data: invoiceData, error: invoiceError } = await supabaseAdmin
+      .from('invoices')
+      .insert({
+        description: invoiceDescription,
+        amount: paymentValue,
+        due_date: dueDateString,
+        status: 'pending',
+        invoice_url: paymentData.invoiceUrl || null,
+        pix_code: pixQrCode?.payload || null,
+        boleto_code: paymentData.bankSlipUrl || null,
+        asaas_invoice_id: paymentId,
+        payment_method: billingType === 'PIX' ? 'pix' : billingType === 'BOLETO' ? 'boleto' : 'credit_card',
+      })
+      .select('id')
+      .single();
+
+    if (invoiceError) {
+      console.error('Error creating invoice:', invoiceError);
+    } else {
+      console.log('Created invoice:', invoiceData?.id);
+    }
+
+    // ========================================
     // STEP 6.1: Trigger form_completed email automation
     // ========================================
     try {
@@ -357,6 +383,7 @@ serve(async (req) => {
       paymentId,
       leadId: leadId! || null,
       contractId: contractData?.id || null,
+      invoiceId: invoiceData?.id || null,
       contractNumber,
       status: paymentData.status,
       billingType,
