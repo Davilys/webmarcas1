@@ -251,37 +251,51 @@ export function ContractRenderer({
             </li>
           </ul>
 
-          {/* Signature Data Box - only shown when actually signed */}
+          {/* Signature Data Box with QR Code - only shown when actually signed */}
           {blockchainSignature?.hash ? (
-            <div className="mt-4 p-4 bg-white border border-green-300 rounded-md shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="font-bold text-green-800">DADOS DA ASSINATURA ELETRÔNICA</span>
+            <div className="mt-4 flex gap-4 items-stretch">
+              {/* Signature Data */}
+              <div className="flex-1 p-4 bg-white border border-green-300 rounded-md shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="font-bold text-green-800">DADOS DA ASSINATURA ELETRÔNICA</span>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-2 text-xs font-mono text-green-900 bg-green-50 p-3 rounded">
+                  <div className="flex flex-wrap items-start gap-1">
+                    <span className="font-bold whitespace-nowrap">Hash SHA-256:</span>
+                    <span className="break-all text-[10px]">{blockchainSignature.hash}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold">Data/Hora:</span>
+                    <span>{blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold">Endereço IP:</span>
+                    <span>{blockchainSignature.ipAddress || '-'}</span>
+                  </div>
+                  {blockchainSignature.txId && (
+                    <div className="flex items-start gap-1">
+                      <span className="font-bold whitespace-nowrap">ID da Transação:</span>
+                      <span className="break-all">{blockchainSignature.txId}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold">Rede:</span>
+                    <span>{blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</span>
+                  </div>
+                </div>
               </div>
               
-              <div className="grid grid-cols-1 gap-2 text-xs font-mono text-green-900 bg-green-50 p-3 rounded">
-                <div className="flex flex-wrap items-start gap-1">
-                  <span className="font-bold whitespace-nowrap">Hash SHA-256:</span>
-                  <span className="break-all text-[10px]">{blockchainSignature.hash}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold">Data/Hora:</span>
-                  <span>{blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold">Endereço IP:</span>
-                  <span>{blockchainSignature.ipAddress || '-'}</span>
-                </div>
-                {blockchainSignature.txId && (
-                  <div className="flex items-start gap-1">
-                    <span className="font-bold whitespace-nowrap">ID da Transação:</span>
-                    <span className="break-all">{blockchainSignature.txId}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1">
-                  <span className="font-bold">Rede:</span>
-                  <span>{blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</span>
-                </div>
+              {/* QR Code */}
+              <div className="flex-shrink-0 p-3 bg-white border border-green-300 rounded-md shadow-sm text-center">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}`}
+                  alt="QR Code de Verificação"
+                  className="w-24 h-24 mx-auto"
+                />
+                <p className="text-[9px] text-green-700 mt-2 font-medium">Escaneie para verificar</p>
+                <p className="text-[8px] text-green-600">a autenticidade</p>
               </div>
             </div>
           ) : (
@@ -545,18 +559,32 @@ export function generateContractPrintHTML(
     </div>
     
     ${blockchainSignature?.hash ? `
-    <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; font-size: 10px;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-        <span style="font-weight: bold; color: #166534;">DADOS DA ASSINATURA ELETRÔNICA</span>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <!-- Signature Data -->
+      <div style="flex: 1; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 16px; font-size: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          <span style="font-weight: bold; color: #166534;">DADOS DA ASSINATURA ELETRÔNICA</span>
+        </div>
+        
+        <div style="font-family: monospace; color: #166534; background: #dcfce7; padding: 12px; border-radius: 4px;">
+          <div style="margin-bottom: 6px;"><strong>Hash SHA-256:</strong> <span style="font-size: 9px; word-break: break-all;">${blockchainSignature.hash}</span></div>
+          <div style="margin-bottom: 6px;"><strong>Data/Hora:</strong> ${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</div>
+          <div style="margin-bottom: 6px;"><strong>Endereço IP:</strong> ${blockchainSignature.ipAddress || '-'}</div>
+          ${blockchainSignature.txId ? `<div style="margin-bottom: 6px;"><strong>ID da Transação:</strong> ${blockchainSignature.txId}</div>` : ''}
+          <div><strong>Rede:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</div>
+        </div>
       </div>
       
-      <div style="font-family: monospace; color: #166534; background: #dcfce7; padding: 12px; border-radius: 4px;">
-        <div style="margin-bottom: 6px;"><strong>Hash SHA-256:</strong> <span style="font-size: 9px; word-break: break-all;">${blockchainSignature.hash}</span></div>
-        <div style="margin-bottom: 6px;"><strong>Data/Hora:</strong> ${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</div>
-        <div style="margin-bottom: 6px;"><strong>Endereço IP:</strong> ${blockchainSignature.ipAddress || '-'}</div>
-        ${blockchainSignature.txId ? `<div style="margin-bottom: 6px;"><strong>ID da Transação:</strong> ${blockchainSignature.txId}</div>` : ''}
-        <div><strong>Rede:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</div>
+      <!-- QR Code -->
+      <div style="text-align: center; background: white; border: 1px solid #86efac; border-radius: 6px; padding: 12px;">
+        <img 
+          src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}" 
+          alt="QR Code de Verificação"
+          style="width: 120px; height: 120px;"
+        />
+        <p style="font-size: 8px; color: #166534; margin-top: 8px; font-weight: 500;">Escaneie para verificar</p>
+        <p style="font-size: 7px; color: #16a34a; margin-top: 2px;">a autenticidade do contrato</p>
       </div>
     </div>
     ` : `
