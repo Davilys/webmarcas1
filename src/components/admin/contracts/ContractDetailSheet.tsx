@@ -8,16 +8,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Eye, Send, Mail, MoreVertical, Trash2, EyeOff, Copy, ExternalLink,
   FileText, Paperclip, MessageSquare, History, CheckSquare, StickyNote, FileStack, Save, 
-  Link, Loader2, Shield, Clock
+  Link, Loader2, Shield, Clock, Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DocumentRenderer } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML } from '@/components/contracts/DocumentRenderer';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface Contract {
   id: string;
@@ -95,6 +99,9 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
   const [attachments, setAttachments] = useState<any[]>([]);
   const [renewalHistory, setRenewalHistory] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     fetchContractTypes();
@@ -248,6 +255,161 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     return labels[eventType] || eventType;
   };
 
+  const openPreview = () => {
+    if (!contract?.contract_html) {
+      toast.error('Documento sem conteúdo');
+      return;
+    }
+
+    const printHtml = generateDocumentPrintHTML(
+      (contract.document_type as any) || 'procuracao',
+      contract.contract_html,
+      contract.client_signature_image || null,
+      contract.blockchain_hash ? {
+        hash: contract.blockchain_hash,
+        timestamp: contract.blockchain_timestamp || '',
+        txId: contract.blockchain_tx_id || '',
+        network: contract.blockchain_network || '',
+        ipAddress: contract.signature_ip || '',
+      } : undefined,
+      contract.signatory_name || undefined,
+      contract.signatory_cpf || undefined,
+      contract.signatory_cnpj || undefined,
+      undefined,
+      window.location.origin
+    );
+
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write(printHtml);
+      newWindow.document.close();
+    }
+  };
+
+  const downloadPDF = async () => {
+    if (!contract?.contract_html) {
+      toast.error('Documento sem conteúdo');
+      return;
+    }
+
+    setDownloadingPdf(true);
+    try {
+      const printHtml = generateDocumentPrintHTML(
+        (contract.document_type as any) || 'procuracao',
+        contract.contract_html,
+        contract.client_signature_image || null,
+        contract.blockchain_hash ? {
+          hash: contract.blockchain_hash,
+          timestamp: contract.blockchain_timestamp || '',
+          txId: contract.blockchain_tx_id || '',
+          network: contract.blockchain_network || '',
+          ipAddress: contract.signature_ip || '',
+        } : undefined,
+        contract.signatory_name || undefined,
+        contract.signatory_cpf || undefined,
+        contract.signatory_cnpj || undefined,
+        undefined,
+        window.location.origin
+      );
+
+      const container = document.createElement('div');
+      container.innerHTML = printHtml;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.width = '210mm';
+      container.style.background = 'white';
+      document.body.appendChild(container);
+
+      const canvas = await html2canvas(container, { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`${contract.subject || contract.contract_number || 'contrato'}.pdf`);
+      toast.success('PDF baixado com sucesso!');
+      
+      document.body.removeChild(container);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const sendContractEmail = async () => {
+    if (!contract) return;
+
+    setSendingEmail(true);
+    try {
+      let clientEmail = '';
+      let clientName = '';
+      
+      if (contract.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .eq('id', contract.user_id)
+          .single();
+        clientEmail = profile?.email || '';
+        clientName = profile?.full_name || '';
+      }
+
+      if (!clientEmail && contract.signatory_name) {
+        // Tenta buscar por lead associado
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('email, full_name')
+          .eq('full_name', contract.signatory_name)
+          .single();
+        clientEmail = lead?.email || '';
+        clientName = lead?.full_name || '';
+      }
+
+      if (!clientEmail) {
+        toast.error('Cliente sem email cadastrado');
+        return;
+      }
+
+      const response = await supabase.functions.invoke('send-email', {
+        body: {
+          to: clientEmail,
+          subject: `Contrato: ${contract.subject || contract.contract_number}`,
+          body: `Olá ${clientName || 'Cliente'},\n\nSegue o contrato "${contract.subject || contract.contract_number}" para sua análise.\n\nAtenciosamente,\nWebMarcas Patentes`,
+        }
+      });
+
+      if (response.error) throw response.error;
+
+      toast.success('Email enviado com sucesso!');
+      setEmailDialogOpen(false);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast.error('Erro ao enviar email');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (!contract) return null;
 
   const signatureUrl = contract.signature_token 
@@ -284,18 +446,86 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={openPreview}>
                 <Eye className="h-4 w-4 mr-2" />
                 Visualizar
               </Button>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={downloadPDF}
+                disabled={downloadingPdf}
+                title="Download PDF"
+              >
+                {downloadingPdf ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setEmailDialogOpen(true)}
+                title="Enviar por Email"
+              >
                 <Mail className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={openPreview}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Visualizar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={downloadPDF}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setEmailDialogOpen(true)}>
+                    <Mail className="h-4 w-4 mr-2" />
+                    Enviar por Email
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
+
+          {/* Email Dialog */}
+          <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Enviar Contrato por Email</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <p className="text-sm text-muted-foreground">
+                  Deseja enviar o contrato "{contract.subject || contract.contract_number}" por email para o cliente?
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={sendContractEmail} disabled={sendingEmail}>
+                  {sendingEmail ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Enviar Email
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Signature Link Section */}
           {contract.signature_status !== 'signed' && (

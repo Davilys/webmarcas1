@@ -23,7 +23,7 @@ interface BlockchainSignature {
 }
 
 interface DocumentRendererProps {
-  documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
+  documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' | 'contract';
   content: string;
   clientSignature?: string | null;
   blockchainSignature?: BlockchainSignature;
@@ -51,10 +51,20 @@ export function DocumentRenderer({
         return 'Acordo de Distrato de Parceria - Anexo I';
       case 'distrato_sem_multa':
         return 'Acordo de Distrato de Parceria - Anexo I';
+      case 'contract':
+        return 'CONTRATO';
       default:
         return 'DOCUMENTO';
     }
   }, [documentType]);
+
+  // Detectar se o conteúdo é HTML completo
+  const isHtmlDocument = useMemo(() => {
+    const trimmedContent = content.trim();
+    return trimmedContent.startsWith('<!DOCTYPE') || 
+           trimmedContent.startsWith('<html') ||
+           (trimmedContent.startsWith('<') && trimmedContent.includes('</'));
+  }, [content]);
 
   const legalNotice = useMemo(() => {
     if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
@@ -112,13 +122,20 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
         )}
 
         {/* Document Content */}
-        <div className="prose prose-sm max-w-none text-justify leading-relaxed">
-          {formattedContent.split('\n\n').map((paragraph, idx) => (
-            <p key={idx} className="mb-4 text-gray-800">
-              {paragraph}
-            </p>
-          ))}
-        </div>
+        {isHtmlDocument ? (
+          <div 
+            className="prose prose-sm max-w-none text-justify leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: formattedContent }}
+          />
+        ) : (
+          <div className="prose prose-sm max-w-none text-justify leading-relaxed">
+            {formattedContent.split('\n\n').map((paragraph, idx) => (
+              <p key={idx} className="mb-4 text-gray-800">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        )}
 
         {/* Signatures Section */}
         <div className="mt-12 pt-8 border-t border-gray-200">
@@ -271,7 +288,7 @@ export async function getSignatureBase64(): Promise<string> {
 }
 
 export function generateDocumentPrintHTML(
-  documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa',
+  documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' | 'contract',
   content: string,
   clientSignature: string | null,
   blockchainSignature?: BlockchainSignature,
@@ -281,11 +298,16 @@ export function generateDocumentPrintHTML(
   davilysSignatureBase64?: string,
   baseUrl?: string
 ): string {
-  const documentTitle = documentType === 'procuracao' 
-    ? 'PROCURAÇÃO' 
-    : 'Acordo de Distrato de Parceria - Anexo I';
+  let documentTitle = 'DOCUMENTO';
+  if (documentType === 'procuracao') {
+    documentTitle = 'PROCURAÇÃO';
+  } else if (documentType === 'contract') {
+    documentTitle = 'CONTRATO';
+  } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
+    documentTitle = 'Acordo de Distrato de Parceria - Anexo I';
+  }
 
-  const legalNotice = documentType !== 'procuracao'
+  const legalNotice = (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa')
     ? `<div style="background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 14px; color: #374151; font-style: italic;">
         <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
         <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
