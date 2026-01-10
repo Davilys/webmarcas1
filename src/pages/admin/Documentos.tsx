@@ -171,8 +171,11 @@ export default function AdminDocumentos() {
   };
 
   const getFileIcon = (url: string) => {
-    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(url)) return <Image className="h-4 w-4 text-blue-500" />;
-    if (/\.pdf$/i.test(url)) return <FileText className="h-4 w-4 text-red-500" />;
+    const lowerUrl = url.toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|tiff|ico)$/i.test(lowerUrl)) return <Image className="h-4 w-4 text-blue-500" />;
+    if (/\.pdf$/i.test(lowerUrl)) return <FileText className="h-4 w-4 text-red-500" />;
+    if (/\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(lowerUrl)) return <FileIcon className="h-4 w-4 text-purple-500" />;
+    if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(lowerUrl)) return <FileIcon className="h-4 w-4 text-green-500" />;
     return <FileIcon className="h-4 w-4 text-gray-500" />;
   };
 
