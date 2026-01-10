@@ -10,15 +10,18 @@ const corsHeaders = {
 interface TriggerRequest {
   trigger_event: string;
   lead_id?: string;
-  create_lead?: boolean; // If true, create or update the lead
+  create_lead?: boolean;
   data: {
-    nome: string;
-    email: string;
+    nome?: string;
+    email?: string;
     marca?: string;
     phone?: string;
     data_assinatura?: string;
     hash_contrato?: string;
     ip_assinatura?: string;
+    verification_url?: string;
+    link_assinatura?: string;
+    data_expiracao?: string;
   };
 }
 
@@ -65,7 +68,7 @@ const handler = async (req: Request): Promise<Response> => {
         const { data: newLead, error: leadError } = await supabase
           .from('leads')
           .insert({
-            full_name: data.nome,
+            full_name: data.nome || 'Lead',
             email: data.email,
             phone: data.phone || null,
             form_started_at: new Date().toISOString(),
@@ -122,6 +125,7 @@ const handler = async (req: Request): Promise<Response> => {
     let subject = template.subject;
     let body = template.body;
 
+    // Preparar substituições de variáveis - incluindo verification_url
     const replacements: Record<string, string> = {
       '{{nome}}': data.nome || '',
       '{{email}}': data.email || '',
@@ -129,6 +133,9 @@ const handler = async (req: Request): Promise<Response> => {
       '{{data_assinatura}}': data.data_assinatura || new Date().toLocaleDateString('pt-BR'),
       '{{hash_contrato}}': data.hash_contrato || '',
       '{{ip_assinatura}}': data.ip_assinatura || '',
+      '{{verification_url}}': data.verification_url || '',
+      '{{link_assinatura}}': data.link_assinatura || '',
+      '{{data_expiracao}}': data.data_expiracao || '',
     };
 
     for (const [key, value] of Object.entries(replacements)) {
@@ -148,6 +155,15 @@ const handler = async (req: Request): Promise<Response> => {
         },
       },
     });
+
+    // Verificar se temos email do destinatário
+    if (!data.email) {
+      console.error('No recipient email provided');
+      return new Response(
+        JSON.stringify({ error: 'Email do destinatário não fornecido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Enviar email
     await client.send({

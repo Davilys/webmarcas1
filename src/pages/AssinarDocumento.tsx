@@ -123,6 +123,7 @@ export default function AssinarDocumento() {
             signatureImage: signature,
             signatureToken: token,
             deviceInfo,
+            baseUrl: window.location.origin,
           }),
         }
       );
