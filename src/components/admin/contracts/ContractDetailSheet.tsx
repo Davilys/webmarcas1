@@ -396,21 +396,88 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
         return;
       }
 
-      const response = await supabase.functions.invoke('send-email', {
-        body: {
-          to: clientEmail,
-          subject: `Contrato: ${contract.subject || contract.contract_number}`,
-          body: `Olá ${clientName || 'Cliente'},\n\nSegue o contrato "${contract.subject || contract.contract_number}" para sua análise.\n\nAtenciosamente,\nWebMarcas Patentes`,
+      // DIFERENCIAÇÃO POR STATUS DO CONTRATO
+      if (contract.signature_status === 'signed') {
+        // CONTRATO JÁ ASSINADO - Enviar confirmação com template rico
+        const { data: template } = await supabase
+          .from('email_templates')
+          .select('subject, body')
+          .eq('trigger_event', 'contract_signed')
+          .eq('is_active', true)
+          .single();
+        
+        if (!template) {
+          toast.error('Template de email não encontrado');
+          setSendingEmail(false);
+          return;
         }
-      });
+        
+        const baseUrl = window.location.origin;
+        const verificationUrl = contract.blockchain_hash 
+          ? `${baseUrl}/verificar-contrato?hash=${contract.blockchain_hash}`
+          : `${baseUrl}/cliente/documentos`;
+        
+        // Substituir variáveis no template
+        const displayName = clientName || contract.signatory_name || 'Cliente';
+        let emailBody = template.body
+          .replace(/\{\{nome\}\}/g, displayName)
+          .replace(/\{\{marca\}\}/g, contract.subject || '')
+          .replace(/\{\{data_assinatura\}\}/g, contract.signed_at 
+            ? format(new Date(contract.signed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+            : 'N/A')
+          .replace(/\{\{hash_contrato\}\}/g, contract.blockchain_hash || 'N/A')
+          .replace(/\{\{ip_assinatura\}\}/g, contract.signature_ip || 'N/A')
+          .replace(/\{\{verification_url\}\}/g, verificationUrl)
+          .replace(/\{\{app_url\}\}/g, baseUrl);
+        
+        let emailSubject = template.subject
+          .replace(/\{\{nome\}\}/g, displayName)
+          .replace(/\{\{marca\}\}/g, contract.subject || '');
+        
+        const response = await supabase.functions.invoke('send-email', {
+          body: {
+            to: [clientEmail],
+            subject: emailSubject,
+            body: emailBody.replace(/<[^>]*>/g, ''), // Plain text fallback
+            html: emailBody,
+          }
+        });
 
-      if (response.error) throw response.error;
+        if (response.error) throw response.error;
+        
+      } else {
+        // CONTRATO NÃO ASSINADO - Enviar link de assinatura
+        const session = await supabase.auth.getSession();
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-signature-request`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.data.session?.access_token}`,
+            },
+            body: JSON.stringify({ 
+              contractId: contract.id, 
+              channels: ['email'], 
+              baseUrl: window.location.origin,
+              overrideContact: { email: clientEmail, name: clientName || contract.signatory_name }
+            }),
+          }
+        );
+        
+        const result = await response.json();
+        
+        if (!response.ok || result.error) {
+          throw new Error(result.error || 'Erro ao enviar email');
+        }
+      }
 
       toast.success('Email enviado com sucesso!');
       setEmailDialogOpen(false);
-    } catch (error) {
+      fetchContractData(contract.id);
+    } catch (error: any) {
       console.error('Error sending email:', error);
-      toast.error('Erro ao enviar email');
+      toast.error(error.message || 'Erro ao enviar email');
     } finally {
       setSendingEmail(false);
     }
@@ -505,11 +572,44 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
           <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Enviar Contrato por Email</DialogTitle>
+                <DialogTitle>
+                  {contract.signature_status === 'signed' 
+                    ? 'Enviar Confirmação de Assinatura'
+                    : 'Enviar Link de Assinatura'}
+                </DialogTitle>
               </DialogHeader>
-              <div className="py-4">
+              <div className="py-4 space-y-3">
+                {contract.signature_status === 'signed' ? (
+                  <>
+                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
+                      <Shield className="h-5 w-5 text-green-600" />
+                      <div>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                          Contrato já assinado
+                        </p>
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          O cliente receberá um email de confirmação com os detalhes da assinatura e link para verificação.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <Clock className="h-5 w-5 text-amber-600" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                          Contrato pendente de assinatura
+                        </p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          O cliente receberá um email com o link para assinar o documento digitalmente.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
                 <p className="text-sm text-muted-foreground">
-                  Deseja enviar o contrato "{contract.subject || contract.contract_number}" por email para o cliente?
+                  Documento: "{contract.subject || contract.contract_number}"
                 </p>
               </div>
               <DialogFooter>
@@ -525,7 +625,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
                   ) : (
                     <>
                       <Mail className="h-4 w-4 mr-2" />
-                      Enviar Email
+                      {contract.signature_status === 'signed' ? 'Enviar Confirmação' : 'Enviar Link'}
                     </>
                   )}
                 </Button>
