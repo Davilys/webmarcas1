@@ -108,7 +108,7 @@ export default function RegistrarMarca() {
 
       sessionStorage.setItem("orderData", JSON.stringify(orderData));
       toast.success("Cobrança criada com sucesso!");
-      navigate("/status-pedido");
+      navigate("/cliente/status-pedido");
     } catch (err) {
       console.error('Submit error:', err);
       toast.error(err instanceof Error ? err.message : "Erro ao processar. Tente novamente.");
