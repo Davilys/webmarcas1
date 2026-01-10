@@ -260,7 +260,7 @@ function AdminSidebar() {
             <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10">
               <Shield className="h-3.5 w-3.5 text-primary" />
             </div>
-            <span className="font-medium text-muted-foreground">Painel Administrativo</span>
+            <span className="font-medium text-muted-foreground">CRM WebMarcas</span>
           </div>
         )}
       </SidebarHeader>
@@ -381,7 +381,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10">
                 <Shield className="h-3.5 w-3.5 text-primary" />
               </div>
-              <span className="font-medium">Painel Administrativo</span>
+              <span className="font-medium">CRM WebMarcas</span>
             </div>
           </header>
           
