@@ -159,9 +159,8 @@ const ViabilitySearchSection = () => {
       businessArea,
       level: result?.level,
     }));
-    // Scroll to top before navigation
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    navigate('/registro');
+    // Open checkout in new tab
+    window.open('/checkout', '_blank');
   };
 
   const getResultStyles = (level: ViabilityLevel) => {
