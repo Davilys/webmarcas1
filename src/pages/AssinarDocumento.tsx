@@ -84,9 +84,18 @@ export default function AssinarDocumento() {
     }
   };
 
+  // Verificar se é procuração (exige rubrica manuscrita)
+  const isProcuracao = contract?.document_type === 'procuracao';
+
   const handleSign = async () => {
-    if (!contract || !signature || !acceptedTerms) {
-      toast.error('Por favor, aceite os termos e desenhe sua assinatura');
+    if (!contract || !acceptedTerms) {
+      toast.error('Por favor, aceite os termos do documento');
+      return;
+    }
+    
+    // Procuração exige assinatura manuscrita
+    if (isProcuracao && !signature) {
+      toast.error('Por favor, desenhe sua assinatura para a procuração');
       return;
     }
 
@@ -336,24 +345,41 @@ export default function AssinarDocumento() {
                 </div>
               </div>
 
-              {/* Signature Pad */}
-              <div className="mb-6">
-                <Label className="block mb-3 font-medium">
-                  Desenhe sua assinatura no campo abaixo:
-                </Label>
-                <SignaturePad 
-                  onSignatureChange={setSignature}
-                  width={600}
-                  height={200}
-                />
-              </div>
+              {/* Signature Pad - Apenas para Procuração */}
+              {isProcuracao ? (
+                <div className="mb-6">
+                  <Label className="block mb-3 font-medium">
+                    Desenhe sua assinatura no campo abaixo:
+                  </Label>
+                  <SignaturePad 
+                    onSignatureChange={setSignature}
+                    width={600}
+                    height={200}
+                  />
+                </div>
+              ) : (
+                <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-900">
+                        Assinatura Eletrônica com Certificação Digital
+                      </p>
+                      <p className="text-sm text-green-700">
+                        Este documento será assinado eletronicamente com validade jurídica 
+                        conforme Lei 14.063/2020. Não é necessária rubrica manuscrita.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Sign Button */}
               <div className="flex justify-center">
                 <Button 
                   size="lg"
                   onClick={handleSign}
-                  disabled={!acceptedTerms || !signature || signing}
+                  disabled={!acceptedTerms || (isProcuracao && !signature) || signing}
                   className="min-w-[200px]"
                 >
                   {signing ? (
@@ -372,9 +398,14 @@ export default function AssinarDocumento() {
 
               {/* Legal Notice */}
               <p className="text-xs text-center text-gray-500 mt-6">
-                Ao clicar em "Assinar Documento", sua assinatura será registrada em blockchain, 
-                capturando data/hora, endereço IP e informações do dispositivo para garantir 
-                a validade jurídica do documento.
+                {isProcuracao ? (
+                  <>Ao clicar em "Assinar Documento", sua assinatura manuscrita será registrada em blockchain, 
+                  capturando data/hora, endereço IP e informações do dispositivo para garantir 
+                  a validade jurídica do documento.</>
+                ) : (
+                  <>Ao clicar em "Assinar Documento", sua confirmação será registrada em blockchain 
+                  com certificação digital, garantindo validade jurídica conforme Lei 14.063/2020.</>
+                )}
               </p>
             </div>
           </>
