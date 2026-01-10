@@ -13,7 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { contractId, channels = ['email'], baseUrl: clientBaseUrl } = await req.json();
+    const { 
+      contractId, 
+      channels = ['email'], 
+      baseUrl: clientBaseUrl,
+      overrideContact, // Optional: { email, phone, name } for new clients
+    } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -63,9 +68,11 @@ serve(async (req) => {
     }
 
     const profile = contract.profiles as any;
-    const recipientEmail = profile?.email;
-    const recipientPhone = profile?.phone;
-    const recipientName = contract.signatory_name || profile?.full_name || 'Cliente';
+    
+    // Use override contact if provided (for newly created clients), otherwise use profile
+    const recipientEmail = overrideContact?.email || profile?.email;
+    const recipientPhone = overrideContact?.phone || profile?.phone;
+    const recipientName = overrideContact?.name || contract.signatory_name || profile?.full_name || 'Cliente';
     
     const baseUrl = clientBaseUrl || Deno.env.get('SITE_URL') || 'https://webmarcas.com.br';
     const signatureUrl = `${baseUrl}/assinar/${contract.signature_token}`;
