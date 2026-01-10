@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
-import { generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
+import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
 import type { PersonalData } from "./PersonalDataStep";
 import type { BrandData } from "./BrandDataStep";
 import { toast } from "sonner";
@@ -168,12 +168,15 @@ export function ContractStep({
       </div>
 
       {/* Contract Content */}
-      <Card>
-        <ScrollArea className="h-[300px] p-4">
-          <div
-            className="prose prose-sm max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: getProcessedContract() }}
-          />
+      <Card className="overflow-hidden border-2">
+        <ScrollArea className="h-[400px]">
+          <div className="p-4">
+            <ContractRenderer 
+              content={getProcessedContract()} 
+              showLetterhead={true}
+              showCertificationSection={false}
+            />
+          </div>
         </ScrollArea>
       </Card>
 
