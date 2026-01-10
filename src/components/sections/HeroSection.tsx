@@ -82,11 +82,14 @@ const HeroSection = () => {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6 animate-slide-up" style={{ animationDelay: "0.2s" }}>
-            <Button variant="hero" size="xl" asChild>
-              <a href="#consultar" className="group">
-                {t("hero.cta.check")}
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </a>
+            <Button 
+              variant="hero" 
+              size="xl" 
+              onClick={() => window.open('/checkout', '_blank')}
+              className="group"
+            >
+              {t("hero.cta.check")}
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
             <Button variant="hero-outline" size="xl" asChild>
               <a href="#precos">
