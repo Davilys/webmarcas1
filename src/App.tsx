@@ -22,6 +22,7 @@ import ClienteDocumentos from "./pages/cliente/Documentos";
 import ClienteFinanceiro from "./pages/cliente/Financeiro";
 import ClienteSuporte from "./pages/cliente/Suporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
+import ClienteRegistrarMarca from "./pages/cliente/RegistrarMarca";
 
 // Admin pages
 import AdminLogin from "./pages/admin/Login";
@@ -69,6 +70,7 @@ const App = () => (
               <Route path="/cliente/financeiro" element={<ClienteFinanceiro />} />
               <Route path="/cliente/suporte" element={<ClienteSuporte />} />
               <Route path="/cliente/configuracoes" element={<ClienteConfiguracoes />} />
+              <Route path="/cliente/registrar-marca" element={<ClienteRegistrarMarca />} />
               
               {/* Painel Administrativo */}
               <Route path="/admin/login" element={<AdminLogin />} />
