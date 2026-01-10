@@ -1,11 +1,9 @@
 import { useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import webmarcasLogo from '@/assets/webmarcas-logo.png';
+import davilysSignature from '@/assets/davilys-signature.png';
 
 const VERIFICATION_BASE_URL = 'https://webmarcas.com.br/verificar-contrato';
-
-// Assinatura do Davilys em base64 (placeholder - será substituído pela imagem real)
-const DAVILYS_SIGNATURE_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkCAYAAAA8AQ3AAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAgVSURBVHhe7d1/rBVVHcfxy1OSJNM0NUxNszKtzB9paZqmaZn9MDVTyzRN0zRN0zRN0zRN0zRN0zRN0zRN0zRN0zQd5v4/z3xm3nDv5d6X8+Ge+76wFgvOzJk5c+acM3N+HDQAAAAAAAAAAAAAAAAAAAAAAAAAAACAbr59q72n3b3aA6rd97f7R7sP0O4D7e5W7e7W7oO0ux+z27W7e7V7P+3ud7f2wNrtvu2u1+5+dLu91g5Y9+52/2v3AXbvb3dvo92D2t2/7e5Xtwda+2Dtdm+lXYDdB9i9n927afc+drs/3O4D7N5Xu/u3u/+0+wC7D9DuPu3uU+0+wO79tbu/dg+q3f3rdu+j3ftrd/9p9wF2H6Dd+2h3v9p9gN0H2L2/dvdv9z7a3b929+92H2D3ftpd2u7+dbsP0O5+tbu/dver2+3+2+5+dLv91+5+dbt/271v3e7/tHsf3W6/tntf3e7/7O5Tt/t/u/eh2+2/dvel2/2f3X3odvuv3X1pd//a3Zdut//a3Y9ud/+63X3odvuv3ftqt//bvY+1+0C793O7z+2+Z7d7v+0+QLv70+0+ULsP0O5+dLv7te0+wO79tbsfbbcftbtP3e7/7N5Pt9v/7e5Lt9t/7d5Xu/3f7n3rdv9vd39rd/++3fvV7f7P7v1odze73f3pdvdv2+1/du+v3d2s3f3odvev291v3W7/sXtfu939ane/dbv91+7+1e7+bbv7r9vt/3b3p93dbLv71O3uX7e7f93ufut2+4/d+2q3/9ndv253v9pdaLf/2N2fbnez291v3e7+dLv71+7+1O7C2t2fbre/ud396na3293/7O5P7e5m7e5Pu7tZu/3N7n51u9vs7k+329+63f3odvev3f3odvu73f3pdjezbrf/2L2fdvej2+1vdven2+0/du+r3f5jd3+63f7S7f53u/er293Mut3+Ync/ut39aHd/dbv7pdvdz27X/+zeT7e7X7X/d+3ep263v3S7+9Ht7k+3279ud391u/ul2+3vdver2+1f3e7+dLv7pdvt73bvp93+0u3ut253P7rd/dXt9ne7+9Xtbna7+9Ht7le32+2/dvel292vbre/dLv7pdvd7Hb3p9vdL93uZrfbv+zev263v3S7+6Xb7e9276fb3S/dbv+xez/dbv/odvdLt7vZ7e5Pt7tZ7fYvu/fT7e6XbnezdrP7drer292sbne/dLub3e7+dLv7pdvdrN39aXez2t2fbrez2t0v3e5mdbv7pdvdrN39anez2t2fdrez2t0v3e5m7e5Xt7tZu/vT7W5mu/vV7W7W7v50u5u1u3/d7mbt7k+3u1m7+9ftbtbu/nW7m7W7f93uZu3uX7e7Wbv72+1u1u7+dbv/123323a3s9vdv253f7vd/Wh3N7vd/ep2+2+7+9ftbna7+9Xt7t92t7Pb3b9u97/b3c5ud/+63f3b7m52u/vZ7e7fdrezzW53P7vd/dvudrbb3c9ud/+2u53d7v51u/ux3e1st7u/3e5+bHc72+3ub7e7P9vdzu52+9vt7sd2t7Pd7n53u/ux3e1sdrd/3e7+bHc72+32v9vdj+1uZ7vd/e52N6vd7Wy323/d7v5sdzubdbv97XY3q93tbLfbv253M9vdzma72/9udzPb3c52u/3tdjez3e1stp+32+1s1u32t9vdzHa3s9l+2G63s9l+1O62s1n/2e22s9n+1u62s/1sdxu73fb/brd9v93tsH1t/2532/Z17S7d7rbN+tB2t23b57S7dPvYPrfd7bD9a7e7bfuadjfbj/a7bdu2z+12u227y+52O2yf1+7S7WL/2+22bZ/X7tLtY/vU7rZt+9x2l24X+89ut23bPrfb7bD9a/+7bbvPa3fpdrH/3e62bfu8drerxf61+23bts/tdnu0f+13t23bPq/d7dLtYv/a7bZt+7x2t8P2uf1v27Z9Xrvbpf2t/W+32/Z57W6X9q/Wbrfb/nfbjvaz/a/dpe2H+9+2o/1s/2t36faxfW072q/2u21H+9X+1+7S9rF9bDvav/a/dpe2j+xr29H+tN9tO9qP9r92t237z/6z7bD9Zr/bdtg+s/9sO2w/2e+2He0n+9u2o/1iP9t2tB/sZ9uO9oP9a9vRvrfPbDvar/arbUf72n6y7Wi/2k+2He1X+8m2o/1oP9l2tO/tK9uO9rV9ZdvR/rSvbDvat/aVbUf70r6y7Whf21e2He1b+8q2o/1pX9l2tG/tK9uO9rV9ZdvRvrWvbDvad/aVbUf7zv6y7Wi/2Ve2He0n+8u2o/1gX9l2tO/tL9uO9r39ZdvRfrC/bDval/aXbUf70/6y7Wi/2V+2He0n+8u2o/1sP9p2tO/sN9uO9qN9ZtvRfrTfbDva9/aVbUf72X6z7Wif2n+2He0r+9G2o/1q39l2tK/tM9uO9rN9ZtvRfrbPbDvaz/aZbUf72j6z7Wj/2W+2He1n+822o/1ov9l2tB/tN9uO9rN9ZtvRfrLvbDvaN/adbUf7xf6z7Wi/2I+2He1X+8+2o/1q/9l2tJ/tR9uO9ov9aNvRfrQ/bTvaj/afbUf70f6z7Wg/2p+2He1H+9O2o/1of9p2tB/tT9uO9qP9advRfrf/bDvad/afbUf7xf6z7Wh/2Z+2He0X+9O2o/1gP9p2tO/sP9uO9pP9aNvRvrffbDva9/abbUf70X6z7Wi/2H+2He0X+8+2o/1s/9l2tF/sP9uO9pf9Z9vR/rL/bDvar/afbUf7y/6z7Wi/2X+2He0v+8+2o/1t/9l2tL/tP9uOdqL9Z9vRTrL/bDvaKfafbUc7xf6z7Wgn2n+2He1E+8+2o51s/9l2tFPtP9uOdpr9Z9vRTrP/bDvaKfafbUc7xf6z7Wgn23+2He1k+8+2o51i/9l2tFPtP9uOdor9Z9vRTrH/bDvaSfafbUc7yf6z7Win2H+2He0U+8+2o51q/9l2tFPtP9uOdor9Z9vRTrL/bDvaSfafbUc7yf6z7Win2n+2He1U+8+2o53mAAAAAAAAAAAAAAAAAAAAAADY+/4HLWkCgE3rIAkAAAAASUVORK5CYII=';
 
 interface BlockchainSignature {
   hash: string;
@@ -19,7 +17,6 @@ interface DocumentRendererProps {
   documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
   content: string;
   clientSignature?: string | null;
-  contractorSignature?: string;
   blockchainSignature?: BlockchainSignature;
   showCertificationSection?: boolean;
   signatoryName?: string;
@@ -31,7 +28,6 @@ export function DocumentRenderer({
   documentType,
   content,
   clientSignature,
-  contractorSignature = DAVILYS_SIGNATURE_BASE64,
   blockchainSignature,
   showCertificationSection = false,
   signatoryName,
@@ -123,17 +119,28 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
               <p className="text-sm text-gray-700 mb-4">
                 WebMarcas Patentes - CNPJ/MF sob o nº 39.528.012/0001-29
               </p>
-              <div className="border-b-2 border-black mx-auto w-64 pb-2">
-                {contractorSignature && (
+              <div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
+                {documentType === 'procuracao' ? (
+                  // Procuração: Mostrar assinatura manuscrita do Davilys
                   <img 
-                    src={contractorSignature} 
+                    src={davilysSignature} 
                     alt="Assinatura WebMarcas"
                     className="h-16 mx-auto object-contain"
                   />
+                ) : (
+                  // Distrato/Contrato: Apenas texto indicando assinatura digital
+                  <div className="flex items-center justify-center h-16">
+                    <span className="text-blue-600 font-medium text-sm">
+                      ✓ Assinado Digitalmente
+                    </span>
+                  </div>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Davilys Danques de Oliveira Cunha
+                {documentType === 'procuracao' 
+                  ? 'Davilys Danques de Oliveira Cunha'
+                  : 'Certificação Digital - Lei 14.063/2020'
+                }
               </p>
             </div>
 
@@ -233,15 +240,30 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
   );
 }
 
+// Convert image to base64 for PDF generation
+export async function getSignatureBase64(): Promise<string> {
+  try {
+    const response = await fetch('/src/assets/davilys-signature.png');
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+}
+
 export function generateDocumentPrintHTML(
   documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa',
   content: string,
   clientSignature: string | null,
-  contractorSignature: string,
   blockchainSignature?: BlockchainSignature,
   signatoryName?: string,
   signatoryCpf?: string,
-  signatoryCnpj?: string
+  signatoryCnpj?: string,
+  davilysSignatureBase64?: string
 ): string {
   const documentTitle = documentType === 'procuracao' 
     ? 'PROCURAÇÃO' 
@@ -341,10 +363,18 @@ export function generateDocumentPrintHTML(
         <div style="text-align: center;">
           <p style="font-size: 14px; font-weight: 600;">Assinatura autorizada:</p>
           <p style="font-size: 12px; color: #4B5563;">WebMarcas Patentes - CNPJ/MF sob o nº 39.528.012/0001-29</p>
-          <div style="border-bottom: 2px solid black; width: 256px; margin: 16px auto; padding-bottom: 8px;">
-            ${contractorSignature ? `<img src="${contractorSignature}" alt="Assinatura" style="height: 64px; object-fit: contain;">` : ''}
+          <div style="border-bottom: 2px solid black; width: 256px; margin: 16px auto; padding-bottom: 8px; min-height: 64px; display: flex; align-items: center; justify-content: center;">
+            ${documentType === 'procuracao' && davilysSignatureBase64 
+              ? `<img src="${davilysSignatureBase64}" alt="Assinatura" style="height: 64px; object-fit: contain;">`
+              : '<span style="color: #2563EB; font-weight: 500; font-size: 14px;">✓ Assinado Digitalmente</span>'
+            }
           </div>
-          <p style="font-size: 10px; color: #6B7280;">Davilys Danques de Oliveira Cunha</p>
+          <p style="font-size: 10px; color: #6B7280;">
+            ${documentType === 'procuracao' 
+              ? 'Davilys Danques de Oliveira Cunha'
+              : 'Certificação Digital - Lei 14.063/2020'
+            }
+          </p>
         </div>
         
         <div style="text-align: center;">

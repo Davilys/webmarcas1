@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { SignaturePad } from '@/components/signature/SignaturePad';
-import { DocumentRenderer, generateDocumentPrintHTML } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
 import { toast } from 'sonner';
 import { Loader2, Download, Printer, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import webmarcasLogo from '@/assets/webmarcas-logo.png';
@@ -137,14 +137,19 @@ export default function AssinarDocumento() {
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!contract) return;
+
+    // Load signature base64 for procuracao documents
+    let signatureBase64: string | undefined;
+    if (contract.document_type === 'procuracao') {
+      signatureBase64 = await getSignatureBase64();
+    }
 
     const html = generateDocumentPrintHTML(
       (contract.document_type as any) || 'procuracao',
       contract.contract_html || '',
       contract.client_signature_image,
-      contract.contractor_signature_image || '',
       contract.blockchain_hash ? {
         hash: contract.blockchain_hash,
         timestamp: contract.blockchain_timestamp || '',
@@ -154,7 +159,8 @@ export default function AssinarDocumento() {
       } : undefined,
       contract.signatory_name || undefined,
       contract.signatory_cpf || undefined,
-      contract.signatory_cnpj || undefined
+      contract.signatory_cnpj || undefined,
+      signatureBase64
     );
 
     const printWindow = window.open('', '_blank');
