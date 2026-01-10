@@ -23,6 +23,8 @@ import ClienteFinanceiro from "./pages/cliente/Financeiro";
 import ClienteSuporte from "./pages/cliente/Suporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 import ClienteRegistrarMarca from "./pages/cliente/RegistrarMarca";
+import ClienteStatusPedido from "./pages/cliente/StatusPedido";
+import ClientePedidoConfirmado from "./pages/cliente/PedidoConfirmado";
 
 // Admin pages
 import AdminLogin from "./pages/admin/Login";
@@ -71,7 +73,8 @@ const App = () => (
               <Route path="/cliente/suporte" element={<ClienteSuporte />} />
               <Route path="/cliente/configuracoes" element={<ClienteConfiguracoes />} />
               <Route path="/cliente/registrar-marca" element={<ClienteRegistrarMarca />} />
-              
+              <Route path="/cliente/status-pedido" element={<ClienteStatusPedido />} />
+              <Route path="/cliente/pedido-confirmado" element={<ClientePedidoConfirmado />} />
               {/* Painel Administrativo */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
