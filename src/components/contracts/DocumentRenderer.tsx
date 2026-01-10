@@ -58,22 +58,25 @@ export function DocumentRenderer({
     }
   }, [documentType]);
 
-  // Detectar se o conteúdo é HTML completo
-  const isHtmlDocument = useMemo(() => {
+  // Detectar se o conteúdo é HTML completo (já possui estrutura própria)
+  const isCompleteHtmlDocument = useMemo(() => {
     const trimmedContent = content.trim();
+    // Verifica se já tem estrutura de documento completo
     return trimmedContent.startsWith('<!DOCTYPE') || 
            trimmedContent.startsWith('<html') ||
-           (trimmedContent.startsWith('<') && trimmedContent.includes('</'));
+           // Verifica se tem estrutura de contrato completo (com header)
+           trimmedContent.includes('gradient-bar') ||
+           trimmedContent.includes('main-title') ||
+           trimmedContent.includes('header-logo') ||
+           // Verifica se é apenas HTML simples (parágrafos, divs)
+           (trimmedContent.startsWith('<div') && trimmedContent.includes('</div>'));
   }, [content]);
 
-  const legalNotice = useMemo(() => {
-    if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
-      return `Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
-
-Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.`;
-    }
-    return null;
-  }, [documentType]);
+  // Detectar se é HTML parcial (sem documento completo, apenas tags)
+  const isHtmlContent = useMemo(() => {
+    const trimmedContent = content.trim();
+    return trimmedContent.startsWith('<') && trimmedContent.includes('</');
+  }, [content]);
 
   const formattedContent = useMemo(() => {
     // Remove {contract_signature} placeholder from content
@@ -84,6 +87,87 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
   const verificationUrl = blockchainSignature?.hash 
     ? getVerificationUrl(blockchainSignature.hash) 
     : '';
+  
+  // Se for documento HTML completo, renderiza diretamente sem adicionar wrapper
+  if (isCompleteHtmlDocument) {
+    return (
+      <div className="bg-white text-black">
+        <div 
+          className="prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: formattedContent }}
+        />
+        
+        {/* Digital Certification Section - Sempre no final para documentos assinados */}
+        {(showCertificationSection || blockchainSignature?.hash) && blockchainSignature && (
+          <div className="mx-6 mb-6">
+            <div className="mt-8 pt-8 border-t-2 border-blue-600">
+              <div className="bg-blue-50 rounded-lg p-6">
+                <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Hash SHA-256</p>
+                      <p className="text-xs font-mono bg-white p-2 rounded border break-all">
+                        {blockchainSignature.hash}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Data/Hora da Assinatura</p>
+                      <p className="text-sm">{blockchainSignature.timestamp}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">ID da Transação</p>
+                      <p className="text-xs font-mono">{blockchainSignature.txId}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Rede Blockchain</p>
+                      <p className="text-sm">{blockchainSignature.network}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">IP do Signatário</p>
+                      <p className="text-sm">{blockchainSignature.ipAddress}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-4 bg-white rounded border">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">QR Code de Verificação</p>
+                    <QRCodeSVG 
+                      value={verificationUrl}
+                      size={120}
+                      level="M"
+                      includeMargin={true}
+                    />
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      Escaneie para verificar
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-600 mt-4 italic text-center">
+                  Este documento foi assinado eletronicamente e possui validade jurídica conforme 
+                  Lei 14.063/2020 e MP 2.200-2/2001.
+                </p>
+                <p className="text-xs text-blue-700 mt-2 text-center font-medium">
+                  Verifique a autenticidade em: {getCurrentHost()}/verificar-contrato
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const legalNotice = (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa')
+    ? `Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
+
+Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.`
+    : null;
 
   return (
     <div className="bg-white text-black rounded-lg shadow-lg overflow-hidden">
@@ -122,7 +206,7 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
         )}
 
         {/* Document Content */}
-        {isHtmlDocument ? (
+        {isHtmlContent ? (
           <div 
             className="prose prose-sm max-w-none text-justify leading-relaxed"
             dangerouslySetInnerHTML={{ __html: formattedContent }}
