@@ -127,6 +127,7 @@ const RegistrationFormSection = () => {
             email: personalData.email,
             phone: personalData.phone || null,
             marca: brandData.brandName || 'Sua Marca',
+            base_url: window.location.origin,
           },
         },
       });

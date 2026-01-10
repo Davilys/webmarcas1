@@ -27,6 +27,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Determine base URL: priority is clientBaseUrl, then SITE_URL secret
+    const baseUrl = clientBaseUrl || Deno.env.get('SITE_URL');
+    if (!baseUrl) {
+      console.error('No baseUrl provided and SITE_URL secret not configured');
+      return new Response(
+        JSON.stringify({ error: 'SITE_URL not configured. Please set the SITE_URL secret or provide baseUrl.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    console.log('Using base URL:', baseUrl);
+
     // Generate unique token
     const token = crypto.randomUUID();
     
@@ -65,8 +76,7 @@ serve(async (req) => {
         },
       });
 
-    // Build public URL - priority: 1) client URL, 2) SITE_URL env, 3) production fallback
-    const baseUrl = clientBaseUrl || Deno.env.get('SITE_URL') || 'https://webmarcas.com.br';
+    // Build public URL
     const signatureUrl = `${baseUrl}/assinar/${token}`;
 
     console.log('Signature link generated:', { contractId, token: token.substring(0, 8) + '...', expiresAt });

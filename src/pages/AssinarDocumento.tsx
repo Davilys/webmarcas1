@@ -289,7 +289,7 @@ export default function AssinarDocumento() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    webmarcas.com.br/verificar-contrato
+                    {window.location.host}/verificar-contrato
                   </a>
                 </p>
               </div>

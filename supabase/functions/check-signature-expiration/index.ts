@@ -18,6 +18,17 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Get base URL from SITE_URL secret - REQUIRED
+    const siteUrl = Deno.env.get("SITE_URL");
+    if (!siteUrl) {
+      console.error("SITE_URL secret not configured");
+      return new Response(
+        JSON.stringify({ error: "SITE_URL secret not configured. Please set it in Lovable Cloud secrets." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+    console.log("Using SITE_URL:", siteUrl);
+
     // Find contracts expiring in 2 days that haven't been signed
     const twoDaysFromNow = new Date();
     twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
@@ -100,8 +111,6 @@ const handler = async (req: Request): Promise<Response> => {
       ? `${emailAccount.display_name} <${emailAccount.email_address}>`
       : emailAccount.email_address;
 
-    const signatureBaseUrl = Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '') || 'https://webmarcas.com.br';
-    
     let sentCount = 0;
     const errors: string[] = [];
 
@@ -132,7 +141,8 @@ const handler = async (req: Request): Promise<Response> => {
           continue;
         }
 
-        const signatureLink = `${signatureBaseUrl}/assinar/${contract.signature_token}`;
+        // Use SITE_URL for signature link
+        const signatureLink = `${siteUrl}/assinar/${contract.signature_token}`;
         const expiresAt = new Date(contract.signature_expires_at);
         const formattedExpiry = expiresAt.toLocaleDateString('pt-BR', {
           weekday: 'long',
@@ -215,7 +225,7 @@ const handler = async (req: Request): Promise<Response> => {
               <p style="font-size: 12px; color: #6B7280; margin: 0;">
                 WebMarcas Patentes - CNPJ: 39.528.012/0001-29<br>
                 Av. Prestes Maia, 241 - Centro, São Paulo - SP<br>
-                <a href="https://www.webmarcas.com.br" style="color: #3B82F6;">www.webmarcas.com.br</a>
+                <a href="${siteUrl}" style="color: #3B82F6;">Acessar Portal</a>
               </p>
             </td>
           </tr>

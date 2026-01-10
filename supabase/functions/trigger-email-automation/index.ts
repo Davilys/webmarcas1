@@ -22,6 +22,7 @@ interface TriggerRequest {
     verification_url?: string;
     link_assinatura?: string;
     data_expiracao?: string;
+    base_url?: string;
   };
 }
 
@@ -39,6 +40,17 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Determine app_url: priority is data.base_url, then SITE_URL secret
+    const appUrl = data.base_url || Deno.env.get('SITE_URL');
+    if (!appUrl) {
+      console.error('No base_url provided and SITE_URL secret not configured');
+      return new Response(
+        JSON.stringify({ error: 'SITE_URL not configured. Please set the SITE_URL secret.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    console.log('Using app URL:', appUrl);
 
     let actualLeadId = lead_id;
 
@@ -125,7 +137,7 @@ const handler = async (req: Request): Promise<Response> => {
     let subject = template.subject;
     let body = template.body;
 
-    // Preparar substituições de variáveis - incluindo verification_url
+    // Preparar substituições de variáveis - incluindo app_url e verification_url
     const replacements: Record<string, string> = {
       '{{nome}}': data.nome || '',
       '{{email}}': data.email || '',
@@ -136,6 +148,7 @@ const handler = async (req: Request): Promise<Response> => {
       '{{verification_url}}': data.verification_url || '',
       '{{link_assinatura}}': data.link_assinatura || '',
       '{{data_expiracao}}': data.data_expiracao || '',
+      '{{app_url}}': appUrl,
     };
 
     for (const [key, value] of Object.entries(replacements)) {
