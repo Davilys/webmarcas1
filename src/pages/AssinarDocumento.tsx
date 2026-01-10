@@ -8,7 +8,7 @@ import { SignaturePad } from '@/components/signature/SignaturePad';
 import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
 import { toast } from 'sonner';
 import { Loader2, Download, Printer, CheckCircle, AlertCircle, FileText } from 'lucide-react';
-import webmarcasLogo from '@/assets/webmarcas-logo.png';
+import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
 
 interface ContractData {
   id: string;

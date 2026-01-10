@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import webmarcasLogo from '@/assets/webmarcas-logo.png';
+import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
 import davilysSignature from '@/assets/davilys-signature.png';
+import { ContractRenderer } from '@/components/contracts/ContractRenderer';
 
 // Função para gerar URL de verificação dinâmica baseada no domínio atual
 const getVerificationUrl = (hash: string, baseUrl?: string) => {
@@ -169,11 +170,30 @@ export function DocumentRenderer({
 Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.`
     : null;
 
+  // Contrato (texto puro): renderizar com o mesmo layout do modelo padrão (ContractRenderer)
+  if (documentType === 'contract' && !isHtmlContent) {
+    return (
+      <ContractRenderer
+        content={formattedContent}
+        showLetterhead
+        className="rounded-lg shadow-lg overflow-hidden"
+        showCertificationSection={showCertificationSection}
+        blockchainSignature={blockchainSignature?.hash ? {
+          hash: blockchainSignature.hash,
+          timestamp: blockchainSignature.timestamp,
+          txId: blockchainSignature.txId,
+          network: blockchainSignature.network,
+          ipAddress: blockchainSignature.ipAddress,
+        } : undefined}
+      />
+    );
+  }
+
   return (
     <div className="bg-white text-black rounded-lg shadow-lg overflow-hidden">
-      {/* Header with Logo and Gradient Bar */}
+      {/* Header with Logo and Gradient Bar (igual ao modelo) */}
       <div className="bg-white p-6 border-b">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between pb-3">
           <img 
             src={webmarcasLogo} 
             alt="WebMarcas" 
@@ -185,7 +205,7 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
           </div>
         </div>
         {/* Gradient Bar */}
-        <div className="h-2 rounded-full bg-gradient-to-r from-orange-400 via-yellow-400 to-yellow-300" />
+        <div className="h-2 w-full rounded-sm" style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)' }} />
       </div>
 
       {/* Document Title */}
