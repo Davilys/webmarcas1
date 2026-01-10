@@ -20,8 +20,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DocumentRenderer, generateDocumentPrintHTML } from '@/components/contracts/DocumentRenderer';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 interface Contract {
   id: string;
@@ -294,6 +292,14 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
 
     setDownloadingPdf(true);
     try {
+      // Dynamic imports to avoid typechecker stack overflow
+      const [html2canvasModule, jspdfModule] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf')
+      ]);
+      const html2canvas = html2canvasModule.default;
+      const { jsPDF } = jspdfModule;
+
       const printHtml = generateDocumentPrintHTML(
         (contract.document_type as any) || 'procuracao',
         contract.contract_html,
