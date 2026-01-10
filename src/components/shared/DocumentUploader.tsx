@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Upload, X, FileText, Image, File as FileIcon } from 'lucide-react';
+import { Upload, X, FileText, Image, File as FileIcon, Video, Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -11,7 +11,6 @@ interface DocumentUploaderProps {
   onUploadComplete?: (fileUrl: string, fileName: string, fileSize: number) => void;
   onUploadStart?: () => void;
   accept?: string;
-  maxSizeMB?: number;
   className?: string;
 }
 
@@ -19,8 +18,7 @@ export function DocumentUploader({
   userId,
   onUploadComplete,
   onUploadStart,
-  accept = ".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif",
-  maxSizeMB = 10,
+  accept = "*", // Aceita todos os formatos
   className
 }: DocumentUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -31,6 +29,8 @@ export function DocumentUploader({
   const getFileIcon = (mimeType: string) => {
     if (mimeType.startsWith('image/')) return <Image className="h-8 w-8 text-blue-500" />;
     if (mimeType === 'application/pdf') return <FileText className="h-8 w-8 text-red-500" />;
+    if (mimeType.startsWith('video/')) return <Video className="h-8 w-8 text-purple-500" />;
+    if (mimeType.startsWith('audio/')) return <Music className="h-8 w-8 text-green-500" />;
     return <FileIcon className="h-8 w-8 text-gray-500" />;
   };
 
@@ -53,23 +53,14 @@ export function DocumentUploader({
 
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
-      validateAndSetFile(droppedFile);
+      setFile(droppedFile);
     }
   }, []);
-
-  const validateAndSetFile = (file: File) => {
-    const maxSizeBytes = maxSizeMB * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      toast.error(`Arquivo muito grande. Máximo: ${maxSizeMB}MB`);
-      return;
-    }
-    setFile(file);
-  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      validateAndSetFile(selectedFile);
+      setFile(selectedFile);
     }
   };
 
@@ -123,6 +114,13 @@ export function DocumentUploader({
     setProgress(0);
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  };
+
   return (
     <div className={cn("space-y-4", className)}>
       {!file ? (
@@ -161,7 +159,7 @@ export function DocumentUploader({
                 {isDragging ? "Solte o arquivo aqui" : "Arraste um arquivo ou clique para selecionar"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                PDF, DOC, DOCX, JPG, PNG (máx. {maxSizeMB}MB)
+                Todos os formatos aceitos • Sem limite de tamanho
               </p>
             </div>
           </div>
@@ -173,7 +171,7 @@ export function DocumentUploader({
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate">{file.name}</p>
               <p className="text-sm text-muted-foreground">
-                {(file.size / 1024 / 1024).toFixed(2)} MB
+                {formatFileSize(file.size)}
               </p>
             </div>
             {!uploading && (

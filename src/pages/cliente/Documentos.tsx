@@ -143,8 +143,11 @@ export default function Documentos() {
   };
 
   const getFileIcon = (doc: Document) => {
-    if (/\.(jpg|jpeg|png|gif|webp)$/i.test(doc.file_url)) return <Image className="h-6 w-6 text-blue-500" />;
-    if (/\.pdf$/i.test(doc.file_url)) return <FileText className="h-6 w-6 text-red-500" />;
+    const url = doc.file_url.toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|tiff|ico)$/i.test(url)) return <Image className="h-6 w-6 text-blue-500" />;
+    if (/\.pdf$/i.test(url)) return <FileText className="h-6 w-6 text-red-500" />;
+    if (/\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(url)) return <FileIcon className="h-6 w-6 text-purple-500" />;
+    if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(url)) return <FileIcon className="h-6 w-6 text-green-500" />;
     return <FileIcon className="h-6 w-6 text-gray-500" />;
   };
 

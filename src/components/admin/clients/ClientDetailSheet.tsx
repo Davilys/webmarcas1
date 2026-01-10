@@ -264,13 +264,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     const file = e.target.files?.[0];
     if (!file || !client) return;
 
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      toast.error('Arquivo muito grande. Máximo 10MB.');
-      return;
-    }
-
+    // Sem limite de tamanho de arquivo
     setUploading(true);
     try {
       const fileName = `clients/${client.id}/${Date.now()}_${file.name}`;
