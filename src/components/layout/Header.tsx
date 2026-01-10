@@ -114,8 +114,13 @@ const Header = () => {
             <Button variant="ghost" size="sm" asChild>
               <Link to="/cliente/login">{t("nav.clientArea")}</Link>
             </Button>
-            <Button variant="primary" size="sm" className="btn-glow" asChild>
-              <a href="#consultar">{t("nav.checkBrand")}</a>
+            <Button 
+              variant="primary" 
+              size="sm" 
+              className="btn-glow" 
+              onClick={() => window.open('/checkout', '_blank')}
+            >
+              {t("nav.checkBrand")}
             </Button>
           </div>
 
@@ -187,8 +192,15 @@ const Header = () => {
               <Button variant="ghost" asChild>
                 <Link to="/cliente/login">{t("nav.clientArea")}</Link>
               </Button>
-              <Button variant="primary" className="btn-glow" asChild onClick={() => setIsMobileMenuOpen(false)}>
-                <a href="#consultar">{t("nav.checkBrand")}</a>
+              <Button 
+                variant="primary" 
+                className="btn-glow" 
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  window.open('/checkout', '_blank');
+                }}
+              >
+                {t("nav.checkBrand")}
               </Button>
             </div>
           </nav>
