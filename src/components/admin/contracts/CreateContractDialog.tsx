@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, FileText, Send, Copy, Link } from 'lucide-react';
+import { Loader2, FileText, Send, Copy, Link, UserPlus } from 'lucide-react';
 import { generateDocumentContent } from '@/lib/documentTemplates';
 
 interface CreateContractDialogProps {
@@ -58,6 +59,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [createdContractId, setCreatedContractId] = useState<string | null>(null);
+  const [isNewClient, setIsNewClient] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
   
   const [formData, setFormData] = useState({
     user_id: '',
@@ -79,6 +82,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     brand_name: '',
     penalty_value: '',
     penalty_installments: '1',
+    // New client fields
+    signatory_email: '',
+    signatory_phone: '',
+    signatory_company: '',
+    business_area: '',
   });
 
   useEffect(() => {
@@ -149,20 +157,92 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     return generateDocumentContent(formData.document_type, vars);
   };
 
+  const createNewClient = async (): Promise<string | null> => {
+    setCreatingClient(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-client-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            email: formData.signatory_email,
+            full_name: formData.signatory_name,
+            phone: formData.signatory_phone,
+            company_name: formData.signatory_company || null,
+            cpf_cnpj: formData.signatory_cnpj || formData.signatory_cpf || null,
+            address: formData.company_address || null,
+            city: formData.company_city || null,
+            state: formData.company_state || null,
+            zip_code: formData.company_cep || null,
+            brand_name: formData.brand_name || null,
+            business_area: formData.business_area || null,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'Erro ao criar cliente');
+      }
+
+      if (result.isExisting) {
+        toast.info('Cliente já existente - documento será vinculado');
+      } else {
+        toast.success('Novo cliente criado com sucesso');
+      }
+
+      return result.userId;
+    } catch (error: any) {
+      console.error('Error creating client:', error);
+      toast.error(error.message || 'Erro ao criar cliente');
+      return null;
+    } finally {
+      setCreatingClient(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent, sendLink = false) => {
     e.preventDefault();
     
-    if (!formData.user_id || !formData.subject) {
-      toast.error('Preencha os campos obrigatórios');
+    // Validate based on new client or existing
+    if (isNewClient) {
+      if (!formData.signatory_email || !formData.signatory_name) {
+        toast.error('Preencha Email e Nome do cliente');
+        return;
+      }
+    } else if (!formData.user_id) {
+      toast.error('Selecione um cliente');
+      return;
+    }
+    
+    if (!formData.subject) {
+      toast.error('Preencha o assunto do documento');
       return;
     }
 
     setLoading(true);
     try {
+      let userId = formData.user_id;
+
+      // If new client, create first
+      if (isNewClient) {
+        const newUserId = await createNewClient();
+        if (!newUserId) {
+          setLoading(false);
+          return;
+        }
+        userId = newUserId;
+      }
+
       const contractHtml = generateDocumentHtml();
 
       const { data: contract, error } = await supabase.from('contracts').insert({
-        user_id: formData.user_id,
+        user_id: userId,
         contract_number: generateContractNumber(),
         subject: formData.subject,
         contract_value: formData.contract_value ? parseFloat(formData.contract_value) : null,
@@ -187,7 +267,12 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       toast.success('Documento criado com sucesso');
 
       if (sendLink) {
-        await generateAndSendLink(contract.id);
+        // Pass new client contact info for sending
+        await generateAndSendLink(contract.id, isNewClient ? {
+          email: formData.signatory_email,
+          phone: formData.signatory_phone,
+          name: formData.signatory_name,
+        } : undefined);
       } else {
         onSuccess();
         onOpenChange(false);
@@ -201,7 +286,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     }
   };
 
-  const generateAndSendLink = async (contractId: string) => {
+  const generateAndSendLink = async (contractId: string, newClientContact?: { email: string; phone: string; name: string }) => {
     setSendingLink(true);
     try {
       // Generate signature link
@@ -225,7 +310,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
       setGeneratedLink(linkResult.data.url);
 
-      // Send signature request
+      // Send signature request with optional override contact
       const sendResponse = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-signature-request`,
         {
@@ -234,7 +319,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId, channels: ['email', 'whatsapp'], baseUrl: window.location.origin }),
+          body: JSON.stringify({ 
+            contractId, 
+            channels: ['email', 'whatsapp'], 
+            baseUrl: window.location.origin,
+            // Override contact info for new clients
+            overrideContact: newClientContact,
+          }),
         }
       );
 
@@ -280,17 +371,30 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       brand_name: '',
       penalty_value: '',
       penalty_installments: '1',
+      signatory_email: '',
+      signatory_phone: '',
+      signatory_company: '',
+      business_area: '',
     });
     setSelectedProfile(null);
     setSelectedTemplate(null);
     setGeneratedLink(null);
     setCreatedContractId(null);
+    setIsNewClient(false);
   };
 
   const handleProfileChange = (userId: string) => {
     setFormData({ ...formData, user_id: userId });
     const profile = profiles.find(p => p.id === userId);
     setSelectedProfile(profile || null);
+  };
+
+  const handleNewClientToggle = (checked: boolean) => {
+    setIsNewClient(checked);
+    if (checked) {
+      setFormData(prev => ({ ...prev, user_id: '' }));
+      setSelectedProfile(null);
+    }
   };
 
   const isSpecialDocument = formData.document_type !== 'contract';
@@ -383,25 +487,65 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
               <TabsContent value="basic" className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label>Cliente *</Label>
-                    <Select 
-                      value={formData.user_id}
-                      onValueChange={handleProfileChange}
+                  {/* Toggle between existing and new client */}
+                  <div className="col-span-2 flex items-center space-x-2 p-3 bg-muted/50 rounded-lg">
+                    <Checkbox 
+                      id="newClient" 
+                      checked={isNewClient}
+                      onCheckedChange={handleNewClientToggle}
+                    />
+                    <label 
+                      htmlFor="newClient" 
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer"
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o cliente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {profiles.map(profile => (
-                          <SelectItem key={profile.id} value={profile.id}>
-                            {profile.full_name || profile.email}
-                            {profile.company_name && ` - ${profile.company_name}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <UserPlus className="h-4 w-4" />
+                      Criar novo cliente
+                    </label>
                   </div>
+
+                  {!isNewClient ? (
+                    <div className="space-y-2 col-span-2">
+                      <Label>Cliente *</Label>
+                      <Select 
+                        value={formData.user_id}
+                        onValueChange={handleProfileChange}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o cliente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profiles.map(profile => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.full_name || profile.email}
+                              {profile.company_name && ` - ${profile.company_name}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <>
+                      {/* New Client Form Fields */}
+                      <div className="space-y-2">
+                        <Label>Email *</Label>
+                        <Input
+                          type="email"
+                          value={formData.signatory_email}
+                          onChange={(e) => setFormData({ ...formData, signatory_email: e.target.value })}
+                          placeholder="cliente@email.com"
+                          required={isNewClient}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Telefone (WhatsApp)</Label>
+                        <Input
+                          value={formData.signatory_phone}
+                          onChange={(e) => setFormData({ ...formData, signatory_phone: e.target.value })}
+                          placeholder="(11) 99999-9999"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="space-y-2 col-span-2">
                     <Label>Assunto *</Label>
@@ -497,18 +641,21 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
               <TabsContent value="details" className="space-y-4 mt-4">
                 <p className="text-sm text-muted-foreground mb-4">
-                  {isSpecialDocument 
-                    ? 'Preencha os dados do representante legal que irá assinar o documento.'
-                    : 'Dados opcionais do signatário.'}
+                  {isNewClient 
+                    ? 'Preencha os dados completos do novo cliente e representante legal.'
+                    : isSpecialDocument 
+                      ? 'Preencha os dados do representante legal que irá assinar o documento.'
+                      : 'Dados opcionais do signatário.'}
                 </p>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2 col-span-2">
-                    <Label>Nome do Representante Legal {isSpecialDocument && '*'}</Label>
+                    <Label>Nome do Representante Legal {(isSpecialDocument || isNewClient) && '*'}</Label>
                     <Input
                       value={formData.signatory_name}
                       onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
                       placeholder="Nome completo"
+                      required={isNewClient}
                     />
                   </div>
 
@@ -522,13 +669,44 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                   </div>
 
                   <div className="space-y-2">
-                    <Label>CNPJ da Empresa</Label>
+                    <Label>CNPJ da Empresa {isNewClient && '(opcional)'}</Label>
                     <Input
                       value={formData.signatory_cnpj}
                       onChange={(e) => setFormData({ ...formData, signatory_cnpj: e.target.value })}
                       placeholder="00.000.000/0001-00"
                     />
                   </div>
+
+                  {isNewClient && (
+                    <>
+                      <div className="space-y-2 col-span-2">
+                        <Label>Razão Social (opcional)</Label>
+                        <Input
+                          value={formData.signatory_company}
+                          onChange={(e) => setFormData({ ...formData, signatory_company: e.target.value })}
+                          placeholder="Nome da empresa"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Nome da Marca</Label>
+                        <Input
+                          value={formData.brand_name}
+                          onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                          placeholder="Nome da marca"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Ramo de Atividade</Label>
+                        <Input
+                          value={formData.business_area}
+                          onChange={(e) => setFormData({ ...formData, business_area: e.target.value })}
+                          placeholder="Ex: Alimentação, Vestuário..."
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="space-y-2 col-span-2">
                     <Label>Endereço</Label>
@@ -574,23 +752,23 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading || sendingLink}>
-                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Button type="submit" disabled={loading || sendingLink || creatingClient}>
+                {(loading || creatingClient) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Criar Documento
               </Button>
-              {isSpecialDocument && (
+              {(isSpecialDocument || isNewClient) && (
                 <Button 
                   type="button" 
                   variant="default"
                   onClick={(e) => handleSubmit(e as any, true)}
-                  disabled={loading || sendingLink}
+                  disabled={loading || sendingLink || creatingClient}
                 >
-                  {sendingLink ? (
+                  {(sendingLink || creatingClient) ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4 mr-2" />
                   )}
-                  Criar e Enviar Link
+                  {isNewClient ? 'Criar Cliente e Enviar' : 'Criar e Enviar Link'}
                 </Button>
               )}
             </div>
