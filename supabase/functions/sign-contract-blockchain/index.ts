@@ -88,7 +88,7 @@ serve(async (req) => {
                      'unknown';
     const userAgent = req.headers.get('user-agent') || 'unknown';
     
-    const { contractId, contractHtml, deviceInfo, leadId, signatureImage, signatureToken } = await req.json();
+    const { contractId, contractHtml, deviceInfo, leadId, signatureImage, signatureToken, baseUrl } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -140,7 +140,7 @@ serve(async (req) => {
       .from('contracts')
       .update(signatureData)
       .eq('id', contractId)
-      .select()
+      .select('*, leads(*)')
       .single();
 
     if (contractError) {
@@ -179,6 +179,87 @@ serve(async (req) => {
         });
     }
 
+    // Build verification URL
+    const verificationBaseUrl = baseUrl || 'https://webmarcas.lovable.app';
+    const verificationUrl = `${verificationBaseUrl}/verificar-contrato?hash=${contractHash}`;
+
+    // Send confirmation email
+    let recipientEmail = '';
+    let recipientName = '';
+    let brandName = contractData?.subject || '';
+
+    // Try to get email from lead first
+    if (contractData?.leads) {
+      recipientEmail = contractData.leads.email || '';
+      recipientName = contractData.leads.full_name || '';
+    }
+
+    // If no email from lead, try profile
+    if (!recipientEmail && contractData?.user_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', contractData.user_id)
+        .single();
+      
+      if (profile) {
+        recipientEmail = profile.email || '';
+        recipientName = profile.full_name || recipientName;
+      }
+    }
+
+    // Get brand name from process if exists
+    if (contractData?.process_id) {
+      const { data: process } = await supabase
+        .from('brand_processes')
+        .select('brand_name')
+        .eq('id', contractData.process_id)
+        .single();
+      
+      if (process?.brand_name) {
+        brandName = process.brand_name;
+      }
+    }
+
+    // Send email if we have a recipient
+    if (recipientEmail) {
+      try {
+        console.log('Sending confirmation email to:', recipientEmail);
+        
+        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-email-automation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            trigger_event: 'contract_signed',
+            data: {
+              nome: recipientName || contractData?.signatory_name || 'Cliente',
+              email: recipientEmail,
+              marca: brandName,
+              data_assinatura: new Date().toLocaleDateString('pt-BR'),
+              hash_contrato: contractHash,
+              ip_assinatura: clientIP,
+              verification_url: verificationUrl,
+            }
+          })
+        });
+
+        if (emailResponse.ok) {
+          console.log('Confirmation email sent successfully');
+        } else {
+          const errorText = await emailResponse.text();
+          console.error('Error sending email:', errorText);
+        }
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+        // Don't fail the operation due to email error
+      }
+    } else {
+      console.log('No recipient email found, skipping email notification');
+    }
+
     console.log('Contract signed successfully:', contractId);
 
     return new Response(
@@ -191,6 +272,7 @@ serve(async (req) => {
           txId: blockchainData.txId,
           network: blockchainData.network,
           ipAddress: clientIP,
+          verificationUrl,
           message: 'Contrato assinado com sucesso e registrado em blockchain'
         }
       }),
