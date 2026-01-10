@@ -31,26 +31,31 @@ interface Profile {
   zip_code: string | null;
 }
 
-interface ContractType {
+interface ContractTemplate {
   id: string;
   name: string;
+  content: string;
+  variables: any;
 }
 
 type DocumentType = 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
 
-const DOCUMENT_TYPES = [
-  { value: 'contract', label: 'Contrato Padrão' },
-  { value: 'procuracao', label: 'Procuração INPI' },
-  { value: 'distrato_multa', label: 'Distrato com Multa' },
-  { value: 'distrato_sem_multa', label: 'Distrato sem Multa' },
-];
+// Mapeamento de nomes de templates para document_type
+const getDocumentTypeFromTemplateName = (name: string): DocumentType => {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes('procuração') || lowerName.includes('procuracao')) return 'procuracao';
+  if (lowerName.includes('distrato') && lowerName.includes('multa') && !lowerName.includes('sem')) return 'distrato_multa';
+  if (lowerName.includes('distrato') && lowerName.includes('sem')) return 'distrato_sem_multa';
+  return 'contract';
+};
 
 export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: CreateContractDialogProps) {
   const [loading, setLoading] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [contractTypes, setContractTypes] = useState<ContractType[]>([]);
+  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | null>(null);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [createdContractId, setCreatedContractId] = useState<string | null>(null);
   
@@ -60,7 +65,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     contract_value: '',
     start_date: new Date().toISOString().split('T')[0],
     end_date: '',
-    contract_type_id: '',
+    template_id: '',
     description: '',
     document_type: 'contract' as DocumentType,
     // Document-specific fields
@@ -102,13 +107,16 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   }, [selectedProfile]);
 
   const fetchData = async () => {
-    const [profilesRes, typesRes] = await Promise.all([
+    const [profilesRes, templatesRes] = await Promise.all([
       supabase.from('profiles').select('*').order('full_name'),
-      supabase.from('contract_types').select('*'),
+      supabase.from('contract_templates')
+        .select('id, name, content, variables')
+        .eq('is_active', true)
+        .order('name'),
     ]);
 
     setProfiles(profilesRes.data || []);
-    setContractTypes(typesRes.data || []);
+    setTemplates(templatesRes.data || []);
   };
 
   const generateContractNumber = () => {
@@ -160,7 +168,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         contract_value: formData.contract_value ? parseFloat(formData.contract_value) : null,
         start_date: formData.start_date,
         end_date: formData.end_date || null,
-        contract_type_id: formData.contract_type_id || null,
+        template_id: formData.template_id || null,
         description: formData.description || null,
         contract_html: contractHtml,
         document_type: formData.document_type,
@@ -259,7 +267,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       contract_value: '',
       start_date: new Date().toISOString().split('T')[0],
       end_date: '',
-      contract_type_id: '',
+      template_id: '',
       description: '',
       document_type: 'contract',
       signatory_name: '',
@@ -274,6 +282,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       penalty_installments: '1',
     });
     setSelectedProfile(null);
+    setSelectedTemplate(null);
     setGeneratedLink(null);
     setCreatedContractId(null);
   };
@@ -335,20 +344,31 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
           </div>
         ) : (
           <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
-            {/* Document Type Selection */}
+            {/* Template Selection */}
             <div className="space-y-2">
-              <Label>Tipo de Documento *</Label>
+              <Label>Modelo de Documento *</Label>
               <Select 
-                value={formData.document_type}
-                onValueChange={(value) => setFormData({ ...formData, document_type: value as DocumentType })}
+                value={selectedTemplate?.id || ''}
+                onValueChange={(value) => {
+                  const template = templates.find(t => t.id === value);
+                  setSelectedTemplate(template || null);
+                  if (template) {
+                    const docType = getDocumentTypeFromTemplateName(template.name);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      document_type: docType,
+                      template_id: template.id
+                    }));
+                  }
+                }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
+                  <SelectValue placeholder="Selecione o modelo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {DOCUMENT_TYPES.map(type => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
+                  {templates.map(template => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -442,26 +462,6 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                     </>
                   )}
 
-                  {!isSpecialDocument && (
-                    <div className="space-y-2">
-                      <Label>Tipo de Contrato</Label>
-                      <Select 
-                        value={formData.contract_type_id}
-                        onValueChange={(value) => setFormData({ ...formData, contract_type_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {contractTypes.map(type => (
-                            <SelectItem key={type.id} value={type.id}>
-                              {type.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
 
                   <div className="space-y-2">
                     <Label>Data de Início</Label>
