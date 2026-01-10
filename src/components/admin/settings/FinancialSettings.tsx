@@ -127,7 +127,7 @@ export function FinancialSettings() {
       >
         <div className="flex items-center gap-3">
           <Select
-            value={settings.dueDays.toString()}
+            value={(settings.dueDays ?? 7).toString()}
             onValueChange={(v) => setSettings({ ...settings, dueDays: parseInt(v) })}
           >
             <SelectTrigger className="w-32">
@@ -180,7 +180,7 @@ export function FinancialSettings() {
       >
         <div className="flex items-center gap-3">
           <Select
-            value={settings.maxInstallments.toString()}
+            value={(settings.maxInstallments ?? 12).toString()}
             onValueChange={(v) => setSettings({ ...settings, maxInstallments: parseInt(v) })}
           >
             <SelectTrigger className="w-32">
