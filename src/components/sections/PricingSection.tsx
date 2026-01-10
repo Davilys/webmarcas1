@@ -18,8 +18,8 @@ const PricingSection = () => {
     t("pricing.feature9"),
   ];
 
-  const openCheckout = () => {
-    window.open('/checkout', '_blank');
+  const scrollToForm = () => {
+    document.getElementById("consultar")?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -88,7 +88,7 @@ const PricingSection = () => {
               variant="hero"
               size="xl"
               className="w-full group"
-              onClick={openCheckout}
+              onClick={scrollToForm}
             >
               {t("pricing.cta")}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
