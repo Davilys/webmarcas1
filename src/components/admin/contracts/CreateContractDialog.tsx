@@ -213,7 +213,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId, expiresInDays: 7 }),
+          body: JSON.stringify({ contractId, expiresInDays: 7, baseUrl: window.location.origin }),
         }
       );
 
@@ -234,7 +234,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId, channels: ['email', 'whatsapp'] }),
+          body: JSON.stringify({ contractId, channels: ['email', 'whatsapp'], baseUrl: window.location.origin }),
         }
       );
 

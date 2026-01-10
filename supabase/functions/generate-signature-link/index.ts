@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { contractId, expiresInDays = 7 } = await req.json();
+    const { contractId, expiresInDays = 7, baseUrl: clientBaseUrl } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -65,8 +65,8 @@ serve(async (req) => {
         },
       });
 
-    // Build public URL (use the project URL in production)
-    const baseUrl = Deno.env.get('SITE_URL') || 'https://webmarcas.com.br';
+    // Build public URL - priority: 1) client URL, 2) SITE_URL env, 3) production fallback
+    const baseUrl = clientBaseUrl || Deno.env.get('SITE_URL') || 'https://webmarcas.com.br';
     const signatureUrl = `${baseUrl}/assinar/${token}`;
 
     console.log('Signature link generated:', { contractId, token: token.substring(0, 8) + '...', expiresAt });
