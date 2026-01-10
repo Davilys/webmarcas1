@@ -16,6 +16,7 @@ import {
   Menu,
   Bell,
   ChevronRight,
+  PlusCircle,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,14 @@ const menuItems: MenuItem[] = [
     href: '/cliente/dashboard',
     iconColor: 'text-blue-500',
     iconBg: 'bg-blue-100 dark:bg-blue-900/30'
+  },
+  { 
+    icon: PlusCircle, 
+    label: 'Registrar Marca', 
+    subtitle: 'Novo registro',
+    href: '/cliente/registrar-marca',
+    iconColor: 'text-orange-500',
+    iconBg: 'bg-orange-100 dark:bg-orange-900/30'
   },
   { 
     icon: FileText, 

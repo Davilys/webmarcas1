@@ -7,6 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { 
   CreditCard, 
   Receipt, 
@@ -16,18 +24,14 @@ import {
   Copy,
   QrCode,
   FileText,
-  Clock
+  Clock,
+  Calendar,
+  Download,
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import type { User } from '@supabase/supabase-js';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Invoice {
   id: string;
@@ -39,6 +43,8 @@ interface Invoice {
   invoice_url: string | null;
   boleto_code: string | null;
   pix_code: string | null;
+  payment_method: string | null;
+  created_at: string | null;
 }
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle }> = {
@@ -57,7 +63,6 @@ export default function Financeiro() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [pixDialogOpen, setPixDialogOpen] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -121,7 +126,11 @@ export default function Financeiro() {
     const isPending = ['pending', 'overdue'].includes(invoice.status);
 
     return (
-      <Card className="overflow-hidden hover:shadow-md transition-shadow">
+      <Card 
+        className="overflow-hidden hover:shadow-md transition-all cursor-pointer border-l-4"
+        style={{ borderLeftColor: isPending ? 'hsl(var(--destructive))' : 'hsl(var(--primary))' }}
+        onClick={() => setSelectedInvoice(invoice)}
+      >
         <CardContent className="p-0">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4">
             {/* Info Section */}
@@ -134,7 +143,6 @@ export default function Financeiro() {
                   <h4 className="font-medium text-sm truncate">{invoice.description}</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Vencimento: {formatDate(invoice.due_date)}
-                    {invoice.payment_date && ` • Pago em: ${formatDate(invoice.payment_date)}`}
                   </p>
                 </div>
               </div>
@@ -149,90 +157,9 @@ export default function Financeiro() {
                   {config.label}
                 </Badge>
               </div>
+              <Eye className="h-5 w-5 text-muted-foreground" />
             </div>
           </div>
-
-          {/* Actions Section for Pending Invoices */}
-          {isPending && (
-            <div className="border-t bg-muted/30 p-3 flex flex-wrap gap-2">
-              {/* Botão principal - Ver Fatura / Pagar */}
-              {invoice.invoice_url && (
-                <Button size="sm" asChild className="flex-1 sm:flex-none">
-                  <a href={invoice.invoice_url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Ver Fatura / Pagar
-                  </a>
-                </Button>
-              )}
-
-              {/* Botão PIX */}
-              {invoice.pix_code && (
-                <Dialog open={pixDialogOpen && selectedInvoice?.id === invoice.id} onOpenChange={(open) => {
-                  setPixDialogOpen(open);
-                  if (open) setSelectedInvoice(invoice);
-                }}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" variant="outline" className="flex-1 sm:flex-none">
-                      <QrCode className="mr-2 h-4 w-4" />
-                      Pagar com PIX
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Pagamento via PIX</DialogTitle>
-                      <DialogDescription>
-                        Copie o código PIX abaixo e cole no aplicativo do seu banco
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="p-4 bg-muted rounded-lg">
-                        <p className="text-xs font-mono break-all">{invoice.pix_code}</p>
-                      </div>
-                      <Button 
-                        className="w-full" 
-                        onClick={() => copyToClipboard(invoice.pix_code!, 'Código PIX')}
-                      >
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copiar Código PIX
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-
-              {/* Botão Boleto */}
-              {invoice.boleto_code && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="flex-1 sm:flex-none"
-                  asChild
-                >
-                  <a href={invoice.boleto_code} target="_blank" rel="noopener noreferrer">
-                    <FileText className="mr-2 h-4 w-4" />
-                    Ver Boleto
-                  </a>
-                </Button>
-              )}
-
-              {/* Fallback - se não tiver nenhuma opção de pagamento */}
-              {!invoice.invoice_url && !invoice.pix_code && !invoice.boleto_code && (
-                <p className="text-xs text-muted-foreground w-full">
-                  Entre em contato com o suporte para obter o link de pagamento.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Paid Invoice - Show payment date */}
-          {!isPending && invoice.payment_date && (
-            <div className="border-t bg-green-50 dark:bg-green-900/10 p-3">
-              <p className="text-xs text-green-700 dark:text-green-400 flex items-center">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Pago em {formatDate(invoice.payment_date)}
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
     );
@@ -260,13 +187,202 @@ export default function Financeiro() {
     </div>
   );
 
+  // Invoice Detail Sheet Content
+  const InvoiceDetailSheet = () => {
+    if (!selectedInvoice) return null;
+    
+    const config = statusConfig[selectedInvoice.status] || statusConfig.pending;
+    const StatusIcon = config.icon;
+    const isPending = ['pending', 'overdue'].includes(selectedInvoice.status);
+    const isPaid = ['received', 'confirmed', 'paid'].includes(selectedInvoice.status);
+
+    return (
+      <Sheet open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              Detalhes da Fatura
+            </SheetTitle>
+            <SheetDescription>
+              {selectedInvoice.description}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-6">
+            {/* Status Badge */}
+            <div className="flex items-center justify-between">
+              <Badge variant={config.variant} className="text-sm px-3 py-1">
+                <StatusIcon className="h-4 w-4 mr-2" />
+                {config.label}
+              </Badge>
+              <span className="text-2xl font-bold text-primary">
+                {formatCurrency(Number(selectedInvoice.amount))}
+              </span>
+            </div>
+
+            <Separator />
+
+            {/* Invoice Details */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    Vencimento
+                  </p>
+                  <p className="font-medium">{formatDate(selectedInvoice.due_date)}</p>
+                </div>
+                
+                {selectedInvoice.payment_date && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      Data do Pagamento
+                    </p>
+                    <p className="font-medium">{formatDate(selectedInvoice.payment_date)}</p>
+                  </div>
+                )}
+
+                {selectedInvoice.created_at && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Criada em</p>
+                    <p className="font-medium">{formatDate(selectedInvoice.created_at)}</p>
+                  </div>
+                )}
+
+                {selectedInvoice.payment_method && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Método</p>
+                    <p className="font-medium capitalize">{selectedInvoice.payment_method}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Payment Options for Pending */}
+            {isPending && (
+              <div className="space-y-4">
+                <h4 className="font-semibold text-sm">Opções de Pagamento</h4>
+                
+                {/* PIX Section */}
+                {selectedInvoice.pix_code && (
+                  <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                        <QrCode className="h-5 w-5" />
+                        <span className="font-semibold">Pagar com PIX</span>
+                      </div>
+                      
+                      {/* QR Code */}
+                      <div className="flex justify-center bg-white p-4 rounded-lg">
+                        <QRCodeSVG 
+                          value={selectedInvoice.pix_code} 
+                          size={180}
+                          level="H"
+                          includeMargin
+                        />
+                      </div>
+
+                      {/* Pix Code */}
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Código PIX (Copia e Cola)</p>
+                        <div className="p-3 bg-muted rounded-lg">
+                          <p className="text-xs font-mono break-all line-clamp-3">
+                            {selectedInvoice.pix_code}
+                          </p>
+                        </div>
+                        <Button 
+                          className="w-full" 
+                          variant="outline"
+                          onClick={() => copyToClipboard(selectedInvoice.pix_code!, 'Código PIX')}
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copiar Código PIX
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Boleto Button */}
+                {selectedInvoice.boleto_code && (
+                  <Button 
+                    className="w-full" 
+                    variant="outline"
+                    asChild
+                  >
+                    <a href={selectedInvoice.boleto_code} target="_blank" rel="noopener noreferrer">
+                      <FileText className="mr-2 h-4 w-4" />
+                      Visualizar Boleto
+                    </a>
+                  </Button>
+                )}
+
+                {/* Main Payment Link */}
+                {selectedInvoice.invoice_url && (
+                  <Button className="w-full" asChild>
+                    <a href={selectedInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Ver Fatura Completa / Pagar
+                    </a>
+                  </Button>
+                )}
+
+                {/* Fallback */}
+                {!selectedInvoice.invoice_url && !selectedInvoice.pix_code && !selectedInvoice.boleto_code && (
+                  <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+                    <CardContent className="p-4">
+                      <p className="text-sm text-amber-700 dark:text-amber-400">
+                        Entre em contato com o suporte para obter o link de pagamento.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {/* Paid Invoice Info */}
+            {isPaid && (
+              <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="font-semibold">Pagamento Confirmado</span>
+                  </div>
+                  {selectedInvoice.payment_date && (
+                    <p className="text-sm text-emerald-600 dark:text-emerald-500">
+                      Pagamento realizado em {formatDate(selectedInvoice.payment_date)}
+                    </p>
+                  )}
+                  
+                  {/* Download/View Receipt */}
+                  {selectedInvoice.invoice_url && (
+                    <Button className="w-full" variant="outline" asChild>
+                      <a href={selectedInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
+                        <Download className="mr-2 h-4 w-4" />
+                        Ver Comprovante
+                      </a>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  };
+
   return (
     <ClientLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Financeiro</h1>
           <p className="text-muted-foreground">
-            Gerencie suas faturas e pagamentos
+            Gerencie suas faturas e pagamentos. Clique em uma fatura para ver detalhes.
           </p>
         </div>
 
@@ -387,6 +503,9 @@ export default function Financeiro() {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Invoice Detail Sheet */}
+        <InvoiceDetailSheet />
       </div>
     </ClientLayout>
   );
