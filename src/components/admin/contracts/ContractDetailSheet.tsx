@@ -178,7 +178,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId: contract.id, expiresInDays: 7 }),
+          body: JSON.stringify({ contractId: contract.id, expiresInDays: 7, baseUrl: window.location.origin }),
         }
       );
 
@@ -209,7 +209,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'] }),
+          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'], baseUrl: window.location.origin }),
         }
       );
 
