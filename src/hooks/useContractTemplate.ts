@@ -113,7 +113,7 @@ CONTRATANTE:
 {{nome_cliente}}
 CPF/CNPJ: {{cpf_cnpj}}`;
 
-export function useContractTemplate(templateType: string = 'Registro de Marca'): UseContractTemplateResult {
+export function useContractTemplate(templateName: string = 'Contrato Padrão - Registro de Marca INPI'): UseContractTemplateResult {
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,24 +123,14 @@ export function useContractTemplate(templateType: string = 'Registro de Marca'):
     setError(null);
 
     try {
-      // First try to get template by contract type name
-      const { data: types } = await supabase
-        .from('contract_types')
-        .select('id')
-        .ilike('name', `%${templateType}%`)
-        .limit(1);
-
-      let query = supabase
+      // Search for template by name (case insensitive partial match)
+      const { data, error: fetchError } = await supabase
         .from('contract_templates')
         .select('id, name, content, variables, is_active')
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (types && types.length > 0) {
-        query = query.eq('contract_type_id', types[0].id);
-      }
-
-      const { data, error: fetchError } = await query.limit(1);
+        .or(`name.ilike.%${templateName}%,name.ilike.%Registro de Marca%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (fetchError) {
         throw fetchError;
@@ -184,7 +174,8 @@ export function useContractTemplate(templateType: string = 'Registro de Marca'):
 
   useEffect(() => {
     fetchTemplate();
-  }, [templateType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateName]);
 
   return { template, isLoading, error, refetch: fetchTemplate };
 }
