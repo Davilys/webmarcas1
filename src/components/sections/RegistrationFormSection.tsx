@@ -55,8 +55,8 @@ const RegistrationFormSection = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   
-  // Load contract template from database
-  const { template: contractTemplate, isLoading: isLoadingTemplate } = useContractTemplate('Registro de Marca');
+  // Load contract template from database - uses "Contrato Padrão - Registro de Marca INPI"
+  const { template: contractTemplate, isLoading: isLoadingTemplate } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
 
   // Form data
   const [personalData, setPersonalData] = useState({

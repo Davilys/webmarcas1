@@ -31,7 +31,8 @@ export function ContractStep({
   isSubmitting,
 }: ContractStepProps) {
   const [accepted, setAccepted] = useState(false);
-  const { template, isLoading } = useContractTemplate('Registro de Marca');
+  // Busca o template "Contrato Padrão - Registro de Marca INPI" do banco de dados
+  const { template, isLoading } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
 
   const getProcessedContract = useCallback(() => {
     if (!template) return '';
