@@ -5,6 +5,7 @@ import { ClientLayout } from '@/components/cliente/ClientLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   MessageSquare, 
   Send, 
@@ -12,11 +13,19 @@ import {
   Loader2, 
   Home, 
   ExternalLink,
-  Sparkles
+  Sparkles,
+  Bell,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  FileText,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Import avatars for team display
 import avatar1 from '@/assets/avatars/avatar-1.jpg';
@@ -31,7 +40,17 @@ interface Message {
   created_at: string;
 }
 
-type ViewType = 'home' | 'chat';
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: string | null;
+  read: boolean;
+  link: string | null;
+  created_at: string;
+}
+
+type ViewType = 'home' | 'chat' | 'notifications';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-support`;
 
@@ -40,10 +59,12 @@ export default function Suporte() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('home');
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,6 +76,7 @@ export default function Suporte() {
           setUser(session.user);
           await fetchUserProfile(session.user.id);
           await fetchMessages(session.user.id);
+          await fetchNotifications(session.user.id);
         }
       }
     );
@@ -66,6 +88,7 @@ export default function Suporte() {
         setUser(session.user);
         await fetchUserProfile(session.user.id);
         await fetchMessages(session.user.id);
+        await fetchNotifications(session.user.id);
       }
     });
 
@@ -98,6 +121,64 @@ export default function Suporte() {
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const unread = msgs.filter(m => m.role === 'assistant' && m.created_at > dayAgo).length;
     setUnreadCount(Math.min(unread, 9));
+  };
+
+  const fetchNotifications = async (userId: string) => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    const notifs = (data as Notification[]) || [];
+    setNotifications(notifs);
+    
+    // Count unread notifications
+    const unread = notifs.filter(n => !n.read).length;
+    setUnreadNotificationsCount(Math.min(unread, 9));
+  };
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId);
+
+    if (!error && user) {
+      await fetchNotifications(user.id);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('read', false);
+
+    if (!error) {
+      await fetchNotifications(user.id);
+      toast.success('Todas as notificações foram marcadas como lidas');
+    }
+  };
+
+  const getNotificationIcon = (type: string | null) => {
+    switch (type) {
+      case 'success':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'warning':
+        return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+      case 'info':
+        return <Info className="h-5 w-5 text-blue-500" />;
+      case 'process':
+        return <FileText className="h-5 w-5 text-primary" />;
+      case 'payment':
+        return <CreditCard className="h-5 w-5 text-green-500" />;
+      default:
+        return <Bell className="h-5 w-5 text-muted-foreground" />;
+    }
   };
 
   useEffect(() => {
@@ -362,35 +443,100 @@ export default function Suporte() {
       </div>
 
       {/* Bottom navigation */}
-      <div className="border-t bg-card p-2 flex rounded-b-xl">
-        <button
-          onClick={() => setCurrentView('home')}
-          className={cn(
-            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
-            currentView === 'home' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Home className="h-5 w-5" />
-          <span className="text-xs font-medium">Início</span>
-        </button>
-        <button
-          onClick={() => setCurrentView('chat')}
-          className={cn(
-            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors relative",
-            currentView === 'chat' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <div className="relative">
-            <MessageSquare className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
-          </div>
-          <span className="text-xs font-medium">Mensagens</span>
-        </button>
+      <BottomNavigation />
+    </div>
+  );
+
+  const NotificationsView = () => (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b bg-card rounded-t-xl">
+        <div>
+          <h3 className="font-semibold text-lg">Minhas Notificações</h3>
+          <p className="text-xs text-muted-foreground">
+            {unreadNotificationsCount > 0 
+              ? `${unreadNotificationsCount} não lida${unreadNotificationsCount > 1 ? 's' : ''}`
+              : 'Todas lidas'}
+          </p>
+        </div>
+        {unreadNotificationsCount > 0 && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={markAllNotificationsAsRead}
+          >
+            Marcar todas como lidas
+          </Button>
+        )}
       </div>
+
+      {/* Notifications list */}
+      <ScrollArea className="flex-1 bg-background">
+        <div className="p-4 space-y-3">
+          {notifications.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Bell className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h4 className="font-medium mb-2">Nenhuma notificação</h4>
+              <p className="text-sm text-muted-foreground">
+                Você será notificado sobre atualizações dos seus processos aqui.
+              </p>
+            </div>
+          ) : (
+            notifications.map((notification) => (
+              <div
+                key={notification.id}
+                onClick={() => {
+                  if (!notification.read) {
+                    markNotificationAsRead(notification.id);
+                  }
+                  if (notification.link) {
+                    navigate(notification.link);
+                  }
+                }}
+                className={cn(
+                  "p-4 rounded-xl border transition-colors cursor-pointer",
+                  notification.read 
+                    ? "bg-card hover:bg-accent" 
+                    : "bg-primary/5 border-primary/20 hover:bg-primary/10"
+                )}
+              >
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className={cn(
+                        "font-medium text-sm",
+                        !notification.read && "text-primary"
+                      )}>
+                        {notification.title}
+                      </h4>
+                      {!notification.read && (
+                        <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1.5" />
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                      {notification.message}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {formatDistanceToNow(new Date(notification.created_at), { 
+                        addSuffix: true, 
+                        locale: ptBR 
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Bottom navigation */}
+      <BottomNavigation />
     </div>
   );
 
@@ -493,7 +639,7 @@ export default function Suporte() {
       </div>
 
       {/* Input - using key to maintain focus */}
-      <div className="p-4 border-t bg-card rounded-b-xl">
+      <div className="p-4 border-t bg-card">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -524,36 +670,77 @@ export default function Suporte() {
       </div>
 
       {/* Bottom navigation */}
-      <div className="border-t bg-card p-2 flex">
-        <button
-          onClick={() => setCurrentView('home')}
-          className={cn(
-            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
-            currentView === 'home' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Home className="h-5 w-5" />
-          <span className="text-xs font-medium">Início</span>
-        </button>
-        <button
-          onClick={() => setCurrentView('chat')}
-          className={cn(
-            "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors relative",
-            currentView === 'chat' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <MessageSquare className="h-5 w-5" />
-          <span className="text-xs font-medium">Mensagens</span>
-        </button>
-      </div>
+      <BottomNavigation />
     </div>
   );
+
+  const BottomNavigation = () => (
+    <div className="border-t bg-card p-2 flex rounded-b-xl">
+      <button
+        onClick={() => setCurrentView('home')}
+        className={cn(
+          "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors",
+          currentView === 'home' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <Home className="h-5 w-5" />
+        <span className="text-xs font-medium">Início</span>
+      </button>
+      <button
+        onClick={() => setCurrentView('chat')}
+        className={cn(
+          "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors relative",
+          currentView === 'chat' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <div className="relative">
+          <MessageSquare className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+              {unreadCount}
+            </span>
+          )}
+        </div>
+        <span className="text-xs font-medium">Mensagens</span>
+      </button>
+      <button
+        onClick={() => setCurrentView('notifications')}
+        className={cn(
+          "flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-colors relative",
+          currentView === 'notifications' ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <div className="relative">
+          <Bell className="h-5 w-5" />
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs w-4 h-4 rounded-full flex items-center justify-center">
+              {unreadNotificationsCount}
+            </span>
+          )}
+        </div>
+        <span className="text-xs font-medium">Notificações</span>
+      </button>
+    </div>
+  );
+
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'home':
+        return <HomeView />;
+      case 'chat':
+        return renderChatView();
+      case 'notifications':
+        return <NotificationsView />;
+      default:
+        return <HomeView />;
+    }
+  };
 
   return (
     <ClientLayout>
       <div className="max-w-lg mx-auto h-[calc(100vh-8rem)]">
         <div className="bg-card rounded-xl shadow-lg border h-full overflow-hidden flex flex-col">
-          {currentView === 'home' ? <HomeView /> : renderChatView()}
+          {renderCurrentView()}
         </div>
       </div>
     </ClientLayout>

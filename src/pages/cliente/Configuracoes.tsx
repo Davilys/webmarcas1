@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ClientLayout } from '@/components/cliente/ClientLayout';
@@ -6,10 +6,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { User, Lock, Bell, Shield, Loader2 } from 'lucide-react';
+import { User, Lock, Building2, Loader2, MapPin, Check, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { 
+  validateCPF, 
+  validateCNPJ, 
+  formatCPF, 
+  formatCNPJ, 
+  formatCEP, 
+  formatPhone, 
+  fetchAddressByCEP 
+} from '@/lib/validators';
 
 interface Profile {
   full_name: string | null;
@@ -20,6 +28,11 @@ interface Profile {
   city: string | null;
   state: string | null;
   zip_code: string | null;
+}
+
+interface ValidationState {
+  cpf: boolean | null;
+  cnpj: boolean | null;
 }
 
 export default function Configuracoes() {
@@ -35,10 +48,25 @@ export default function Configuracoes() {
     state: '',
     zip_code: '',
   });
+  
+  // Separate fields for CPF and CNPJ
+  const [cpf, setCpf] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [razaoSocial, setRazaoSocial] = useState('');
+  const [nomeFantasia, setNomeFantasia] = useState('');
+  const [bairro, setBairro] = useState('');
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingCompany, setSavingCompany] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [loadingCEP, setLoadingCEP] = useState(false);
+  
+  const [validation, setValidation] = useState<ValidationState>({
+    cpf: null,
+    cnpj: null,
+  });
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -74,33 +102,171 @@ export default function Configuracoes() {
     if (data) {
       setProfile({
         full_name: data.full_name || '',
-        phone: data.phone || '',
+        phone: data.phone ? formatPhone(data.phone) : '',
         cpf_cnpj: data.cpf_cnpj || '',
         company_name: data.company_name || '',
         address: data.address || '',
         city: data.city || '',
         state: data.state || '',
-        zip_code: data.zip_code || '',
+        zip_code: data.zip_code ? formatCEP(data.zip_code) : '',
       });
+      
+      // Parse cpf_cnpj to separate CPF and CNPJ
+      const cleanDoc = (data.cpf_cnpj || '').replace(/\D/g, '');
+      if (cleanDoc.length === 11) {
+        setCpf(formatCPF(cleanDoc));
+        setValidation(prev => ({ ...prev, cpf: validateCPF(cleanDoc) }));
+      } else if (cleanDoc.length === 14) {
+        setCnpj(formatCNPJ(cleanDoc));
+        setValidation(prev => ({ ...prev, cnpj: validateCNPJ(cleanDoc) }));
+      }
+      
+      // Company name might contain "razão social | nome fantasia" format
+      if (data.company_name) {
+        const parts = data.company_name.split('|').map((s: string) => s.trim());
+        setRazaoSocial(parts[0] || '');
+        setNomeFantasia(parts[1] || '');
+      }
     }
     setLoading(false);
   };
 
+  const handleCEPChange = useCallback(async (value: string) => {
+    const formatted = formatCEP(value);
+    setProfile(prev => ({ ...prev, zip_code: formatted }));
+    
+    const cleanCEP = value.replace(/\D/g, '');
+    if (cleanCEP.length === 8) {
+      setLoadingCEP(true);
+      const addressData = await fetchAddressByCEP(cleanCEP);
+      setLoadingCEP(false);
+      
+      if (addressData) {
+        setProfile(prev => ({
+          ...prev,
+          address: addressData.logradouro,
+          city: addressData.localidade,
+          state: addressData.uf,
+        }));
+        setBairro(addressData.bairro);
+        toast.success('Endereço encontrado!');
+      } else {
+        toast.error('CEP não encontrado');
+      }
+    }
+  }, []);
+
+  const handlePhoneChange = (value: string) => {
+    setProfile(prev => ({ ...prev, phone: formatPhone(value) }));
+  };
+
+  const handleCPFChange = (value: string) => {
+    const formatted = formatCPF(value);
+    setCpf(formatted);
+    
+    const clean = value.replace(/\D/g, '');
+    if (clean.length === 11) {
+      const isValid = validateCPF(clean);
+      setValidation(prev => ({ ...prev, cpf: isValid }));
+      if (!isValid) {
+        toast.error('CPF inválido');
+      }
+    } else {
+      setValidation(prev => ({ ...prev, cpf: null }));
+    }
+  };
+
+  const handleCNPJChange = (value: string) => {
+    const formatted = formatCNPJ(value);
+    setCnpj(formatted);
+    
+    const clean = value.replace(/\D/g, '');
+    if (clean.length === 14) {
+      const isValid = validateCNPJ(clean);
+      setValidation(prev => ({ ...prev, cnpj: isValid }));
+      if (!isValid) {
+        toast.error('CNPJ inválido');
+      }
+    } else {
+      setValidation(prev => ({ ...prev, cnpj: null }));
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!user) return;
+    
+    // Validate CPF if provided
+    const cleanCPF = cpf.replace(/\D/g, '');
+    if (cleanCPF.length > 0 && cleanCPF.length !== 11) {
+      toast.error('CPF deve ter 11 dígitos');
+      return;
+    }
+    if (cleanCPF.length === 11 && !validateCPF(cleanCPF)) {
+      toast.error('CPF inválido');
+      return;
+    }
+    
     setSaving(true);
+
+    const updateData = {
+      full_name: profile.full_name,
+      phone: profile.phone?.replace(/\D/g, '') || null,
+      cpf_cnpj: cleanCPF || null,
+      address: profile.address,
+      city: profile.city,
+      state: profile.state,
+      zip_code: profile.zip_code?.replace(/\D/g, '') || null,
+    };
 
     const { error } = await supabase
       .from('profiles')
-      .update(profile)
+      .update(updateData)
       .eq('id', user.id);
 
     if (error) {
       toast.error('Erro ao salvar perfil');
     } else {
-      toast.success('Perfil atualizado com sucesso!');
+      toast.success('Dados pessoais atualizados com sucesso!');
     }
     setSaving(false);
+  };
+
+  const handleSaveCompany = async () => {
+    if (!user) return;
+    
+    // Validate CNPJ if provided
+    const cleanCNPJ = cnpj.replace(/\D/g, '');
+    if (cleanCNPJ.length > 0 && cleanCNPJ.length !== 14) {
+      toast.error('CNPJ deve ter 14 dígitos');
+      return;
+    }
+    if (cleanCNPJ.length === 14 && !validateCNPJ(cleanCNPJ)) {
+      toast.error('CNPJ inválido');
+      return;
+    }
+    
+    setSavingCompany(true);
+
+    // Store company info - razão social and nome fantasia
+    const companyName = nomeFantasia 
+      ? `${razaoSocial} | ${nomeFantasia}` 
+      : razaoSocial;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        company_name: companyName || null,
+        // If CNPJ is provided and CPF was already set, update cpf_cnpj with CNPJ
+        ...(cleanCNPJ.length === 14 && { cpf_cnpj: cleanCNPJ }),
+      })
+      .eq('id', user.id);
+
+    if (error) {
+      toast.error('Erro ao salvar dados da empresa');
+    } else {
+      toast.success('Dados da empresa atualizados com sucesso!');
+    }
+    setSavingCompany(false);
   };
 
   const handleChangePassword = async () => {
@@ -124,6 +290,15 @@ export default function Configuracoes() {
     setChangingPassword(false);
   };
 
+  const ValidationIcon = ({ isValid }: { isValid: boolean | null }) => {
+    if (isValid === null) return null;
+    return isValid ? (
+      <Check className="h-4 w-4 text-green-500" />
+    ) : (
+      <X className="h-4 w-4 text-destructive" />
+    );
+  };
+
   if (loading) {
     return (
       <ClientLayout>
@@ -144,7 +319,7 @@ export default function Configuracoes() {
           </p>
         </div>
 
-        {/* Profile Section */}
+        {/* Personal Data Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -163,6 +338,7 @@ export default function Configuracoes() {
                   id="full_name"
                   value={profile.full_name || ''}
                   onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                  placeholder="Seu nome completo"
                 />
               </div>
               <div className="space-y-2">
@@ -179,24 +355,43 @@ export default function Configuracoes() {
                 <Input
                   id="phone"
                   value={profile.phone || ''}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder="(11) 99999-9999"
+                  maxLength={15}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cpf_cnpj">CPF/CNPJ</Label>
-                <Input
-                  id="cpf_cnpj"
-                  value={profile.cpf_cnpj || ''}
-                  onChange={(e) => setProfile({ ...profile, cpf_cnpj: e.target.value })}
-                />
+                <Label htmlFor="cpf">CPF</Label>
+                <div className="relative">
+                  <Input
+                    id="cpf"
+                    value={cpf}
+                    onChange={(e) => handleCPFChange(e.target.value)}
+                    placeholder="000.000.000-00"
+                    maxLength={14}
+                    className={validation.cpf === false ? 'border-destructive' : ''}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <ValidationIcon isValid={validation.cpf} />
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company_name">Empresa</Label>
-                <Input
-                  id="company_name"
-                  value={profile.company_name || ''}
-                  onChange={(e) => setProfile({ ...profile, company_name: e.target.value })}
-                />
+                <Label htmlFor="cep">CEP</Label>
+                <div className="relative">
+                  <Input
+                    id="cep"
+                    value={profile.zip_code || ''}
+                    onChange={(e) => handleCEPChange(e.target.value)}
+                    placeholder="00000-000"
+                    maxLength={9}
+                  />
+                  {loadingCEP && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">Endereço</Label>
@@ -204,6 +399,16 @@ export default function Configuracoes() {
                   id="address"
                   value={profile.address || ''}
                   onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+                  placeholder="Rua, número"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bairro">Bairro</Label>
+                <Input
+                  id="bairro"
+                  value={bairro}
+                  onChange={(e) => setBairro(e.target.value)}
+                  placeholder="Bairro"
                 />
               </div>
               <div className="space-y-2">
@@ -212,6 +417,7 @@ export default function Configuracoes() {
                   id="city"
                   value={profile.city || ''}
                   onChange={(e) => setProfile({ ...profile, city: e.target.value })}
+                  placeholder="Cidade"
                 />
               </div>
               <div className="space-y-2">
@@ -220,6 +426,8 @@ export default function Configuracoes() {
                   id="state"
                   value={profile.state || ''}
                   onChange={(e) => setProfile({ ...profile, state: e.target.value })}
+                  placeholder="UF"
+                  maxLength={2}
                 />
               </div>
             </div>
@@ -231,7 +439,70 @@ export default function Configuracoes() {
                   Salvando...
                 </>
               ) : (
-                'Salvar Alterações'
+                'Salvar Dados Pessoais'
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Company Data Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Dados da Empresa
+              <span className="text-xs font-normal text-muted-foreground">(Opcional)</span>
+            </CardTitle>
+            <CardDescription>
+              Preencha se for pessoa jurídica
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="razao_social">Razão Social</Label>
+                <Input
+                  id="razao_social"
+                  value={razaoSocial}
+                  onChange={(e) => setRazaoSocial(e.target.value)}
+                  placeholder="Razão Social da empresa"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cnpj">CNPJ</Label>
+                <div className="relative">
+                  <Input
+                    id="cnpj"
+                    value={cnpj}
+                    onChange={(e) => handleCNPJChange(e.target.value)}
+                    placeholder="00.000.000/0000-00"
+                    maxLength={18}
+                    className={validation.cnpj === false ? 'border-destructive' : ''}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <ValidationIcon isValid={validation.cnpj} />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
+                <Input
+                  id="nome_fantasia"
+                  value={nomeFantasia}
+                  onChange={(e) => setNomeFantasia(e.target.value)}
+                  placeholder="Nome Fantasia (opcional)"
+                />
+              </div>
+            </div>
+
+            <Button onClick={handleSaveCompany} disabled={savingCompany} variant="outline">
+              {savingCompany ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                'Salvar Dados da Empresa'
               )}
             </Button>
           </CardContent>
