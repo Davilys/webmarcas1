@@ -154,12 +154,14 @@ const ViabilitySearchSection = () => {
   };
 
   const handleRegisterClick = () => {
-    // Salvar dados para o checkout
-    sessionStorage.setItem('viabilityBrandName', brandName);
-    sessionStorage.setItem('viabilityBusinessArea', businessArea);
-    sessionStorage.setItem('viabilityLevel', result?.level || '');
-    // Abrir checkout em nova aba
-    window.open('/checkout', '_blank');
+    sessionStorage.setItem('viabilityData', JSON.stringify({
+      brandName,
+      businessArea,
+      level: result?.level,
+    }));
+    // Scroll to top before navigation
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    navigate('/registro');
   };
 
   const getResultStyles = (level: ViabilityLevel) => {

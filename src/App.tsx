@@ -11,7 +11,6 @@ import StatusPedido from "./pages/StatusPedido";
 import Obrigado from "./pages/Obrigado";
 import VerificarContrato from "./pages/VerificarContrato";
 import AssinarDocumento from "./pages/AssinarDocumento";
-import Checkout from "./pages/Checkout";
 import NotFound from "./pages/NotFound";
 
 // Cliente pages
@@ -55,7 +54,6 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/checkout" element={<Checkout />} />
               <Route path="/registro" element={<Registro />} />
               <Route path="/status-pedido" element={<StatusPedido />} />
               <Route path="/obrigado" element={<Obrigado />} />
