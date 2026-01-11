@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -168,52 +167,27 @@ Resolver o problema real do cliente de forma técnica, estratégica, honesta e �
 
 Seja direta, clara e sempre foque na melhor solução possível para o caso concreto.`;
 
-// Robust PDF text extraction using pdfjs-dist
-async function extractPdfText(base64Data: string): Promise<string> {
-  try {
-    // Decode base64 to Uint8Array
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    // Disable worker in edge runtime
-    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = undefined;
-
-    const loadingTask = (pdfjsLib as any).getDocument({ data: bytes, disableWorker: true });
-    const pdf = await loadingTask.promise;
-
-    const pages: string[] = [];
-    const maxPages = Math.min(pdf.numPages ?? 0, 50);
-
-    console.log(`PDF has ${pdf.numPages} pages, processing ${maxPages}`);
-
-    for (let i = 1; i <= maxPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const strings = (content.items || [])
-        .map((it: any) => (typeof it.str === "string" ? it.str : ""))
-        .filter(Boolean);
-
-      const pageText = strings.join(" ").replace(/\s+/g, " ").trim();
-      if (pageText) pages.push(pageText);
-    }
-
-    const fullText = pages.join("\n\n").trim();
-    
-    console.log(`Extracted ${fullText.length} characters from PDF`);
-    console.log(`Preview: ${fullText.substring(0, 300)}...`);
-    
-    if (fullText.length < 50) {
-      return "Não foi possível extrair texto do PDF. O documento pode ser escaneado/imagem.";
-    }
-    
-    return fullText;
-  } catch (error) {
-    console.error('Error extracting PDF text with pdfjs:', error);
-    return 'Erro ao processar o PDF: ' + (error instanceof Error ? error.message : 'Erro desconhecido');
+// Build multimodal content for GPT-4o with images (OCR for scanned PDFs)
+function buildMultimodalContent(text: string, images: string[], fileName: string): any[] {
+  const content: any[] = [];
+  
+  content.push({
+    type: "text",
+    text: `${text}\n\n📄 Documento anexado: ${fileName}\n\nAs imagens abaixo são páginas do documento PDF. Por favor, faça OCR e análise jurídica completa do conteúdo visível.`
+  });
+  
+  for (const imageData of images) {
+    // imageData should be a data URL like "data:image/jpeg;base64,..."
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: imageData,
+        detail: "high"
+      }
+    });
   }
+  
+  return content;
 }
 
 serve(async (req) => {
@@ -229,7 +203,7 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    // Build messages array with text-only content
+    // Build messages array
     const apiMessages: any[] = [
       { role: 'system', content: SYSTEM_PROMPT }
     ];
@@ -237,18 +211,27 @@ serve(async (req) => {
     // Process conversation history
     if (messages && Array.isArray(messages)) {
       for (const msg of messages) {
-        if (msg.role === 'user' && msg.fileBase64) {
-          // Extract text from PDF using pdfjs-dist
-          console.log('Extracting text from PDF:', msg.fileName);
-          const pdfText = await extractPdfText(msg.fileBase64);
+        if (msg.role === 'user' && msg.fileImages && msg.fileImages.length > 0) {
+          // Use multimodal content with images for OCR
+          console.log('Using multimodal OCR for PDF:', msg.fileName, 'with', msg.fileImages.length, 'images');
           
-          console.log('PDF extraction result length:', pdfText.length);
-          
-          const messageContent = `${msg.content || 'Analise este documento do INPI:'}\n\n📄 CONTEÚDO DO DOCUMENTO (${msg.fileName}):\n\n${pdfText}`;
+          const multimodalContent = buildMultimodalContent(
+            msg.content || 'Analise este documento do INPI:',
+            msg.fileImages,
+            msg.fileName || 'documento.pdf'
+          );
           
           apiMessages.push({
             role: 'user',
-            content: messageContent
+            content: multimodalContent
+          });
+        } else if (msg.role === 'user' && msg.fileBase64) {
+          // Fallback: PDF without images (shouldn't happen with new frontend)
+          console.log('PDF without images, asking user to re-upload:', msg.fileName);
+          
+          apiMessages.push({
+            role: 'user',
+            content: `${msg.content || 'Analise este documento do INPI:'}\n\n[Documento PDF anexado: ${msg.fileName}]\n\nNota: O documento foi enviado mas precisa ser reprocessado. Por favor, reenvie o PDF para análise completa.`
           });
         } else {
           apiMessages.push({

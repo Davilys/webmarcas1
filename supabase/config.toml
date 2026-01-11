@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.chat-inpi-legal]
 verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
