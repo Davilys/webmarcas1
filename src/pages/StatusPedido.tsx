@@ -210,17 +210,34 @@ const StatusPedido = () => {
                   <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
                     <FileText className="w-6 h-6 text-primary" />
                   </div>
-                <div>
+                  <div>
                     <p className="text-2xl font-bold text-primary">
-                      R$ {orderData.paymentValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {orderData.paymentMethod === 'cartao6x' 
+                        ? `6x de R$ ${(Math.round((orderData.paymentValue / 6) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : orderData.paymentMethod === 'boleto3x'
+                        ? `3x de R$ ${(Math.round((orderData.paymentValue / 3) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : `R$ ${orderData.paymentValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      }
                     </p>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <CreditCard className="w-4 h-4" />
-                      <span>Parcela 1/1</span>
+                      <span>
+                        {orderData.paymentMethod === 'cartao6x' 
+                          ? '6x sem juros' 
+                          : orderData.paymentMethod === 'boleto3x'
+                          ? '3x no boleto'
+                          : 'PIX à vista'
+                        }
+                      </span>
                       <span className="mx-1">•</span>
                       <Clock className="w-4 h-4" />
                       <span>Vence em {dueDate.toLocaleDateString("pt-BR")}</span>
                     </div>
+                    {(orderData.paymentMethod === 'cartao6x' || orderData.paymentMethod === 'boleto3x') && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Total: R$ {orderData.paymentValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    )}
                   </div>
                 </div>
 
