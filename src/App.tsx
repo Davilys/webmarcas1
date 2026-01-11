@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import Index from "./pages/Index";
 import Registro from "./pages/Registro";
+import Registrar from "./pages/Registrar";
 import StatusPedido from "./pages/StatusPedido";
 import Obrigado from "./pages/Obrigado";
 import VerificarContrato from "./pages/VerificarContrato";
@@ -58,6 +59,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/registro" element={<Registro />} />
+              <Route path="/registrar" element={<Registrar />} />
               <Route path="/status-pedido" element={<StatusPedido />} />
               <Route path="/obrigado" element={<Obrigado />} />
               <Route path="/verificar-contrato" element={<VerificarContrato />} />
