@@ -169,11 +169,26 @@ export default function ClienteStatusPedido() {
             <div className="text-center border-b pb-6">
               <p className="text-sm text-muted-foreground mb-1">Valor do Registro</p>
               <p className="text-4xl font-bold text-primary">
-                {formatCurrency(orderData.paymentValue)}
+                {orderData.paymentMethod === 'cartao6x' 
+                  ? `6x de ${formatCurrency(Math.round((orderData.paymentValue / 6) * 100) / 100)}`
+                  : orderData.paymentMethod === 'boleto3x'
+                  ? `3x de ${formatCurrency(Math.round((orderData.paymentValue / 3) * 100) / 100)}`
+                  : formatCurrency(orderData.paymentValue)
+                }
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                {getPaymentDescription()}
+                {orderData.paymentMethod === 'cartao6x' 
+                  ? '6x sem juros' 
+                  : orderData.paymentMethod === 'boleto3x'
+                  ? '3x no boleto'
+                  : 'PIX à vista'
+                }
               </p>
+              {(orderData.paymentMethod === 'cartao6x' || orderData.paymentMethod === 'boleto3x') && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Total: {formatCurrency(orderData.paymentValue)}
+                </p>
+              )}
             </div>
 
             {/* PIX Payment - Show QR Code */}
