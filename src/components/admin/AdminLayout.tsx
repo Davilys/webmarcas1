@@ -339,14 +339,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         return;
       }
 
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .single();
+      // Usar RPC has_role para verificação server-side segura
+      const { data: isAdminRole, error } = await supabase.rpc('has_role', {
+        _user_id: user.id,
+        _role: 'admin'
+      });
 
-      if (!roles) {
+      if (error || !isAdminRole) {
         toast.error('Acesso negado. Você não tem permissão de administrador.');
         navigate('/cliente/dashboard');
         return;
