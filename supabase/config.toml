@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.check-signature-expiration]
 verify_jwt = false
+
+[functions.chat-inpi-legal]
+verify_jwt = false
