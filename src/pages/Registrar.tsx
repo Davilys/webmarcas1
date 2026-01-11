@@ -16,6 +16,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import SocialProofNotification from "@/components/SocialProofNotification";
 import type { ViabilityResult } from "@/lib/api/viability";
 import logo from "@/assets/webmarcas-logo.png";
+import WhatsAppButton from "@/components/layout/WhatsAppButton";
 
 // Dynamic text options for typing effect
 const dynamicTexts = [
@@ -323,6 +324,9 @@ export default function Registrar() {
           <a href="/privacidade" className="underline hover:text-primary transition-colors">Política de Privacidade</a>.
         </p>
       </main>
+
+      {/* WhatsApp Floating Button */}
+      <WhatsAppButton />
     </div>
   );
 }
