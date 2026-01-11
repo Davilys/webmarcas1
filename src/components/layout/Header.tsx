@@ -33,11 +33,12 @@ const Header = () => {
   }, []);
 
   const navItems = [
-    { label: t("nav.home"), href: "#home" },
-    { label: t("nav.benefits"), href: "#beneficios" },
-    { label: t("nav.howItWorks"), href: "#como-funciona" },
-    { label: t("nav.pricing"), href: "#precos" },
-    { label: t("nav.faq"), href: "#faq" },
+    { label: t("nav.home"), href: "#home", external: false },
+    { label: t("nav.benefits"), href: "#beneficios", external: false },
+    { label: t("nav.howItWorks"), href: "#como-funciona", external: false },
+    { label: t("nav.pricing"), href: "#precos", external: false },
+    { label: t("nav.faq"), href: "#faq", external: false },
+    { label: t("nav.register"), href: "/registrar", external: true },
   ];
 
   const currentLang = languages.find((l) => l.code === language);
@@ -63,13 +64,25 @@ const Header = () => {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary"
-              >
-                {item.label}
-              </a>
+              item.external ? (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors rounded-lg hover:bg-primary/10"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary"
+                >
+                  {item.label}
+                </a>
+              )
             ))}
           </nav>
 
@@ -174,14 +187,27 @@ const Header = () => {
         <div className="md:hidden bg-background/95 backdrop-blur-xl border-b border-border">
           <nav className="container mx-auto px-4 py-4 flex flex-col gap-2">
             {navItems.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {item.label}
-              </a>
+              item.external ? (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-3 font-medium text-primary hover:text-primary/80 transition-colors rounded-lg hover:bg-primary/10"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {item.label}
+                </a>
+              )
             ))}
             <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
               <Button variant="ghost" asChild>
