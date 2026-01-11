@@ -167,43 +167,104 @@ Resolver o problema real do cliente de forma técnica, estratégica, honesta e �
 
 Seja direta, clara e sempre foque na melhor solução possível para o caso concreto.`;
 
+// Simple PDF text extraction using regex patterns
+function extractTextFromPDFContent(base64Data: string): string {
+  try {
+    // Decode base64 to binary string
+    const binaryString = atob(base64Data);
+    
+    // Find all text streams in the PDF
+    const textPatterns: string[] = [];
+    
+    // Pattern 1: Look for text between BT and ET (text objects)
+    const btEtRegex = /BT[\s\S]*?ET/g;
+    const textBlocks = binaryString.match(btEtRegex) || [];
+    
+    for (const block of textBlocks) {
+      // Extract text from Tj, TJ, ' and " operators
+      const tjMatches = block.match(/\(([^)]*)\)\s*Tj/g) || [];
+      const tjArrayMatches = block.match(/\[([^\]]*)\]\s*TJ/g) || [];
+      
+      for (const match of tjMatches) {
+        const text = match.match(/\(([^)]*)\)/)?.[1];
+        if (text && text.length > 1) {
+          textPatterns.push(text);
+        }
+      }
+      
+      for (const match of tjArrayMatches) {
+        const innerTexts = match.match(/\(([^)]*)\)/g) || [];
+        for (const inner of innerTexts) {
+          const text = inner.match(/\(([^)]*)\)/)?.[1];
+          if (text && text.length > 1) {
+            textPatterns.push(text);
+          }
+        }
+      }
+    }
+    
+    // Pattern 2: Look for stream content with readable text
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let streamMatch;
+    while ((streamMatch = streamRegex.exec(binaryString)) !== null) {
+      const content = streamMatch[1];
+      // Extract readable ASCII text segments
+      const readableText = content.match(/[A-Za-z0-9\sáàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ.,;:!?()-]{10,}/g) || [];
+      textPatterns.push(...readableText);
+    }
+    
+    // Clean and join extracted text
+    const cleanedText = textPatterns
+      .filter(t => t && t.length > 2)
+      .map(t => t.replace(/\\n/g, '\n').replace(/\\r/g, '').trim())
+      .filter(t => t.length > 0)
+      .join(' ');
+    
+    if (cleanedText.length > 100) {
+      return cleanedText;
+    }
+    
+    // Fallback: Extract any readable text from the PDF
+    const allReadable = binaryString.match(/[A-Za-z0-9\sáàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ.,;:!?()@/-]{20,}/g) || [];
+    return allReadable.slice(0, 100).join(' ').substring(0, 10000) || 'Não foi possível extrair texto legível do PDF.';
+    
+  } catch (error) {
+    console.error('Error extracting PDF text:', error);
+    return 'Erro ao processar o PDF.';
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, fileBase64, fileType, fileName } = await req.json();
+    const { messages } = await req.json();
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    // Build messages array
+    // Build messages array with text-only content
     const apiMessages: any[] = [
       { role: 'system', content: SYSTEM_PROMPT }
     ];
 
-    // Add conversation history
+    // Process conversation history
     if (messages && Array.isArray(messages)) {
       for (const msg of messages) {
         if (msg.role === 'user' && msg.fileBase64) {
-          // Message with file attachment
+          // Extract text from PDF using simple extraction
+          console.log('Extracting text from PDF:', msg.fileName);
+          const pdfText = extractTextFromPDFContent(msg.fileBase64);
+          
+          const messageContent = `${msg.content || 'Analise este documento do INPI:'}\n\n📄 CONTEÚDO DO DOCUMENTO (${msg.fileName}):\n\n${pdfText}`;
+          
           apiMessages.push({
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: msg.content || `Analise este documento PDF do INPI: ${msg.fileName || 'documento.pdf'}`
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${msg.fileType || 'application/pdf'};base64,${msg.fileBase64}`
-                }
-              }
-            ]
+            content: messageContent
           });
         } else {
           apiMessages.push({
@@ -211,28 +272,6 @@ serve(async (req) => {
             content: msg.content
           });
         }
-      }
-    }
-
-    // Handle current file upload if present
-    if (fileBase64 && !messages?.some((m: any) => m.fileBase64)) {
-      const lastUserMessage = apiMessages[apiMessages.length - 1];
-      if (lastUserMessage && lastUserMessage.role === 'user') {
-        apiMessages[apiMessages.length - 1] = {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: lastUserMessage.content || `Analise este documento PDF do INPI: ${fileName || 'documento.pdf'}`
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${fileType || 'application/pdf'};base64,${fileBase64}`
-              }
-            }
-          ]
-        };
       }
     }
 
