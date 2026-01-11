@@ -154,7 +154,7 @@ export function PaymentStep({ selectedMethod, onNext, onBack }: PaymentStepProps
                 Garantia de Satisfação
               </p>
               <p className="text-emerald-600/80 dark:text-emerald-500/80">
-                Se o INPI indeferir seu registro, devolvemos 100% do valor investido.
+                Se o INPI indeferir seu registro, registramos uma nova marca sem cobrar nada de honorários.
               </p>
             </div>
           </div>
