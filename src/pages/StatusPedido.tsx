@@ -21,7 +21,7 @@ interface AsaasData {
     encodedImage: string;
     payload: string;
     expirationDate?: string;
-  };
+  } | null;
 }
 
 interface OrderData {
@@ -239,75 +239,127 @@ const StatusPedido = () => {
                   </div>
                 )}
 
-                {/* QR Code Section */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <QrCode className="w-5 h-5 text-primary" />
-                    <span className="font-medium">QrCode</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Abra o app do seu banco e aponte a câmera para o QrCode abaixo
-                  </p>
-                  
-                  {/* QR Code from Asaas */}
-                  <div className="flex justify-center mb-6">
-                    <div className="w-48 h-48 bg-white p-3 rounded-xl border border-border overflow-hidden">
-                      {pixQrCodeImage ? (
-                        <img 
-                          src={`data:image/png;base64,${pixQrCodeImage}`} 
-                          alt="QR Code PIX" 
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm text-center">
-                          QR Code não disponível
+              {/* Payment Method Specific Content */}
+                {orderData.paymentMethod === 'avista' && (
+                  <>
+                    {/* QR Code Section - PIX */}
+                    <div className="mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <QrCode className="w-5 h-5 text-primary" />
+                        <span className="font-medium">QrCode PIX</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Abra o app do seu banco e aponte a câmera para o QrCode abaixo
+                      </p>
+                      
+                      <div className="flex justify-center mb-6">
+                        <div className="w-48 h-48 bg-white p-3 rounded-xl border border-border overflow-hidden">
+                          {pixQrCodeImage ? (
+                            <img 
+                              src={`data:image/png;base64,${pixQrCodeImage}`} 
+                              alt="QR Code PIX" 
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm text-center">
+                              QR Code não disponível
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* PIX Copy and Paste */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-medium">Pix Copia e Cola</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Você pode copiar e colar esse código no app
-                  </p>
-                  
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={pixCode ? (pixCode.length > 40 ? pixCode.substring(0, 40) + "..." : pixCode) : "Aguardando geração..."}
-                      className="input-styled flex-1 text-sm font-mono"
-                    />
-                  </div>
-                  
-                  <Button
-                    variant="hero"
-                    size="lg"
-                    className="w-full mt-4"
-                    onClick={handleCopyPix}
-                    disabled={!pixCode}
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-5 h-5" />
-                        Código Copiado!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-5 h-5" />
-                        COPIAR CÓDIGO
-                      </>
-                    )}
-                  </Button>
-                </div>
+                    {/* PIX Copy and Paste */}
+                    <div className="mb-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-medium">Pix Copia e Cola</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Você pode copiar e colar esse código no app
+                      </p>
+                      
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={pixCode ? (pixCode.length > 40 ? pixCode.substring(0, 40) + "..." : pixCode) : "Aguardando geração..."}
+                          className="input-styled flex-1 text-sm font-mono"
+                        />
+                      </div>
+                      
+                      <Button
+                        variant="hero"
+                        size="lg"
+                        className="w-full mt-4"
+                        onClick={handleCopyPix}
+                        disabled={!pixCode}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="w-5 h-5" />
+                            Código Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-5 h-5" />
+                            COPIAR CÓDIGO
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
 
-                {/* Link to invoice if available */}
-                {orderData.asaas?.invoiceUrl && (
+                {/* Credit Card - Show Pay Now Button */}
+                {orderData.paymentMethod === 'cartao6x' && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CreditCard className="w-5 h-5 text-primary" />
+                      <span className="font-medium">Pagamento com Cartão de Crédito</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Clique no botão abaixo para inserir os dados do seu cartão e finalizar o pagamento em 6x sem juros.
+                    </p>
+                    
+                    <Button
+                      variant="hero"
+                      size="lg"
+                      className="w-full"
+                      onClick={() => window.open(orderData.asaas?.invoiceUrl, '_blank')}
+                      disabled={!orderData.asaas?.invoiceUrl}
+                    >
+                      <CreditCard className="w-5 h-5 mr-2" />
+                      PAGAR AGORA
+                    </Button>
+                  </div>
+                )}
+
+                {/* Boleto - Show Link to PDF */}
+                {orderData.paymentMethod === 'boleto3x' && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText className="w-5 h-5 text-primary" />
+                      <span className="font-medium">Pagamento via Boleto Parcelado</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Clique no botão abaixo para acessar o boleto. Serão gerados 3 boletos mensais.
+                    </p>
+                    
+                    <Button
+                      variant="hero"
+                      size="lg"
+                      className="w-full"
+                      onClick={() => window.open(orderData.asaas?.bankSlipUrl || orderData.asaas?.invoiceUrl, '_blank')}
+                      disabled={!orderData.asaas?.bankSlipUrl && !orderData.asaas?.invoiceUrl}
+                    >
+                      <FileText className="w-5 h-5 mr-2" />
+                      VER BOLETO
+                    </Button>
+                  </div>
+                )}
+
+                {/* Link to invoice if available - for all methods */}
+                {orderData.asaas?.invoiceUrl && orderData.paymentMethod === 'avista' && (
                   <div className="mb-6">
                     <a 
                       href={orderData.asaas.invoiceUrl} 

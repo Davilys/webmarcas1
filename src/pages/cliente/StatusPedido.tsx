@@ -18,10 +18,11 @@ import {
 interface AsaasData {
   paymentId: string;
   invoiceUrl: string;
+  bankSlipUrl?: string;
   pixQrCode?: {
     encodedImage?: string;
     payload?: string;
-  };
+  } | null;
 }
 
 interface OrderData {
@@ -120,9 +121,9 @@ export default function ClienteStatusPedido() {
   const getPaymentDescription = () => {
     if (!orderData) return '';
     switch (orderData.paymentMethod) {
-      case 'pix': return 'À Vista (PIX)';
-      case 'credit_6x': return 'Cartão 6x';
-      case 'boleto_3x': return 'Boleto 3x';
+      case 'avista': return 'À Vista (PIX)';
+      case 'cartao6x': return 'Cartão 6x sem juros';
+      case 'boleto3x': return 'Boleto 3x';
       default: return orderData.paymentMethod;
     }
   };
@@ -170,8 +171,8 @@ export default function ClienteStatusPedido() {
               </p>
             </div>
 
-            {/* PIX QR Code */}
-            {orderData.paymentMethod === 'pix' && orderData.asaas?.pixQrCode && (
+            {/* PIX Payment - Show QR Code */}
+            {orderData.paymentMethod === 'avista' && orderData.asaas?.pixQrCode && (
               <div className="flex flex-col items-center space-y-4">
                 <div className="bg-white p-4 rounded-lg border">
                   {orderData.asaas.pixQrCode.encodedImage ? (
@@ -190,8 +191,8 @@ export default function ClienteStatusPedido() {
               </div>
             )}
 
-            {/* PIX Copy and Paste */}
-            {pixCode && (
+            {/* PIX Copy and Paste - Only for PIX payments */}
+            {orderData.paymentMethod === 'avista' && pixCode && (
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-2">
                   <QrCode className="w-4 h-4" />
@@ -214,8 +215,48 @@ export default function ClienteStatusPedido() {
               </div>
             )}
 
-            {/* Invoice Link */}
-            {orderData.asaas?.invoiceUrl && (
+            {/* Credit Card Payment - Show Pay Now Button */}
+            {orderData.paymentMethod === 'cartao6x' && (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Clique no botão abaixo para inserir os dados do seu cartão e finalizar o pagamento em 6x sem juros.
+                  </p>
+                </div>
+                <Button 
+                  className="w-full"
+                  size="lg"
+                  onClick={() => window.open(orderData.asaas?.invoiceUrl, '_blank')}
+                  disabled={!orderData.asaas?.invoiceUrl}
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  PAGAR AGORA
+                </Button>
+              </div>
+            )}
+
+            {/* Boleto Payment - Show Link to PDF */}
+            {orderData.paymentMethod === 'boleto3x' && (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Clique no botão abaixo para acessar o boleto. Serão gerados 3 boletos mensais.
+                  </p>
+                </div>
+                <Button 
+                  className="w-full"
+                  size="lg"
+                  onClick={() => window.open(orderData.asaas?.invoiceUrl, '_blank')}
+                  disabled={!orderData.asaas?.invoiceUrl}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  VER BOLETO
+                </Button>
+              </div>
+            )}
+
+            {/* Invoice Link - Only for PIX */}
+            {orderData.paymentMethod === 'avista' && orderData.asaas?.invoiceUrl && (
               <Button 
                 variant="outline" 
                 className="w-full"
