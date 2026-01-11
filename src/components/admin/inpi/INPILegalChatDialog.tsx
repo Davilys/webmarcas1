@@ -4,19 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
 import { Send, Paperclip, Mic, Square, Loader2, X, FileText, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
-// Set up the worker for pdfjs
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Set up the worker for pdfjs (Vite will bundle the worker URL)
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   fileName?: string;
+  fileBase64?: string;
   fileImages?: string[];
   createdAt: Date;
 }
@@ -26,8 +29,14 @@ interface INPILegalChatDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type PdfProgressStage = 'reading' | 'rendering';
+
 // Convert PDF pages to images for OCR
-async function convertPdfToImages(base64Data: string, maxPages: number = 3): Promise<string[]> {
+async function convertPdfToImages(
+  base64Data: string,
+  maxPages: number = 3,
+  onProgress?: (info: { currentPage: number; totalPages: number; etaSeconds?: number }) => void
+): Promise<string[]> {
   try {
     const binaryString = atob(base64Data);
     const bytes = new Uint8Array(binaryString.length);
@@ -41,7 +50,7 @@ async function convertPdfToImages(base64Data: string, maxPages: number = 3): Pro
     const images: string[] = [];
     const pagesToProcess = Math.min(pdf.numPages, maxPages);
 
-    console.log(`Converting ${pagesToProcess} pages of PDF to images`);
+    const start = performance.now();
 
     for (let i = 1; i <= pagesToProcess; i++) {
       const page = await pdf.getPage(i);
@@ -49,7 +58,7 @@ async function convertPdfToImages(base64Data: string, maxPages: number = 3): Pro
 
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
-      
+
       if (!context) continue;
 
       canvas.height = viewport.height;
@@ -63,8 +72,13 @@ async function convertPdfToImages(base64Data: string, maxPages: number = 3): Pro
       // Convert to JPEG data URL
       const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85);
       images.push(imageDataUrl);
-      
-      console.log(`Page ${i} converted, size: ${Math.round(imageDataUrl.length / 1024)}KB`);
+
+      const elapsedSec = (performance.now() - start) / 1000;
+      const avgPerPage = elapsedSec / i;
+      const remainingPages = pagesToProcess - i;
+      const etaSeconds = remainingPages > 0 ? Math.max(0, Math.round(avgPerPage * remainingPages)) : 0;
+
+      onProgress?.({ currentPage: i, totalPages: pagesToProcess, etaSeconds });
     }
 
     return images;
@@ -88,9 +102,15 @@ export function INPILegalChatDialog({ open, onOpenChange }: INPILegalChatDialogP
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [attachedFile, setAttachedFile] = useState<{ name: string; images: string[] } | null>(null);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; base64: string; images: string[] } | null>(null);
   const [isProcessingPdf, setIsProcessingPdf] = useState(false);
-  
+  const [pdfProgress, setPdfProgress] = useState<{
+    stage: PdfProgressStage;
+    progress: number; // 0..100
+    etaSeconds?: number;
+    detail?: string;
+  } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -127,38 +147,70 @@ export function INPILegalChatDialog({ open, onOpenChange }: INPILegalChatDialogP
     }
 
     setIsProcessingPdf(true);
-    toast.info('Processando PDF para análise...');
+    setPdfProgress({ stage: 'reading', progress: 0, etaSeconds: undefined, detail: 'Lendo arquivo...' });
 
     try {
+      const startedAt = performance.now();
       const reader = new FileReader();
+
+      reader.onprogress = (evt) => {
+        if (!evt.lengthComputable) return;
+        const progress = Math.round((evt.loaded / evt.total) * 100);
+        const elapsedSec = (performance.now() - startedAt) / 1000;
+        const speed = evt.loaded / Math.max(elapsedSec, 0.2); // bytes/s
+        const remainingBytes = evt.total - evt.loaded;
+        const etaSeconds = speed > 0 ? Math.round(remainingBytes / speed) : undefined;
+
+        setPdfProgress({ stage: 'reading', progress, etaSeconds, detail: `Lendo arquivo (${progress}%)` });
+      };
+
       reader.onload = async () => {
         const result = reader.result as string;
         const base64 = result.split(',')[1];
-        
-        // Convert PDF to images for OCR
-        const images = await convertPdfToImages(base64);
-        
-        if (images.length === 0) {
-          toast.error('Não foi possível processar o PDF. Tente novamente.');
-          setIsProcessingPdf(false);
-          return;
-        }
+
+        // Convert PDF to images for OCR (optional; if it fails, we still send the PDF base64)
+        setPdfProgress({ stage: 'rendering', progress: 0, etaSeconds: undefined, detail: 'Convertendo páginas para OCR...' });
+
+        const images = await convertPdfToImages(base64, 3, ({ currentPage, totalPages, etaSeconds }) => {
+          const progress = Math.round((currentPage / totalPages) * 100);
+          setPdfProgress({
+            stage: 'rendering',
+            progress,
+            etaSeconds,
+            detail: `Convertendo página ${currentPage}/${totalPages}`,
+          });
+        });
 
         setAttachedFile({
           name: file.name,
+          base64,
           images,
         });
-        
-        toast.success(`PDF processado: ${images.length} página(s) prontas para análise`);
+
+        if (images.length > 0) {
+          toast.success(`PDF pronto: ${images.length} página(s) processada(s) para OCR`);
+        } else {
+          toast.warning('PDF anexado, mas não consegui gerar imagens para OCR. Vou tentar ler o texto do PDF direto.');
+        }
+
         setIsProcessingPdf(false);
+        setPdfProgress(null);
       };
+
+      reader.onerror = () => {
+        toast.error('Erro ao ler o PDF');
+        setIsProcessingPdf(false);
+        setPdfProgress(null);
+      };
+
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('Error processing PDF:', error);
       toast.error('Erro ao processar o PDF');
       setIsProcessingPdf(false);
+      setPdfProgress(null);
     }
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -297,6 +349,7 @@ export function INPILegalChatDialog({ open, onOpenChange }: INPILegalChatDialogP
       role: 'user',
       content: text.trim() || (attachedFile ? `Analise este documento: ${attachedFile.name}` : ''),
       fileName: attachedFile?.name,
+      fileBase64: attachedFile?.base64,
       fileImages: attachedFile?.images,
       createdAt: new Date(),
     };
@@ -315,6 +368,7 @@ export function INPILegalChatDialog({ open, onOpenChange }: INPILegalChatDialogP
           role: m.role,
           content: m.content,
           fileImages: m.fileImages,
+          fileBase64: m.fileBase64,
           fileName: m.fileName,
         }));
 
@@ -497,10 +551,18 @@ export function INPILegalChatDialog({ open, onOpenChange }: INPILegalChatDialogP
             </div>
           )}
 
-          {isProcessingPdf && (
-            <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-blue-700">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Processando PDF...</span>
+          {(isProcessingPdf || pdfProgress) && (
+            <div className="p-2 bg-muted rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">
+                  {pdfProgress?.detail ?? 'Processando PDF...'}
+                  {typeof pdfProgress?.etaSeconds === 'number'
+                    ? ` • ~${formatTime(pdfProgress.etaSeconds)} restante`
+                    : ''}
+                </span>
+              </div>
+              <Progress value={pdfProgress?.progress ?? 5} />
             </div>
           )}
 
