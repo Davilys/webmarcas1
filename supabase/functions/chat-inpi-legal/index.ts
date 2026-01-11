@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -167,70 +168,51 @@ Resolver o problema real do cliente de forma técnica, estratégica, honesta e �
 
 Seja direta, clara e sempre foque na melhor solução possível para o caso concreto.`;
 
-// Simple PDF text extraction using regex patterns
-function extractTextFromPDFContent(base64Data: string): string {
+// Robust PDF text extraction using pdfjs-dist
+async function extractPdfText(base64Data: string): Promise<string> {
   try {
-    // Decode base64 to binary string
+    // Decode base64 to Uint8Array
     const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Disable worker in edge runtime
+    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = undefined;
+
+    const loadingTask = (pdfjsLib as any).getDocument({ data: bytes, disableWorker: true });
+    const pdf = await loadingTask.promise;
+
+    const pages: string[] = [];
+    const maxPages = Math.min(pdf.numPages ?? 0, 50);
+
+    console.log(`PDF has ${pdf.numPages} pages, processing ${maxPages}`);
+
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = (content.items || [])
+        .map((it: any) => (typeof it.str === "string" ? it.str : ""))
+        .filter(Boolean);
+
+      const pageText = strings.join(" ").replace(/\s+/g, " ").trim();
+      if (pageText) pages.push(pageText);
+    }
+
+    const fullText = pages.join("\n\n").trim();
     
-    // Find all text streams in the PDF
-    const textPatterns: string[] = [];
+    console.log(`Extracted ${fullText.length} characters from PDF`);
+    console.log(`Preview: ${fullText.substring(0, 300)}...`);
     
-    // Pattern 1: Look for text between BT and ET (text objects)
-    const btEtRegex = /BT[\s\S]*?ET/g;
-    const textBlocks = binaryString.match(btEtRegex) || [];
-    
-    for (const block of textBlocks) {
-      // Extract text from Tj, TJ, ' and " operators
-      const tjMatches = block.match(/\(([^)]*)\)\s*Tj/g) || [];
-      const tjArrayMatches = block.match(/\[([^\]]*)\]\s*TJ/g) || [];
-      
-      for (const match of tjMatches) {
-        const text = match.match(/\(([^)]*)\)/)?.[1];
-        if (text && text.length > 1) {
-          textPatterns.push(text);
-        }
-      }
-      
-      for (const match of tjArrayMatches) {
-        const innerTexts = match.match(/\(([^)]*)\)/g) || [];
-        for (const inner of innerTexts) {
-          const text = inner.match(/\(([^)]*)\)/)?.[1];
-          if (text && text.length > 1) {
-            textPatterns.push(text);
-          }
-        }
-      }
+    if (fullText.length < 50) {
+      return "Não foi possível extrair texto do PDF. O documento pode ser escaneado/imagem.";
     }
     
-    // Pattern 2: Look for stream content with readable text
-    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    let streamMatch;
-    while ((streamMatch = streamRegex.exec(binaryString)) !== null) {
-      const content = streamMatch[1];
-      // Extract readable ASCII text segments
-      const readableText = content.match(/[A-Za-z0-9\sáàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ.,;:!?()-]{10,}/g) || [];
-      textPatterns.push(...readableText);
-    }
-    
-    // Clean and join extracted text
-    const cleanedText = textPatterns
-      .filter(t => t && t.length > 2)
-      .map(t => t.replace(/\\n/g, '\n').replace(/\\r/g, '').trim())
-      .filter(t => t.length > 0)
-      .join(' ');
-    
-    if (cleanedText.length > 100) {
-      return cleanedText;
-    }
-    
-    // Fallback: Extract any readable text from the PDF
-    const allReadable = binaryString.match(/[A-Za-z0-9\sáàâãéèêíìîóòôõúùûçÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ.,;:!?()@/-]{20,}/g) || [];
-    return allReadable.slice(0, 100).join(' ').substring(0, 10000) || 'Não foi possível extrair texto legível do PDF.';
-    
+    return fullText;
   } catch (error) {
-    console.error('Error extracting PDF text:', error);
-    return 'Erro ao processar o PDF.';
+    console.error('Error extracting PDF text with pdfjs:', error);
+    return 'Erro ao processar o PDF: ' + (error instanceof Error ? error.message : 'Erro desconhecido');
   }
 }
 
@@ -256,9 +238,11 @@ serve(async (req) => {
     if (messages && Array.isArray(messages)) {
       for (const msg of messages) {
         if (msg.role === 'user' && msg.fileBase64) {
-          // Extract text from PDF using simple extraction
+          // Extract text from PDF using pdfjs-dist
           console.log('Extracting text from PDF:', msg.fileName);
-          const pdfText = extractTextFromPDFContent(msg.fileBase64);
+          const pdfText = await extractPdfText(msg.fileBase64);
+          
+          console.log('PDF extraction result length:', pdfText.length);
           
           const messageContent = `${msg.content || 'Analise este documento do INPI:'}\n\n📄 CONTEÚDO DO DOCUMENTO (${msg.fileName}):\n\n${pdfText}`;
           
