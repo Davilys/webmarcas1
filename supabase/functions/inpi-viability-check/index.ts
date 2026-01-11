@@ -177,6 +177,101 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
   return BUSINESS_AREA_CLASSES.default;
 }
 
+// Função para buscar no TMView (inclui INPI/Brasil)
+async function searchTMView(brandName: string): Promise<{
+  success: boolean;
+  totalResults: number;
+  brands: Array<{
+    processo: string;
+    marca: string;
+    situacao: string;
+    classe: string;
+    titular: string;
+    pais: string;
+  }>;
+  error?: string;
+}> {
+  try {
+    console.log(`[TMView] ========== INICIANDO BUSCA ==========`);
+    console.log(`[TMView] Marca: "${brandName}"`);
+    
+    // TMView API endpoint
+    const tmviewUrl = 'https://www.tmdn.org/tmview/api/search/v3';
+    
+    const searchPayload = {
+      searchCriteria: [
+        {
+          field: 'tmName',
+          value: brandName,
+          operator: 'CONTAINS'
+        }
+      ],
+      territories: ['BR'], // Brazil only
+      pageNumber: 1,
+      pageSize: 30,
+      sortField: 'applicationDate',
+      sortOrder: 'DESC'
+    };
+    
+    console.log(`[TMView] Payload:`, JSON.stringify(searchPayload));
+
+    const response = await fetch(tmviewUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      body: JSON.stringify(searchPayload)
+    });
+
+    console.log(`[TMView] Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`[TMView] Error response: ${errorText.substring(0, 500)}`);
+      return {
+        success: false,
+        totalResults: 0,
+        brands: [],
+        error: `TMView API error: ${response.status}`
+      };
+    }
+    
+    const data = await response.json();
+    console.log(`[TMView] Response data keys:`, Object.keys(data));
+    
+    const results = data.results || data.trademarks || data.items || [];
+    const totalResults = data.totalResults || data.total || results.length;
+    
+    console.log(`[TMView] Total encontrado: ${totalResults}, Results: ${results.length}`);
+
+    const brands = results.map((item: any) => ({
+      processo: item.applicationNumber || item.registrationNumber || item.ST13 || '',
+      marca: item.tmName || item.name || item.wordElement || brandName.toUpperCase(),
+      situacao: item.status || item.statusDescription || 'Encontrado',
+      classe: Array.isArray(item.niceClasses) ? item.niceClasses.join(', ') : (item.niceClass || ''),
+      titular: item.applicantName || item.holderName || item.owner || '',
+      pais: item.territory || item.country || 'BR'
+    }));
+
+    return {
+      success: true,
+      totalResults,
+      brands: brands.slice(0, 15)
+    };
+
+  } catch (error) {
+    console.error('[TMView] ERRO:', error);
+    return {
+      success: false,
+      totalResults: 0,
+      brands: [],
+      error: error instanceof Error ? error.message : 'Erro na busca TMView'
+    };
+  }
+}
+
 // Função para buscar no WIPO Global Brand Database
 async function searchWIPO(brandName: string): Promise<{
   success: boolean;
@@ -207,7 +302,6 @@ async function searchWIPO(brandName: string): Promise<{
       }]
     };
     
-    // URL exata do WIPO similarname com os parâmetros corretos
     const params = new URLSearchParams({
       sort: 'score desc',
       rows: '30',
@@ -216,7 +310,6 @@ async function searchWIPO(brandName: string): Promise<{
       _: Date.now().toString()
     });
     
-    // Endpoint de resultados JSON do WIPO
     const wipoJsonUrl = `https://branddb.wipo.int/en/similarname/results?${params.toString()}`;
     
     console.log(`[WIPO] URL: ${wipoJsonUrl}`);
@@ -244,7 +337,6 @@ async function searchWIPO(brandName: string): Promise<{
       const data = JSON.parse(text);
       console.log(`[WIPO] JSON parsed successfully`);
       
-      // Estrutura de resposta WIPO
       const docs = data.response?.docs || data.docs || data.results || [];
       const numFound = data.response?.numFound || data.numFound || data.total || docs.length;
 
@@ -280,68 +372,10 @@ async function searchWIPO(brandName: string): Promise<{
         success: false,
         totalResults: 0,
         brands: [],
-        error: 'Verificação de segurança do WIPO ativa. A busca automática está temporariamente bloqueada.'
+        error: 'Verificação de segurança do WIPO ativa'
       };
     }
     
-    // Tentar extrair dados do HTML
-    console.log('[WIPO] Tentando extrair dados do HTML...');
-    
-    // Procurar por dados JSON embutidos no HTML
-    const jsonMatch = text.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/) ||
-                      text.match(/var\s+(?:results|data|searchData)\s*=\s*(\{[\s\S]*?\});/) ||
-                      text.match(/"docs"\s*:\s*\[([\s\S]*?)\]/);
-    
-    if (jsonMatch) {
-      try {
-        let jsonData;
-        if (jsonMatch[1].startsWith('{')) {
-          jsonData = JSON.parse(jsonMatch[1]);
-        } else {
-          jsonData = { docs: JSON.parse(`[${jsonMatch[1]}]`) };
-        }
-        
-        const docs = jsonData.docs || jsonData.results || [];
-        console.log(`[WIPO] Dados extraídos do HTML: ${docs.length} resultados`);
-        
-        return {
-          success: true,
-          totalResults: docs.length,
-          brands: docs.slice(0, 15).map((doc: any) => ({
-            processo: doc.AN || doc.RN || '',
-            marca: doc.BN || brandName.toUpperCase(),
-            situacao: doc.ST || 'Encontrado',
-            classe: doc.NC || '',
-            titular: doc.HOL || '',
-            pais: doc.OO || ''
-          }))
-        };
-      } catch (e) {
-        console.log('[WIPO] Falha ao parsear JSON embutido:', e);
-      }
-    }
-    
-    // Procurar menções da marca no HTML
-    const brandRegex = new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    const matches = text.match(brandRegex);
-    
-    if (matches && matches.length > 0) {
-      console.log(`[WIPO] Encontradas ${matches.length} menções da marca no HTML`);
-      return {
-        success: true,
-        totalResults: matches.length,
-        brands: [{
-          processo: '',
-          marca: brandName.toUpperCase(),
-          situacao: 'Encontrado na base WIPO',
-          classe: '',
-          titular: '',
-          pais: ''
-        }]
-      };
-    }
-
-    // Nenhum resultado encontrado
     console.log('[WIPO] Nenhum resultado encontrado');
     return {
       success: true,
@@ -419,7 +453,7 @@ function analyzeBrandPattern(brandName: string): {
   return { score, observations };
 }
 
-// Função combinada para análise de viabilidade
+// Função combinada para análise de viabilidade com fallback em cadeia
 async function analyzeViability(brandName: string): Promise<{
   success: boolean;
   totalResults: number;
@@ -435,27 +469,66 @@ async function analyzeViability(brandName: string): Promise<{
     observations: string[];
   };
   searchAttempted: boolean;
+  searchSource: string;
   error?: string;
 }> {
   // Análise de padrões (sempre funciona)
   const patternAnalysis = analyzeBrandPattern(brandName);
   
-  // Tentar busca no WIPO
+  // 1. Tentar TMView primeiro (inclui INPI/Brasil)
+  console.log('[Viability] Tentando TMView...');
+  const tmviewResult = await searchTMView(brandName);
+  
+  if (tmviewResult.success && tmviewResult.totalResults > 0) {
+    console.log('[Viability] TMView retornou resultados');
+    return {
+      success: true,
+      totalResults: tmviewResult.totalResults,
+      brands: tmviewResult.brands.map(b => ({
+        processo: b.processo,
+        marca: b.marca,
+        situacao: b.situacao,
+        classe: b.classe,
+        titular: b.titular
+      })),
+      patternAnalysis,
+      searchAttempted: true,
+      searchSource: 'TMView (INPI/Brasil)'
+    };
+  }
+  
+  // 2. Fallback para WIPO
+  console.log('[Viability] TMView falhou, tentando WIPO...');
   const wipoResult = await searchWIPO(brandName);
   
+  if (wipoResult.success && wipoResult.totalResults > 0) {
+    console.log('[Viability] WIPO retornou resultados');
+    return {
+      success: true,
+      totalResults: wipoResult.totalResults,
+      brands: wipoResult.brands.map(b => ({
+        processo: b.processo,
+        marca: b.marca,
+        situacao: b.situacao,
+        classe: b.classe,
+        titular: b.titular
+      })),
+      patternAnalysis,
+      searchAttempted: true,
+      searchSource: 'WIPO Global Brand Database'
+    };
+  }
+  
+  // 3. Fallback para análise de padrões
+  console.log('[Viability] Usando análise de padrões como fallback');
   return {
     success: true,
-    totalResults: wipoResult.totalResults,
-    brands: wipoResult.brands.map(b => ({
-      processo: b.processo,
-      marca: b.marca,
-      situacao: b.situacao,
-      classe: b.classe,
-      titular: b.titular
-    })),
+    totalResults: 0,
+    brands: [],
     patternAnalysis,
-    searchAttempted: wipoResult.success,
-    error: wipoResult.error
+    searchAttempted: false,
+    searchSource: 'Análise de Padrões (bases externas indisponíveis)',
+    error: tmviewResult.error || wipoResult.error
   };
 }
 
@@ -503,14 +576,14 @@ Deno.serve(async (req) => {
       minute: '2-digit'
     });
 
-    // ANÁLISE DE VIABILIDADE (padrões + tentativa de busca)
+    // ANÁLISE DE VIABILIDADE (TMView + WIPO + padrões)
     const analysisResult = await analyzeViability(brandName);
     
     // Get classes for the business area
     const { classes, descriptions } = getClassesForBusinessArea(businessArea);
     const classesText = descriptions.map((desc: string) => `${desc}`).join('\n');
     
-    // Determinar nível de viabilidade baseado na análise de padrões
+    // Determinar nível de viabilidade baseado na análise
     let viabilityLevel: 'high' | 'medium' | 'low' = 'high';
     let resultText = '';
     
@@ -519,11 +592,13 @@ Deno.serve(async (req) => {
     const patternObs = analysisResult.patternAnalysis.observations.join('\n');
     
     if (analysisResult.searchAttempted && analysisResult.totalResults > 0) {
-      // Busca encontrou resultados
+      // Busca encontrou resultados reais
       const hasActiveRegistration = analysisResult.brands.some((b: { situacao: string }) => 
         b.situacao.toLowerCase().includes('regist') || 
         b.situacao.toLowerCase().includes('active') ||
-        b.situacao.toLowerCase().includes('ativo')
+        b.situacao.toLowerCase().includes('ativo') ||
+        b.situacao.toLowerCase().includes('granted') ||
+        b.situacao.toLowerCase().includes('concedido')
       );
       
       if (hasActiveRegistration) {
@@ -532,10 +607,14 @@ Deno.serve(async (req) => {
         viabilityLevel = 'medium';
       }
       
-      resultText = `Foram encontradas ${analysisResult.totalResults} marca(s) na base global:\n\n`;
+      resultText = `🔍 *BUSCA REAL EM BASE DE DADOS*
+Fonte: ${analysisResult.searchSource}
+
+Foram encontradas ${analysisResult.totalResults} marca(s) similares:\n\n`;
+      
       analysisResult.brands.slice(0, 10).forEach((b: { marca: string; processo: string; situacao: string; classe: string; titular?: string }, i: number) => {
         resultText += `${i + 1}. ${b.marca}\n`;
-        resultText += `   Processo: ${b.processo}\n`;
+        if (b.processo) resultText += `   Processo: ${b.processo}\n`;
         if (b.situacao) resultText += `   Situação: ${b.situacao}\n`;
         if (b.classe) resultText += `   Classe NCL: ${b.classe}\n`;
         resultText += '\n';
@@ -544,7 +623,8 @@ Deno.serve(async (req) => {
       // Usar análise de padrões para determinar viabilidade
       if (patternScore >= 80) {
         viabilityLevel = 'high';
-        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
+        resultText = `📊 *ANÁLISE DE DISTINTIVIDADE*
+${analysisResult.searchSource ? `(${analysisResult.searchSource})` : ''}
 
 Score de Distintividade: ${patternScore}/100 - ALTO
 
@@ -555,7 +635,8 @@ ${patternObs}
 ✅ Recomendamos prosseguir com o registro.`;
       } else if (patternScore >= 50) {
         viabilityLevel = 'medium';
-        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
+        resultText = `📊 *ANÁLISE DE DISTINTIVIDADE*
+${analysisResult.searchSource ? `(${analysisResult.searchSource})` : ''}
 
 Score de Distintividade: ${patternScore}/100 - MÉDIO
 
@@ -565,7 +646,8 @@ ${patternObs}
 ⚠️ Recomendamos consulta especializada antes de prosseguir.`;
       } else {
         viabilityLevel = 'low';
-        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
+        resultText = `📊 *ANÁLISE DE DISTINTIVIDADE*
+${analysisResult.searchSource ? `(${analysisResult.searchSource})` : ''}
 
 Score de Distintividade: ${patternScore}/100 - BAIXO
 
@@ -578,7 +660,7 @@ ${patternObs}
 
     // Build the laudo
     const laudo = `*LAUDO TÉCNICO DE VIABILIDADE DE MARCA*
-*Pesquisa na Base Global WIPO + INPI*
+*Pesquisa em Bases de Dados de Marcas*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -588,6 +670,7 @@ Marca Pesquisada: ${brandName.toUpperCase()}
 Ramo de Atividade: ${businessArea}
 Tipo de Pesquisa: EXATA
 Data/Hora: ${brazilTime}
+Fonte de Dados: ${analysisResult.searchSource}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -600,7 +683,7 @@ ${resultText}
 ⚖️ *CONCLUSÃO TÉCNICA*
 
 ${viabilityLevel === 'high' ? 
-'A marca apresenta ALTA VIABILIDADE de registro. Não foram encontradas marcas idênticas nas bases do INPI que possam impedir o registro.' :
+'A marca apresenta ALTA VIABILIDADE de registro. Não foram encontradas marcas idênticas nas bases pesquisadas que possam impedir o registro.' :
 viabilityLevel === 'medium' ?
 'A marca apresenta VIABILIDADE MÉDIA. Podem existir marcas similares. Recomendamos consultar um especialista antes de prosseguir.' :
 'A marca apresenta BAIXA VIABILIDADE. Existem marcas conflitantes registradas que provavelmente impedirão o registro. Sugerimos alteração do nome ou consulta especializada.'}
@@ -638,10 +721,10 @@ www.webmarcas.net`;
         title: viabilityLevel === 'high' ? 'Alta Viabilidade' : 
                viabilityLevel === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
         description: viabilityLevel === 'high' 
-          ? 'Sua marca está disponível para registro! Não encontramos conflitos na base do INPI.'
+          ? 'Sua marca está disponível para registro! Não encontramos conflitos nas bases pesquisadas.'
           : viabilityLevel === 'medium'
           ? 'Recomendamos consulta especializada antes de prosseguir.'
-          : 'Existem marcas conflitantes na base do INPI. Consulte nossos especialistas.',
+          : 'Existem marcas conflitantes nas bases pesquisadas. Consulte nossos especialistas.',
         laudo,
         classes,
         classDescriptions: descriptions,
@@ -650,7 +733,8 @@ www.webmarcas.net`;
           totalResults: analysisResult.totalResults,
           brands: analysisResult.brands.slice(0, 10),
           patternScore: analysisResult.patternAnalysis.score,
-          searchAttempted: analysisResult.searchAttempted
+          searchAttempted: analysisResult.searchAttempted,
+          searchSource: analysisResult.searchSource
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

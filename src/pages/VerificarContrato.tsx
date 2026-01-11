@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Shield, CheckCircle, XCircle, Search, Hash, Lock, Globe, Clock, FileText, ExternalLink } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, Search, Hash, Lock, Globe, Clock, FileText, ExternalLink, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ interface ContractVerification {
   network?: string;
   brandName?: string;
   clientName?: string;
+  otsFileUrl?: string;
 }
 
 export default function VerificarContrato() {
@@ -55,6 +56,7 @@ export default function VerificarContrato() {
           signed_at,
           subject,
           user_id,
+          ots_file_url,
           profiles:user_id (
             full_name
           ),
@@ -75,7 +77,8 @@ export default function VerificarContrato() {
           ipAddress: data.signature_ip || undefined,
           network: data.blockchain_network || 'Bitcoin (OpenTimestamps)',
           brandName: (data.brand_processes as any)?.brand_name || data.subject || undefined,
-          clientName: (data.profiles as any)?.full_name || undefined
+          clientName: (data.profiles as any)?.full_name || undefined,
+          otsFileUrl: (data as any).ots_file_url || undefined
         });
       }
     } catch (err) {
@@ -83,6 +86,12 @@ export default function VerificarContrato() {
       setVerification({ found: false });
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleDownloadOTS = () => {
+    if (verification?.otsFileUrl) {
+      window.open(verification.otsFileUrl, '_blank');
     }
   };
 
@@ -246,16 +255,56 @@ export default function VerificarContrato() {
                     </ul>
                   </div>
 
-                  <div className="mt-4 text-center">
-                    <a 
-                      href="https://opentimestamps.org" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-sky-600 hover:text-sky-800"
-                    >
+                  {/* OpenTimestamps Verification Section */}
+                  <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
                       <ExternalLink className="h-4 w-4" />
-                      Verificar no OpenTimestamps
-                    </a>
+                      Verificação no OpenTimestamps
+                    </h4>
+                    <p className="text-sm text-amber-700 mb-4">
+                      Para verificar de forma independente a prova de timestamp no blockchain Bitcoin, 
+                      baixe o arquivo .ots e faça upload no site oficial do OpenTimestamps.
+                    </p>
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {verification.otsFileUrl ? (
+                        <Button 
+                          variant="outline" 
+                          onClick={handleDownloadOTS}
+                          className="border-amber-300 text-amber-800 hover:bg-amber-100"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Baixar Arquivo .ots
+                        </Button>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          disabled
+                          className="border-gray-300 text-gray-500"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Arquivo .ots Pendente
+                        </Button>
+                      )}
+                      
+                      <a 
+                        href="https://opentimestamps.org" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <Button 
+                          variant="default"
+                          className="bg-amber-600 hover:bg-amber-700 w-full sm:w-auto"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Abrir OpenTimestamps.org
+                        </Button>
+                      </a>
+                    </div>
+                    
+                    <p className="text-xs text-amber-600 mt-3">
+                      Instruções: Baixe o arquivo .ots, acesse opentimestamps.org, e arraste o arquivo para a área de verificação.
+                    </p>
                   </div>
                 </div>
               ) : (
