@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
+import { usePricing } from '@/hooks/usePricing';
 
 interface ClientDetailSheetProps {
   client: ClientWithProcess | null;
@@ -64,50 +65,55 @@ interface ClientInvoice {
   due_date: string;
 }
 
-const SERVICE_PRICING_OPTIONS = [
-  { 
-    id: 'registro_avista', 
-    label: 'Registro de Marca - À Vista', 
-    value: 699, 
-    description: 'Pagamento único',
-    details: 'R$ 699,00 à vista'
-  },
-  { 
-    id: 'registro_boleto', 
-    label: 'Registro de Marca - Boleto', 
-    value: 1194, 
-    description: '3x de R$ 398,00',
-    details: '3x R$ 398,00 (boleto)'
-  },
-  { 
-    id: 'registro_cartao', 
-    label: 'Registro de Marca - Cartão', 
-    value: 1194, 
-    description: '6x de R$ 199,00',
-    details: '6x R$ 199,00 (cartão)'
-  },
-  { 
-    id: 'exigencia_avista', 
-    label: 'Exigência/Publicação - À Vista', 
-    value: 1412, 
-    description: '1 Salário Mínimo',
-    details: 'R$ 1.412,00 à vista (1 SM)'
-  },
-  { 
-    id: 'exigencia_parcelado', 
-    label: 'Exigência/Publicação - Parcelado', 
-    value: 2388, 
-    description: '6x de R$ 398,00',
-    details: '6x R$ 398,00 (boleto ou cartão)'
-  },
-  { 
-    id: 'personalizado', 
-    label: 'Valor Personalizado', 
-    value: 0, 
-    description: 'Definir valor manualmente',
-    details: 'Informe o valor e motivo'
-  },
-];
+// Hook-based dynamic pricing options
+const useServicePricingOptions = () => {
+  const { pricing } = usePricing();
+  
+  return useMemo(() => [
+    { 
+      id: 'registro_avista', 
+      label: 'Registro de Marca - À Vista', 
+      value: Math.round(pricing.avista.value), 
+      description: 'Pagamento único',
+      details: `R$ ${pricing.avista.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} à vista`
+    },
+    { 
+      id: 'registro_boleto', 
+      label: 'Registro de Marca - Boleto', 
+      value: pricing.boleto.value, 
+      description: `${pricing.boleto.installments}x de R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      details: `${pricing.boleto.installments}x R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (boleto)`
+    },
+    { 
+      id: 'registro_cartao', 
+      label: 'Registro de Marca - Cartão', 
+      value: pricing.cartao.value, 
+      description: `${pricing.cartao.installments}x de R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      details: `${pricing.cartao.installments}x R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (cartão)`
+    },
+    { 
+      id: 'exigencia_avista', 
+      label: 'Exigência/Publicação - À Vista', 
+      value: 1412, 
+      description: '1 Salário Mínimo',
+      details: 'R$ 1.412,00 à vista (1 SM)'
+    },
+    { 
+      id: 'exigencia_parcelado', 
+      label: 'Exigência/Publicação - Parcelado', 
+      value: 2388, 
+      description: '6x de R$ 398,00',
+      details: '6x R$ 398,00 (boleto ou cartão)'
+    },
+    { 
+      id: 'personalizado', 
+      label: 'Valor Personalizado', 
+      value: 0, 
+      description: 'Definir valor manualmente',
+      details: 'Informe o valor e motivo'
+    },
+  ], [pricing]);
+};
 
 const SERVICE_TYPES = [
   { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI' },
@@ -128,6 +134,7 @@ const QUICK_ACTIONS = [
 ];
 
 export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: ClientDetailSheetProps) {
+  const SERVICE_PRICING_OPTIONS = useServicePricingOptions();
   const [notes, setNotes] = useState<ClientNote[]>([]);
   const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);

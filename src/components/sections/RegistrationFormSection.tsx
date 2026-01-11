@@ -16,6 +16,7 @@ import {
 } from "@/lib/validators";
 import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
 import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
+import { usePricing } from "@/hooks/usePricing";
 // Form schemas with real validation
 const personalDataSchema = z.object({
   fullName: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").max(100),
@@ -54,6 +55,7 @@ const RegistrationFormSection = () => {
   const [contractAccepted, setContractAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { pricing, getPaymentValue } = usePricing();
   
   // Load contract template from database - uses "Contrato Padrão - Registro de Marca INPI"
   const { template: contractTemplate, isLoading: isLoadingTemplate } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
@@ -236,7 +238,7 @@ const RegistrationFormSection = () => {
       return;
     }
 
-    const paymentValue = paymentMethod === 'avista' ? 698.97 : paymentMethod === 'cartao6x' ? 1194 : 1197;
+    const paymentValue = getPaymentValue(paymentMethod);
 
     setIsSubmitting(true);
 
