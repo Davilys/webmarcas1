@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { User, Lock, Building2, Loader2, MapPin, Check, X } from 'lucide-react';
+import { User, Lock, Building2, Loader2, Check, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { 
   validateCPF, 
@@ -25,6 +25,7 @@ interface Profile {
   cpf_cnpj: string | null;
   company_name: string | null;
   address: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
@@ -44,6 +45,7 @@ export default function Configuracoes() {
     cpf_cnpj: '',
     company_name: '',
     address: '',
+    neighborhood: '',
     city: '',
     state: '',
     zip_code: '',
@@ -54,7 +56,6 @@ export default function Configuracoes() {
   const [cnpj, setCnpj] = useState('');
   const [razaoSocial, setRazaoSocial] = useState('');
   const [nomeFantasia, setNomeFantasia] = useState('');
-  const [bairro, setBairro] = useState('');
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -106,6 +107,7 @@ export default function Configuracoes() {
         cpf_cnpj: data.cpf_cnpj || '',
         company_name: data.company_name || '',
         address: data.address || '',
+        neighborhood: data.neighborhood || '',
         city: data.city || '',
         state: data.state || '',
         zip_code: data.zip_code ? formatCEP(data.zip_code) : '',
@@ -117,6 +119,8 @@ export default function Configuracoes() {
         setCpf(formatCPF(cleanDoc));
         setValidation(prev => ({ ...prev, cpf: validateCPF(cleanDoc) }));
       } else if (cleanDoc.length === 14) {
+        // If it's a CNPJ stored, we need to check if there's a CPF elsewhere
+        // For now, just show CNPJ in company section
         setCnpj(formatCNPJ(cleanDoc));
         setValidation(prev => ({ ...prev, cnpj: validateCNPJ(cleanDoc) }));
       }
@@ -145,10 +149,10 @@ export default function Configuracoes() {
         setProfile(prev => ({
           ...prev,
           address: addressData.logradouro,
+          neighborhood: addressData.bairro,
           city: addressData.localidade,
           state: addressData.uf,
         }));
-        setBairro(addressData.bairro);
         toast.success('Endereço encontrado!');
       } else {
         toast.error('CEP não encontrado');
@@ -213,6 +217,7 @@ export default function Configuracoes() {
       phone: profile.phone?.replace(/\D/g, '') || null,
       cpf_cnpj: cleanCPF || null,
       address: profile.address,
+      neighborhood: profile.neighborhood,
       city: profile.city,
       state: profile.state,
       zip_code: profile.zip_code?.replace(/\D/g, '') || null,
@@ -247,17 +252,21 @@ export default function Configuracoes() {
     
     setSavingCompany(true);
 
-    // Store company info - razão social and nome fantasia
-    const companyName = nomeFantasia 
-      ? `${razaoSocial} | ${nomeFantasia}` 
-      : razaoSocial;
+    // Store company info - razão social, nome fantasia, and CNPJ
+    // Format: "razão social | nome fantasia | cnpj"
+    let companyName = razaoSocial;
+    if (nomeFantasia) {
+      companyName = `${razaoSocial} | ${nomeFantasia}`;
+    }
+    if (cleanCNPJ) {
+      companyName = `${companyName} | CNPJ: ${formatCNPJ(cleanCNPJ)}`;
+    }
 
     const { error } = await supabase
       .from('profiles')
       .update({
         company_name: companyName || null,
-        // If CNPJ is provided and CPF was already set, update cpf_cnpj with CNPJ
-        ...(cleanCNPJ.length === 14 && { cpf_cnpj: cleanCNPJ }),
+        // DO NOT overwrite cpf_cnpj with CNPJ - keep personal CPF separate
       })
       .eq('id', user.id);
 
@@ -403,11 +412,11 @@ export default function Configuracoes() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bairro">Bairro</Label>
+                <Label htmlFor="neighborhood">Bairro</Label>
                 <Input
-                  id="bairro"
-                  value={bairro}
-                  onChange={(e) => setBairro(e.target.value)}
+                  id="neighborhood"
+                  value={profile.neighborhood || ''}
+                  onChange={(e) => setProfile({ ...profile, neighborhood: e.target.value })}
                   placeholder="Bairro"
                 />
               </div>
@@ -495,7 +504,7 @@ export default function Configuracoes() {
               </div>
             </div>
 
-            <Button onClick={handleSaveCompany} disabled={savingCompany} variant="outline">
+            <Button onClick={handleSaveCompany} disabled={savingCompany}>
               {savingCompany ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

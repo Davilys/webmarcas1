@@ -17,7 +17,9 @@ import {
   Eye,
   Upload,
   Image,
-  File as FileIcon
+  File as FileIcon,
+  FileSignature,
+  Inbox
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -39,6 +41,7 @@ interface Document {
 const typeLabels: Record<string, { label: string; color: string }> = {
   contrato: { label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
   procuracao: { label: 'Procuração', color: 'bg-purple-100 text-purple-700' },
+  distrato: { label: 'Distrato', color: 'bg-red-100 text-red-700' },
   certificado: { label: 'Certificado', color: 'bg-green-100 text-green-700' },
   comprovante: { label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
   parecer: { label: 'Parecer INPI', color: 'bg-orange-100 text-orange-700' },
@@ -48,6 +51,9 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   anexo: { label: 'Anexo', color: 'bg-indigo-100 text-indigo-700' },
   outro: { label: 'Outro', color: 'bg-gray-100 text-gray-700' },
 };
+
+// Legal document types for contracts section
+const legalDocTypes = ['contrato', 'procuracao', 'distrato', 'distrato_multa', 'distrato_sem_multa'];
 
 export default function Documentos() {
   const navigate = useNavigate();
@@ -135,6 +141,10 @@ export default function Documentos() {
     doc.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Separate documents into contracts/procurations and received documents
+  const contractDocs = filteredDocs.filter(doc => legalDocTypes.includes(doc.document_type));
+  const receivedDocs = filteredDocs.filter(doc => !legalDocTypes.includes(doc.document_type));
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
     const kb = bytes / 1024;
@@ -149,6 +159,54 @@ export default function Documentos() {
     if (/\.(mp4|webm|ogg|mov|avi|mkv)$/i.test(url)) return <FileIcon className="h-6 w-6 text-purple-500" />;
     if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(url)) return <FileIcon className="h-6 w-6 text-green-500" />;
     return <FileIcon className="h-6 w-6 text-gray-500" />;
+  };
+
+  const DocumentListItem = ({ doc }: { doc: Document }) => {
+    const typeConfig = typeLabels[doc.document_type] || typeLabels.outro;
+    return (
+      <div
+        className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="p-2 bg-muted rounded-lg">
+            {getFileIcon(doc)}
+          </div>
+          <div>
+            <p className="font-medium">{doc.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="secondary" className={`text-xs ${typeConfig.color}`}>
+                {typeConfig.label}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {formatFileSize(doc.file_size)}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {formatDistanceToNow(new Date(doc.created_at), {
+                  addSuffix: true,
+                  locale: ptBR,
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => { setPreviewDoc(doc); setPreviewOpen(true); }}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => handleDownload(doc)}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -211,19 +269,54 @@ export default function Documentos() {
           </Dialog>
         </div>
 
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar documentos..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Contracts and Procurations Section */}
         <Card>
           <CardHeader>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar documentos..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
+            <CardTitle className="flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-primary" />
+              Contratos e Procurações
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="h-16 bg-muted animate-pulse rounded" />
+                ))}
               </div>
-            </div>
+            ) : contractDocs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileSignature className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm">Nenhum contrato ou procuração encontrado</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contractDocs.map((doc) => (
+                  <DocumentListItem key={doc.id} doc={doc} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Received Documents Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Inbox className="h-5 w-5 text-primary" />
+              Documentos Recebidos
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -232,62 +325,16 @@ export default function Documentos() {
                   <div key={i} className="h-16 bg-muted animate-pulse rounded" />
                 ))}
               </div>
-            ) : filteredDocs.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <FolderOpen className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">Nenhum documento encontrado</p>
-                <p className="text-sm">Os documentos do seu processo aparecerão aqui</p>
+            ) : receivedDocs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-sm">Nenhum documento recebido</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredDocs.map((doc) => {
-                  const typeConfig = typeLabels[doc.document_type] || typeLabels.outro;
-                  return (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="p-2 bg-muted rounded-lg">
-                          {getFileIcon(doc)}
-                        </div>
-                        <div>
-                          <p className="font-medium">{doc.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="secondary" className={`text-xs ${typeConfig.color}`}>
-                              {typeConfig.label}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {formatFileSize(doc.file_size)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(doc.created_at), {
-                                addSuffix: true,
-                                locale: ptBR,
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => { setPreviewDoc(doc); setPreviewOpen(true); }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleDownload(doc)}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                {receivedDocs.map((doc) => (
+                  <DocumentListItem key={doc.id} doc={doc} />
+                ))}
               </div>
             )}
           </CardContent>
