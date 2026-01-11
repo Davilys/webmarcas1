@@ -25,6 +25,7 @@ interface Profile {
   cpf_cnpj: string | null;
   company_name: string | null;
   address: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
@@ -44,6 +45,7 @@ export default function Configuracoes() {
     cpf_cnpj: '',
     company_name: '',
     address: '',
+    neighborhood: '',
     city: '',
     state: '',
     zip_code: '',
@@ -54,7 +56,6 @@ export default function Configuracoes() {
   const [cnpj, setCnpj] = useState('');
   const [razaoSocial, setRazaoSocial] = useState('');
   const [nomeFantasia, setNomeFantasia] = useState('');
-  const [bairro, setBairro] = useState('');
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -106,26 +107,36 @@ export default function Configuracoes() {
         cpf_cnpj: data.cpf_cnpj || '',
         company_name: data.company_name || '',
         address: data.address || '',
+        neighborhood: (data as any).neighborhood || '',
         city: data.city || '',
         state: data.state || '',
         zip_code: data.zip_code ? formatCEP(data.zip_code) : '',
       });
       
-      // Parse cpf_cnpj to separate CPF and CNPJ
+      // Parse cpf_cnpj to separate CPF and CNPJ - check if it's CPF (11) or CNPJ (14)
       const cleanDoc = (data.cpf_cnpj || '').replace(/\D/g, '');
       if (cleanDoc.length === 11) {
         setCpf(formatCPF(cleanDoc));
         setValidation(prev => ({ ...prev, cpf: validateCPF(cleanDoc) }));
       } else if (cleanDoc.length === 14) {
+        // If stored is CNPJ, set it to CNPJ field but don't touch CPF
         setCnpj(formatCNPJ(cleanDoc));
         setValidation(prev => ({ ...prev, cnpj: validateCNPJ(cleanDoc) }));
       }
       
-      // Company name might contain "razão social | nome fantasia" format
+      // Company name might contain "razão social | nome fantasia | cpf" format
       if (data.company_name) {
         const parts = data.company_name.split('|').map((s: string) => s.trim());
         setRazaoSocial(parts[0] || '');
         setNomeFantasia(parts[1] || '');
+        // If CPF was stored in company_name part 3, restore it
+        if (parts[2]) {
+          const storedCpf = parts[2].replace(/\D/g, '');
+          if (storedCpf.length === 11) {
+            setCpf(formatCPF(storedCpf));
+            setValidation(prev => ({ ...prev, cpf: validateCPF(storedCpf) }));
+          }
+        }
       }
     }
     setLoading(false);
@@ -145,10 +156,10 @@ export default function Configuracoes() {
         setProfile(prev => ({
           ...prev,
           address: addressData.logradouro,
+          neighborhood: addressData.bairro,
           city: addressData.localidade,
           state: addressData.uf,
         }));
-        setBairro(addressData.bairro);
         toast.success('Endereço encontrado!');
       } else {
         toast.error('CEP não encontrado');
@@ -213,6 +224,7 @@ export default function Configuracoes() {
       phone: profile.phone?.replace(/\D/g, '') || null,
       cpf_cnpj: cleanCPF || null,
       address: profile.address,
+      neighborhood: profile.neighborhood || null,
       city: profile.city,
       state: profile.state,
       zip_code: profile.zip_code?.replace(/\D/g, '') || null,
@@ -247,18 +259,28 @@ export default function Configuracoes() {
     
     setSavingCompany(true);
 
-    // Store company info - razão social and nome fantasia
-    const companyName = nomeFantasia 
-      ? `${razaoSocial} | ${nomeFantasia}` 
-      : razaoSocial;
+    // Store company info - razão social, nome fantasia, and preserve CPF
+    // We store CPF separately in the company_name field to not lose it when setting CNPJ
+    const cleanCurrentCPF = cpf.replace(/\D/g, '');
+    const companyName = [
+      razaoSocial,
+      nomeFantasia,
+      cleanCurrentCPF.length === 11 ? cleanCurrentCPF : ''
+    ].filter(Boolean).join(' | ');
+
+    // Only update cpf_cnpj to CNPJ if CNPJ is provided, otherwise keep CPF
+    const updatePayload: Record<string, any> = {
+      company_name: companyName || null,
+    };
+    
+    // If CNPJ is provided, update cpf_cnpj with CNPJ
+    if (cleanCNPJ.length === 14) {
+      updatePayload.cpf_cnpj = cleanCNPJ;
+    }
 
     const { error } = await supabase
       .from('profiles')
-      .update({
-        company_name: companyName || null,
-        // If CNPJ is provided and CPF was already set, update cpf_cnpj with CNPJ
-        ...(cleanCNPJ.length === 14 && { cpf_cnpj: cleanCNPJ }),
-      })
+      .update(updatePayload)
       .eq('id', user.id);
 
     if (error) {
@@ -406,8 +428,8 @@ export default function Configuracoes() {
                 <Label htmlFor="bairro">Bairro</Label>
                 <Input
                   id="bairro"
-                  value={bairro}
-                  onChange={(e) => setBairro(e.target.value)}
+                  value={profile.neighborhood || ''}
+                  onChange={(e) => setProfile({ ...profile, neighborhood: e.target.value })}
                   placeholder="Bairro"
                 />
               </div>

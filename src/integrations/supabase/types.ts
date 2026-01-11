@@ -518,6 +518,7 @@ export type Database = {
           id: string
           ip_address: string | null
           lead_id: string | null
+          ots_file_url: string | null
           penalty_value: number | null
           perfex_contract_id: string | null
           perfex_customer_id: string | null
@@ -560,6 +561,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           lead_id?: string | null
+          ots_file_url?: string | null
           penalty_value?: number | null
           perfex_contract_id?: string | null
           perfex_customer_id?: string | null
@@ -602,6 +604,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           lead_id?: string | null
+          ots_file_url?: string | null
           penalty_value?: number | null
           perfex_contract_id?: string | null
           perfex_customer_id?: string | null
@@ -1448,6 +1451,7 @@ export type Database = {
           full_name: string | null
           id: string
           last_contact: string | null
+          neighborhood: string | null
           origin: string | null
           perfex_customer_id: string | null
           phone: string | null
@@ -1468,6 +1472,7 @@ export type Database = {
           full_name?: string | null
           id: string
           last_contact?: string | null
+          neighborhood?: string | null
           origin?: string | null
           perfex_customer_id?: string | null
           phone?: string | null
@@ -1488,6 +1493,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           last_contact?: string | null
+          neighborhood?: string | null
           origin?: string | null
           perfex_customer_id?: string | null
           phone?: string | null

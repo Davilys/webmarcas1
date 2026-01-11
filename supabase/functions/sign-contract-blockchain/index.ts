@@ -17,10 +17,12 @@ async function generateSHA256(text: string): Promise<string> {
 
 // Create timestamp proof using OpenTimestamps calendar servers
 async function createBlockchainTimestamp(hash: string): Promise<{
-  proof: string;
+  proof: Uint8Array;
+  proofBase64: string;
   timestamp: string;
   txId: string;
   network: string;
+  serverUsed: string;
 }> {
   // Convert hex hash to bytes
   const hashBytes = new Uint8Array(
@@ -35,7 +37,8 @@ async function createBlockchainTimestamp(hash: string): Promise<{
     'https://bob.btc.calendar.opentimestamps.org'
   ];
   
-  let proof = '';
+  let proof = new Uint8Array();
+  let proofBase64 = '';
   let serverUsed = '';
   
   for (const server of calendarServers) {
@@ -50,10 +53,11 @@ async function createBlockchainTimestamp(hash: string): Promise<{
       });
       
       if (response.ok) {
-        const proofBytes = new Uint8Array(await response.arrayBuffer());
+        proof = new Uint8Array(await response.arrayBuffer());
         // Encode proof as base64
-        proof = btoa(String.fromCharCode(...proofBytes));
+        proofBase64 = btoa(String.fromCharCode(...proof));
         serverUsed = server;
+        console.log(`Successfully got timestamp from ${server}, proof size: ${proof.length} bytes`);
         break;
       }
     } catch (error) {
@@ -67,10 +71,12 @@ async function createBlockchainTimestamp(hash: string): Promise<{
   const txId = `OTS_${Date.now()}_${hash.substring(0, 16).toUpperCase()}`;
   
   return {
-    proof: proof || `PENDING_${hash.substring(0, 32)}`,
+    proof,
+    proofBase64: proofBase64 || `PENDING_${hash.substring(0, 32)}`,
     timestamp,
     txId,
-    network: serverUsed ? `Bitcoin (OpenTimestamps via ${new URL(serverUsed).hostname})` : 'Bitcoin (OpenTimestamps - Pending)'
+    network: serverUsed ? `Bitcoin (OpenTimestamps via ${new URL(serverUsed).hostname})` : 'Bitcoin (OpenTimestamps - Pending)',
+    serverUsed
   };
 }
 
@@ -111,6 +117,35 @@ serve(async (req) => {
     const blockchainData = await createBlockchainTimestamp(contractHash);
     console.log('Blockchain timestamp created:', blockchainData);
 
+    // Save .ots proof file to storage if we got a real proof
+    let otsFileUrl = '';
+    if (blockchainData.proof.length > 0) {
+      try {
+        const fileName = `proofs/${contractId}_${contractHash.substring(0, 16)}.ots`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(fileName, blockchainData.proof, {
+            contentType: 'application/octet-stream',
+            upsert: true
+          });
+
+        if (uploadError) {
+          console.error('Error uploading OTS file:', uploadError);
+        } else {
+          // Get public URL
+          const { data: publicUrlData } = supabase.storage
+            .from('documents')
+            .getPublicUrl(fileName);
+          
+          otsFileUrl = publicUrlData.publicUrl;
+          console.log('OTS file uploaded:', otsFileUrl);
+        }
+      } catch (storageError) {
+        console.error('Storage error:', storageError);
+      }
+    }
+
     // Prepare signature data
     const signatureData: Record<string, any> = {
       signature_status: 'signed',
@@ -121,7 +156,8 @@ serve(async (req) => {
       blockchain_timestamp: blockchainData.timestamp,
       blockchain_tx_id: blockchainData.txId,
       blockchain_network: blockchainData.network,
-      blockchain_proof: blockchainData.proof,
+      blockchain_proof: blockchainData.proofBase64,
+      ots_file_url: otsFileUrl || null,
       device_info: {
         ...deviceInfo,
         signed_at: blockchainData.timestamp,
@@ -174,7 +210,8 @@ serve(async (req) => {
             contract_id: contractId,
             blockchain_hash: contractHash,
             blockchain_tx_id: blockchainData.txId,
-            ip_address: clientIP
+            ip_address: clientIP,
+            ots_file_url: otsFileUrl
           }
         });
     }
@@ -242,6 +279,7 @@ serve(async (req) => {
               hash_contrato: contractHash,
               ip_assinatura: clientIP,
               verification_url: verificationUrl,
+              ots_file_url: otsFileUrl,
             }
           })
         });
@@ -273,6 +311,7 @@ serve(async (req) => {
           network: blockchainData.network,
           ipAddress: clientIP,
           verificationUrl,
+          otsFileUrl,
           message: 'Contrato assinado com sucesso e registrado em blockchain'
         }
       }),
