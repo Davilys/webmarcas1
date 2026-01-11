@@ -7,6 +7,7 @@ import Footer from "@/components/layout/Footer";
 import WhatsAppButton from "@/components/layout/WhatsAppButton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import CreditCardForm from "@/components/payment/CreditCardForm";
 
 interface AsaasData {
   customerId: string;
@@ -310,27 +311,33 @@ const StatusPedido = () => {
                   </>
                 )}
 
-                {/* Credit Card - Show Pay Now Button */}
+                {/* Credit Card - Embedded Form */}
                 {orderData.paymentMethod === 'cartao6x' && (
                   <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CreditCard className="w-5 h-5 text-primary" />
-                      <span className="font-medium">Pagamento com Cartão de Crédito</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Clique no botão abaixo para inserir os dados do seu cartão e finalizar o pagamento em 6x sem juros.
-                    </p>
-                    
-                    <Button
-                      variant="hero"
-                      size="lg"
-                      className="w-full"
-                      onClick={() => window.open(orderData.asaas?.invoiceUrl, '_blank')}
-                      disabled={!orderData.asaas?.invoiceUrl}
-                    >
-                      <CreditCard className="w-5 h-5 mr-2" />
-                      PAGAR AGORA
-                    </Button>
+                    <CreditCardForm
+                      value={orderData.paymentValue}
+                      installmentCount={6}
+                      installmentValue={Math.round((orderData.paymentValue / 6) * 100) / 100}
+                      dueDate={orderData.asaas?.dueDate || new Date().toISOString().split('T')[0]}
+                      customerId={orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId || ''}
+                      paymentId={orderData.asaas?.paymentId || ''}
+                      holderName={orderData.personalData.fullName}
+                      holderEmail={orderData.personalData.email}
+                      holderCpfCnpj={orderData.personalData.cpf}
+                      holderPostalCode={orderData.personalData.cep}
+                      holderPhone={orderData.personalData.phone}
+                      onSuccess={async () => {
+                        // Call confirm-payment after successful card payment
+                        await handlePaymentConfirmed();
+                      }}
+                      onError={(error) => {
+                        toast({
+                          title: "Erro no pagamento",
+                          description: error,
+                          variant: "destructive",
+                        });
+                      }}
+                    />
                   </div>
                 )}
 
