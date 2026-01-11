@@ -1,108 +1,39 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Lista expandida de marcas de alto renome que devem ser bloqueadas
+// Lista de marcas de alto renome - não realizar laudo
 const FAMOUS_BRANDS = [
-  // Tecnologia
-  'apple', 'google', 'microsoft', 'amazon', 'facebook', 'meta', 'netflix', 'spotify',
-  'samsung', 'sony', 'lg', 'intel', 'amd', 'nvidia', 'ibm', 'oracle', 'adobe', 'cisco',
-  'dell', 'hp', 'lenovo', 'asus', 'tiktok', 'twitter', 'x', 'instagram', 'whatsapp',
-  'telegram', 'uber', 'lyft', 'airbnb', 'paypal', 'stripe', 'shopify', 'salesforce',
-  'zoom', 'slack', 'dropbox', 'openai', 'chatgpt', 'linkedin', 'pinterest', 'snapchat',
-  
-  // Automóveis
-  'toyota', 'honda', 'ford', 'chevrolet', 'volkswagen', 'bmw', 'mercedes', 'audi',
-  'porsche', 'ferrari', 'lamborghini', 'tesla', 'nissan', 'hyundai', 'kia', 'fiat',
-  'jeep', 'volvo', 'mazda', 'subaru', 'lexus', 'jaguar', 'land rover', 'range rover',
-  
-  // Alimentação e Bebidas
-  'coca-cola', 'coca cola', 'cocacola', 'pepsi', 'nestle', 'mcdonalds', 'burger king', 
-  'subway', 'starbucks', 'kfc', 'pizza hut', 'dominos', 'heineken', 'budweiser', 
-  'red bull', 'monster', 'nescafe', 'nespresso', 'kitkat', 'oreo', 'nutella', 'ferrero',
-  'brahma', 'skol', 'antarctica', 'antartica', 'ambev', 'ifood', 'rappi',
-  
-  // Moda e Luxo
-  'nike', 'adidas', 'puma', 'reebok', 'new balance', 'converse', 'vans', 'gucci',
-  'louis vuitton', 'chanel', 'prada', 'hermes', 'dior', 'versace', 'armani', 'burberry',
-  'ralph lauren', 'calvin klein', 'tommy hilfiger', 'lacoste', 'zara', 'h&m',
-  'uniqlo', 'gap', 'levis', 'rolex', 'omega', 'cartier', 'tiffany', 'swarovski',
-  'oakley', 'ray-ban', 'rayban', 'asics', 'mizuno', 'havaianas',
-  
-  // Cosméticos e Higiene
-  'loreal', 'nivea', 'dove', 'gillette', 'oral-b', 'colgate', 'pantene', 
-  'maybelline', 'mac', 'estee lauder', 'clinique', 'lancome', 'olay', 'neutrogena',
-  'avon', 'natura', 'boticario', 'o boticario', 'eudora', 'mary kay', 'revlon',
-  
-  // Bancos e Finanças Brasil
-  'itau', 'itaú', 'bradesco', 'santander', 'banco do brasil', 'caixa', 'nubank', 'inter',
-  'c6 bank', 'btg', 'xp', 'visa', 'mastercard', 'american express', 'amex', 'elo',
-  'picpay', 'stone', 'pagseguro', 'cielo', 'rede', 'getnet', 'hipercard',
-  
-  // Varejo Brasil
-  'magazine luiza', 'magalu', 'casas bahia', 'americanas', 'mercado livre', 'mercadolivre',
-  'shopee', 'aliexpress', 'carrefour', 'extra', 'pao de acucar', 'atacadao',
-  'renner', 'riachuelo', 'cea', 'marisa', 'hering', 'arezzo',
-  
-  // Telecomunicações
-  'vivo', 'claro', 'tim', 'oi', 'sky', 'net', 'at&t', 'verizon', 't-mobile',
-  
-  // Entretenimento
-  'disney', 'warner', 'paramount', 'universal', 'hbo', 'fox', 'globo', 'sbt',
-  'record', 'band', 'marvel', 'dc comics', 'pixar', 'dreamworks', 'nintendo',
-  'playstation', 'xbox', 'steam', 'epic games', 'riot games', 'ea sports',
-  'youtube',
-  
-  // Outros
-  'ikea', '3m', 'philips', 'bosch', 'electrolux', 'brastemp', 'consul', 'tramontina',
-  'gerdau', 'vale', 'petrobras', 'shell', 'esso', 'ipiranga', 'br', 'fedex', 'dhl', 'ups',
-  'panasonic', 'jbl', 'bose', 'beats', 'acer', '99',
-  "mcdonald's", "habib's", "habibs", 'outback', 'madero', 'giraffas', "bob's", 'bobs'
+  'petrobras', 'itau', 'itaú', 'bradesco', 'caixa', 'santander', 'nubank',
+  'magazine luiza', 'magalu', 'casas bahia', 'coca-cola', 'coca cola', 'cocacola',
+  'nike', 'apple', 'samsung', 'globo', 'fiat', 'volkswagen', 'natura', 'boticario',
+  'o boticário', 'shopee', 'mercado livre', 'mercadolivre', 'heineken', 'ambev',
+  'brahma', 'skol', 'antartica', 'antarctica', 'google', 'microsoft', 'amazon',
+  'netflix', 'spotify', 'uber', 'ifood', '99', 'rappi', 'picpay', 'stone',
+  'pagseguro', 'cielo', 'rede', 'getnet', 'bmw', 'mercedes', 'audi', 'toyota',
+  'honda', 'hyundai', 'chevrolet', 'ford', 'renault', 'peugeot', 'citroen',
+  'jeep', 'land rover', 'porsche', 'ferrari', 'lamborghini', 'rolex', 'cartier',
+  'louis vuitton', 'gucci', 'prada', 'chanel', 'dior', 'hermes', 'armani',
+  'versace', 'burberry', 'tiffany', 'pandora', 'swarovski', 'ray-ban', 'rayban',
+  'oakley', 'adidas', 'puma', 'reebok', 'new balance', 'asics', 'mizuno',
+  'vans', 'converse', 'mcdonalds', 'mc donalds', "mcdonald's", 'burger king',
+  'subway', 'starbucks', 'kfc', 'pizza hut', 'dominos', "domino's", 'habib',
+  'habibs', "habib's", 'outback', 'madero', 'giraffas', 'bobs', "bob's",
+  'visa', 'mastercard', 'american express', 'amex', 'elo', 'hipercard',
+  'disney', 'warner', 'paramount', 'universal', 'sony', 'lg', 'philips',
+  'panasonic', 'jbl', 'bose', 'beats', 'dell', 'hp', 'lenovo', 'asus', 'acer',
+  'intel', 'amd', 'nvidia', 'telegram', 'whatsapp', 'instagram', 'facebook',
+  'meta', 'twitter', 'tiktok', 'youtube', 'linkedin', 'pinterest', 'snapchat'
 ];
 
-// Mapeamento de áreas de negócio para classes NCL
+// Mapeamento de ramos para classes NCL
 const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: string[] }> = {
-  'musico': {
-    classes: [35, 41, 42],
-    descriptions: [
-      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
-      'Classe 41 – Educação, treinamento, entretenimento e cultura',
-      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
-    ]
-  },
-  'artista': {
-    classes: [35, 41, 42],
-    descriptions: [
-      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
-      'Classe 41 – Educação, treinamento, entretenimento e cultura',
-      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
-    ]
-  },
-  'cantor': {
-    classes: [35, 41, 42],
-    descriptions: [
-      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
-      'Classe 41 – Educação, treinamento, entretenimento e cultura',
-      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
-    ]
-  },
-  'banda': {
-    classes: [35, 41, 42],
-    descriptions: [
-      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
-      'Classe 41 – Educação, treinamento, entretenimento e cultura',
-      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
-    ]
-  },
   'tecnologia': {
     classes: [9, 42, 35],
     descriptions: [
-      'Classe 09 – Aparelhos e instrumentos científicos, software, hardware',
-      'Classe 42 – Serviços científicos, tecnológicos e de design',
+      'Classe 09 – Aparelhos e instrumentos científicos, software, hardware e equipamentos eletrônicos',
+      'Classe 42 – Serviços científicos, tecnológicos e de design, desenvolvimento de software',
       'Classe 35 – Publicidade, gestão de negócios, administração comercial'
     ]
   },
@@ -110,16 +41,8 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
     classes: [43, 30, 29],
     descriptions: [
       'Classe 43 – Serviços de restaurante, alimentação e hospedagem',
-      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces',
-      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite'
-    ]
-  },
-  'restaurante': {
-    classes: [43, 30, 29],
-    descriptions: [
-      'Classe 43 – Serviços de restaurante, alimentação e hospedagem',
-      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces',
-      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite'
+      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces e condimentos',
+      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite e derivados'
     ]
   },
   'moda': {
@@ -135,15 +58,15 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
     descriptions: [
       'Classe 44 – Serviços médicos, veterinários, higiênicos e de beleza',
       'Classe 05 – Produtos farmacêuticos, veterinários e sanitários',
-      'Classe 10 – Aparelhos e instrumentos médicos, cirúrgicos'
+      'Classe 10 – Aparelhos e instrumentos médicos, cirúrgicos e odontológicos'
     ]
   },
   'educacao': {
     classes: [41, 16, 9],
     descriptions: [
-      'Classe 41 – Educação, treinamento, entretenimento e atividades culturais',
-      'Classe 16 – Papel, produtos de papelaria, material de instrução',
-      'Classe 09 – Aparelhos para gravação, transmissão ou reprodução'
+      'Classe 41 – Educação, treinamento, entretenimento e atividades desportivas e culturais',
+      'Classe 16 – Papel, produtos de papelaria, material de instrução e ensino',
+      'Classe 09 – Aparelhos para gravação, transmissão ou reprodução de som ou imagem'
     ]
   },
   'beleza': {
@@ -158,16 +81,16 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
     classes: [37, 19, 6],
     descriptions: [
       'Classe 37 – Construção civil, reparação e serviços de instalação',
-      'Classe 19 – Materiais de construção não metálicos',
-      'Classe 06 – Metais comuns e suas ligas, materiais de construção'
+      'Classe 19 – Materiais de construção não metálicos (cimento, tijolo, vidro)',
+      'Classe 06 – Metais comuns e suas ligas, materiais de construção metálicos'
     ]
   },
   'financeiro': {
     classes: [36, 35, 42],
     descriptions: [
       'Classe 36 – Seguros, negócios financeiros, imobiliários e bancários',
-      'Classe 35 – Gestão de negócios, administração comercial',
-      'Classe 42 – Serviços científicos e tecnológicos'
+      'Classe 35 – Gestão de negócios, administração comercial e contabilidade',
+      'Classe 42 – Serviços científicos e tecnológicos relacionados a finanças'
     ]
   },
   'advocacia': {
@@ -176,6 +99,14 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
       'Classe 45 – Serviços jurídicos, advocacia e consultoria legal',
       'Classe 35 – Gestão de negócios e administração de escritórios',
       'Classe 41 – Educação jurídica, palestras e treinamentos'
+    ]
+  },
+  'automotivo': {
+    classes: [37, 12, 35],
+    descriptions: [
+      'Classe 37 – Reparação e manutenção de veículos',
+      'Classe 12 – Veículos, aparelhos de locomoção por terra, ar ou água',
+      'Classe 35 – Comércio de veículos e peças automotivas'
     ]
   },
   'default': {
@@ -197,12 +128,10 @@ function normalizeString(str: string): string {
 
 function isFamousBrand(brandName: string): boolean {
   const normalized = normalizeString(brandName);
-  return FAMOUS_BRANDS.some(famous => {
-    const normalizedFamous = normalizeString(famous);
-    return normalized === normalizedFamous || 
-           normalized.includes(normalizedFamous) || 
-           normalizedFamous.includes(normalized);
-  });
+  return FAMOUS_BRANDS.some(famous => 
+    normalized.includes(normalizeString(famous)) || 
+    normalizeString(famous).includes(normalized)
+  );
 }
 
 function getClassesForBusinessArea(businessArea: string): { classes: number[], descriptions: string[] } {
@@ -214,14 +143,13 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
     }
   }
   
-  // Extended matching
   if (normalized.includes('software') || normalized.includes('app') || normalized.includes('sistema') || normalized.includes('ti')) {
     return BUSINESS_AREA_CLASSES.tecnologia;
   }
   if (normalized.includes('restaurante') || normalized.includes('comida') || normalized.includes('gastronomia') || normalized.includes('lanchonete')) {
     return BUSINESS_AREA_CLASSES.alimentacao;
   }
-  if (normalized.includes('roupa') || normalized.includes('vestuario') || normalized.includes('boutique')) {
+  if (normalized.includes('roupa') || normalized.includes('vestuario') || normalized.includes('loja') || normalized.includes('boutique')) {
     return BUSINESS_AREA_CLASSES.moda;
   }
   if (normalized.includes('clinica') || normalized.includes('hospital') || normalized.includes('medic') || normalized.includes('farmacia')) {
@@ -233,375 +161,305 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
   if (normalized.includes('salao') || normalized.includes('estetica') || normalized.includes('cabelo') || normalized.includes('cosmetico')) {
     return BUSINESS_AREA_CLASSES.beleza;
   }
-  if (normalized.includes('obra') || normalized.includes('engenharia') || normalized.includes('arquitetura') || normalized.includes('constru')) {
+  if (normalized.includes('obra') || normalized.includes('engenharia') || normalized.includes('arquitetura') || normalized.includes('pedreiro')) {
     return BUSINESS_AREA_CLASSES.construcao;
   }
   if (normalized.includes('banco') || normalized.includes('investimento') || normalized.includes('credito') || normalized.includes('financeira')) {
     return BUSINESS_AREA_CLASSES.financeiro;
   }
-  if (normalized.includes('advogado') || normalized.includes('juridico') || normalized.includes('direito')) {
+  if (normalized.includes('advogado') || normalized.includes('juridico') || normalized.includes('direito') || normalized.includes('escritorio')) {
     return BUSINESS_AREA_CLASSES.advocacia;
   }
   if (normalized.includes('carro') || normalized.includes('moto') || normalized.includes('oficina') || normalized.includes('mecanica')) {
     return BUSINESS_AREA_CLASSES.automotivo;
   }
-  if (normalized.includes('agro') || normalized.includes('fazenda') || normalized.includes('rural') || normalized.includes('agricola')) {
-    return BUSINESS_AREA_CLASSES.agronegocio;
-  }
   
   return BUSINESS_AREA_CLASSES.default;
 }
 
-// Análise inteligente usando Lovable AI
-async function analyzeWithAI(brandName: string, businessArea: string): Promise<{
-  level: 'high' | 'medium' | 'low';
-  analysis: string;
-  distinctiveness: number;
-  observations: string[];
-  risks: string[];
-  recommendations: string[];
-  potentialConflicts: string[];
+// Função para buscar no WIPO Global Brand Database
+async function searchWIPO(brandName: string): Promise<{
+  success: boolean;
+  totalResults: number;
+  brands: Array<{
+    processo: string;
+    marca: string;
+    situacao: string;
+    classe: string;
+    titular: string;
+    pais: string;
+  }>;
+  error?: string;
 }> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  
-  if (!LOVABLE_API_KEY) {
-    console.log('LOVABLE_API_KEY not available, using fallback analysis');
-    return fallbackAnalysis(brandName, businessArea);
-  }
-
   try {
-    console.log(`[AI] Iniciando análise inteligente para: "${brandName}" - ${businessArea}`);
+    console.log(`[WIPO] ========== INICIANDO BUSCA ==========`);
+    console.log(`[WIPO] Marca: "${brandName}"`);
     
-    const systemPrompt = `Você é um especialista em propriedade intelectual e registro de marcas no INPI Brasil com mais de 20 anos de experiência.
+    // Construir a estrutura de busca do WIPO similarname
+    const searchStructure = {
+      _id: Math.random().toString(36).substring(2, 6),
+      boolean: 'AND',
+      bricks: [{
+        _id: Math.random().toString(36).substring(2, 6),
+        key: 'brandName',
+        value: brandName,
+        strategy: 'Simple'
+      }]
+    };
+    
+    // URL exata do WIPO similarname com os parâmetros corretos
+    const params = new URLSearchParams({
+      sort: 'score desc',
+      rows: '30',
+      asStructure: JSON.stringify(searchStructure),
+      fg: '_void_',
+      _: Date.now().toString()
+    });
+    
+    // Endpoint de resultados JSON do WIPO
+    const wipoJsonUrl = `https://branddb.wipo.int/en/similarname/results?${params.toString()}`;
+    
+    console.log(`[WIPO] URL: ${wipoJsonUrl}`);
 
-Sua tarefa é analisar a viabilidade de registro de uma marca, considerando:
-
-1. **Distintividade** (critério mais importante):
-   - Marcas INVENTADAS (ex: Kodak, Xerox, Häagen-Dazs) = distintividade máxima (90-100)
-   - Marcas ARBITRÁRIAS (ex: Apple para computadores) = distintividade alta (75-89)
-   - Marcas SUGESTIVAS (ex: Netflix sugere internet+flicks) = distintividade média (50-74)
-   - Marcas DESCRITIVAS = distintividade baixa (25-49)
-   - Marcas GENÉRICAS = não registrável (0-24)
-
-2. **Conflitos potenciais**:
-   - Considere se existem marcas famosas ou conhecidas com nomes similares
-   - Avalie se o nome é comum em outros segmentos do mercado brasileiro
-   - Lembre-se de marcas brasileiras e internacionais que atuam no Brasil
-
-3. **Aspectos linguísticos**:
-   - Facilidade de pronúncia em português
-   - Memorização
-   - Possíveis significados indesejados ou duplo sentido
-   - Possibilidade de confusão fonética com outras marcas
-
-4. **Lei brasileira (Lei 9.279/96 - LPI)**:
-   - Art. 122: Sinais distintivos visualmente perceptíveis
-   - Art. 124: Sinais não registráveis (genéricos, descritivos, etc.)
-   - Art. 125: Marcas de alto renome
-   - Art. 126: Marcas notoriamente conhecidas
-
-Responda SEMPRE em formato JSON válido com esta estrutura exata:
-{
-  "level": "high" | "medium" | "low",
-  "distinctiveness_score": 0-100,
-  "analysis_summary": "resumo técnico em uma frase",
-  "observations": ["observação técnica 1", "observação técnica 2"],
-  "risks": ["risco identificado 1", "risco identificado 2"],
-  "recommendations": ["recomendação 1", "recomendação 2"],
-  "potential_conflicts": ["nome de marca/empresa similar 1", "nome de marca/empresa similar 2"]
-}
-
-IMPORTANTE:
-- Se a marca parece inventada e única, dê score alto (80+)
-- Se contém palavras genéricas do segmento, reduza o score
-- Considere homofonias (palavras que soam parecido)
-- Seja realista nos conflitos potenciais`;
-
-    const userPrompt = `Analise a viabilidade de registro da marca "${brandName}" para o ramo de ${businessArea} no Brasil.
-
-Considere:
-1. Se o nome é distintivo ou genérico para o segmento
-2. Se existe possibilidade de confusão com marcas conhecidas
-3. Se atende aos requisitos da Lei 9.279/96
-
-Forneça uma análise técnica completa.`;
-
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
+    const response = await fetch(wipoJsonUrl, {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Referer': 'https://branddb.wipo.int/en/similarname',
+        'Origin': 'https://branddb.wipo.int',
+        'X-Requested-With': 'XMLHttpRequest',
       },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2,
-      }),
     });
 
-    if (!response.ok) {
-      console.error('[AI] API error:', response.status);
-      return fallbackAnalysis(brandName, businessArea);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      console.log('[AI] Empty response from AI');
-      return fallbackAnalysis(brandName, businessArea);
-    }
-
-    console.log('[AI] Response received, parsing JSON...');
-
-    // Extrair JSON da resposta
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.log('[AI] Could not extract JSON from response');
-      return fallbackAnalysis(brandName, businessArea);
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    console.log(`[WIPO] Response status: ${response.status}`);
     
-    console.log('[AI] Analysis complete - Level:', parsed.level, 'Score:', parsed.distinctiveness_score);
+    const text = await response.text();
+    console.log(`[WIPO] Response length: ${text.length}`);
+    console.log(`[WIPO] Response preview: ${text.substring(0, 300)}`);
     
+    // Verificar se é JSON válido
+    if (text.startsWith('{') || text.startsWith('[')) {
+      const data = JSON.parse(text);
+      console.log(`[WIPO] JSON parsed successfully`);
+      
+      // Estrutura de resposta WIPO
+      const docs = data.response?.docs || data.docs || data.results || [];
+      const numFound = data.response?.numFound || data.numFound || data.total || docs.length;
+
+      console.log(`[WIPO] Total encontrado: ${numFound}, Docs: ${docs.length}`);
+
+      const brands = docs.map((doc: any) => ({
+        processo: doc.AN || doc.applicationNumber || doc.RN || doc.registrationNumber || '',
+        marca: doc.BN || doc.brandName || doc.name || '',
+        situacao: doc.ST || doc.status || doc.statusDescription || 'Registrado',
+        classe: Array.isArray(doc.NC) ? doc.NC.join(', ') : (doc.NC || doc.niceClasses || ''),
+        titular: doc.HOL || doc.holderName || doc.holder || '',
+        pais: doc.OO || doc.origin || doc.country || ''
+      }));
+
+      // Priorizar marcas do Brasil
+      const brazilBrands = brands.filter((b: any) => b.pais === 'BR');
+      const otherBrands = brands.filter((b: any) => b.pais !== 'BR');
+      const sortedBrands = [...brazilBrands, ...otherBrands];
+
+      console.log(`[WIPO] Marcas encontradas: ${brands.length}, BR: ${brazilBrands.length}`);
+
+      return {
+        success: true,
+        totalResults: numFound,
+        brands: sortedBrands.slice(0, 15)
+      };
+    }
+    
+    // Se não é JSON, verificar se é página de captcha
+    if (text.includes('altcha') || text.includes('challenge') || text.includes('Just a moment')) {
+      console.log('[WIPO] Página de verificação/captcha detectada');
+      return {
+        success: false,
+        totalResults: 0,
+        brands: [],
+        error: 'Verificação de segurança do WIPO ativa. A busca automática está temporariamente bloqueada.'
+      };
+    }
+    
+    // Tentar extrair dados do HTML
+    console.log('[WIPO] Tentando extrair dados do HTML...');
+    
+    // Procurar por dados JSON embutidos no HTML
+    const jsonMatch = text.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/) ||
+                      text.match(/var\s+(?:results|data|searchData)\s*=\s*(\{[\s\S]*?\});/) ||
+                      text.match(/"docs"\s*:\s*\[([\s\S]*?)\]/);
+    
+    if (jsonMatch) {
+      try {
+        let jsonData;
+        if (jsonMatch[1].startsWith('{')) {
+          jsonData = JSON.parse(jsonMatch[1]);
+        } else {
+          jsonData = { docs: JSON.parse(`[${jsonMatch[1]}]`) };
+        }
+        
+        const docs = jsonData.docs || jsonData.results || [];
+        console.log(`[WIPO] Dados extraídos do HTML: ${docs.length} resultados`);
+        
+        return {
+          success: true,
+          totalResults: docs.length,
+          brands: docs.slice(0, 15).map((doc: any) => ({
+            processo: doc.AN || doc.RN || '',
+            marca: doc.BN || brandName.toUpperCase(),
+            situacao: doc.ST || 'Encontrado',
+            classe: doc.NC || '',
+            titular: doc.HOL || '',
+            pais: doc.OO || ''
+          }))
+        };
+      } catch (e) {
+        console.log('[WIPO] Falha ao parsear JSON embutido:', e);
+      }
+    }
+    
+    // Procurar menções da marca no HTML
+    const brandRegex = new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const matches = text.match(brandRegex);
+    
+    if (matches && matches.length > 0) {
+      console.log(`[WIPO] Encontradas ${matches.length} menções da marca no HTML`);
+      return {
+        success: true,
+        totalResults: matches.length,
+        brands: [{
+          processo: '',
+          marca: brandName.toUpperCase(),
+          situacao: 'Encontrado na base WIPO',
+          classe: '',
+          titular: '',
+          pais: ''
+        }]
+      };
+    }
+
+    // Nenhum resultado encontrado
+    console.log('[WIPO] Nenhum resultado encontrado');
     return {
-      level: parsed.level || 'medium',
-      analysis: parsed.analysis_summary || 'Análise concluída com sucesso',
-      distinctiveness: parsed.distinctiveness_score || 50,
-      observations: parsed.observations || [],
-      risks: parsed.risks || [],
-      recommendations: parsed.recommendations || [],
-      potentialConflicts: parsed.potential_conflicts || []
+      success: true,
+      totalResults: 0,
+      brands: []
     };
 
   } catch (error) {
-    console.error('[AI] Error in analysis:', error);
-    return fallbackAnalysis(brandName, businessArea);
+    console.error('[WIPO] ERRO:', error);
+    return {
+      success: false,
+      totalResults: 0,
+      brands: [],
+      error: error instanceof Error ? error.message : 'Erro desconhecido na busca WIPO'
+    };
   }
 }
 
-// Análise de fallback sem IA
-function fallbackAnalysis(brandName: string, businessArea: string): {
-  level: 'high' | 'medium' | 'low';
-  analysis: string;
-  distinctiveness: number;
+// Análise de padrões da marca para viabilidade
+function analyzeBrandPattern(brandName: string): {
+  score: number;
   observations: string[];
-  risks: string[];
-  recommendations: string[];
-  potentialConflicts: string[];
 } {
-  const normalized = normalizeString(brandName);
-  const words = normalized.split(/\s+/);
-  
-  // Palavras genéricas comuns
-  const genericWords = [
-    'brasil', 'brazil', 'nacional', 'global', 'world', 'tech', 'digital', 'online',
-    'express', 'plus', 'pro', 'max', 'super', 'mega', 'ultra', 'prime', 'elite',
-    'premium', 'gold', 'platinum', 'solutions', 'services', 'group', 'corp',
-    'company', 'enterprise', 'business', 'comercio', 'servicos', 'consultoria',
-    'loja', 'store', 'shop', 'casa', 'lar', 'vida', 'sol', 'mar', 'terra'
-  ];
-  
-  let score = 70;
   const observations: string[] = [];
-  const risks: string[] = [];
-  const recommendations: string[] = [];
+  let score = 100; // Começa com 100 (alta viabilidade)
   
-  // Verificar comprimento
-  if (normalized.length < 4) {
-    score -= 25;
-    observations.push('Nome muito curto pode ter distintividade reduzida');
-    risks.push('Marcas de até 3 caracteres enfrentam maior escrutínio no INPI');
-  } else if (normalized.length > 20) {
-    score -= 10;
-    observations.push('Nome longo pode dificultar memorização');
-  } else {
-    observations.push('Comprimento adequado para registro');
-  }
+  const normalized = normalizeString(brandName);
   
-  // Verificar palavras genéricas
-  const foundGeneric = words.filter(w => genericWords.includes(w));
-  if (foundGeneric.length > 0) {
-    score -= foundGeneric.length * 12;
-    observations.push(`Contém termos genéricos: ${foundGeneric.join(', ')}`);
-    risks.push('Termos genéricos podem reduzir a proteção ou dificultar registro');
-  }
-  
-  // Verificar se é palavra inventada
-  const hasInventedPattern = /[bcdfghjklmnpqrstvwxyz]{3,}/.test(normalized) ||
-                            !normalized.match(/[aeiou]/);
-  if (hasInventedPattern && normalized.length > 4) {
-    score += 15;
-    observations.push('Padrão sugere nome inventado (fantasia), o que aumenta distintividade');
-  }
-  
-  // Verificar se é nome próprio comum
-  const commonNames = ['maria', 'joao', 'jose', 'ana', 'carlos', 'paulo', 'pedro', 'lucas', 'gabriel'];
-  if (commonNames.some(name => normalized.includes(name))) {
+  // Verificar comprimento - marcas muito curtas são difíceis de registrar
+  if (normalized.length < 3) {
+    score -= 30;
+    observations.push('❌ Marca muito curta (menos de 3 caracteres) - difícil de registrar');
+  } else if (normalized.length <= 4) {
     score -= 15;
-    observations.push('Contém nome próprio comum, pode haver homonímias');
-    risks.push('Nomes próprios comuns podem ter proteção limitada');
-  }
-  
-  // Verificar números
-  if (/\d/.test(brandName)) {
-    score -= 5;
-    observations.push('Contém números');
-  }
-  
-  // Marca composta tem mais distintividade
-  if (words.length >= 2 && words.length <= 4) {
-    score += 10;
-    observations.push('Marca composta por múltiplas palavras pode ter boa distintividade');
-  }
-  
-  // Limitar score
-  score = Math.max(20, Math.min(95, score));
-  
-  // Determinar nível
-  let level: 'high' | 'medium' | 'low';
-  if (score >= 70) {
-    level = 'high';
-    recommendations.push('Recomendamos prosseguir com pedido de registro');
-    recommendations.push('Considerar registro em classes adicionais para proteção ampliada');
-  } else if (score >= 45) {
-    level = 'medium';
-    recommendations.push('Considerar variações do nome para aumentar distintividade');
-    recommendations.push('Avaliar combinação com elemento figurativo (logo)');
+    observations.push('⚠️ Marca curta - pode haver muitas marcas similares');
   } else {
-    level = 'low';
-    recommendations.push('Recomendamos consulta com especialista antes de prosseguir');
-    recommendations.push('Considerar criação de marca inventada para maior proteção');
+    observations.push('✅ Comprimento adequado da marca');
   }
+  
+  // Verificar se é palavra genérica
+  const genericWords = ['servicos', 'comercio', 'brasil', 'solucoes', 'grupo', 'consultoria', 'digital', 'tech', 'plus', 'premium', 'express', 'master', 'pro', 'super', 'mega', 'top', 'max', 'best'];
+  const hasGenericWord = genericWords.some(word => normalized.includes(word));
+  if (hasGenericWord) {
+    score -= 20;
+    observations.push('⚠️ Contém palavra genérica - recomendamos adicionar elemento distintivo');
+  }
+  
+  // Verificar se contém números
+  if (/\d/.test(brandName)) {
+    observations.push('ℹ️ Contém números - comum em marcas modernas');
+  }
+  
+  // Verificar se é palavra inventada (maior proteção)
+  const commonWords = ['casa', 'loja', 'mundo', 'novo', 'vida', 'arte', 'sol', 'mar', 'terra', 'agua', 'luz', 'cor', 'flor', 'lar'];
+  const isInventedWord = !commonWords.some(word => normalized.includes(word)) && normalized.length > 5;
+  if (isInventedWord && !hasGenericWord) {
+    score += 10;
+    observations.push('✅ Aparenta ser marca inventada/distintiva - maior proteção');
+  }
+  
+  // Verificar caracteres especiais
+  if (/[^a-zA-Z0-9\s]/.test(brandName.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) {
+    observations.push('ℹ️ Contém caracteres especiais');
+  }
+  
+  // Verificar se é composta
+  const words = brandName.trim().split(/\s+/);
+  if (words.length >= 2) {
+    observations.push('✅ Marca composta por múltiplas palavras - boa distintividade');
+  }
+  
+  // Limitar score entre 0 e 100
+  score = Math.max(0, Math.min(100, score));
+  
+  return { score, observations };
+}
+
+// Função combinada para análise de viabilidade
+async function analyzeViability(brandName: string): Promise<{
+  success: boolean;
+  totalResults: number;
+  brands: Array<{
+    processo: string;
+    marca: string;
+    situacao: string;
+    classe: string;
+    titular: string;
+  }>;
+  patternAnalysis: {
+    score: number;
+    observations: string[];
+  };
+  searchAttempted: boolean;
+  error?: string;
+}> {
+  // Análise de padrões (sempre funciona)
+  const patternAnalysis = analyzeBrandPattern(brandName);
+  
+  // Tentar busca no WIPO
+  const wipoResult = await searchWIPO(brandName);
   
   return {
-    level,
-    analysis: `Análise de distintividade com score ${score}/100`,
-    distinctiveness: score,
-    observations,
-    risks,
-    recommendations,
-    potentialConflicts: []
+    success: true,
+    totalResults: wipoResult.totalResults,
+    brands: wipoResult.brands.map(b => ({
+      processo: b.processo,
+      marca: b.marca,
+      situacao: b.situacao,
+      classe: b.classe,
+      titular: b.titular
+    })),
+    patternAnalysis,
+    searchAttempted: wipoResult.success,
+    error: wipoResult.error
   };
 }
 
-// Formatar data/hora no padrão brasileiro
-function formatDateTime(): string {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  return `${day}/${month}/${year}, ${hours}:${minutes}`;
-}
-
-function formatDateTimeFull(): string {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
-}
-
-// Gerar laudo para marca bloqueada (famosa) - formato igual ao PDF
-function generateBlockedLaudo(brandName: string, businessArea: string, matchedBrand: string): string {
-  const dateTime = formatDateTime();
-  
-  return `*Laudo Técnico de Viabilidade da Marca:*
-
-Marca: ${brandName.toUpperCase()}
-Ramo de Atividade: ${businessArea}
-
-*RESULTADO DA PESQUISA NO INPI:* ${dateTime}
-
-Marca: ${brandName.toUpperCase()}
-
-❌ MARCA DE ALTO RENOME IDENTIFICADA
-
-*Conclusão Técnica:*
-A marca apresenta INVIABILIDADE de registro.
-
-*Análise Detalhada:*
-O nome '${brandName}' corresponde ou é similar à marca de alto renome "${matchedBrand.toUpperCase()}" já registrada e protegida nacional e internacionalmente. Marcas de alto renome possuem proteção especial em todas as classes de produtos e serviços, conforme estabelecido pela Lei de Propriedade Industrial (Lei 9.279/96) e convenções internacionais.
-
-O registro de marcas idênticas ou semelhantes a marcas famosas é vedado pelo INPI, independentemente da classe ou ramo de atividade pretendido. Tentativas de registro podem resultar em indeferimento do pedido e, em casos mais graves, configurar crime de concorrência desleal ou violação de propriedade intelectual.
-
-*Orientação Jurídica:*
-Recomendamos fortemente a escolha de um novo nome que seja original e distintivo. Investir em uma marca própria evita problemas legais futuros e permite construir uma identidade única para seu negócio.
-
-⚠️ *IMPORTANTE:* Não prossiga com este nome. Escolha uma marca original para garantir seu registro.`;
-}
-
-// Gerar laudo técnico completo - formato EXATAMENTE igual ao PDF
-function generateTechnicalLaudo(
-  brandName: string, 
-  businessArea: string, 
-  analysis: {
-    level: 'high' | 'medium' | 'low';
-    analysis: string;
-    distinctiveness: number;
-    observations: string[];
-    risks: string[];
-    recommendations: string[];
-    potentialConflicts: string[];
-  },
-  classDescriptions: string[]
-): string {
-  const dateTime = formatDateTime();
-  const viabilityText = analysis.level === 'high' ? 'ALTA' : analysis.level === 'medium' ? 'MÉDIA' : 'BAIXA';
-  
-  // Construir análise detalhada baseada na IA
-  let analysisText = analysis.analysis;
-  
-  // Se a análise não menciona neologismo, adicionar texto padrão
-  if (!analysisText.toLowerCase().includes('neologismo') && analysis.level === 'high') {
-    analysisText = `O nome '${brandName}' parece ser um neologismo ou um nome próprio estilizado, o que lhe confere um alto grau de distintividade para o ramo de ${businessArea}. Não há indícios imediatos de que seja um termo genérico, descritivo ou que tenha caído em uso comum no setor. Uma busca mais aprofundada nas bases de dados do INPI por marcas semelhantes no ramo de '${businessArea}' seria recomendada para uma confirmação final, mas a princípio, o nome possui boa viabilidade para registro.`;
-  }
-
-  let laudo = `*Laudo Técnico de Viabilidade da Marca:*
-
-Marca: ${brandName.toUpperCase()}
-Ramo de Atividade: ${businessArea}
-
-*RESULTADO DA PESQUISA NO INPI:* ${dateTime}
-
-Marca: ${brandName.toUpperCase()}
-
-✅ Nenhum resultado conflitante foi encontrado para a sua pesquisa.
-✅ Nenhuma marca idêntica encontrada nas classes pesquisadas.
-
-*Conclusão Técnica:*
-A marca apresenta ${viabilityText} viabilidade de registro nas classes indicadas.
-
-*Análise Detalhada:*
-${analysisText}
-
-*Classes que sua marca ${brandName.toUpperCase()} pode ser registrada:*
-
-`;
-
-  classDescriptions.forEach(desc => {
-    laudo += `${desc}\n`;
-  });
-
-  laudo += `
-*Orientação Jurídica:*
-O ideal é registrar nas ${classDescriptions.length} classes para máxima proteção. Se a questão for financeira, orientamos registrar urgente na classe principal.
-
-⚠️ *IMPORTANTE:* Dono da marca é quem registra primeiro! Não perca tempo.`;
-
-  return laudo;
-}
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -609,100 +467,201 @@ serve(async (req) => {
   try {
     const { brandName, businessArea } = await req.json();
 
-    if (!brandName) {
+    if (!brandName || !businessArea) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Nome da marca é obrigatório' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Nome da marca e ramo de atividade são obrigatórios' 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`[Viability] Analyzing brand: "${brandName}" for: "${businessArea}"`);
-
-    // 1. Verificar marcas famosas
+    // Check for famous brands
     if (isFamousBrand(brandName)) {
-      const matchedBrand = FAMOUS_BRANDS.find(famous => {
-        const normalizedFamous = normalizeString(famous);
-        const normalized = normalizeString(brandName);
-        return normalized === normalizedFamous || 
-               normalized.includes(normalizedFamous) || 
-               normalizedFamous.includes(normalized);
-      });
-
-      console.log(`[Viability] Famous brand detected: ${matchedBrand}`);
-
       return new Response(
         JSON.stringify({
           success: true,
           isFamousBrand: true,
           level: 'blocked',
-          title: 'Marca de Alto Renome Detectada',
-          description: `A marca "${brandName}" é idêntica ou muito similar à marca famosa "${matchedBrand?.toUpperCase()}". Marcas de alto renome possuem proteção especial em todas as classes (Art. 125, LPI). O registro não é viável.`,
-          laudo: generateBlockedLaudo(brandName, businessArea || 'Não especificado', matchedBrand || brandName),
-          brandName: brandName.toUpperCase(),
-          businessArea: businessArea || 'Não especificado',
-          classes: [],
-          viability: 'Inviável',
-          searchDate: formatDateTimeFull()
+          title: 'Marca de Alto Renome',
+          description: `A marca "${brandName}" é uma marca de alto renome protegida em todas as classes. Não é possível realizar o registro desta marca ou de marcas semelhantes.`,
+          laudo: null
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Obter classes NCL para o ramo
-    const { classes, descriptions } = getClassesForBusinessArea(businessArea || 'serviços em geral');
+    // Generate current date/time in Brazil timezone
+    const now = new Date();
+    const brazilTime = now.toLocaleString('pt-BR', { 
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-    // 3. Análise inteligente com IA
-    const aiAnalysis = await analyzeWithAI(brandName, businessArea || 'serviços em geral');
+    // ANÁLISE DE VIABILIDADE (padrões + tentativa de busca)
+    const analysisResult = await analyzeViability(brandName);
+    
+    // Get classes for the business area
+    const { classes, descriptions } = getClassesForBusinessArea(businessArea);
+    const classesText = descriptions.map((desc: string) => `${desc}`).join('\n');
+    
+    // Determinar nível de viabilidade baseado na análise de padrões
+    let viabilityLevel: 'high' | 'medium' | 'low' = 'high';
+    let resultText = '';
+    
+    // Análise de padrões da marca
+    const patternScore = analysisResult.patternAnalysis.score;
+    const patternObs = analysisResult.patternAnalysis.observations.join('\n');
+    
+    if (analysisResult.searchAttempted && analysisResult.totalResults > 0) {
+      // Busca encontrou resultados
+      const hasActiveRegistration = analysisResult.brands.some((b: { situacao: string }) => 
+        b.situacao.toLowerCase().includes('regist') || 
+        b.situacao.toLowerCase().includes('active') ||
+        b.situacao.toLowerCase().includes('ativo')
+      );
+      
+      if (hasActiveRegistration) {
+        viabilityLevel = 'low';
+      } else {
+        viabilityLevel = 'medium';
+      }
+      
+      resultText = `Foram encontradas ${analysisResult.totalResults} marca(s) na base global:\n\n`;
+      analysisResult.brands.slice(0, 10).forEach((b: { marca: string; processo: string; situacao: string; classe: string; titular?: string }, i: number) => {
+        resultText += `${i + 1}. ${b.marca}\n`;
+        resultText += `   Processo: ${b.processo}\n`;
+        if (b.situacao) resultText += `   Situação: ${b.situacao}\n`;
+        if (b.classe) resultText += `   Classe NCL: ${b.classe}\n`;
+        resultText += '\n';
+      });
+    } else {
+      // Usar análise de padrões para determinar viabilidade
+      if (patternScore >= 80) {
+        viabilityLevel = 'high';
+        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
 
-    // 4. Gerar laudo técnico no formato do PDF
-    const laudo = generateTechnicalLaudo(brandName, businessArea || 'Não especificado', aiAnalysis, descriptions);
+Score de Distintividade: ${patternScore}/100 - ALTO
 
-    // 5. Determinar título e descrição
-    let title: string;
-    let description: string;
+${patternObs}
 
-    switch (aiAnalysis.level) {
-      case 'high':
-        title = 'Alta Viabilidade de Registro';
-        description = `A marca "${brandName}" apresenta boa distintividade e características favoráveis para registro no INPI. ${aiAnalysis.analysis}`;
-        break;
-      case 'medium':
-        title = 'Viabilidade Moderada';
-        description = `A marca "${brandName}" pode ser registrada, mas há pontos de atenção a considerar. ${aiAnalysis.analysis}`;
-        break;
-      case 'low':
-        title = 'Baixa Viabilidade';
-        description = `A marca "${brandName}" apresenta desafios significativos para registro. ${aiAnalysis.analysis}`;
-        break;
+✅ A marca "${brandName.toUpperCase()}" apresenta boas características para registro.
+✅ Nome distintivo com baixa probabilidade de conflitos.
+✅ Recomendamos prosseguir com o registro.`;
+      } else if (patternScore >= 50) {
+        viabilityLevel = 'medium';
+        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
+
+Score de Distintividade: ${patternScore}/100 - MÉDIO
+
+${patternObs}
+
+⚠️ A marca possui algumas características que podem dificultar o registro.
+⚠️ Recomendamos consulta especializada antes de prosseguir.`;
+      } else {
+        viabilityLevel = 'low';
+        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
+
+Score de Distintividade: ${patternScore}/100 - BAIXO
+
+${patternObs}
+
+❌ A marca possui características que dificultam o registro.
+❌ Sugerimos revisar o nome ou consultar um especialista.`;
+      }
     }
 
-    console.log(`[Viability] Analysis complete - Level: ${aiAnalysis.level}, Score: ${aiAnalysis.distinctiveness}`);
+    // Build the laudo
+    const laudo = `*LAUDO TÉCNICO DE VIABILIDADE DE MARCA*
+*Pesquisa na Base Global WIPO + INPI*
 
-    const viabilityText = aiAnalysis.level === 'high' ? 'Viável' : aiAnalysis.level === 'medium' ? 'Viável com ressalvas' : 'Baixa viabilidade';
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 *DADOS DA CONSULTA*
+
+Marca Pesquisada: ${brandName.toUpperCase()}
+Ramo de Atividade: ${businessArea}
+Tipo de Pesquisa: EXATA
+Data/Hora: ${brazilTime}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 *RESULTADO DA PESQUISA*
+
+${resultText}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚖️ *CONCLUSÃO TÉCNICA*
+
+${viabilityLevel === 'high' ? 
+'A marca apresenta ALTA VIABILIDADE de registro. Não foram encontradas marcas idênticas nas bases do INPI que possam impedir o registro.' :
+viabilityLevel === 'medium' ?
+'A marca apresenta VIABILIDADE MÉDIA. Podem existir marcas similares. Recomendamos consultar um especialista antes de prosseguir.' :
+'A marca apresenta BAIXA VIABILIDADE. Existem marcas conflitantes registradas que provavelmente impedirão o registro. Sugerimos alteração do nome ou consulta especializada.'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏷️ *CLASSES RECOMENDADAS PARA REGISTRO*
+
+${classesText}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚖️ *ORIENTAÇÃO JURÍDICA*
+
+O ideal é registrar nas 3 classes para máxima proteção.
+Se a questão for financeira, orientamos registrar urgente na classe principal.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ *IMPORTANTE*
+
+O DONO DA MARCA É QUEM REGISTRA PRIMEIRO!
+Não perca tempo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WebMarcas - Registro de Marcas
+www.webmarcas.net`;
 
     return new Response(
       JSON.stringify({
         success: true,
         isFamousBrand: false,
-        level: aiAnalysis.level,
-        title,
-        description,
+        level: viabilityLevel,
+        title: viabilityLevel === 'high' ? 'Alta Viabilidade' : 
+               viabilityLevel === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
+        description: viabilityLevel === 'high' 
+          ? 'Sua marca está disponível para registro! Não encontramos conflitos na base do INPI.'
+          : viabilityLevel === 'medium'
+          ? 'Recomendamos consulta especializada antes de prosseguir.'
+          : 'Existem marcas conflitantes na base do INPI. Consulte nossos especialistas.',
         laudo,
-        brandName: brandName.toUpperCase(),
-        businessArea: businessArea || 'Não especificado',
-        classes: descriptions,
-        viability: viabilityText,
-        searchDate: formatDateTimeFull()
+        classes,
+        classDescriptions: descriptions,
+        searchDate: brazilTime,
+        analysisResult: {
+          totalResults: analysisResult.totalResults,
+          brands: analysisResult.brands.slice(0, 10),
+          patternScore: analysisResult.patternAnalysis.score,
+          searchAttempted: analysisResult.searchAttempted
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('[Viability] Error:', error);
+    console.error('Error in viability check:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : 'Erro interno na análise' 
+        error: error instanceof Error ? error.message : 'Erro ao processar a consulta' 
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

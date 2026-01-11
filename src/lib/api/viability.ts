@@ -1,16 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ViabilityResult {
-  success?: boolean;
+  success: boolean;
   isFamousBrand?: boolean;
   level: 'high' | 'medium' | 'low' | 'blocked';
   title: string;
   description: string;
   laudo?: string;
-  brandName?: string;
-  businessArea?: string;
-  classes?: string[];
-  viability?: string;
+  classes?: number[];
+  classDescriptions?: string[];
   searchDate?: string;
   error?: string;
 }
