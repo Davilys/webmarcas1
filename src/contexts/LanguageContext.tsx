@@ -16,6 +16,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.howItWorks": "Como Funciona",
     "nav.pricing": "Preços",
     "nav.faq": "FAQ",
+    "nav.register": "Registrar",
     "nav.clientArea": "Área do Cliente",
     "nav.checkBrand": "Consultar Marca",
     
@@ -191,6 +192,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.howItWorks": "How It Works",
     "nav.pricing": "Pricing",
     "nav.faq": "FAQ",
+    "nav.register": "Register",
     "nav.clientArea": "Client Area",
     "nav.checkBrand": "Check Brand",
     
@@ -366,6 +368,7 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.howItWorks": "Cómo Funciona",
     "nav.pricing": "Precios",
     "nav.faq": "FAQ",
+    "nav.register": "Registrar",
     "nav.clientArea": "Área del Cliente",
     "nav.checkBrand": "Consultar Marca",
     
