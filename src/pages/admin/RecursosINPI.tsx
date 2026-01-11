@@ -8,13 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Upload, Loader2, Edit3, Check, Download, Printer, FileCheck, History, Plus, Eye, Search, X, Calendar } from 'lucide-react';
+import { FileText, Upload, Loader2, Edit3, Check, Download, Printer, FileCheck, History, Plus, Eye, Search, X, Calendar, Scale } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { INPIResourcePDFPreview } from '@/components/admin/INPIResourcePDFPreview';
+import { INPILegalChatDialog } from '@/components/admin/inpi/INPILegalChatDialog';
 
 interface ExtractedData {
   process_number: string;
@@ -63,6 +64,7 @@ export default function RecursosINPI() {
   const [selectedResource, setSelectedResource] = useState<INPIResource | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDate, setSearchDate] = useState('');
+  const [showLegalChat, setShowLegalChat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -516,6 +518,19 @@ export default function RecursosINPI() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Floating Legal AI Chat Button */}
+        <Button
+          onClick={() => setShowLegalChat(true)}
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50"
+          size="icon"
+          title="Consultora Jurídica IA"
+        >
+          <Scale className="h-6 w-6" />
+        </Button>
+
+        {/* Legal Chat Dialog */}
+        <INPILegalChatDialog open={showLegalChat} onOpenChange={setShowLegalChat} />
       </div>
     </AdminLayout>
   );
