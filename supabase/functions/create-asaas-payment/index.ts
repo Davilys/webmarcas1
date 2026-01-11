@@ -34,6 +34,7 @@ interface PaymentRequest {
   paymentMethod: string;
   paymentValue: number;
   contractHtml?: string;
+  userId?: string;
 }
 
 serve(async (req) => {
@@ -58,7 +59,7 @@ serve(async (req) => {
     // Create Supabase admin client
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { personalData, brandData, paymentMethod, paymentValue, contractHtml }: PaymentRequest = await req.json();
+    const { personalData, brandData, paymentMethod, paymentValue, contractHtml, userId }: PaymentRequest = await req.json();
 
     console.log('Creating Asaas payment for:', personalData.fullName);
 
@@ -309,6 +310,7 @@ serve(async (req) => {
         signature_status: 'not_signed',
         asaas_payment_id: paymentId,
         lead_id: leadId! || null,
+        user_id: userId || null,
         contract_html: contractHtml || null,
         visible_to_client: true,
       })
@@ -319,6 +321,61 @@ serve(async (req) => {
       console.error('Error creating contract:', contractError);
     } else {
       console.log('Created contract:', contractData?.id);
+
+      // ========================================
+      // STEP 6.1: Create Document entry for contract (CRM sync)
+      // ========================================
+      if (contractData?.id && userId) {
+        const { error: docError } = await supabaseAdmin
+          .from('documents')
+          .insert({
+            name: `Contrato ${contractNumber} - ${brandData.brandName}`,
+            document_type: 'contrato',
+            file_url: '', // Will be updated when PDF is generated
+            user_id: userId,
+            uploaded_by: 'system',
+          });
+
+        if (docError) {
+          console.error('Error creating document entry:', docError);
+        } else {
+          console.log('Created document entry for contract');
+        }
+      }
+
+      // ========================================
+      // STEP 6.2: Create Brand Process entry (CRM sync)
+      // ========================================
+      if (userId) {
+        // Check if process already exists for this brand
+        const { data: existingProcess } = await supabaseAdmin
+          .from('brand_processes')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('brand_name', brandData.brandName)
+          .maybeSingle();
+
+        if (!existingProcess) {
+          const { error: processError } = await supabaseAdmin
+            .from('brand_processes')
+            .insert({
+              user_id: userId,
+              brand_name: brandData.brandName,
+              business_area: brandData.businessArea,
+              status: 'em_andamento',
+              pipeline_stage: 'protocolado',
+              notes: `Pagamento: ${paymentMethod} | Valor: R$ ${paymentValue}`,
+            });
+
+          if (processError) {
+            console.error('Error creating brand process:', processError);
+          } else {
+            console.log('Created brand process for:', brandData.brandName);
+          }
+        } else {
+          console.log('Brand process already exists:', existingProcess.id);
+        }
+      }
     }
 
     // ========================================
@@ -332,6 +389,7 @@ serve(async (req) => {
         amount: paymentValue,
         due_date: dueDateString,
         status: 'pending',
+        user_id: userId || null,
         invoice_url: paymentData.invoiceUrl || null,
         pix_code: pixQrCode?.payload || null,
         boleto_code: paymentData.bankSlipUrl || null,
