@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress";
 import { ViabilityStep } from "@/components/cliente/checkout/ViabilityStep";
 import { PersonalDataStep, type PersonalData } from "@/components/cliente/checkout/PersonalDataStep";
@@ -9,13 +10,33 @@ import { BrandDataStep, type BrandData } from "@/components/cliente/checkout/Bra
 import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import { toast } from "sonner";
+import { Moon, Sun, Award } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import SocialProofNotification from "@/components/SocialProofNotification";
 import type { ViabilityResult } from "@/lib/api/viability";
 import logo from "@/assets/webmarcas-logo.png";
 
+// Dynamic text options for typing effect
+const dynamicTexts = [
+  "seja exclusivo",
+  "proteja seu negócio", 
+  "garanta seu futuro",
+  "destaque-se",
+  "cresça com segurança",
+];
+
 export default function Registrar() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Typing effect state
+  const [currentTextIndex, setCurrentTextIndex] = useState(0);
+  const [displayedText, setDisplayedText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [viabilityData, setViabilityData] = useState<{
     brandName: string;
@@ -27,6 +48,32 @@ export default function Registrar() {
   const [brandData, setBrandData] = useState<BrandData | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [paymentValue, setPaymentValue] = useState<number>(0);
+
+  // Typing effect logic
+  useEffect(() => {
+    const currentFullText = dynamicTexts[currentTextIndex];
+    const typingSpeed = isDeleting ? 50 : 100;
+    const pauseTime = 2000;
+
+    const timeout = setTimeout(() => {
+      if (!isDeleting) {
+        if (displayedText.length < currentFullText.length) {
+          setDisplayedText(currentFullText.slice(0, displayedText.length + 1));
+        } else {
+          setTimeout(() => setIsDeleting(true), pauseTime);
+        }
+      } else {
+        if (displayedText.length > 0) {
+          setDisplayedText(displayedText.slice(0, -1));
+        } else {
+          setIsDeleting(false);
+          setCurrentTextIndex((prev) => (prev + 1) % dynamicTexts.length);
+        }
+      }
+    }, typingSpeed);
+
+    return () => clearTimeout(timeout);
+  }, [displayedText, isDeleting, currentTextIndex]);
 
   // Pre-fill personal data if user is logged in
   useEffect(() => {
@@ -132,23 +179,64 @@ export default function Registrar() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50">
-      {/* Header with logo */}
-      <header className="w-full py-4 px-6 border-b bg-white/80 backdrop-blur-sm">
-        <div className="max-w-2xl mx-auto flex items-center justify-center">
-          <img src={logo} alt="WebMarcas" className="h-10" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-hero-gradient" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
+      <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-primary/3 rounded-full blur-2xl" />
+
+      {/* Social Proof Notifications */}
+      <SocialProofNotification />
+
+      {/* Header with logo and theme toggle */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <a href="/" className="flex items-center gap-2 group">
+              <img src={logo} alt="WebMarcas" className="h-10 transition-transform group-hover:scale-105" />
+              <span className="font-display text-xl font-bold hidden sm:inline">
+                Web<span className="gradient-text">Marcas</span>
+              </span>
+            </a>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="w-9 h-9 rounded-lg"
+              aria-label="Alternar tema"
+            >
+              {theme === "light" ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="w-full max-w-2xl mx-auto px-4 py-8">
-        {/* Title */}
+      <main className="relative z-10 w-full max-w-2xl mx-auto px-4 pt-24 pb-8">
+        {/* Badge - Líder em Registro de Marcas */}
+        <div className="flex justify-center mb-6 animate-fade-in">
+          <div className="inline-flex items-center gap-2 badge-premium">
+            <Award className="w-4 h-4" />
+            <span>{t("hero.badge")}</span>
+          </div>
+        </div>
+
+        {/* Dynamic Title */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Registrar Nova Marca
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-4">
+            {t("hero.title")}{" "}
+            <span className="gradient-text">
+              {displayedText}
+              <span className="animate-pulse">|</span>
+            </span>
           </h1>
-          <p className="text-muted-foreground">
-            Complete as etapas abaixo para registrar sua marca no INPI.
+          <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+            {t("hero.subtitle")}
           </p>
         </div>
 
@@ -156,7 +244,7 @@ export default function Registrar() {
         <CheckoutProgress currentStep={step} />
 
         {/* Form card */}
-        <Card className="shadow-xl border-0 bg-white">
+        <Card className="shadow-xl border border-border bg-card/95 backdrop-blur-sm">
           <CardContent className="p-6 md:p-8">
             {step === 1 && (
               <ViabilityStep onNext={handleViabilityNext} />
@@ -230,9 +318,9 @@ export default function Registrar() {
         {/* Footer text */}
         <p className="text-center text-xs text-muted-foreground mt-6">
           Ao continuar, você concorda com nossos{" "}
-          <a href="/termos" className="underline hover:text-primary">Termos de Uso</a>
+          <a href="/termos" className="underline hover:text-primary transition-colors">Termos de Uso</a>
           {" "}e{" "}
-          <a href="/privacidade" className="underline hover:text-primary">Política de Privacidade</a>.
+          <a href="/privacidade" className="underline hover:text-primary transition-colors">Política de Privacidade</a>.
         </p>
       </main>
     </div>
