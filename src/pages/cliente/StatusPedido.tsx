@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress";
+import CreditCardForm from "@/components/payment/CreditCardForm";
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,8 +18,11 @@ import {
 
 interface AsaasData {
   paymentId: string;
+  customerId?: string;
+  asaasCustomerId?: string;
   invoiceUrl: string;
   bankSlipUrl?: string;
+  dueDate?: string;
   pixQrCode?: {
     encodedImage?: string;
     payload?: string;
@@ -31,6 +35,7 @@ interface OrderData {
     email: string;
     phone: string;
     cpf: string;
+    cep?: string;
   };
   brandData: {
     brandName: string;
@@ -215,24 +220,27 @@ export default function ClienteStatusPedido() {
               </div>
             )}
 
-            {/* Credit Card Payment - Show Pay Now Button */}
+            {/* Credit Card Payment - Embedded Form */}
             {orderData.paymentMethod === 'cartao6x' && (
-              <div className="space-y-4">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Clique no botão abaixo para inserir os dados do seu cartão e finalizar o pagamento em 6x sem juros.
-                  </p>
-                </div>
-                <Button 
-                  className="w-full"
-                  size="lg"
-                  onClick={() => window.open(orderData.asaas?.invoiceUrl, '_blank')}
-                  disabled={!orderData.asaas?.invoiceUrl}
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  PAGAR AGORA
-                </Button>
-              </div>
+              <CreditCardForm
+                value={orderData.paymentValue}
+                installmentCount={6}
+                installmentValue={Math.round((orderData.paymentValue / 6) * 100) / 100}
+                dueDate={orderData.asaas?.dueDate || new Date().toISOString().split('T')[0]}
+                customerId={orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId || ''}
+                paymentId={orderData.asaas?.paymentId || ''}
+                holderName={orderData.personalData.fullName}
+                holderEmail={orderData.personalData.email}
+                holderCpfCnpj={orderData.personalData.cpf}
+                holderPostalCode={orderData.personalData.cep || ''}
+                holderPhone={orderData.personalData.phone}
+                onSuccess={async () => {
+                  await handlePaymentConfirmed();
+                }}
+                onError={(error) => {
+                  toast.error(error);
+                }}
+              />
             )}
 
             {/* Boleto Payment - Show Link to PDF */}
