@@ -8,6 +8,7 @@ import WhatsAppButton from "@/components/layout/WhatsAppButton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import CreditCardForm from "@/components/payment/CreditCardForm";
+import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress";
 
 interface AsaasData {
   customerId: string;
@@ -185,18 +186,9 @@ const StatusPedido = () => {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
 
           <div className="container mx-auto px-4 relative z-10">
-            {/* Progress Bar */}
-            <div className="max-w-md mx-auto mb-8">
-              <div className="flex items-center justify-center gap-2 mb-4">
-                {[1, 2, 3, 4].map((step) => (
-                  <div
-                    key={step}
-                    className={`h-2 flex-1 rounded-full ${
-                      step <= 3 ? "bg-primary" : "bg-muted"
-                    }`}
-                  />
-                ))}
-              </div>
+            {/* Progress Bar with Icons */}
+            <div className="max-w-xl mx-auto mb-8">
+              <CheckoutProgress currentStep={4} />
             </div>
 
             {/* Header */}
@@ -445,27 +437,31 @@ const StatusPedido = () => {
                 </div>
               </div>
 
-              {/* Confirmation Button */}
-              <Button
-                variant="default"
-                size="lg"
-                className="w-full"
-                onClick={handlePaymentConfirmed}
-                disabled={isConfirming}
-              >
-                {isConfirming ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Processando...
-                  </>
-                ) : (
-                  "CONCLUIR O REGISTRO"
-                )}
-              </Button>
+              {/* Confirmation Button - Hide for credit card since form has its own button */}
+              {orderData.paymentMethod !== 'cartao6x' && (
+                <>
+                  <Button
+                    variant="default"
+                    size="lg"
+                    className="w-full"
+                    onClick={handlePaymentConfirmed}
+                    disabled={isConfirming}
+                  >
+                    {isConfirming ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      "CONCLUIR O REGISTRO"
+                    )}
+                  </Button>
 
-              <p className="text-xs text-muted-foreground text-center mt-4">
-                Ao confirmar, sua conta será criada e você receberá um e-mail com os dados de acesso ao painel do cliente.
-              </p>
+                  <p className="text-xs text-muted-foreground text-center mt-4">
+                    Ao confirmar, sua conta será criada e você receberá um e-mail com os dados de acesso ao painel do cliente.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </section>

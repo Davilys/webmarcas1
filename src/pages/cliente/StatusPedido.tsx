@@ -326,35 +326,37 @@ export default function ClienteStatusPedido() {
           </CardContent>
         </Card>
 
-        {/* Confirmation Button */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <Clock className="w-5 h-5 text-amber-500 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium">Após realizar o pagamento</p>
-                <p className="text-muted-foreground">
-                  Clique no botão abaixo para confirmar e dar início ao processo de registro.
-                </p>
+        {/* Confirmation Button - Hide for credit card since form has its own button */}
+        {orderData.paymentMethod !== 'cartao6x' && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <Clock className="w-5 h-5 text-amber-500 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium">Após realizar o pagamento</p>
+                  <p className="text-muted-foreground">
+                    Clique no botão abaixo para confirmar e dar início ao processo de registro.
+                  </p>
+                </div>
               </div>
-            </div>
-            <Button 
-              className="w-full" 
-              size="lg"
-              onClick={handlePaymentConfirmed}
-              disabled={isConfirming}
-            >
-              {isConfirming ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Confirmando...
-                </>
-              ) : (
-                "CONCLUIR O REGISTRO"
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+              <Button 
+                className="w-full" 
+                size="lg"
+                onClick={handlePaymentConfirmed}
+                disabled={isConfirming}
+              >
+                {isConfirming ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Confirmando...
+                  </>
+                ) : (
+                  "CONCLUIR O REGISTRO"
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </ClientLayout>
   );

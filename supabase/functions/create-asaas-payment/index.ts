@@ -316,7 +316,8 @@ serve(async (req) => {
         contract_value: paymentValue,
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 10 years
-        signature_status: 'not_signed',
+        signature_status: 'signed', // Marcado como assinado quando cliente aceita os termos no checkout
+        signed_at: new Date().toISOString(), // Data do aceite eletrônico
         asaas_payment_id: paymentId,
         lead_id: leadId! || null,
         user_id: userId || null,
