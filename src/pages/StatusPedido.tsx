@@ -386,9 +386,9 @@ const StatusPedido = () => {
                 </div>
               </div>
 
-              {/* Already Paid Button */}
+              {/* Confirmation Button */}
               <Button
-                variant="outline"
+                variant="default"
                 size="lg"
                 className="w-full"
                 onClick={handlePaymentConfirmed}
@@ -400,7 +400,7 @@ const StatusPedido = () => {
                     Processando...
                   </>
                 ) : (
-                  "Já realizei o pagamento"
+                  "CONCLUIR O REGISTRO"
                 )}
               </Button>
 

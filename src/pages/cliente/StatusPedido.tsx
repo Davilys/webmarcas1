@@ -301,7 +301,7 @@ export default function ClienteStatusPedido() {
                   Confirmando...
                 </>
               ) : (
-                "Já realizei o pagamento"
+                "CONCLUIR O REGISTRO"
               )}
             </Button>
           </CardContent>

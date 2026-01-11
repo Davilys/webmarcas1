@@ -24,7 +24,7 @@ interface PaymentStepProps {
 export function PaymentStep({ selectedMethod, onNext, onBack }: PaymentStepProps) {
   const [selected, setSelected] = useState(selectedMethod || "");
   const [error, setError] = useState("");
-  const { pricing, isLoading, getCartaoParcelaText, getBoletoParcelaText } = usePricing();
+  const { pricing, isLoading } = usePricing();
 
   const paymentOptions: PaymentOption[] = useMemo(() => [
     {
@@ -39,20 +39,20 @@ export function PaymentStep({ selectedMethod, onNext, onBack }: PaymentStepProps
     {
       id: "cartao6x",
       title: "Cartão de Crédito",
-      subtitle: getCartaoParcelaText(),
-      price: `R$ ${pricing.cartao.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      subtitle: `em ${pricing.cartao.installments}x sem juros de`,
+      price: `R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       priceValue: pricing.cartao.value,
       icon: CreditCard,
     },
     {
       id: "boleto3x",
       title: "Boleto Parcelado",
-      subtitle: getBoletoParcelaText(),
-      price: `R$ ${pricing.boleto.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      subtitle: `em ${pricing.boleto.installments}x sem juros de`,
+      price: `R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       priceValue: pricing.boleto.value,
       icon: FileText,
     },
-  ], [pricing, getCartaoParcelaText, getBoletoParcelaText]);
+  ], [pricing]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
