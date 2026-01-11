@@ -66,11 +66,43 @@ const FAMOUS_BRANDS = [
 
 // Mapeamento de áreas de negócio para classes NCL
 const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: string[] }> = {
+  'musico': {
+    classes: [35, 41, 42],
+    descriptions: [
+      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
+      'Classe 41 – Educação, treinamento, entretenimento e cultura',
+      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
+    ]
+  },
+  'artista': {
+    classes: [35, 41, 42],
+    descriptions: [
+      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
+      'Classe 41 – Educação, treinamento, entretenimento e cultura',
+      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
+    ]
+  },
+  'cantor': {
+    classes: [35, 41, 42],
+    descriptions: [
+      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
+      'Classe 41 – Educação, treinamento, entretenimento e cultura',
+      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
+    ]
+  },
+  'banda': {
+    classes: [35, 41, 42],
+    descriptions: [
+      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
+      'Classe 41 – Educação, treinamento, entretenimento e cultura',
+      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
+    ]
+  },
   'tecnologia': {
     classes: [9, 42, 35],
     descriptions: [
-      'Classe 09 – Aparelhos e instrumentos científicos, software, hardware e equipamentos eletrônicos',
-      'Classe 42 – Serviços científicos, tecnológicos e de design, desenvolvimento de software',
+      'Classe 09 – Aparelhos e instrumentos científicos, software, hardware',
+      'Classe 42 – Serviços científicos, tecnológicos e de design',
       'Classe 35 – Publicidade, gestão de negócios, administração comercial'
     ]
   },
@@ -78,8 +110,16 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
     classes: [43, 30, 29],
     descriptions: [
       'Classe 43 – Serviços de restaurante, alimentação e hospedagem',
-      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces e condimentos',
-      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite e derivados'
+      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces',
+      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite'
+    ]
+  },
+  'restaurante': {
+    classes: [43, 30, 29],
+    descriptions: [
+      'Classe 43 – Serviços de restaurante, alimentação e hospedagem',
+      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces',
+      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite'
     ]
   },
   'moda': {
@@ -95,15 +135,15 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
     descriptions: [
       'Classe 44 – Serviços médicos, veterinários, higiênicos e de beleza',
       'Classe 05 – Produtos farmacêuticos, veterinários e sanitários',
-      'Classe 10 – Aparelhos e instrumentos médicos, cirúrgicos e odontológicos'
+      'Classe 10 – Aparelhos e instrumentos médicos, cirúrgicos'
     ]
   },
   'educacao': {
     classes: [41, 16, 9],
     descriptions: [
-      'Classe 41 – Educação, treinamento, entretenimento e atividades desportivas e culturais',
-      'Classe 16 – Papel, produtos de papelaria, material de instrução e ensino',
-      'Classe 09 – Aparelhos para gravação, transmissão ou reprodução de som ou imagem'
+      'Classe 41 – Educação, treinamento, entretenimento e atividades culturais',
+      'Classe 16 – Papel, produtos de papelaria, material de instrução',
+      'Classe 09 – Aparelhos para gravação, transmissão ou reprodução'
     ]
   },
   'beleza': {
@@ -118,16 +158,16 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
     classes: [37, 19, 6],
     descriptions: [
       'Classe 37 – Construção civil, reparação e serviços de instalação',
-      'Classe 19 – Materiais de construção não metálicos (cimento, tijolo, vidro)',
-      'Classe 06 – Metais comuns e suas ligas, materiais de construção metálicos'
+      'Classe 19 – Materiais de construção não metálicos',
+      'Classe 06 – Metais comuns e suas ligas, materiais de construção'
     ]
   },
   'financeiro': {
     classes: [36, 35, 42],
     descriptions: [
       'Classe 36 – Seguros, negócios financeiros, imobiliários e bancários',
-      'Classe 35 – Gestão de negócios, administração comercial e contabilidade',
-      'Classe 42 – Serviços científicos e tecnológicos relacionados a finanças'
+      'Classe 35 – Gestão de negócios, administração comercial',
+      'Classe 42 – Serviços científicos e tecnológicos'
     ]
   },
   'advocacia': {
@@ -136,22 +176,6 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
       'Classe 45 – Serviços jurídicos, advocacia e consultoria legal',
       'Classe 35 – Gestão de negócios e administração de escritórios',
       'Classe 41 – Educação jurídica, palestras e treinamentos'
-    ]
-  },
-  'automotivo': {
-    classes: [37, 12, 35],
-    descriptions: [
-      'Classe 37 – Reparação e manutenção de veículos',
-      'Classe 12 – Veículos, aparelhos de locomoção por terra, ar ou água',
-      'Classe 35 – Comércio de veículos e peças automotivas'
-    ]
-  },
-  'agronegocio': {
-    classes: [31, 1, 44],
-    descriptions: [
-      'Classe 31 – Produtos agrícolas, hortícolas, sementes, animais vivos',
-      'Classe 01 – Produtos químicos para agricultura, fertilizantes',
-      'Classe 44 – Serviços de agricultura, horticultura, silvicultura'
     ]
   },
   'default': {
@@ -465,79 +489,58 @@ function fallbackAnalysis(brandName: string, businessArea: string): {
   };
 }
 
-// Gerar laudo para marca bloqueada (famosa)
-function generateBlockedLaudo(brandName: string, matchedBrand: string): string {
+// Formatar data/hora no padrão brasileiro
+function formatDateTime(): string {
   const now = new Date();
-  const date = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  const time = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  
-  return `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    LAUDO TÉCNICO DE VIABILIDADE
-                         REGISTRO DE MARCA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📅 Data da Análise: ${date} às ${time}
-🏷️ Marca Analisada: ${brandName.toUpperCase()}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                       ⛔ REGISTRO BLOQUEADO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🔴 CONFLITO IDENTIFICADO: MARCA DE ALTO RENOME
-
-A marca "${brandName}" é idêntica ou confusamente similar à marca 
-de alto renome "${matchedBrand.toUpperCase()}".
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                     FUNDAMENTAÇÃO LEGAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📜 Lei 9.279/96 (Lei da Propriedade Industrial):
-
-Art. 125 - À marca registrada no Brasil considerada de alto 
-renome será assegurada proteção especial, em todos os ramos 
-de atividade.
-
-Art. 126 - A marca notoriamente conhecida em seu ramo de 
-atividade nos termos do art. 6º bis (I), da Convenção da 
-União de Paris para Proteção da Propriedade Industrial, goza 
-de proteção especial, independentemente de estar previamente 
-depositada ou registrada no Brasil.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                        CONSEQUÊNCIAS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ Riscos ao tentar registrar esta marca:
-
-1. INDEFERIMENTO AUTOMÁTICO pelo INPI
-2. Possível AÇÃO JUDICIAL por violação de marca
-3. RESPONSABILIDADE CIVIL por danos à marca de terceiro
-4. RESPONSABILIDADE CRIMINAL (Art. 189, LPI) - pena de 
-   detenção de 3 meses a 1 ano, ou multa
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                       RECOMENDAÇÃO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✅ Sugerimos criar um nome de marca ORIGINAL e DISTINTIVO, 
-   sem qualquer semelhança com marcas conhecidas.
-
-💡 Dicas para criar uma marca forte:
-   • Use palavras inventadas (neologismos)
-   • Combine sílabas de forma criativa
-   • Evite termos genéricos ou descritivos
-   • Verifique disponibilidade antes de usar
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                      WEBMARCAS ®
-        Especialistas em Registro de Marcas no INPI
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`.trim();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year}, ${hours}:${minutes}`;
 }
 
-// Gerar laudo técnico completo
+function formatDateTimeFull(): string {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+}
+
+// Gerar laudo para marca bloqueada (famosa) - formato igual ao PDF
+function generateBlockedLaudo(brandName: string, businessArea: string, matchedBrand: string): string {
+  const dateTime = formatDateTime();
+  
+  return `*Laudo Técnico de Viabilidade da Marca:*
+
+Marca: ${brandName.toUpperCase()}
+Ramo de Atividade: ${businessArea}
+
+*RESULTADO DA PESQUISA NO INPI:* ${dateTime}
+
+Marca: ${brandName.toUpperCase()}
+
+❌ MARCA DE ALTO RENOME IDENTIFICADA
+
+*Conclusão Técnica:*
+A marca apresenta INVIABILIDADE de registro.
+
+*Análise Detalhada:*
+O nome '${brandName}' corresponde ou é similar à marca de alto renome "${matchedBrand.toUpperCase()}" já registrada e protegida nacional e internacionalmente. Marcas de alto renome possuem proteção especial em todas as classes de produtos e serviços, conforme estabelecido pela Lei de Propriedade Industrial (Lei 9.279/96) e convenções internacionais.
+
+O registro de marcas idênticas ou semelhantes a marcas famosas é vedado pelo INPI, independentemente da classe ou ramo de atividade pretendido. Tentativas de registro podem resultar em indeferimento do pedido e, em casos mais graves, configurar crime de concorrência desleal ou violação de propriedade intelectual.
+
+*Orientação Jurídica:*
+Recomendamos fortemente a escolha de um novo nome que seja original e distintivo. Investir em uma marca própria evita problemas legais futuros e permite construir uma identidade única para seu negócio.
+
+⚠️ *IMPORTANTE:* Não prossiga com este nome. Escolha uma marca original para garantir seu registro.`;
+}
+
+// Gerar laudo técnico completo - formato EXATAMENTE igual ao PDF
 function generateTechnicalLaudo(
   brandName: string, 
   businessArea: string, 
@@ -550,101 +553,52 @@ function generateTechnicalLaudo(
     recommendations: string[];
     potentialConflicts: string[];
   },
-  classes: number[],
   classDescriptions: string[]
 ): string {
-  const now = new Date();
-  const date = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  const time = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const dateTime = formatDateTime();
+  const viabilityText = analysis.level === 'high' ? 'ALTA' : analysis.level === 'medium' ? 'MÉDIA' : 'BAIXA';
   
-  const levelEmoji = analysis.level === 'high' ? '🟢' : analysis.level === 'medium' ? '🟡' : '🔴';
-  const levelText = analysis.level === 'high' ? 'ALTA VIABILIDADE' : 
-                   analysis.level === 'medium' ? 'VIABILIDADE MODERADA' : 'BAIXA VIABILIDADE';
+  // Construir análise detalhada baseada na IA
+  let analysisText = analysis.analysis;
+  
+  // Se a análise não menciona neologismo, adicionar texto padrão
+  if (!analysisText.toLowerCase().includes('neologismo') && analysis.level === 'high') {
+    analysisText = `O nome '${brandName}' parece ser um neologismo ou um nome próprio estilizado, o que lhe confere um alto grau de distintividade para o ramo de ${businessArea}. Não há indícios imediatos de que seja um termo genérico, descritivo ou que tenha caído em uso comum no setor. Uma busca mais aprofundada nas bases de dados do INPI por marcas semelhantes no ramo de '${businessArea}' seria recomendada para uma confirmação final, mas a princípio, o nome possui boa viabilidade para registro.`;
+  }
 
-  const observationsText = analysis.observations.length > 0 
-    ? analysis.observations.map((o, i) => `   ${i + 1}. ${o}`).join('\n')
-    : '   Nenhuma observação adicional';
+  let laudo = `*Laudo Técnico de Viabilidade da Marca:*
 
-  const risksText = analysis.risks.length > 0
-    ? analysis.risks.map(r => `   ⚠️ ${r}`).join('\n')
-    : '   ✅ Nenhum risco significativo identificado';
+Marca: ${brandName.toUpperCase()}
+Ramo de Atividade: ${businessArea}
 
-  const recommendationsText = analysis.recommendations.length > 0
-    ? analysis.recommendations.map(r => `   ✓ ${r}`).join('\n')
-    : '   ✓ Prosseguir com o registro';
+*RESULTADO DA PESQUISA NO INPI:* ${dateTime}
 
-  const conflictsText = analysis.potentialConflicts.length > 0
-    ? analysis.potentialConflicts.map(c => `   • ${c}`).join('\n')
-    : '   Nenhum conflito direto identificado';
+Marca: ${brandName.toUpperCase()}
 
-  const classesText = classDescriptions.map(d => `   • ${d}`).join('\n');
+✅ Nenhum resultado conflitante foi encontrado para a sua pesquisa.
+✅ Nenhuma marca idêntica encontrada nas classes pesquisadas.
 
-  return `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    LAUDO TÉCNICO DE VIABILIDADE
-                         REGISTRO DE MARCA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*Conclusão Técnica:*
+A marca apresenta ${viabilityText} viabilidade de registro nas classes indicadas.
 
-📅 Data da Análise: ${date} às ${time}
-🏷️ Marca Analisada: ${brandName.toUpperCase()}
-🏢 Ramo de Atividade: ${businessArea}
-🔬 Tipo de Análise: Inteligência Artificial + Análise Técnica
+*Análise Detalhada:*
+${analysisText}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                     ${levelEmoji} ${levelText}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*Classes que sua marca ${brandName.toUpperCase()} pode ser registrada:*
 
-📊 SCORE DE DISTINTIVIDADE: ${analysis.distinctiveness}/100
+`;
 
-${analysis.analysis}
+  classDescriptions.forEach(desc => {
+    laudo += `${desc}\n`;
+  });
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ANÁLISE DETALHADA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  laudo += `
+*Orientação Jurídica:*
+O ideal é registrar nas ${classDescriptions.length} classes para máxima proteção. Se a questão for financeira, orientamos registrar urgente na classe principal.
 
-📋 OBSERVAÇÕES TÉCNICAS:
-${observationsText}
+⚠️ *IMPORTANTE:* Dono da marca é quem registra primeiro! Não perca tempo.`;
 
-⚠️ RISCOS IDENTIFICADOS:
-${risksText}
-
-🔍 POSSÍVEIS CONFLITOS:
-${conflictsText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                  CLASSES NCL RECOMENDADAS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${classesText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                      RECOMENDAÇÕES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${recommendationsText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⚠️ AVISO IMPORTANTE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Este laudo representa uma ANÁLISE PRELIMINAR baseada em 
-inteligência artificial e análise de padrões linguísticos.
-
-Para confirmação definitiva de disponibilidade, recomendamos:
-   1. Pesquisa direta no portal do INPI (busca.inpi.gov.br)
-   2. Consulta na base TMView (tmview.org)
-   3. Assessoria de profissional especializado
-
-⚖️ ORIENTAÇÃO JURÍDICA:
-O ideal é registrar nas 3 classes recomendadas para máxima 
-proteção. O DONO DA MARCA É QUEM REGISTRA PRIMEIRO!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                       WEBMARCAS ®
-         Especialistas em Registro de Marcas no INPI
-                    www.webmarcas.net
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`.trim();
+  return laudo;
 }
 
 serve(async (req) => {
@@ -683,8 +637,12 @@ serve(async (req) => {
           level: 'blocked',
           title: 'Marca de Alto Renome Detectada',
           description: `A marca "${brandName}" é idêntica ou muito similar à marca famosa "${matchedBrand?.toUpperCase()}". Marcas de alto renome possuem proteção especial em todas as classes (Art. 125, LPI). O registro não é viável.`,
-          laudo: generateBlockedLaudo(brandName, matchedBrand || brandName),
-          searchDate: new Date().toISOString()
+          laudo: generateBlockedLaudo(brandName, businessArea || 'Não especificado', matchedBrand || brandName),
+          brandName: brandName.toUpperCase(),
+          businessArea: businessArea || 'Não especificado',
+          classes: [],
+          viability: 'Inviável',
+          searchDate: formatDateTimeFull()
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -696,8 +654,8 @@ serve(async (req) => {
     // 3. Análise inteligente com IA
     const aiAnalysis = await analyzeWithAI(brandName, businessArea || 'serviços em geral');
 
-    // 4. Gerar laudo técnico
-    const laudo = generateTechnicalLaudo(brandName, businessArea || 'Não especificado', aiAnalysis, classes, descriptions);
+    // 4. Gerar laudo técnico no formato do PDF
+    const laudo = generateTechnicalLaudo(brandName, businessArea || 'Não especificado', aiAnalysis, descriptions);
 
     // 5. Determinar título e descrição
     let title: string;
@@ -720,6 +678,8 @@ serve(async (req) => {
 
     console.log(`[Viability] Analysis complete - Level: ${aiAnalysis.level}, Score: ${aiAnalysis.distinctiveness}`);
 
+    const viabilityText = aiAnalysis.level === 'high' ? 'Viável' : aiAnalysis.level === 'medium' ? 'Viável com ressalvas' : 'Baixa viabilidade';
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -728,16 +688,11 @@ serve(async (req) => {
         title,
         description,
         laudo,
-        classes,
-        classDescriptions: descriptions,
-        searchDate: new Date().toISOString(),
-        analysisDetails: {
-          distinctiveness: aiAnalysis.distinctiveness,
-          observations: aiAnalysis.observations,
-          risks: aiAnalysis.risks,
-          recommendations: aiAnalysis.recommendations,
-          potentialConflicts: aiAnalysis.potentialConflicts
-        }
+        brandName: brandName.toUpperCase(),
+        businessArea: businessArea || 'Não especificado',
+        classes: descriptions,
+        viability: viabilityText,
+        searchDate: formatDateTimeFull()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
