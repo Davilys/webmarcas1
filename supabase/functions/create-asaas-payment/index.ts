@@ -200,32 +200,41 @@ serve(async (req) => {
     dueDate.setDate(dueDate.getDate() + 3);
     const dueDateString = dueDate.toISOString().split('T')[0];
 
+    // Determine billing type and installments
+    // Cartão parcelado: gerar link de pagamento (não pedir dados do cartão)
+    // Boleto: sempre gerar parcelamento via Asaas
     let billingType = 'PIX';
     let installmentCount = 1;
     let installmentValue = paymentValue;
 
     if (paymentMethod === 'cartao6x') {
-      billingType = 'CREDIT_CARD';
+      // Cartão parcelado: usar UNDEFINED para gerar link de pagamento genérico
+      // Cliente escolhe pagar com cartão na página do Asaas
+      billingType = 'UNDEFINED';
       installmentCount = 6;
-      installmentValue = 199;
+      installmentValue = Math.round((paymentValue / 6) * 100) / 100;
     } else if (paymentMethod === 'boleto3x') {
+      // Boleto parcelado: gerar boletos via Asaas
       billingType = 'BOLETO';
       installmentCount = 3;
-      installmentValue = 399;
+      installmentValue = Math.round((paymentValue / 3) * 100) / 100;
     }
 
     const paymentPayload: Record<string, unknown> = {
       customer: customerId,
       billingType: billingType,
-      value: paymentValue,
       dueDate: dueDateString,
       description: `Registro de marca: ${brandData.brandName}`,
       externalReference: `marca_${brandData.brandName.replace(/\s+/g, '_')}_${Date.now()}`,
     };
 
-    if (installmentCount > 1 && billingType !== 'PIX') {
+    // Para pagamentos parcelados, usar installmentCount e installmentValue
+    if (installmentCount > 1) {
       paymentPayload.installmentCount = installmentCount;
       paymentPayload.installmentValue = installmentValue;
+      // Não enviar 'value' quando usando parcelamento - Asaas calcula automaticamente
+    } else {
+      paymentPayload.value = paymentValue;
     }
 
     console.log('Creating payment with payload:', JSON.stringify(paymentPayload));
