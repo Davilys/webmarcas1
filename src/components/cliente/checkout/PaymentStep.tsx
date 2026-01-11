@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CreditCard, QrCode, FileText } from "lucide-react";
+import { useState, useMemo } from "react";
+import { ArrowLeft, ArrowRight, Check, CreditCard, QrCode, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { usePricing } from "@/hooks/usePricing";
 
 interface PaymentOption {
   id: string;
@@ -14,34 +15,6 @@ interface PaymentOption {
   highlight?: boolean;
 }
 
-const paymentOptions: PaymentOption[] = [
-  {
-    id: "avista",
-    title: "À Vista (PIX)",
-    subtitle: "Pagamento instantâneo",
-    price: "R$ 698,97",
-    priceValue: 698.97,
-    icon: QrCode,
-    highlight: true,
-  },
-  {
-    id: "cartao6x",
-    title: "Cartão de Crédito",
-    subtitle: "6x de R$ 199,00",
-    price: "R$ 1.194,00",
-    priceValue: 1194,
-    icon: CreditCard,
-  },
-  {
-    id: "boleto3x",
-    title: "Boleto Parcelado",
-    subtitle: "3x de R$ 399,00",
-    price: "R$ 1.197,00",
-    priceValue: 1197,
-    icon: FileText,
-  },
-];
-
 interface PaymentStepProps {
   selectedMethod: string;
   onNext: (method: string, value: number) => void;
@@ -51,6 +24,35 @@ interface PaymentStepProps {
 export function PaymentStep({ selectedMethod, onNext, onBack }: PaymentStepProps) {
   const [selected, setSelected] = useState(selectedMethod || "");
   const [error, setError] = useState("");
+  const { pricing, isLoading, getCartaoParcelaText, getBoletoParcelaText } = usePricing();
+
+  const paymentOptions: PaymentOption[] = useMemo(() => [
+    {
+      id: "avista",
+      title: "À Vista (PIX)",
+      subtitle: "Pagamento instantâneo",
+      price: `R$ ${pricing.avista.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      priceValue: pricing.avista.value,
+      icon: QrCode,
+      highlight: true,
+    },
+    {
+      id: "cartao6x",
+      title: "Cartão de Crédito",
+      subtitle: getCartaoParcelaText(),
+      price: `R$ ${pricing.cartao.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      priceValue: pricing.cartao.value,
+      icon: CreditCard,
+    },
+    {
+      id: "boleto3x",
+      title: "Boleto Parcelado",
+      subtitle: getBoletoParcelaText(),
+      price: `R$ ${pricing.boleto.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      priceValue: pricing.boleto.value,
+      icon: FileText,
+    },
+  ], [pricing, getCartaoParcelaText, getBoletoParcelaText]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +68,14 @@ export function PaymentStep({ selectedMethod, onNext, onBack }: PaymentStepProps
       onNext(selected, option.priceValue);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

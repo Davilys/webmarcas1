@@ -1,10 +1,12 @@
-import { Check, Star, ArrowRight, Flame } from "lucide-react";
+import { Check, Star, ArrowRight, Flame, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getNextFridayFormatted } from "@/lib/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePricing } from "@/hooks/usePricing";
 
 const PricingSection = () => {
   const { t } = useLanguage();
+  const { pricing, isLoading, getCartaoParcelaText, getBoletoParcelaText, getAvistaLabel } = usePricing();
 
   const features = [
     t("pricing.feature1"),
@@ -21,6 +23,16 @@ const PricingSection = () => {
   const scrollToForm = () => {
     document.getElementById("consultar")?.scrollIntoView({ behavior: "smooth" });
   };
+
+  if (isLoading) {
+    return (
+      <section id="precos" className="section-padding bg-card relative overflow-hidden">
+        <div className="container mx-auto px-4 flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="precos" className="section-padding bg-card relative overflow-hidden">
@@ -60,14 +72,14 @@ const PricingSection = () => {
             {/* Price */}
             <div className="mb-8">
               <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-5xl font-display font-bold gradient-text">{t("pricing.price")}</span>
+                <span className="text-5xl font-display font-bold gradient-text">{getAvistaLabel()}</span>
                 <span className="text-muted-foreground">{t("pricing.priceLabel")}</span>
               </div>
               <div className="text-sm text-muted-foreground">
-                {t("pricing.installments1")} <span className="text-foreground font-medium">6x de R$199</span> {t("pricing.installments2")}
+                {t("pricing.installments1")} <span className="text-foreground font-medium">{getCartaoParcelaText()}</span> {t("pricing.installments2")}
               </div>
               <div className="text-sm text-muted-foreground">
-                {t("pricing.installments1")} <span className="text-foreground font-medium">3x de R$399</span> {t("pricing.installments3")}
+                {t("pricing.installments1")} <span className="text-foreground font-medium">{getBoletoParcelaText()}</span> {t("pricing.installments3")}
               </div>
             </div>
 

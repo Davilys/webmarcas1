@@ -14,17 +14,19 @@ import { ContractSettings } from '@/components/admin/settings/ContractSettings';
 import { ProcessSettings } from '@/components/admin/settings/ProcessSettings';
 import { FinancialSettings } from '@/components/admin/settings/FinancialSettings';
 import { BackupSettings } from '@/components/admin/settings/BackupSettings';
+import { PricingSettings } from '@/components/admin/settings/PricingSettings';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { 
   Settings, Database, Webhook, Mail, MessageCircle, Bell, Shield, 
-  Palette, FileSignature, GitBranch, Wallet, HardDrive 
+  Palette, FileSignature, GitBranch, Wallet, HardDrive, Tag 
 } from 'lucide-react';
 
 const tabs = [
   { value: 'geral', label: 'Geral', icon: Settings },
+  { value: 'precos', label: 'Preços', icon: Tag, badge: 'Novo' },
   { value: 'integracoes', label: 'Integrações', icon: Database },
-  { value: 'api', label: 'API e Webhooks', icon: Webhook, badge: 'Novo' },
+  { value: 'api', label: 'API e Webhooks', icon: Webhook },
   { value: 'email', label: 'Email', icon: Mail },
   { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { value: 'notificacoes', label: 'Notificações', icon: Bell },
@@ -102,6 +104,7 @@ export default function AdminConfiguracoes() {
             transition={{ duration: 0.3 }}
           >
             <TabsContent value="geral" className="mt-0"><GeneralSettings /></TabsContent>
+            <TabsContent value="precos" className="mt-0"><PricingSettings /></TabsContent>
             <TabsContent value="integracoes" className="mt-0"><IntegrationSettings /></TabsContent>
             <TabsContent value="api" className="mt-0"><APIWebhooksSettings /></TabsContent>
             <TabsContent value="email" className="mt-0"><EmailSettings /></TabsContent>
