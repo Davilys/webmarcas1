@@ -233,22 +233,86 @@ export function generateSignedContractHtml(
     .join('\n');
 
   const certificationSection = blockchainSignature?.hash ? `
-    <div style="margin-top: 32px; padding: 20px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-        <span style="font-weight: bold; color: #166534; font-size: 14px;">✓ CONTRATO ASSINADO DIGITALMENTE</span>
+    <!-- Digital Certification Section -->
+    <div style="margin-top: 32px;">
+      <!-- Footer before certification -->
+      <div style="text-align: center; padding: 16px 0; border-top: 1px solid #e5e7eb; font-size: 10px; color: #6b7280;">
+        <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
+        <p>www.webmarcas.net | contato@webmarcas.net</p>
+        <p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>
       </div>
       
-      <div style="font-family: monospace; color: #166534; background: #dcfce7; padding: 12px; border-radius: 4px; font-size: 10px;">
-        <div style="margin-bottom: 6px;"><strong>Hash SHA-256:</strong> ${blockchainSignature.hash}</div>
-        <div style="margin-bottom: 6px;"><strong>Data/Hora:</strong> ${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</div>
-        <div style="margin-bottom: 6px;"><strong>Endereço IP:</strong> ${blockchainSignature.ipAddress || '-'}</div>
-        ${blockchainSignature.txId ? `<div style="margin-bottom: 6px;"><strong>ID da Transação:</strong> ${blockchainSignature.txId}</div>` : ''}
-        <div><strong>Rede:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</div>
-      </div>
+      <!-- Blue divider line -->
+      <div style="height: 4px; background: #0284c7; margin: 16px 0;"></div>
       
-      <p style="font-size: 10px; color: #166534; margin-top: 12px;">
-        Verifique a autenticidade em: ${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}
-      </p>
+      <!-- Certification Box -->
+      <div style="padding: 24px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <!-- Header with checkmark -->
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 32px; height: 32px; background: #0284c7; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <h3 style="font-size: 20px; font-weight: bold; color: #0284c7; margin: 0;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
+        </div>
+        
+        <!-- Content Grid - Signature Data + QR Code -->
+        <div style="display: flex; gap: 24px; align-items: flex-start;">
+          <!-- Left: Signature Data -->
+          <div style="flex: 1;">
+            <div style="margin-bottom: 16px;">
+              <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b; margin-bottom: 6px;">HASH SHA-256</p>
+              <div style="background: white; padding: 12px; border-radius: 4px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 11px; word-break: break-all; color: #1e293b;">
+                ${blockchainSignature.hash}
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+              <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b; margin-bottom: 6px;">DATA/HORA DA ASSINATURA</p>
+              <p style="font-size: 13px; color: #1e293b;">${blockchainSignature.timestamp ? new Date(blockchainSignature.timestamp).toLocaleString('pt-BR') : '-'}</p>
+            </div>
+            
+            ${blockchainSignature.txId ? `
+            <div style="margin-bottom: 16px;">
+              <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b; margin-bottom: 6px;">ID DA TRANSAÇÃO</p>
+              <p style="font-size: 13px; font-family: monospace; color: #1e293b; word-break: break-all;">${blockchainSignature.txId}</p>
+            </div>
+            ` : ''}
+            
+            <div style="margin-bottom: 16px;">
+              <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b; margin-bottom: 6px;">REDE BLOCKCHAIN</p>
+              <p style="font-size: 13px; color: #1e293b;">${blockchainSignature.network || 'Bitcoin (OpenTimestamps via a.pool.opentimestamps.org)'}</p>
+            </div>
+            
+            ${blockchainSignature.ipAddress ? `
+            <div>
+              <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b; margin-bottom: 6px;">IP DO SIGNATÁRIO</p>
+              <p style="font-size: 13px; color: #1e293b;">${blockchainSignature.ipAddress}</p>
+            </div>
+            ` : ''}
+          </div>
+          
+          <!-- Right: QR Code -->
+          <div style="flex-shrink: 0; text-align: center; padding: 16px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <p style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b; margin-bottom: 12px;">QR CODE DE VERIFICAÇÃO</p>
+            <img 
+              src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}" 
+              alt="QR Code de Verificação"
+              style="width: 140px; height: 140px;"
+            />
+            <p style="font-size: 10px; color: #64748b; margin-top: 8px;">Escaneie para verificar</p>
+          </div>
+        </div>
+        
+        <!-- Legal footer -->
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center;">
+          <p style="font-size: 11px; color: #64748b; font-style: italic;">
+            Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
+          </p>
+          <p style="font-size: 11px; color: #0284c7; margin-top: 8px;">
+            Verifique a autenticidade em: ${window.location.origin}/verificar-contrato
+          </p>
+        </div>
+      </div>
     </div>
   ` : '';
 

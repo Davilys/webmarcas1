@@ -126,7 +126,7 @@ export default function Registrar() {
     setStep(5);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (contractHtml: string) => {
     if (!personalData || !brandData || !viabilityData) {
       toast.error("Dados incompletos. Por favor, revise as etapas anteriores.");
       return;
@@ -147,6 +147,7 @@ export default function Registrar() {
           },
           paymentMethod,
           paymentValue,
+          contractHtml, // Send the full contract HTML
         },
       });
 
@@ -163,7 +164,8 @@ export default function Registrar() {
           paymentMethod,
           paymentValue,
           brandName: brandData.brandName,
-          contractId: data.contract?.id,
+          contractId: data.contract?.id || data.contractId,
+          leadId: data.leadId,
         }));
 
         toast.success("Pedido realizado com sucesso!");
@@ -309,7 +311,7 @@ export default function Registrar() {
                 paymentMethod={paymentMethod}
                 paymentValue={paymentValue}
                 onBack={() => setStep(4)}
-                onSubmit={handleSubmit}
+                onSubmit={(html) => handleSubmit(html)}
                 isSubmitting={isSubmitting}
               />
             )}
