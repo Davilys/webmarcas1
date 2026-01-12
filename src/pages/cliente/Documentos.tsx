@@ -36,6 +36,10 @@ interface Document {
   file_size: number | null;
   mime_type: string | null;
   created_at: string;
+  // Extra fields for contracts
+  signature_status?: string;
+  blockchain_hash?: string;
+  isContract?: boolean;
 }
 
 const typeLabels: Record<string, { label: string; color: string }> = {
@@ -93,13 +97,41 @@ export default function Documentos() {
   }, [navigate]);
 
   const fetchDocuments = async (userId: string) => {
-    const { data } = await supabase
+    // Fetch documents from documents table
+    const { data: docsData } = await supabase
       .from('documents')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    setDocuments((data as Document[]) || []);
+    // Also fetch contracts from contracts table (to ensure contracts always show)
+    const { data: contractsData } = await supabase
+      .from('contracts')
+      .select('id, contract_number, subject, signature_status, signed_at, created_at, blockchain_hash, contract_html, visible_to_client')
+      .eq('user_id', userId)
+      .eq('visible_to_client', true)
+      .order('created_at', { ascending: false });
+
+    // Transform contracts into Document format
+    const contractDocs: Document[] = (contractsData || []).map(c => ({
+      id: c.id,
+      name: c.subject || `Contrato ${c.contract_number}`,
+      document_type: 'contrato',
+      file_url: '', // Digital contract, no file
+      file_size: null,
+      mime_type: null,
+      created_at: c.created_at || '',
+      signature_status: c.signature_status,
+      blockchain_hash: c.blockchain_hash,
+      isContract: true,
+    }));
+
+    // Merge and dedupe (contracts table takes precedence)
+    const docs = (docsData as Document[]) || [];
+    const contractIds = new Set(contractDocs.map(c => c.id));
+    const filteredDocs = docs.filter(d => !contractIds.has(d.id));
+    
+    setDocuments([...contractDocs, ...filteredDocs]);
     setLoading(false);
   };
 
@@ -163,6 +195,8 @@ export default function Documentos() {
 
   const DocumentListItem = ({ doc }: { doc: Document }) => {
     const typeConfig = typeLabels[doc.document_type] || typeLabels.outro;
+    const isSignedContract = doc.isContract && doc.signature_status === 'signed';
+    
     return (
       <div
         className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors group"
@@ -173,13 +207,28 @@ export default function Documentos() {
           </div>
           <div>
             <p className="font-medium">{doc.name}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="secondary" className={`text-xs ${typeConfig.color}`}>
                 {typeConfig.label}
               </Badge>
-              <span className="text-xs text-muted-foreground">
-                {formatFileSize(doc.file_size)}
-              </span>
+              {doc.isContract && (
+                <Badge 
+                  variant={isSignedContract ? "default" : "outline"} 
+                  className={`text-xs ${isSignedContract ? 'bg-green-600 hover:bg-green-700' : 'text-yellow-600 border-yellow-600'}`}
+                >
+                  {isSignedContract ? '✓ Assinado' : 'Aguardando'}
+                </Badge>
+              )}
+              {doc.blockchain_hash && (
+                <Badge variant="outline" className="text-xs text-blue-600 border-blue-600">
+                  🔗 Blockchain
+                </Badge>
+              )}
+              {doc.file_size && (
+                <span className="text-xs text-muted-foreground">
+                  {formatFileSize(doc.file_size)}
+                </span>
+              )}
               <span className="text-xs text-muted-foreground">
                 {formatDistanceToNow(new Date(doc.created_at), {
                   addSuffix: true,
@@ -197,13 +246,15 @@ export default function Documentos() {
           >
             <Eye className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => handleDownload(doc)}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+          {doc.file_url && (
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => handleDownload(doc)}
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     );

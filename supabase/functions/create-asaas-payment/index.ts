@@ -346,15 +346,15 @@ serve(async (req) => {
     } else {
       console.log('Created contract:', contractData?.id);
 
-      // Create Document entry for contract (CRM sync)
-      if (contractData?.id && userId) {
+      // Create Document entry for contract (CRM sync) - ALWAYS create, even without userId
+      if (contractData?.id) {
         const { error: docError } = await supabaseAdmin
           .from('documents')
           .insert({
             name: `Contrato ${contractNumber} - ${brandData.brandName}`,
             document_type: 'contrato',
             file_url: '',
-            user_id: userId,
+            user_id: userId || null, // Can be null for leads
             uploaded_by: 'system',
           });
 
@@ -397,10 +397,14 @@ serve(async (req) => {
       }
 
       // ========================================
-      // STEP 5.1: Sign contract on blockchain
+      // STEP 5.1: Sign contract on blockchain - ALWAYS sign when contract is created
+      // This ensures blockchain evidence is captured immediately upon checkout acceptance
       // ========================================
-      if (contractData?.id && contractHtml) {
+      if (contractData?.id) {
         try {
+          // Use contractHtml if provided, otherwise create a minimal record
+          const htmlToSign = contractHtml || `Contrato ${contractNumber} - Registro de Marca: ${brandData.brandName} - Cliente: ${personalData.fullName} - CPF/CNPJ: ${cpfCnpj}`;
+          
           console.log('Triggering blockchain signature for contract:', contractData.id);
           
           const signResponse = await fetch(`${SUPABASE_URL}/functions/v1/sign-contract-blockchain`, {
@@ -411,7 +415,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               contractId: contractData.id,
-              contractHtml: contractHtml,
+              contractHtml: htmlToSign,
               deviceInfo: {
                 ip_address: clientIP,
                 user_agent: userAgent,

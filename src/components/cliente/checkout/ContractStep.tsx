@@ -16,7 +16,7 @@ interface ContractStepProps {
   brandData: BrandData;
   paymentMethod: string;
   paymentValue: number;
-  onSubmit: () => void;
+  onSubmit: (contractHtml: string) => void;
   onBack: () => void;
   isSubmitting: boolean;
 }
@@ -90,7 +90,15 @@ export function ContractStep({
       toast.error("Por favor, leia e aceite o contrato para continuar.");
       return;
     }
-    onSubmit();
+    // Generate the full contract HTML with all data
+    const contractContent = getProcessedContract();
+    const fullContractHtml = generateContractPrintHTML(
+      contractContent,
+      brandData.brandName,
+      personalData.fullName,
+      personalData.cpf
+    );
+    onSubmit(fullContractHtml);
   };
 
   const formatCurrency = (value: number) => {
