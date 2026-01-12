@@ -52,6 +52,7 @@ interface OrderData {
   leadId?: string;
   contractId?: string;
   contractNumber?: string;
+  invoiceId?: string;
   asaas?: AsaasData;
 }
 
@@ -329,7 +330,8 @@ const StatusPedido = () => {
                       installmentValue={Math.round((orderData.paymentValue / 6) * 100) / 100}
                       dueDate={orderData.asaas?.dueDate || new Date().toISOString().split('T')[0]}
                       customerId={orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId || ''}
-                      paymentId={orderData.asaas?.paymentId || ''}
+                      invoiceId={orderData.invoiceId || ''}
+                      contractId={orderData.contractId || ''}
                       holderName={orderData.personalData.fullName}
                       holderEmail={orderData.personalData.email}
                       holderCpfCnpj={orderData.personalData.cpf}
