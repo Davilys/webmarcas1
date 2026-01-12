@@ -23,7 +23,7 @@ serve(async (req) => {
       }
     );
 
-    const { email, password, fullName } = await req.json();
+    const { email, password, fullName, fullAccess, permissions } = await req.json();
 
     // Create user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -49,6 +49,30 @@ serve(async (req) => {
 
     if (roleError) {
       throw roleError;
+    }
+
+    // If not full access and permissions provided, insert them
+    if (!fullAccess && permissions) {
+      const permissionsToInsert = Object.entries(permissions)
+        .filter(([_, perms]: [string, any]) => perms.can_view || perms.can_edit || perms.can_delete)
+        .map(([key, perms]: [string, any]) => ({
+          user_id: authData.user.id,
+          permission_key: key,
+          can_view: perms.can_view || false,
+          can_edit: perms.can_edit || false,
+          can_delete: perms.can_delete || false,
+        }));
+
+      if (permissionsToInsert.length > 0) {
+        const { error: permError } = await supabaseAdmin
+          .from("admin_permissions")
+          .insert(permissionsToInsert);
+
+        if (permError) {
+          console.error("Error inserting permissions:", permError);
+          // Don't throw - user is created, permissions can be set later
+        }
+      }
     }
 
     return new Response(

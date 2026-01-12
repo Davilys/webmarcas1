@@ -1,0 +1,192 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+// Available CRM sections with their permission keys
+export const CRM_SECTIONS = [
+  { key: 'dashboard', label: 'Dashboard', description: 'Métricas e relatórios' },
+  { key: 'leads', label: 'Leads', description: 'Gestão de leads' },
+  { key: 'clients', label: 'Clientes', description: 'Base de clientes' },
+  { key: 'contracts', label: 'Contratos', description: 'Gestão de contratos' },
+  { key: 'contract_templates', label: 'Modelos de Contrato', description: 'Templates e modelos' },
+  { key: 'documents', label: 'Documentos', description: 'Arquivos e anexos' },
+  { key: 'financial', label: 'Financeiro', description: 'Pagamentos e faturas' },
+  { key: 'emails', label: 'Emails', description: 'Comunicação e templates' },
+  { key: 'live_chat', label: 'Chat ao Vivo', description: 'Atendimento em tempo real' },
+  { key: 'notifications', label: 'Notificações', description: 'Alertas e avisos' },
+  { key: 'inpi_magazine', label: 'Revista INPI', description: 'Publicações oficiais' },
+  { key: 'inpi_resources', label: 'Recursos INPI', description: 'Recursos e petições' },
+  { key: 'perfex_integration', label: 'Integração Perfex', description: 'Sincronização CRM' },
+  { key: 'settings', label: 'Configurações', description: 'Preferências do sistema' },
+] as const;
+
+export type PermissionKey = typeof CRM_SECTIONS[number]['key'];
+export type PermissionAction = 'can_view' | 'can_edit' | 'can_delete';
+
+export interface Permission {
+  id: string;
+  user_id: string;
+  permission_key: PermissionKey;
+  can_view: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
+export interface UserPermissions {
+  [key: string]: {
+    can_view: boolean;
+    can_edit: boolean;
+    can_delete: boolean;
+  };
+}
+
+// Map URL paths to permission keys
+const PATH_TO_PERMISSION_KEY: Record<string, PermissionKey> = {
+  '/admin/dashboard': 'dashboard',
+  '/admin/leads': 'leads',
+  '/admin/clientes': 'clients',
+  '/admin/contratos': 'contracts',
+  '/admin/modelos-contrato': 'contract_templates',
+  '/admin/documentos': 'documents',
+  '/admin/financeiro': 'financial',
+  '/admin/emails': 'emails',
+  '/admin/chat-ao-vivo': 'live_chat',
+  '/admin/notificacoes': 'notifications',
+  '/admin/revista-inpi': 'inpi_magazine',
+  '/admin/recursos-inpi': 'inpi_resources',
+  '/admin/integracao-perfex': 'perfex_integration',
+  '/admin/configuracoes': 'settings',
+};
+
+export function getPermissionKeyFromPath(path: string): PermissionKey | null {
+  return PATH_TO_PERMISSION_KEY[path] || null;
+}
+
+export function useAdminPermissions(userId?: string) {
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    },
+    enabled: !userId,
+    staleTime: 60000,
+  });
+
+  const targetUserId = userId || currentUser?.id;
+
+  const { data: permissions, isLoading, refetch } = useQuery({
+    queryKey: ['admin-permissions', targetUserId],
+    queryFn: async () => {
+      if (!targetUserId) return null;
+
+      const { data, error } = await supabase
+        .from('admin_permissions')
+        .select('*')
+        .eq('user_id', targetUserId);
+
+      if (error) throw error;
+
+      // Convert to map for easy access
+      const permissionsMap: UserPermissions = {};
+      
+      // Initialize with defaults (users without explicit permissions get full access for backward compatibility)
+      CRM_SECTIONS.forEach(section => {
+        permissionsMap[section.key] = {
+          can_view: true,
+          can_edit: true,
+          can_delete: true,
+        };
+      });
+
+      // If user has any permissions set, use those instead
+      if (data && data.length > 0) {
+        // Reset to false first when explicit permissions exist
+        CRM_SECTIONS.forEach(section => {
+          permissionsMap[section.key] = {
+            can_view: false,
+            can_edit: false,
+            can_delete: false,
+          };
+        });
+        
+        // Apply explicit permissions
+        data.forEach((perm) => {
+          const key = perm.permission_key as PermissionKey;
+          permissionsMap[key] = {
+            can_view: perm.can_view,
+            can_edit: perm.can_edit,
+            can_delete: perm.can_delete,
+          };
+        });
+      }
+
+      return permissionsMap;
+    },
+    enabled: !!targetUserId,
+    staleTime: 30000,
+  });
+
+  const hasPermission = (key: PermissionKey, action: PermissionAction): boolean => {
+    if (!permissions) return true; // Default to true while loading
+    return permissions[key]?.[action] ?? true;
+  };
+
+  const canAccessPath = (path: string): boolean => {
+    const permKey = getPermissionKeyFromPath(path);
+    if (!permKey) return true;
+    return hasPermission(permKey, 'can_view');
+  };
+
+  return {
+    permissions,
+    isLoading,
+    hasPermission,
+    canAccessPath,
+    refetch,
+    userId: targetUserId,
+  };
+}
+
+export function useUserPermissions(userId: string) {
+  return useQuery({
+    queryKey: ['user-permissions', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('admin_permissions')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      // Convert to map
+      const permissionsMap: UserPermissions = {};
+      
+      // Initialize all sections
+      CRM_SECTIONS.forEach(section => {
+        permissionsMap[section.key] = {
+          can_view: false,
+          can_edit: false,
+          can_delete: false,
+        };
+      });
+
+      // Apply saved permissions
+      if (data) {
+        data.forEach((perm) => {
+          const key = perm.permission_key as PermissionKey;
+          permissionsMap[key] = {
+            can_view: perm.can_view,
+            can_edit: perm.can_edit,
+            can_delete: perm.can_delete,
+          };
+        });
+      }
+
+      // Check if has any permissions (if not, grant full access)
+      const hasAnyPermission = data && data.length > 0;
+      
+      return { permissionsMap, hasAnyPermission, rawPermissions: data };
+    },
+    enabled: !!userId,
+  });
+}
