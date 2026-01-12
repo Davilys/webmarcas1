@@ -77,17 +77,22 @@ export default function RegistrarMarca() {
     setStep(5);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (contractHtml: string) => {
     setIsSubmitting(true);
 
     try {
+      // Get current user ID for proper linking
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id || null;
+
       const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
         body: {
           personalData,
           brandData,
           paymentMethod,
           paymentValue,
-          contractHtml: '',
+          contractHtml, // Send the full contract HTML
+          userId, // Send user ID for proper linking
         },
       });
 
@@ -159,7 +164,7 @@ export default function RegistrarMarca() {
                 brandData={brandData}
                 paymentMethod={paymentMethod}
                 paymentValue={paymentValue}
-                onSubmit={handleSubmit}
+                onSubmit={(html) => handleSubmit(html)}
                 onBack={() => setStep(4)}
                 isSubmitting={isSubmitting}
               />
