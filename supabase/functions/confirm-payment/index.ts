@@ -75,11 +75,11 @@ serve(async (req) => {
       : personalData.cpf.replace(/\D/g, '');
 
     // ========================================
-    // STEP 1: Create user in auth.users (or find existing)
+    // STEP 1: Find existing user (user creation moved to sign-contract-blockchain)
     // ========================================
     let userId: string | null = null;
 
-    // Check if user already exists by email
+    // Check if user already exists by email (should have been created by sign-contract-blockchain)
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const existingUser = existingUsers?.users?.find(u => u.email === personalData.email);
 
@@ -87,8 +87,9 @@ serve(async (req) => {
       userId = existingUser.id;
       console.log('Found existing user:', userId);
     } else {
-      // Create new user with a temporary password
-      const tempPassword = `WebMarcas@${Date.now().toString().slice(-6)}`;
+      // User should have been created during contract signing
+      // If not found, create with fixed password as fallback
+      const tempPassword = '123Mudar@';
       
       const { data: newUser, error: userError } = await supabaseAdmin.auth.admin.createUser({
         email: personalData.email,
@@ -106,13 +107,13 @@ serve(async (req) => {
       }
 
       userId = newUser.user?.id || null;
-      console.log('Created new user:', userId);
+      console.log('Created new user as fallback:', userId);
 
-      // Send password reset email so user can set their own password
+      // Assign 'user' role
       if (userId) {
-        await supabaseAdmin.auth.admin.generateLink({
-          type: 'recovery',
-          email: personalData.email,
+        await supabaseAdmin.from('user_roles').insert({
+          user_id: userId,
+          role: 'user',
         });
       }
     }

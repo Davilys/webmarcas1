@@ -194,50 +194,37 @@ serve(async (req) => {
         .eq('id', leadId);
     }
 
-    // Create client activity log
-    if (contractData?.user_id) {
-      await supabase
-        .from('client_activities')
-        .insert({
-          user_id: contractData.user_id,
-          activity_type: 'contract_signed',
-          description: `Contrato assinado digitalmente com registro em blockchain`,
-          metadata: {
-            contract_id: contractId,
-            blockchain_hash: contractHash,
-            blockchain_tx_id: blockchainData.txId,
-            ip_address: clientIP,
-            ots_file_url: otsFileUrl
-          }
-        });
-    }
-
     // Build verification URL
-    const verificationBaseUrl = baseUrl || 'https://webmarcas.lovable.app';
-    const verificationUrl = `${verificationBaseUrl}/verificar-contrato?hash=${contractHash}`;
+    const verificationBaseUrl = baseUrl || Deno.env.get('SITE_URL') || 'https://webmarcas.lovable.app';
 
-    // Send confirmation email
+    // Get recipient info
     let recipientEmail = '';
     let recipientName = '';
     let brandName = contractData?.subject || '';
+    let recipientCpfCnpj = '';
+    let recipientPhone = '';
 
-    // Try to get email from lead first
+    // Try to get data from lead first
     if (contractData?.leads) {
       recipientEmail = contractData.leads.email || '';
       recipientName = contractData.leads.full_name || '';
+      recipientCpfCnpj = contractData.leads.cpf_cnpj || '';
+      recipientPhone = contractData.leads.phone || '';
     }
 
     // If no email from lead, try profile
     if (!recipientEmail && contractData?.user_id) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('email, full_name')
+        .select('email, full_name, cpf_cnpj, phone')
         .eq('id', contractData.user_id)
         .single();
       
       if (profile) {
         recipientEmail = profile.email || '';
         recipientName = profile.full_name || recipientName;
+        recipientCpfCnpj = profile.cpf_cnpj || recipientCpfCnpj;
+        recipientPhone = profile.phone || recipientPhone;
       }
     }
 
@@ -254,10 +241,135 @@ serve(async (req) => {
       }
     }
 
-    // Send email if we have a recipient
+    // ========================================
+    // CREATE CLIENT USER AFTER CONTRACT SIGNATURE
+    // ========================================
+    let userId: string | null = contractData?.user_id || null;
+    let userCreated = false;
+    const tempPassword = '123Mudar@';
+
+    if (!userId && recipientEmail) {
+      // Check if user already exists by email
+      const { data: existingUsers } = await supabase.auth.admin.listUsers();
+      const existingUser = existingUsers?.users?.find(u => u.email === recipientEmail);
+
+      if (existingUser) {
+        userId = existingUser.id;
+        console.log('Found existing user:', userId);
+      } else {
+        // Create new user with fixed password
+        const { data: newUser, error: userError } = await supabase.auth.admin.createUser({
+          email: recipientEmail,
+          password: tempPassword,
+          email_confirm: true,
+          user_metadata: {
+            full_name: recipientName,
+          },
+        });
+
+        if (!userError && newUser.user) {
+          userId = newUser.user.id;
+          userCreated = true;
+          console.log('Created new client user:', userId);
+
+          // Assign 'user' role (NOT admin) - this restricts access to client area only
+          await supabase.from('user_roles').insert({
+            user_id: userId,
+            role: 'user',
+          });
+          console.log('Assigned user role');
+
+          // Create profile with lead data
+          const { error: profileError } = await supabase.from('profiles').upsert({
+            id: userId,
+            email: recipientEmail,
+            full_name: recipientName,
+            cpf_cnpj: recipientCpfCnpj || null,
+            phone: recipientPhone || null,
+            origin: 'site',
+            priority: 'high',
+            last_contact: new Date().toISOString(),
+          });
+
+          if (profileError) {
+            console.error('Error creating profile:', profileError);
+          } else {
+            console.log('Created profile for user:', userId);
+          }
+        } else if (userError) {
+          console.error('Error creating user:', userError);
+        }
+      }
+
+      // Update contract with user_id
+      if (userId) {
+        await supabase.from('contracts').update({ user_id: userId }).eq('id', contractId);
+        console.log('Updated contract with user_id:', userId);
+      }
+    }
+
+    // Create client activity log
+    if (userId) {
+      await supabase
+        .from('client_activities')
+        .insert({
+          user_id: userId,
+          activity_type: 'contract_signed',
+          description: `Contrato assinado digitalmente com registro em blockchain`,
+          metadata: {
+            contract_id: contractId,
+            blockchain_hash: contractHash,
+            blockchain_tx_id: blockchainData.txId,
+            ip_address: clientIP,
+            ots_file_url: otsFileUrl
+          }
+        });
+    }
+
+    const verificationUrl = `${verificationBaseUrl}/verificar-contrato?hash=${contractHash}`;
+    const loginUrl = `${verificationBaseUrl}/cliente/login`;
+
+    // ========================================
+    // SEND WELCOME EMAIL WITH CREDENTIALS (if user was just created)
+    // ========================================
+    if (userCreated && recipientEmail) {
+      try {
+        console.log('Sending welcome email with credentials to:', recipientEmail);
+        
+        const welcomeEmailResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-email-automation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            trigger_event: 'user_created',
+            data: {
+              nome: recipientName || 'Cliente',
+              email: recipientEmail,
+              senha: tempPassword,
+              login_url: loginUrl,
+            }
+          })
+        });
+
+        if (welcomeEmailResponse.ok) {
+          console.log('Welcome email with credentials sent successfully');
+        } else {
+          const errorText = await welcomeEmailResponse.text();
+          console.error('Error sending welcome email:', errorText);
+        }
+      } catch (welcomeEmailError) {
+        console.error('Error sending welcome email:', welcomeEmailError);
+      }
+    }
+
+    // ========================================
+    // SEND CONTRACT SIGNED CONFIRMATION EMAIL
+    // ========================================
     if (recipientEmail) {
       try {
-        console.log('Sending confirmation email to:', recipientEmail);
+        console.log('Sending contract signed confirmation email to:', recipientEmail);
         
         const emailResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-email-automation`, {
           method: 'POST',
@@ -281,17 +393,16 @@ serve(async (req) => {
         });
 
         if (emailResponse.ok) {
-          console.log('Confirmation email sent successfully');
+          console.log('Contract signed confirmation email sent successfully');
         } else {
           const errorText = await emailResponse.text();
-          console.error('Error sending email:', errorText);
+          console.error('Error sending confirmation email:', errorText);
         }
       } catch (emailError) {
         console.error('Error sending confirmation email:', emailError);
-        // Don't fail the operation due to email error
       }
     } else {
-      console.log('No recipient email found, skipping email notification');
+      console.log('No recipient email found, skipping email notifications');
     }
 
     console.log('Contract signed successfully:', contractId);
@@ -308,6 +419,8 @@ serve(async (req) => {
           ipAddress: clientIP,
           verificationUrl,
           otsFileUrl,
+          userId,
+          userCreated,
           message: 'Contrato assinado com sucesso e registrado em blockchain'
         }
       }),

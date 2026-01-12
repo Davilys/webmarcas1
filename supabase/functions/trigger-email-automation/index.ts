@@ -23,6 +23,9 @@ interface TriggerRequest {
     link_assinatura?: string;
     data_expiracao?: string;
     base_url?: string;
+    // New fields for user_created email
+    senha?: string;
+    login_url?: string;
   };
 }
 
@@ -137,7 +140,7 @@ const handler = async (req: Request): Promise<Response> => {
     let subject = template.subject;
     let body = template.body;
 
-    // Preparar substituições de variáveis - incluindo app_url e verification_url
+    // Preparar substituições de variáveis - incluindo app_url, verification_url, senha e login_url
     const replacements: Record<string, string> = {
       '{{nome}}': data.nome || '',
       '{{email}}': data.email || '',
@@ -149,6 +152,9 @@ const handler = async (req: Request): Promise<Response> => {
       '{{link_assinatura}}': data.link_assinatura || '',
       '{{data_expiracao}}': data.data_expiracao || '',
       '{{app_url}}': appUrl,
+      // New fields for user_created email
+      '{{senha}}': data.senha || '',
+      '{{login_url}}': data.login_url || `${appUrl}/cliente/login`,
     };
 
     for (const [key, value] of Object.entries(replacements)) {

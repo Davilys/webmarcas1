@@ -189,7 +189,7 @@ export default function Login() {
           <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>
               Primeiro acesso? Use a senha padrão:{' '}
-              <code className="bg-muted px-1 rounded">123WebMarcas!</code>
+              <code className="bg-muted px-1 rounded">123Mudar@</code>
             </p>
             <p className="mt-2">
               <Link to="/" className="text-primary hover:underline">
