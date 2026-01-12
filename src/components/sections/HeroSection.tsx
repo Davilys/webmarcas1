@@ -3,39 +3,21 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { getNextFridayFormatted } from "@/lib/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { motion, AnimatePresence } from "framer-motion";
 
 const HeroSection = () => {
   const { t } = useLanguage();
-  const [displayedText, setDisplayedText] = useState("");
-  const [isTyping, setIsTyping] = useState(true);
   const [phraseIndex, setPhraseIndex] = useState(0);
 
   const phrases = [t("hero.phrase1"), t("hero.phrase2"), t("hero.phrase3")];
 
   useEffect(() => {
-    const currentPhrase = phrases[phraseIndex];
+    const interval = setInterval(() => {
+      setPhraseIndex((prev) => (prev + 1) % phrases.length);
+    }, 3000);
     
-    if (isTyping) {
-      if (displayedText.length < currentPhrase.length) {
-        const timeout = setTimeout(() => {
-          setDisplayedText(currentPhrase.slice(0, displayedText.length + 1));
-        }, 100);
-        return () => clearTimeout(timeout);
-      } else {
-        const timeout = setTimeout(() => {
-          setIsTyping(false);
-          setDisplayedText("");
-        }, 2000);
-        return () => clearTimeout(timeout);
-      }
-    } else {
-      const timeout = setTimeout(() => {
-        setPhraseIndex((prev) => (prev + 1) % phrases.length);
-        setIsTyping(true);
-      }, 500);
-      return () => clearTimeout(timeout);
-    }
-  }, [displayedText, isTyping, phraseIndex, phrases]);
+    return () => clearInterval(interval);
+  }, [phrases.length]);
 
   const trustBadges = [
     { icon: Shield, label: t("hero.trust.inpi") },
@@ -69,9 +51,19 @@ const HeroSection = () => {
           {/* Heading */}
           <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight mb-6 animate-slide-up">
             {t("hero.title")}{" "}
-            <span className="gradient-text">
-              {displayedText}
-              <span className="animate-pulse">|</span>
+            <span className="inline-block overflow-hidden h-[1.2em] align-bottom relative">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={phraseIndex}
+                  initial={{ y: '100%', opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '-100%', opacity: 0 }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  className="inline-block gradient-text"
+                >
+                  {phrases[phraseIndex]}
+                </motion.span>
+              </AnimatePresence>
             </span>
           </h1>
 
