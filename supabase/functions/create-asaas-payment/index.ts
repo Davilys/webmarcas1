@@ -56,12 +56,19 @@ serve(async (req) => {
       throw new Error('Supabase configuration missing');
     }
 
+    // Capture client info for signature
+    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('x-real-ip') || 
+                     req.headers.get('cf-connecting-ip') ||
+                     'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+
     // Create Supabase admin client
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { personalData, brandData, paymentMethod, paymentValue, contractHtml, userId }: PaymentRequest = await req.json();
 
-    console.log('Creating Asaas payment for:', personalData.fullName);
+    console.log('Creating Asaas payment for:', personalData.fullName, '| Method:', paymentMethod);
 
     // ========================================
     // STEP 1: Create Lead in database
@@ -78,7 +85,7 @@ serve(async (req) => {
       .limit(1)
       .single();
 
-    let leadId: string;
+    let leadId: string = '';
 
     if (existingLead) {
       leadId = existingLead.id;
@@ -194,115 +201,120 @@ serve(async (req) => {
     }
 
     // ========================================
-    // STEP 3: Create Payment in Asaas
+    // STEP 3: Create Payment in Asaas (ONLY for PIX and Boleto)
+    // For Credit Card: DO NOT create payment here - it will be created
+    // when user submits card data via process-credit-card-payment
     // ========================================
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 3);
     const dueDateString = dueDate.toISOString().split('T')[0];
 
-    // Determine billing type and installments
-    // Cartão parcelado: gerar link de pagamento (não pedir dados do cartão)
-    // Boleto: sempre gerar parcelamento via Asaas
     let billingType = 'PIX';
     let installmentCount = 1;
     let installmentValue = paymentValue;
+    let paymentId: string | null = null;
+    let paymentData: Record<string, unknown> = {};
+    let pixQrCode = null;
 
-    if (paymentMethod === 'cartao6x') {
-      // Cartão parcelado: usar UNDEFINED para gerar link de pagamento genérico
-      // Cliente escolhe pagar com cartão na página do Asaas
-      billingType = 'UNDEFINED';
+    // CRITICAL: For credit card, we do NOT create a payment in Asaas here
+    // The payment will be created when the user submits their card data
+    const isCardPayment = paymentMethod === 'cartao6x';
+
+    if (!isCardPayment) {
+      // PIX or Boleto - create payment now
+      if (paymentMethod === 'boleto3x') {
+        billingType = 'BOLETO';
+        installmentCount = 3;
+        installmentValue = Math.round((paymentValue / 3) * 100) / 100;
+      }
+      // else: PIX (default)
+
+      const paymentPayload: Record<string, unknown> = {
+        customer: customerId,
+        billingType: billingType,
+        dueDate: dueDateString,
+        description: `Registro de marca: ${brandData.brandName}`,
+        externalReference: `marca_${brandData.brandName.replace(/\s+/g, '_')}_${Date.now()}`,
+      };
+
+      // For installment payments, use installmentCount and installmentValue
+      if (installmentCount > 1) {
+        paymentPayload.installmentCount = installmentCount;
+        paymentPayload.installmentValue = installmentValue;
+      } else {
+        paymentPayload.value = paymentValue;
+      }
+
+      console.log('Creating payment with payload:', JSON.stringify(paymentPayload));
+
+      const paymentResponse = await fetch(`${ASAAS_API_URL}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'access_token': ASAAS_API_KEY,
+        },
+        body: JSON.stringify(paymentPayload),
+      });
+
+      paymentData = await paymentResponse.json();
+      console.log('Payment creation response:', JSON.stringify(paymentData));
+
+      if (paymentData.errors) {
+        throw new Error(`Error creating payment: ${JSON.stringify(paymentData.errors)}`);
+      }
+
+      paymentId = paymentData.id as string;
+      console.log('Created payment:', paymentId);
+
+      // Get PIX QR Code if applicable
+      if (billingType === 'PIX') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const qrCodeResponse = await fetch(
+          `${ASAAS_API_URL}/payments/${paymentId}/pixQrCode`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'access_token': ASAAS_API_KEY,
+            },
+          }
+        );
+
+        const qrCodeData = await qrCodeResponse.json();
+        console.log('QR Code response:', JSON.stringify(qrCodeData));
+
+        if (qrCodeData.encodedImage && qrCodeData.payload) {
+          pixQrCode = {
+            encodedImage: qrCodeData.encodedImage,
+            payload: qrCodeData.payload,
+            expirationDate: qrCodeData.expirationDate,
+          };
+        }
+      }
+    } else {
+      // Credit card - set proper values for internal tracking
+      billingType = 'CREDIT_CARD';
       installmentCount = 6;
       installmentValue = Math.round((paymentValue / 6) * 100) / 100;
-    } else if (paymentMethod === 'boleto3x') {
-      // Boleto parcelado: gerar boletos via Asaas
-      billingType = 'BOLETO';
-      installmentCount = 3;
-      installmentValue = Math.round((paymentValue / 3) * 100) / 100;
-    }
-
-    const paymentPayload: Record<string, unknown> = {
-      customer: customerId,
-      billingType: billingType,
-      dueDate: dueDateString,
-      description: `Registro de marca: ${brandData.brandName}`,
-      externalReference: `marca_${brandData.brandName.replace(/\s+/g, '_')}_${Date.now()}`,
-    };
-
-    // Para pagamentos parcelados, usar installmentCount e installmentValue
-    if (installmentCount > 1) {
-      paymentPayload.installmentCount = installmentCount;
-      paymentPayload.installmentValue = installmentValue;
-      // Não enviar 'value' quando usando parcelamento - Asaas calcula automaticamente
-    } else {
-      paymentPayload.value = paymentValue;
-    }
-
-    console.log('Creating payment with payload:', JSON.stringify(paymentPayload));
-
-    const paymentResponse = await fetch(`${ASAAS_API_URL}/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'access_token': ASAAS_API_KEY,
-      },
-      body: JSON.stringify(paymentPayload),
-    });
-
-    const paymentData = await paymentResponse.json();
-    console.log('Payment creation response:', JSON.stringify(paymentData));
-
-    if (paymentData.errors) {
-      throw new Error(`Error creating payment: ${JSON.stringify(paymentData.errors)}`);
-    }
-
-    const paymentId = paymentData.id;
-    console.log('Created payment:', paymentId);
-
-    // ========================================
-    // STEP 4: Get PIX QR Code if applicable
-    // ========================================
-    let pixQrCode = null;
-    if (billingType === 'PIX') {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const qrCodeResponse = await fetch(
-        `${ASAAS_API_URL}/payments/${paymentId}/pixQrCode`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'access_token': ASAAS_API_KEY,
-          },
-        }
-      );
-
-      const qrCodeData = await qrCodeResponse.json();
-      console.log('QR Code response:', JSON.stringify(qrCodeData));
-
-      if (qrCodeData.encodedImage && qrCodeData.payload) {
-        pixQrCode = {
-          encodedImage: qrCodeData.encodedImage,
-          payload: qrCodeData.payload,
-          expirationDate: qrCodeData.expirationDate,
-        };
-      }
+      console.log('Credit card payment - will be processed when user submits card data');
     }
 
     // ========================================
-    // STEP 5: Update Lead with payment info
+    // STEP 4: Update Lead with payment info
     // ========================================
-    if (leadId!) {
+    if (leadId) {
       await supabaseAdmin
         .from('leads')
         .update({
           status: 'em_negociacao',
-          notes: `Marca: ${brandData.brandName} | Ramo: ${brandData.businessArea} | Pagamento: ${paymentMethod} | Asaas: ${paymentId}`,
+          notes: `Marca: ${brandData.brandName} | Ramo: ${brandData.businessArea} | Pagamento: ${paymentMethod}${paymentId ? ` | Asaas: ${paymentId}` : ''}`,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', leadId!);
+        .eq('id', leadId);
     }
 
     // ========================================
-    // STEP 6: Create Contract in database (pending signature)
+    // STEP 5: Create Contract in database (signed via checkout acceptance)
     // ========================================
     const contractNumber = `WM-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
     
@@ -316,10 +328,12 @@ serve(async (req) => {
         contract_value: paymentValue,
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 10 years
-        signature_status: 'signed', // Marcado como assinado quando cliente aceita os termos no checkout
-        signed_at: new Date().toISOString(), // Data do aceite eletrônico
-        asaas_payment_id: paymentId,
-        lead_id: leadId! || null,
+        signature_status: 'signed', // Marked as signed when customer accepts terms in checkout
+        signed_at: new Date().toISOString(), // Electronic acceptance date
+        signature_ip: clientIP,
+        signature_user_agent: userAgent,
+        asaas_payment_id: paymentId || null, // Will be filled for card after payment
+        lead_id: leadId || null,
         user_id: userId || null,
         contract_html: contractHtml || null,
         visible_to_client: true,
@@ -332,16 +346,14 @@ serve(async (req) => {
     } else {
       console.log('Created contract:', contractData?.id);
 
-      // ========================================
-      // STEP 6.1: Create Document entry for contract (CRM sync)
-      // ========================================
+      // Create Document entry for contract (CRM sync)
       if (contractData?.id && userId) {
         const { error: docError } = await supabaseAdmin
           .from('documents')
           .insert({
             name: `Contrato ${contractNumber} - ${brandData.brandName}`,
             document_type: 'contrato',
-            file_url: '', // Will be updated when PDF is generated
+            file_url: '',
             user_id: userId,
             uploaded_by: 'system',
           });
@@ -353,11 +365,8 @@ serve(async (req) => {
         }
       }
 
-      // ========================================
-      // STEP 6.2: Create Brand Process entry (CRM sync)
-      // ========================================
+      // Create Brand Process entry (CRM sync)
       if (userId) {
-        // Check if process already exists for this brand
         const { data: existingProcess } = await supabaseAdmin
           .from('brand_processes')
           .select('id')
@@ -386,10 +395,50 @@ serve(async (req) => {
           console.log('Brand process already exists:', existingProcess.id);
         }
       }
+
+      // ========================================
+      // STEP 5.1: Sign contract on blockchain
+      // ========================================
+      if (contractData?.id && contractHtml) {
+        try {
+          console.log('Triggering blockchain signature for contract:', contractData.id);
+          
+          const signResponse = await fetch(`${SUPABASE_URL}/functions/v1/sign-contract-blockchain`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              contractId: contractData.id,
+              contractHtml: contractHtml,
+              deviceInfo: {
+                ip_address: clientIP,
+                user_agent: userAgent,
+                timestamp: new Date().toISOString(),
+              },
+              leadId: leadId || null,
+              baseUrl: 'https://webmarcas.lovable.app',
+            }),
+          });
+
+          if (signResponse.ok) {
+            const signData = await signResponse.json();
+            console.log('Contract signed on blockchain:', signData?.data?.hash);
+          } else {
+            const errorText = await signResponse.text();
+            console.error('Error signing contract on blockchain:', errorText);
+          }
+        } catch (signError) {
+          console.error('Error triggering blockchain signature:', signError);
+          // Don't fail the payment flow
+        }
+      }
     }
 
     // ========================================
-    // STEP 6.5: Create Invoice in database with payment details
+    // STEP 6: Create Invoice in database with payment details
+    // For credit card: create invoice WITHOUT asaas_invoice_id (will be set after payment)
     // ========================================
     const invoiceDescription = `Registro de marca: ${brandData.brandName}`;
     const { data: invoiceData, error: invoiceError } = await supabaseAdmin
@@ -400,10 +449,11 @@ serve(async (req) => {
         due_date: dueDateString,
         status: 'pending',
         user_id: userId || null,
-        invoice_url: paymentData.invoiceUrl || null,
-        pix_code: pixQrCode?.payload || null,
-        boleto_code: paymentData.bankSlipUrl || null,
-        asaas_invoice_id: paymentId,
+        // For card payments: NO invoice_url, boleto_code, pix_code, or asaas_invoice_id yet
+        invoice_url: isCardPayment ? null : (paymentData.invoiceUrl as string || null),
+        pix_code: isCardPayment ? null : (pixQrCode?.payload || null),
+        boleto_code: isCardPayment ? null : (paymentData.bankSlipUrl as string || null),
+        asaas_invoice_id: isCardPayment ? null : paymentId,
         payment_method: billingType === 'PIX' ? 'pix' : billingType === 'BOLETO' ? 'boleto' : 'credit_card',
       })
       .select('id')
@@ -416,7 +466,7 @@ serve(async (req) => {
     }
 
     // ========================================
-    // STEP 6.1: Trigger form_completed email automation
+    // STEP 7: Trigger form_completed email automation
     // ========================================
     try {
       await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
@@ -427,7 +477,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           trigger_event: 'form_completed',
-          lead_id: leadId! || null,
+          lead_id: leadId || null,
           data: {
             nome: personalData.fullName,
             email: personalData.email,
@@ -438,29 +488,30 @@ serve(async (req) => {
       console.log('Triggered form_completed email automation');
     } catch (emailError) {
       console.error('Error triggering form_completed email:', emailError);
-      // Don't fail the payment flow if email fails
     }
 
     // ========================================
-    // STEP 7: Return response
+    // STEP 8: Return response
     // ========================================
     const response = {
       success: true,
       customerId,
       asaasCustomerId,
-      paymentId,
-      leadId: leadId! || null,
+      paymentId: paymentId || null,
+      leadId: leadId || null,
       contractId: contractData?.id || null,
       invoiceId: invoiceData?.id || null,
       contractNumber,
-      status: paymentData.status,
+      status: isCardPayment ? 'PENDING_CARD' : paymentData.status,
       billingType,
-      value: paymentData.value,
-      netValue: paymentData.netValue,
-      dueDate: paymentData.dueDate,
-      invoiceUrl: paymentData.invoiceUrl,
-      bankSlipUrl: paymentData.bankSlipUrl,
-      pixQrCode,
+      value: paymentValue,
+      installmentCount,
+      installmentValue,
+      dueDate: dueDateString,
+      // For card payments: no invoiceUrl or bankSlipUrl
+      invoiceUrl: isCardPayment ? null : (paymentData.invoiceUrl || null),
+      bankSlipUrl: isCardPayment ? null : (paymentData.bankSlipUrl || null),
+      pixQrCode: isCardPayment ? null : pixQrCode,
     };
 
     console.log('Returning response:', JSON.stringify(response));

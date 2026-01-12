@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { CreditCard, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CreditCardFormProps {
   value: number;
@@ -12,7 +13,8 @@ interface CreditCardFormProps {
   installmentValue: number;
   dueDate: string;
   customerId: string;
-  paymentId: string;
+  invoiceId: string; // Changed from paymentId to invoiceId (internal DB ID)
+  contractId?: string; // Optional contract ID to update
   holderName: string;
   holderEmail: string;
   holderCpfCnpj: string;
@@ -28,7 +30,8 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
   installmentValue,
   dueDate,
   customerId,
-  paymentId,
+  invoiceId,
+  contractId,
   holderName,
   holderEmail,
   holderCpfCnpj,
@@ -103,41 +106,35 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
     setIsProcessing(true);
     
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-credit-card-payment`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      // Use supabase.functions.invoke for consistent auth handling
+      const { data, error } = await supabase.functions.invoke('process-credit-card-payment', {
+        body: {
+          invoiceId, // Internal invoice ID
+          customerId,
+          contractId, // For updating contract with Asaas payment ID
+          value,
+          installmentCount,
+          installmentValue,
+          dueDate,
+          creditCard: {
+            holderName: cardHolderName.toUpperCase(),
+            number: cardNumber.replace(/\s/g, ''),
+            expiryMonth: expiryMonth.padStart(2, '0'),
+            expiryYear,
+            ccv: cvv,
           },
-          body: JSON.stringify({
-            paymentId,
-            customerId,
-            value,
-            installmentCount,
-            installmentValue,
-            dueDate,
-            creditCard: {
-              holderName: cardHolderName.toUpperCase(),
-              number: cardNumber.replace(/\s/g, ''),
-              expiryMonth: expiryMonth.padStart(2, '0'),
-              expiryYear,
-              ccv: cvv,
-            },
-            creditCardHolderInfo: {
-              name: holderName,
-              email: holderEmail,
-              cpfCnpj: holderCpfCnpj,
-              postalCode: holderPostalCode,
-              phone: holderPhone,
-              addressNumber: 'S/N',
-            },
-          }),
-        }
-      );
+          creditCardHolderInfo: {
+            name: holderName,
+            email: holderEmail,
+            cpfCnpj: holderCpfCnpj,
+            postalCode: holderPostalCode,
+            phone: holderPhone,
+            addressNumber: 'S/N',
+          },
+        },
+      });
       
-      const data = await response.json();
+      if (error) throw new Error(error.message);
       
       if (data.success) {
         toast.success('Pagamento aprovado!');
@@ -148,8 +145,9 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
       }
     } catch (error) {
       console.error('Payment error:', error);
-      toast.error('Erro de conexão. Tente novamente.');
-      onError('Erro de conexão');
+      const errorMsg = error instanceof Error ? error.message : 'Erro de conexão. Tente novamente.';
+      toast.error(errorMsg);
+      onError(errorMsg);
     } finally {
       setIsProcessing(false);
     }
@@ -165,10 +163,10 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
         <CardTitle className="text-lg font-semibold">Dados do Cartão de Crédito</CardTitle>
         <div className="mt-2">
           <p className="text-3xl font-bold text-primary">
-            {formatCurrency(installmentValue)}
+            {installmentCount}x de {formatCurrency(installmentValue)}
           </p>
           <p className="text-sm text-muted-foreground">
-            Parcela 1/{installmentCount} • Vence em {new Date(dueDate).toLocaleDateString('pt-BR')}
+            {installmentCount}x sem juros • Total: {formatCurrency(value)}
           </p>
         </div>
       </CardHeader>
@@ -291,7 +289,7 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
             ) : (
               <>
                 <Lock className="mr-2 h-5 w-5" />
-                PAGAR AGORA • {formatCurrency(installmentValue)}
+                PAGAR AGORA • {formatCurrency(value)}
               </>
             )}
           </Button>
