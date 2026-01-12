@@ -23,7 +23,7 @@ import {
   FileText, CreditCard, MessageSquare, Calendar as CalendarIcon, Paperclip,
   Upload, Loader2, ExternalLink, Plus, Edit, X, Check, 
   MessageCircle, ArrowUpRight, Tag, Zap, AlertTriangle,
-  CheckCircle, XCircle, TrendingUp, Users, Receipt
+  CheckCircle, XCircle, TrendingUp, Users, Receipt, Trash2
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
@@ -140,6 +140,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [invoices, setInvoices] = useState<ClientInvoice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [uploading, setUploading] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -352,6 +354,62 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     }
   };
 
+  const handleDeleteClient = async () => {
+    if (!client) return;
+    
+    setDeleting(true);
+    try {
+      // Delete related data first (in order to avoid FK constraints)
+      // Delete client notes
+      await supabase.from('client_notes').delete().eq('user_id', client.id);
+      
+      // Delete client activities
+      await supabase.from('client_activities').delete().eq('user_id', client.id);
+      
+      // Delete client appointments
+      await supabase.from('client_appointments').delete().eq('user_id', client.id);
+      
+      // Delete notifications
+      await supabase.from('notifications').delete().eq('user_id', client.id);
+      
+      // Delete chat messages
+      await supabase.from('chat_messages').delete().eq('user_id', client.id);
+      
+      // Delete documents
+      await supabase.from('documents').delete().eq('user_id', client.id);
+      
+      // Delete invoices
+      await supabase.from('invoices').delete().eq('user_id', client.id);
+      
+      // Delete contracts
+      await supabase.from('contracts').delete().eq('user_id', client.id);
+      
+      // Delete brand processes
+      await supabase.from('brand_processes').delete().eq('user_id', client.id);
+      
+      // Delete login history
+      await supabase.from('login_history').delete().eq('user_id', client.id);
+      
+      // Delete user roles
+      await supabase.from('user_roles').delete().eq('user_id', client.id);
+      
+      // Finally delete the profile
+      const { error } = await supabase.from('profiles').delete().eq('id', client.id);
+      
+      if (error) throw error;
+      
+      toast.success('Cliente excluído com sucesso');
+      setShowDeleteConfirm(false);
+      onOpenChange(false);
+      onUpdate();
+    } catch (error: any) {
+      console.error('Error deleting client:', error);
+      toast.error(`Erro ao excluir cliente: ${error?.message || 'Tente novamente'}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleQuickAction = (actionId: string) => {
     switch (actionId) {
       case 'chat':
@@ -429,6 +487,59 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                 </div>
               </div>
               <div className="flex gap-2">
+                <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="bg-red-500/80 hover:bg-red-600 text-white border-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="h-5 w-5" />
+                        Excluir Cliente
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Tem certeza que deseja excluir <strong>{client.full_name}</strong>?
+                      </p>
+                      <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm">
+                        <p className="font-medium text-destructive mb-2">Esta ação irá excluir:</p>
+                        <ul className="text-muted-foreground space-y-1 text-xs">
+                          <li>• Todos os processos de marca</li>
+                          <li>• Todos os contratos</li>
+                          <li>• Todas as faturas</li>
+                          <li>• Todos os documentos</li>
+                          <li>• Todas as notas e atividades</li>
+                          <li>• Histórico de login</li>
+                        </ul>
+                        <p className="mt-3 font-semibold text-destructive">Esta ação é irreversível!</p>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+                        Cancelar
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        onClick={handleDeleteClient}
+                        disabled={deleting}
+                      >
+                        {deleting ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-2" />
+                        )}
+                        Excluir Permanentemente
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 <Button 
                   variant="secondary" 
                   size="sm" 
