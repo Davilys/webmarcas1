@@ -140,26 +140,41 @@ const handler = async (req: Request): Promise<Response> => {
     let subject = template.subject;
     let body = template.body;
 
-    // Preparar substituições de variáveis - incluindo app_url, verification_url, senha e login_url
+    // Preparar substituições de variáveis - incluindo aliases para compatibilidade
     const replacements: Record<string, string> = {
+      // Nome (com aliases)
       '{{nome}}': data.nome || '',
+      '{{nome_cliente}}': data.nome || '',
+      // Email
       '{{email}}': data.email || '',
+      // Marca (com aliases)
       '{{marca}}': data.marca || 'Sua Marca',
+      '{{nome_marca}}': data.marca || 'Sua Marca',
+      // Data de assinatura
       '{{data_assinatura}}': data.data_assinatura || new Date().toLocaleDateString('pt-BR'),
+      // Hash do contrato
       '{{hash_contrato}}': data.hash_contrato || '',
+      // IP
       '{{ip_assinatura}}': data.ip_assinatura || '',
+      // URLs de verificação e assinatura
       '{{verification_url}}': data.verification_url || '',
       '{{link_assinatura}}': data.link_assinatura || '',
+      // Data de expiração
       '{{data_expiracao}}': data.data_expiracao || '',
+      // App URL
       '{{app_url}}': appUrl,
-      // New fields for user_created email
-      '{{senha}}': data.senha || '',
+      // Link área do cliente (com aliases)
+      '{{link_area_cliente}}': data.login_url || `${appUrl}/cliente/login`,
       '{{login_url}}': data.login_url || `${appUrl}/cliente/login`,
+      // Senha temporária
+      '{{senha}}': data.senha || '',
+      // Número do processo (se disponível no futuro)
+      '{{numero_processo}}': '',
     };
 
     for (const [key, value] of Object.entries(replacements)) {
-      subject = subject.replace(new RegExp(key, 'g'), value);
-      body = body.replace(new RegExp(key, 'g'), value);
+      subject = subject.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      body = body.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
     }
 
     // Configurar cliente SMTP

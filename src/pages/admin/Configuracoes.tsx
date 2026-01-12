@@ -15,16 +15,18 @@ import { ProcessSettings } from '@/components/admin/settings/ProcessSettings';
 import { FinancialSettings } from '@/components/admin/settings/FinancialSettings';
 import { BackupSettings } from '@/components/admin/settings/BackupSettings';
 import { PricingSettings } from '@/components/admin/settings/PricingSettings';
+import { AutomatedEmailSettings } from '@/components/admin/settings/AutomatedEmailSettings';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { 
   Settings, Database, Webhook, Mail, MessageCircle, Bell, Shield, 
-  Palette, FileSignature, GitBranch, Wallet, HardDrive, Tag 
+  Palette, FileSignature, GitBranch, Wallet, HardDrive, Tag, Zap 
 } from 'lucide-react';
 
 const tabs = [
   { value: 'geral', label: 'Geral', icon: Settings },
-  { value: 'precos', label: 'Preços', icon: Tag, badge: 'Novo' },
+  { value: 'precos', label: 'Preços', icon: Tag },
+  { value: 'email-auto', label: 'E-mails Automáticos', icon: Zap, badge: 'Novo' },
   { value: 'integracoes', label: 'Integrações', icon: Database },
   { value: 'api', label: 'API e Webhooks', icon: Webhook },
   { value: 'email', label: 'Email', icon: Mail },
@@ -105,6 +107,7 @@ export default function AdminConfiguracoes() {
           >
             <TabsContent value="geral" className="mt-0"><GeneralSettings /></TabsContent>
             <TabsContent value="precos" className="mt-0"><PricingSettings /></TabsContent>
+            <TabsContent value="email-auto" className="mt-0"><AutomatedEmailSettings /></TabsContent>
             <TabsContent value="integracoes" className="mt-0"><IntegrationSettings /></TabsContent>
             <TabsContent value="api" className="mt-0"><APIWebhooksSettings /></TabsContent>
             <TabsContent value="email" className="mt-0"><EmailSettings /></TabsContent>
