@@ -109,13 +109,34 @@ export default function AdminContratos() {
     if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
     
     try {
-      const { error } = await supabase.from('contracts').delete().eq('id', id);
+      // Delete related data first (cascade should handle most, but ensure clean deletion)
+      await supabase.from('contract_attachments').delete().eq('contract_id', id);
+      await supabase.from('contract_comments').delete().eq('contract_id', id);
+      await supabase.from('contract_notes').delete().eq('contract_id', id);
+      await supabase.from('contract_tasks').delete().eq('contract_id', id);
+      await supabase.from('contract_renewal_history').delete().eq('contract_id', id);
+      await supabase.from('signature_audit_log').delete().eq('contract_id', id);
+      await supabase.from('documents').delete().eq('contract_id', id);
+
+      // Now delete the contract and verify it was deleted
+      const { data, error } = await supabase
+        .from('contracts')
+        .delete()
+        .eq('id', id)
+        .select('id');
+      
       if (error) throw error;
-      toast.success('Contrato excluído');
+      
+      if (!data || data.length === 0) {
+        toast.error('Não foi possível excluir o contrato. Verifique suas permissões.');
+        return;
+      }
+      
+      toast.success('Contrato excluído com sucesso');
       fetchContracts();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting contract:', error);
-      toast.error('Erro ao excluir contrato');
+      toast.error(error.message || 'Erro ao excluir contrato');
     }
   };
 

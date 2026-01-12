@@ -32,24 +32,36 @@ export function LeadBulkActionsBar({
 
     setLoading(true);
     try {
-      // Delete related data first
+      // First delete related email_logs
       await supabase.from('email_logs').delete().in('related_lead_id', selectedIds);
-      await supabase.from('contracts').delete().in('lead_id', selectedIds);
       
-      // Then delete leads
-      const { error } = await supabase
+      // Then delete the leads (contracts will have lead_id set to NULL automatically via ON DELETE SET NULL)
+      const { data, error } = await supabase
         .from('leads')
         .delete()
-        .in('id', selectedIds);
-
+        .in('id', selectedIds)
+        .select('id');
+      
       if (error) throw error;
       
-      toast.success(`${selectedIds.length} leads excluídos`);
+      const deletedCount = data?.length || 0;
+      
+      if (deletedCount === 0) {
+        toast.error('Nenhum lead foi excluído. Verifique suas permissões.');
+        return;
+      }
+      
+      if (deletedCount < selectedIds.length) {
+        toast.warning(`${deletedCount} de ${selectedIds.length} leads excluídos. Alguns não puderam ser removidos.`);
+      } else {
+        toast.success(`${deletedCount} leads excluídos com sucesso`);
+      }
+      
       onClearSelection();
       onActionComplete();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting leads:', error);
-      toast.error('Erro ao excluir leads');
+      toast.error(error.message || 'Erro ao excluir leads');
     } finally {
       setLoading(false);
     }
