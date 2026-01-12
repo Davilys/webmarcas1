@@ -791,7 +791,7 @@ const RegistrationFormSection = () => {
                     <ContractRenderer 
                       content={getProcessedContract()} 
                       showLetterhead={true}
-                      showCertificationSection={true}
+                      showCertificationSection={false}
                       className="text-foreground"
                     />
                   )}
