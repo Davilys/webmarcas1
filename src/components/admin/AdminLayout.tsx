@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -40,6 +40,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { useAdminPermissions, type PermissionKey } from '@/hooks/useAdminPermissions';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -52,6 +53,7 @@ interface MenuItem {
   href: string;
   iconColor: string;
   iconBg: string;
+  permissionKey: PermissionKey;
 }
 
 const menuItems: MenuItem[] = [
@@ -61,7 +63,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Métricas e relatórios',
     href: '/admin/dashboard',
     iconColor: 'text-blue-500',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/30'
+    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
+    permissionKey: 'dashboard'
   },
   { 
     icon: UserPlus, 
@@ -69,7 +72,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Gestão de leads',
     href: '/admin/leads',
     iconColor: 'text-green-500',
-    iconBg: 'bg-green-100 dark:bg-green-900/30'
+    iconBg: 'bg-green-100 dark:bg-green-900/30',
+    permissionKey: 'leads'
   },
   { 
     icon: Users, 
@@ -77,7 +81,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Base de clientes',
     href: '/admin/clientes',
     iconColor: 'text-indigo-500',
-    iconBg: 'bg-indigo-100 dark:bg-indigo-900/30'
+    iconBg: 'bg-indigo-100 dark:bg-indigo-900/30',
+    permissionKey: 'clients'
   },
   { 
     icon: FileSignature, 
@@ -85,7 +90,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Gestão de contratos',
     href: '/admin/contratos',
     iconColor: 'text-violet-500',
-    iconBg: 'bg-violet-100 dark:bg-violet-900/30'
+    iconBg: 'bg-violet-100 dark:bg-violet-900/30',
+    permissionKey: 'contracts'
   },
   { 
     icon: FileStack, 
@@ -93,7 +99,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Templates e modelos',
     href: '/admin/modelos-contrato',
     iconColor: 'text-pink-500',
-    iconBg: 'bg-pink-100 dark:bg-pink-900/30'
+    iconBg: 'bg-pink-100 dark:bg-pink-900/30',
+    permissionKey: 'contract_templates'
   },
   { 
     icon: FolderOpen, 
@@ -101,7 +108,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Arquivos e anexos',
     href: '/admin/documentos',
     iconColor: 'text-amber-500',
-    iconBg: 'bg-amber-100 dark:bg-amber-900/30'
+    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+    permissionKey: 'documents'
   },
   { 
     icon: CreditCard, 
@@ -109,7 +117,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Pagamentos e faturas',
     href: '/admin/financeiro',
     iconColor: 'text-emerald-500',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30'
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
+    permissionKey: 'financial'
   },
   { 
     icon: Mail, 
@@ -117,7 +126,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Comunicação e templates',
     href: '/admin/emails',
     iconColor: 'text-sky-500',
-    iconBg: 'bg-sky-100 dark:bg-sky-900/30'
+    iconBg: 'bg-sky-100 dark:bg-sky-900/30',
+    permissionKey: 'emails'
   },
   { 
     icon: MessageCircle, 
@@ -125,7 +135,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Atendimento em tempo real',
     href: '/admin/chat-ao-vivo',
     iconColor: 'text-teal-500',
-    iconBg: 'bg-teal-100 dark:bg-teal-900/30'
+    iconBg: 'bg-teal-100 dark:bg-teal-900/30',
+    permissionKey: 'live_chat'
   },
   { 
     icon: Bell, 
@@ -133,7 +144,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Alertas e avisos',
     href: '/admin/notificacoes',
     iconColor: 'text-orange-500',
-    iconBg: 'bg-orange-100 dark:bg-orange-900/30'
+    iconBg: 'bg-orange-100 dark:bg-orange-900/30',
+    permissionKey: 'notifications'
   },
   { 
     icon: BookOpen, 
@@ -141,7 +153,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Publicações oficiais',
     href: '/admin/revista-inpi',
     iconColor: 'text-cyan-500',
-    iconBg: 'bg-cyan-100 dark:bg-cyan-900/30'
+    iconBg: 'bg-cyan-100 dark:bg-cyan-900/30',
+    permissionKey: 'inpi_magazine'
   },
   { 
     icon: Scale, 
@@ -149,7 +162,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Recursos e petições',
     href: '/admin/recursos-inpi',
     iconColor: 'text-purple-500',
-    iconBg: 'bg-purple-100 dark:bg-purple-900/30'
+    iconBg: 'bg-purple-100 dark:bg-purple-900/30',
+    permissionKey: 'inpi_resources'
   },
   { 
     icon: Database, 
@@ -157,7 +171,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Sincronização CRM',
     href: '/admin/integracao-perfex',
     iconColor: 'text-slate-500',
-    iconBg: 'bg-slate-100 dark:bg-slate-900/30'
+    iconBg: 'bg-slate-100 dark:bg-slate-900/30',
+    permissionKey: 'perfex_integration'
   },
   { 
     icon: Settings, 
@@ -165,7 +180,8 @@ const menuItems: MenuItem[] = [
     subtitle: 'Preferências do sistema',
     href: '/admin/configuracoes',
     iconColor: 'text-zinc-500',
-    iconBg: 'bg-zinc-100 dark:bg-zinc-900/30'
+    iconBg: 'bg-zinc-100 dark:bg-zinc-900/30',
+    permissionKey: 'settings'
   },
 ];
 
@@ -230,6 +246,13 @@ function AdminSidebar() {
   const navigate = useNavigate();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
+  const { permissions, isLoading: loadingPermissions } = useAdminPermissions();
+
+  // Filter menu items based on user permissions
+  const filteredMenuItems = useMemo(() => {
+    if (!permissions) return menuItems; // Show all while loading
+    return menuItems.filter(item => permissions[item.permissionKey]?.can_view !== false);
+  }, [permissions]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -269,7 +292,7 @@ function AdminSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {menuItems.map((item) => (
+              {filteredMenuItems.map((item) => (
                 <SidebarMenuItemCustom
                   key={item.href}
                   item={item}

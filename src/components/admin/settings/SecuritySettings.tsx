@@ -3,23 +3,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Shield, UserPlus, Trash2, Loader2, Clock, User, Monitor } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Loader2, Clock, User, Monitor, Settings2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { CreateAdminDialog } from './CreateAdminDialog';
+import { EditPermissionsDialog } from './EditPermissionsDialog';
 
 export function SecuritySettings() {
   const queryClient = useQueryClient();
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<{ id: string; email: string; fullName: string } | null>(null);
 
-  // Fetch admin users
+  // Fetch admin users with permissions info
   const { data: adminUsers, isLoading: loadingAdmins } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
@@ -42,9 +41,21 @@ export function SecuritySettings() {
         .select('id, email, full_name')
         .in('id', userIds);
 
+      // Fetch permissions count for each admin
+      const { data: permissions } = await supabase
+        .from('admin_permissions')
+        .select('user_id')
+        .in('user_id', userIds);
+
+      const permissionsByUser = permissions?.reduce((acc, p) => {
+        acc[p.user_id] = (acc[p.user_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
       return data.map(role => ({
         ...role,
         profile: profiles?.find(p => p.id === role.user_id),
+        hasCustomPermissions: (permissionsByUser[role.user_id] || 0) > 0,
       }));
     },
   });
@@ -81,51 +92,15 @@ export function SecuritySettings() {
     },
   });
 
-  const inviteAdminMutation = useMutation({
-    mutationFn: async (email: string) => {
-      // Check if user exists
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
-
-      if (!profile) {
-        throw new Error('Usuário não encontrado. O usuário precisa ter uma conta primeiro.');
-      }
-
-      // Check if already admin
-      const { data: existingRole } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('user_id', profile.id)
-        .eq('role', 'admin')
-        .single();
-
-      if (existingRole) {
-        throw new Error('Este usuário já é um administrador.');
-      }
-
-      // Add admin role
-      const { error } = await supabase
-        .from('user_roles')
-        .insert({ user_id: profile.id, role: 'admin' });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Administrador adicionado com sucesso!');
-      setIsInviteDialogOpen(false);
-      setInviteEmail('');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
-
   const removeAdminMutation = useMutation({
-    mutationFn: async (roleId: string) => {
+    mutationFn: async ({ roleId, userId }: { roleId: string; userId: string }) => {
+      // Delete permissions first
+      await supabase
+        .from('admin_permissions')
+        .delete()
+        .eq('user_id', userId);
+
+      // Delete role
       const { error } = await supabase
         .from('user_roles')
         .delete()
@@ -151,10 +126,18 @@ export function SecuritySettings() {
     return 'Navegador';
   };
 
-  const isLoading = loadingAdmins || loadingHistory;
-
   return (
     <div className="space-y-6">
+      {/* Create Admin Dialog */}
+      <CreateAdminDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
+      
+      {/* Edit Permissions Dialog */}
+      <EditPermissionsDialog 
+        open={!!editingUser} 
+        onOpenChange={(open) => !open && setEditingUser(null)}
+        user={editingUser}
+      />
+
       {/* Admin Users */}
       <Card>
         <CardHeader>
@@ -163,55 +146,13 @@ export function SecuritySettings() {
               <Shield className="h-5 w-5 text-violet-500" />
               <CardTitle>Usuários Administradores</CardTitle>
             </div>
-            <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Adicionar Admin
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Adicionar Administrador</DialogTitle>
-                  <DialogDescription>
-                    Digite o email de um usuário existente para conceder acesso administrativo
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                  <Label htmlFor="email">Email do Usuário</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="usuario@email.com"
-                    className="mt-2"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    O usuário precisa ter uma conta cadastrada no sistema
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button 
-                    onClick={() => inviteAdminMutation.mutate(inviteEmail)}
-                    disabled={!inviteEmail || inviteAdminMutation.isPending}
-                  >
-                    {inviteAdminMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <UserPlus className="h-4 w-4 mr-2" />
-                    )}
-                    Adicionar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Criar Novo Admin
+            </Button>
           </div>
           <CardDescription>
-            Gerencie os usuários com acesso administrativo ao sistema
+            Crie e gerencie usuários com acesso ao CRM. Defina permissões granulares por seção.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -224,7 +165,7 @@ export function SecuritySettings() {
               {adminUsers.map((admin) => (
                 <div
                   key={admin.id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
@@ -236,16 +177,33 @@ export function SecuritySettings() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge>Admin</Badge>
+                    {admin.hasCustomPermissions ? (
+                      <Badge variant="secondary">Permissões Personalizadas</Badge>
+                    ) : (
+                      <Badge>Acesso Total</Badge>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditingUser({
+                        id: admin.user_id,
+                        email: admin.profile?.email || '',
+                        fullName: admin.profile?.full_name || '',
+                      })}
+                      title="Editar Permissões"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        if (confirm('Remover acesso de administrador deste usuário?')) {
-                          removeAdminMutation.mutate(admin.id);
+                        if (confirm('Remover acesso de administrador deste usuário? As permissões também serão removidas.')) {
+                          removeAdminMutation.mutate({ roleId: admin.id, userId: admin.user_id });
                         }
                       }}
                       disabled={removeAdminMutation.isPending}
+                      title="Remover Admin"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -257,6 +215,14 @@ export function SecuritySettings() {
             <div className="text-center py-8 text-muted-foreground">
               <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>Nenhum administrador cadastrado</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setIsCreateDialogOpen(true)}
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Criar Primeiro Admin
+              </Button>
             </div>
           )}
         </CardContent>
