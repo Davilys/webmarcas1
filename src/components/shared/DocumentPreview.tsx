@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, ExternalLink, FileText, Image, Video, Music, Loader2 } from 'lucide-react';
+import { Download, ExternalLink, FileText, Image, Video, Music, Loader2, CheckCircle, Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { ContractRenderer } from '@/components/contracts/ContractRenderer';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface DocumentPreviewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   document: {
+    id?: string;
     name: string;
     file_url: string;
     document_type?: string | null;
     mime_type?: string | null;
+    isContract?: boolean;
+    signature_status?: string;
+    blockchain_hash?: string;
   } | null;
 }
 
@@ -20,6 +26,7 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [effectiveUrl, setEffectiveUrl] = useState<string>('');
+  const [contractHtml, setContractHtml] = useState<string | null>(null);
 
   // Reset states when document changes
   useEffect(() => {
@@ -28,8 +35,34 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
       setSignedUrl(null);
       setLoading(false);
       setEffectiveUrl(document.file_url);
+      setContractHtml(null);
+      
+      // If it's a contract without file_url, fetch contract_html
+      if (document.isContract && !document.file_url && document.id) {
+        fetchContractHtml(document.id);
+      }
     }
   }, [document]);
+
+  // Fetch contract HTML for digital contracts
+  const fetchContractHtml = async (contractId: string) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('contract_html, blockchain_hash, blockchain_timestamp, signature_ip, blockchain_tx_id, blockchain_network')
+        .eq('id', contractId)
+        .single();
+      
+      if (data?.contract_html) {
+        setContractHtml(data.contract_html);
+      }
+    } catch (err) {
+      console.error('Error fetching contract HTML:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Try to get signed URL as fallback when public URL fails
   const trySignedUrl = async () => {
@@ -116,6 +149,41 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Loader2 className="h-12 w-12 mb-4 animate-spin opacity-50" />
           <p className="text-lg font-medium">Carregando...</p>
+        </div>
+      );
+    }
+
+    // Digital contract with HTML content (no PDF file)
+    if (document.isContract && contractHtml) {
+      return (
+        <ScrollArea className="h-[60vh]">
+          <div className="p-4 bg-white rounded-lg">
+            {document.signature_status === 'signed' && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="text-green-800 font-medium">Contrato Assinado Digitalmente</span>
+                {document.blockchain_hash && (
+                  <Shield className="h-4 w-4 text-blue-600 ml-2" />
+                )}
+              </div>
+            )}
+            <ContractRenderer 
+              content={contractHtml}
+              showLetterhead={true}
+              showCertificationSection={document.signature_status === 'signed'}
+            />
+          </div>
+        </ScrollArea>
+      );
+    }
+
+    // Digital contract without HTML - show message
+    if (document.isContract && !contractHtml && !url) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <FileText className="h-16 w-16 mb-4 opacity-50" />
+          <p className="text-lg font-medium">Contrato Digital</p>
+          <p className="text-sm mt-2">O PDF está sendo gerado. Tente novamente em alguns segundos.</p>
         </div>
       );
     }

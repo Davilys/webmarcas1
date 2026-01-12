@@ -11,6 +11,7 @@ import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import { toast } from "sonner";
 import type { ViabilityResult } from "@/lib/api/viability";
+import { generateAndUploadContractPdf } from "@/hooks/useContractPdfUpload";
 
 export default function RegistrarMarca() {
   const navigate = useNavigate();
@@ -98,6 +99,25 @@ export default function RegistrarMarca() {
 
       if (error) throw new Error(error.message);
       if (!data.success) throw new Error(data.error || 'Erro ao criar cobrança');
+
+      // Generate and upload the signed PDF (async, don't block navigation)
+      if (data.contractId && contractHtml) {
+        generateAndUploadContractPdf({
+          contractId: data.contractId,
+          contractHtml,
+          brandName: brandData.brandName,
+          documentType: 'contrato',
+          userId: userId || undefined,
+        }).then(result => {
+          if (result.success) {
+            console.log('Contract PDF uploaded successfully:', result.publicUrl);
+          } else {
+            console.error('Failed to upload contract PDF:', result.error);
+          }
+        }).catch(err => {
+          console.error('Error uploading contract PDF:', err);
+        });
+      }
 
       const orderData = {
         personalData, brandData, paymentMethod, paymentValue,

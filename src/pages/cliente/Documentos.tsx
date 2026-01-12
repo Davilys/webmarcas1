@@ -40,6 +40,7 @@ interface Document {
   signature_status?: string;
   blockchain_hash?: string;
   isContract?: boolean;
+  contract_id?: string;
 }
 
 const typeLabels: Record<string, { label: string; color: string }> = {
@@ -97,7 +98,7 @@ export default function Documentos() {
   }, [navigate]);
 
   const fetchDocuments = async (userId: string) => {
-    // Fetch documents from documents table
+    // Fetch documents from documents table (including those linked to contracts)
     const { data: docsData } = await supabase
       .from('documents')
       .select('*')
@@ -112,24 +113,42 @@ export default function Documentos() {
       .eq('visible_to_client', true)
       .order('created_at', { ascending: false });
 
-    // Transform contracts into Document format
-    const contractDocs: Document[] = (contractsData || []).map(c => ({
-      id: c.id,
-      name: c.subject || `Contrato ${c.contract_number}`,
-      document_type: 'contrato',
-      file_url: '', // Digital contract, no file
-      file_size: null,
-      mime_type: null,
-      created_at: c.created_at || '',
-      signature_status: c.signature_status,
-      blockchain_hash: c.blockchain_hash,
-      isContract: true,
-    }));
+    // Build a map of contract_id -> document with real file_url
+    const contractToDocMap = new Map<string, typeof docsData extends (infer T)[] ? T : never>();
+    (docsData || []).forEach(doc => {
+      if (doc.contract_id && doc.file_url) {
+        contractToDocMap.set(doc.contract_id, doc);
+      }
+    });
 
-    // Merge and dedupe (contracts table takes precedence)
+    // Transform contracts into Document format, using file_url from linked document if available
+    const contractDocs: Document[] = (contractsData || []).map(c => {
+      const linkedDoc = contractToDocMap.get(c.id);
+      return {
+        id: c.id,
+        name: c.subject || `Contrato ${c.contract_number}`,
+        document_type: 'contrato',
+        file_url: linkedDoc?.file_url || '', // Use real PDF URL if available
+        file_size: linkedDoc?.file_size || null,
+        mime_type: linkedDoc?.mime_type || null,
+        created_at: c.created_at || '',
+        signature_status: c.signature_status,
+        blockchain_hash: c.blockchain_hash,
+        isContract: true,
+      };
+    });
+
+    // Filter out documents that are linked to contracts (to avoid duplicates)
     const docs = (docsData as Document[]) || [];
     const contractIds = new Set(contractDocs.map(c => c.id));
-    const filteredDocs = docs.filter(d => !contractIds.has(d.id));
+    const docsWithContractId = new Set([...contractToDocMap.keys()]);
+    const filteredDocs = docs.filter(d => {
+      // Skip if this doc represents a contract already in contractDocs
+      if (contractIds.has(d.id)) return false;
+      // Skip if this doc is linked to a contract (it's already merged above)
+      if (d.contract_id && docsWithContractId.has(d.contract_id)) return false;
+      return true;
+    });
     
     setDocuments([...contractDocs, ...filteredDocs]);
     setLoading(false);
