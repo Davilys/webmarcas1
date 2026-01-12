@@ -1759,6 +1759,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      merge_duplicate_clients: {
+        Args: { keep_id: string; merge_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
