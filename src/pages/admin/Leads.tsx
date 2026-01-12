@@ -9,11 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Plus, RefreshCw, UserPlus, MoreHorizontal, UserCheck, FileSignature, Trash2, Edit, Eye, Filter } from 'lucide-react';
+import { Search, Plus, RefreshCw, UserPlus, MoreHorizontal, UserCheck, Trash2, Edit, Filter, Upload, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { LeadImportExportDialog } from '@/components/admin/leads/LeadImportExportDialog';
+import { LeadBulkActionsBar } from '@/components/admin/leads/LeadBulkActionsBar';
 
 interface Lead {
   id: string;
@@ -53,8 +56,10 @@ export default function AdminLeads() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importExportOpen, setImportExportOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
     full_name: '',
@@ -165,6 +170,11 @@ export default function AdminLeads() {
     if (!confirm('Tem certeza que deseja excluir este lead?')) return;
     
     try {
+      // Delete related data first
+      await supabase.from('email_logs').delete().eq('related_lead_id', id);
+      await supabase.from('contracts').delete().eq('lead_id', id);
+      
+      // Then delete the lead
       const { error } = await supabase.from('leads').delete().eq('id', id);
       if (error) throw error;
       toast.success('Lead excluído');
@@ -224,6 +234,22 @@ export default function AdminLeads() {
     );
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(filteredLeads.map(lead => lead.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds([...selectedIds, id]);
+    } else {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    }
+  };
+
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = 
       lead.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -256,6 +282,10 @@ export default function AdminLeads() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={fetchLeads}>
               <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" onClick={() => setImportExportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Importar/Exportar
             </Button>
             <Dialog open={dialogOpen} onOpenChange={(open) => {
               setDialogOpen(open);
@@ -419,6 +449,12 @@ export default function AdminLeads() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px]">
+                  <Checkbox 
+                    checked={selectedIds.length === filteredLeads.length && filteredLeads.length > 0}
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Contato</TableHead>
                 <TableHead>Empresa</TableHead>
@@ -432,7 +468,7 @@ export default function AdminLeads() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="h-4 w-4 animate-spin" />
                       Carregando...
@@ -441,13 +477,19 @@ export default function AdminLeads() {
                 </TableRow>
               ) : filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Nenhum lead encontrado
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredLeads.map((lead) => (
-                  <TableRow key={lead.id}>
+                  <TableRow key={lead.id} className={selectedIds.includes(lead.id) ? 'bg-muted/50' : ''}>
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedIds.includes(lead.id)}
+                        onCheckedChange={(checked) => handleSelectOne(lead.id, !!checked)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{lead.full_name}</TableCell>
                     <TableCell>
                       <div className="text-sm">
@@ -531,6 +573,21 @@ export default function AdminLeads() {
           </div>
         </div>
       </div>
+
+      {/* Import/Export Dialog */}
+      <LeadImportExportDialog 
+        open={importExportOpen}
+        onOpenChange={setImportExportOpen}
+        leads={leads}
+        onImportComplete={fetchLeads}
+      />
+
+      {/* Bulk Actions Bar */}
+      <LeadBulkActionsBar 
+        selectedIds={selectedIds}
+        onClearSelection={() => setSelectedIds([])}
+        onActionComplete={fetchLeads}
+      />
     </AdminLayout>
   );
 }
