@@ -134,7 +134,8 @@ function isFamousBrand(brandName: string): boolean {
   );
 }
 
-function getClassesForBusinessArea(businessArea: string): { classes: number[], descriptions: string[] } {
+// Função de fallback para mapeamento fixo (usada se IA falhar)
+function getClassesForBusinessAreaFallback(businessArea: string): { classes: number[], descriptions: string[] } {
   const normalized = normalizeString(businessArea);
   
   for (const [key, value] of Object.entries(BUSINESS_AREA_CLASSES)) {
@@ -175,6 +176,100 @@ function getClassesForBusinessArea(businessArea: string): { classes: number[], d
   }
   
   return BUSINESS_AREA_CLASSES.default;
+}
+
+// Função para sugerir classes NCL via IA baseado no ramo de atividade
+async function suggestClassesWithAI(businessArea: string): Promise<{
+  classes: number[];
+  descriptions: string[];
+}> {
+  const openAIKey = Deno.env.get('OPENAI_API_KEY');
+  
+  // Fallback para mapeamento fixo se não tiver chave
+  if (!openAIKey) {
+    console.log('[CLASSES] OpenAI key não configurada, usando fallback');
+    return getClassesForBusinessAreaFallback(businessArea);
+  }
+  
+  const prompt = `Você é um especialista em registro de marcas no INPI Brasil e na Classificação Internacional de Nice (NCL).
+
+Com base no ramo de atividade informado pelo cliente, sugira EXATAMENTE 3 classes NCL mais adequadas para proteger uma marca neste segmento de mercado.
+
+Ramo de Atividade: "${businessArea}"
+
+REGRAS IMPORTANTES:
+- Retorne APENAS um JSON válido no formato especificado
+- As classes devem ser números entre 1 e 45 (classes válidas NCL)
+- As descrições devem ser claras, em português e começar com "Classe XX – "
+- Priorize classes específicas e diretamente relacionadas ao ramo informado
+- Evite classes genéricas como 35, 41, 42 quando existirem classes mais específicas
+- Considere toda a cadeia do negócio (produtos, serviços, comercialização)
+
+Formato de resposta (JSON puro, sem markdown, sem code blocks):
+{
+  "classes": [numero1, numero2, numero3],
+  "descriptions": [
+    "Classe XX – Descrição completa e detalhada da classe 1",
+    "Classe XX – Descrição completa e detalhada da classe 2", 
+    "Classe XX – Descrição completa e detalhada da classe 3"
+  ]
+}`;
+
+  try {
+    console.log(`[CLASSES] Consultando IA para ramo: "${businessArea}"`);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Você é um especialista em propriedade intelectual e classificação NCL do INPI Brasil. Responda sempre em JSON válido, sem markdown.' 
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 600,
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`[CLASSES] Erro na API OpenAI: ${response.status}`);
+      return getClassesForBusinessAreaFallback(businessArea);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (content) {
+      const parsed = JSON.parse(content);
+      
+      // Validar resposta
+      if (Array.isArray(parsed.classes) && parsed.classes.length === 3 &&
+          Array.isArray(parsed.descriptions) && parsed.descriptions.length === 3 &&
+          parsed.classes.every((c: number) => c >= 1 && c <= 45)) {
+        console.log(`[CLASSES] IA sugeriu para "${businessArea}":`, parsed.classes);
+        return {
+          classes: parsed.classes,
+          descriptions: parsed.descriptions
+        };
+      } else {
+        console.log('[CLASSES] Resposta da IA inválida, usando fallback');
+      }
+    }
+  } catch (error) {
+    console.error('[CLASSES] Erro ao consultar IA:', error);
+  }
+  
+  // Fallback para mapeamento fixo
+  console.log('[CLASSES] Usando fallback para:', businessArea);
+  return getClassesForBusinessAreaFallback(businessArea);
 }
 
 // Função para buscar no WIPO Global Brand Database
@@ -507,7 +602,7 @@ Deno.serve(async (req) => {
     const analysisResult = await analyzeViability(brandName);
     
     // Get classes for the business area
-    const { classes, descriptions } = getClassesForBusinessArea(businessArea);
+    const { classes, descriptions } = await suggestClassesWithAI(businessArea);
     const classesText = descriptions.map((desc: string) => `${desc}`).join('\n');
     
     // Determinar nível de viabilidade baseado na análise de padrões
