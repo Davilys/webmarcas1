@@ -186,13 +186,18 @@ export default function Login() {
             </TabsContent>
           </Tabs>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+          <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">
             <p>
               Primeiro acesso? Use a senha padrão:{' '}
               <code className="bg-muted px-1 rounded">123Mudar@</code>
             </p>
-            <p className="mt-2">
-              <Link to="/" className="text-primary hover:underline">
+            <p>
+              <Link to="/cliente/recuperar-senha" className="text-primary hover:underline">
+                Esqueceu sua senha?
+              </Link>
+            </p>
+            <p>
+              <Link to="/" className="text-muted-foreground hover:text-primary">
                 ← Voltar ao site
               </Link>
             </p>

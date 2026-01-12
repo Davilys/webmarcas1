@@ -26,6 +26,8 @@ import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 import ClienteRegistrarMarca from "./pages/cliente/RegistrarMarca";
 import ClienteStatusPedido from "./pages/cliente/StatusPedido";
 import ClientePedidoConfirmado from "./pages/cliente/PedidoConfirmado";
+import ClienteRecuperarSenha from "./pages/cliente/RecuperarSenha";
+import ClienteRedefinirSenha from "./pages/cliente/RedefinirSenha";
 
 // Admin pages
 import AdminLogin from "./pages/admin/Login";
@@ -77,6 +79,8 @@ const App = () => (
               <Route path="/cliente/registrar-marca" element={<ClienteRegistrarMarca />} />
               <Route path="/cliente/status-pedido" element={<ClienteStatusPedido />} />
               <Route path="/cliente/pedido-confirmado" element={<ClientePedidoConfirmado />} />
+              <Route path="/cliente/recuperar-senha" element={<ClienteRecuperarSenha />} />
+              <Route path="/cliente/redefinir-senha" element={<ClienteRedefinirSenha />} />
               {/* Painel Administrativo */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
