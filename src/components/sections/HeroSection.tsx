@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getNextFridayFormatted } from "@/lib/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { AnimatedCounter } from "@/components/admin/dashboard/AnimatedCounter";
 
 const HeroSection = () => {
   const { t } = useLanguage();
@@ -55,10 +56,10 @@ const HeroSection = () => {
   ];
 
   const stats = [
-    { value: "10.000+", label: t("hero.stats.brands") },
-    { value: "98%", label: t("hero.stats.success") },
-    { value: "48h", label: t("hero.stats.time") },
-    { value: "15+", label: t("hero.stats.experience") },
+    { value: 10000, suffix: "+", label: t("hero.stats.brands") },
+    { value: 98, suffix: "%", label: t("hero.stats.success") },
+    { value: 48, suffix: "h", label: t("hero.stats.time") },
+    { value: 15, suffix: "+", label: t("hero.stats.experience") },
   ];
 
   return (
@@ -171,14 +172,26 @@ const HeroSection = () => {
         </div>
 
         {/* Stats */}
-        <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 max-w-3xl mx-auto">
           {stats.map((stat, index) => (
-            <div key={index} className="text-center">
-              <div className="font-display text-3xl md:text-4xl font-bold gradient-text mb-1">
-                {stat.value}
+            <motion.div 
+              key={index} 
+              className="text-center"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
+            >
+              <div className="font-display text-4xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2">
+                <AnimatedCounter 
+                  value={stat.value} 
+                  suffix={stat.suffix}
+                  duration={2.5}
+                />
               </div>
-              <div className="text-sm text-muted-foreground">{stat.label}</div>
-            </div>
+              <div className="text-sm md:text-base text-muted-foreground font-medium">
+                {stat.label}
+              </div>
+            </motion.div>
           ))}
         </div>
       </div>
