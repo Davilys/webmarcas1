@@ -20,10 +20,38 @@ const HeroSection = () => {
   }, [phrases.length]);
 
   const trustBadges = [
-    { icon: Shield, label: t("hero.trust.inpi") },
-    { icon: Clock, label: t("hero.trust.protocol") },
-    { icon: CheckCircle, label: t("hero.trust.guarantee") },
-    { icon: Award, label: t("hero.trust.online") },
+    { 
+      icon: Shield, 
+      label: t("hero.trust.inpi"),
+      color: "text-blue-600",
+      bgColor: "bg-blue-500/10",
+      gradientFrom: "from-blue-500",
+      gradientTo: "to-cyan-500"
+    },
+    { 
+      icon: Clock, 
+      label: t("hero.trust.protocol"),
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-500/10",
+      gradientFrom: "from-emerald-500",
+      gradientTo: "to-green-500"
+    },
+    { 
+      icon: CheckCircle, 
+      label: t("hero.trust.guarantee"),
+      color: "text-violet-600",
+      bgColor: "bg-violet-500/10",
+      gradientFrom: "from-violet-500",
+      gradientTo: "to-purple-500"
+    },
+    { 
+      icon: Award, 
+      label: t("hero.trust.online"),
+      color: "text-amber-600",
+      bgColor: "bg-amber-500/10",
+      gradientFrom: "from-amber-500",
+      gradientTo: "to-orange-500"
+    },
   ];
 
   const stats = [
@@ -96,17 +124,48 @@ const HeroSection = () => {
           </div>
 
           {/* Trust badges */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 max-w-3xl mx-auto animate-slide-up" style={{ animationDelay: "0.3s" }}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-3xl mx-auto">
             {trustBadges.map((item, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-secondary/50 backdrop-blur-sm"
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ 
+                  duration: 0.5, 
+                  delay: 0.3 + index * 0.1,
+                  type: "spring",
+                  stiffness: 100
+                }}
+                whileHover={{ 
+                  y: -8, 
+                  scale: 1.05,
+                  transition: { duration: 0.2 }
+                }}
+                className="relative flex flex-col items-center gap-4 p-6 rounded-2xl bg-card/80 backdrop-blur-md border border-border/50 overflow-hidden group cursor-pointer shadow-lg hover:shadow-xl transition-shadow"
               >
-                <item.icon className="w-9 h-9 text-primary" />
-                <span className="text-xs md:text-sm text-muted-foreground text-center">
+                {/* Gradiente de fundo sutil */}
+                <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 bg-gradient-to-br ${item.gradientFrom} ${item.gradientTo}`} />
+                
+                {/* Circulo decorativo */}
+                <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-10 group-hover:opacity-20 transition-opacity bg-gradient-to-br ${item.gradientFrom} ${item.gradientTo}`} />
+                
+                {/* Container do icone com animacao */}
+                <motion.div 
+                  className={`p-4 rounded-2xl ${item.bgColor} relative`}
+                  whileHover={{ rotate: 10, scale: 1.1 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <item.icon className={`w-8 h-8 ${item.color}`} />
+                  
+                  {/* Brilho animado no icone */}
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </motion.div>
+                
+                {/* Texto */}
+                <span className="text-sm font-medium text-foreground text-center relative z-10">
                   {item.label}
                 </span>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
