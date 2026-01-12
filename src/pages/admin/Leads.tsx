@@ -170,18 +170,28 @@ export default function AdminLeads() {
     if (!confirm('Tem certeza que deseja excluir este lead?')) return;
     
     try {
-      // Delete related data first
+      // Delete related email_logs first
       await supabase.from('email_logs').delete().eq('related_lead_id', id);
-      await supabase.from('contracts').delete().eq('lead_id', id);
       
-      // Then delete the lead
-      const { error } = await supabase.from('leads').delete().eq('id', id);
+      // Now delete the lead and verify it was deleted (contracts will have lead_id set to NULL automatically)
+      const { data, error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id)
+        .select('id');
+      
       if (error) throw error;
-      toast.success('Lead excluído');
+      
+      if (!data || data.length === 0) {
+        toast.error('Não foi possível excluir o lead. Verifique suas permissões.');
+        return;
+      }
+      
+      toast.success('Lead excluído com sucesso');
       fetchLeads();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting lead:', error);
-      toast.error('Erro ao excluir lead');
+      toast.error(error.message || 'Erro ao excluir lead');
     }
   };
 
