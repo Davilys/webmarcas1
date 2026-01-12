@@ -16,6 +16,13 @@ function generateTempPassword(): string {
   return password;
 }
 
+// Normalize CPF/CNPJ by removing all non-digit characters
+function normalizeCpfCnpj(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.replace(/\D/g, '');
+  return normalized.length > 0 ? normalized : null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -30,6 +37,7 @@ serve(async (req) => {
       company_name,
       cpf_cnpj,
       address,
+      neighborhood,
       city,
       state,
       zip_code,
@@ -57,27 +65,99 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check if user already exists
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id, email')
-      .eq('email', email)
-      .single();
+    // Normalize CPF/CNPJ for consistent lookup
+    const normalizedCpfCnpj = normalizeCpfCnpj(cpf_cnpj);
 
+    // PRIORITY 1: Check if client already exists by CPF/CNPJ (primary unique key)
+    let existingProfile = null;
+    
+    if (normalizedCpfCnpj) {
+      const { data: profileByCpf } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, cpf_cnpj')
+        .eq('cpf_cnpj', cpf_cnpj) // Check with formatted version
+        .maybeSingle();
+      
+      if (!profileByCpf) {
+        // Also check normalized version (digits only)
+        const { data: profileByNormalizedCpf } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, cpf_cnpj')
+          .ilike('cpf_cnpj', `%${normalizedCpfCnpj}%`)
+          .maybeSingle();
+        
+        existingProfile = profileByNormalizedCpf;
+      } else {
+        existingProfile = profileByCpf;
+      }
+    }
+
+    // PRIORITY 2: If not found by CPF, check by email
+    if (!existingProfile) {
+      const { data: profileByEmail } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, cpf_cnpj')
+        .eq('email', email)
+        .maybeSingle();
+      
+      existingProfile = profileByEmail;
+    }
+
+    // If existing profile found, return it and optionally create new process
     if (existingProfile) {
-      // Return existing user ID
+      console.log(`Found existing client by CPF/email: ${existingProfile.email} (${existingProfile.id})`);
+      
+      // Update profile with any new information (except CPF which is unique)
+      await supabase
+        .from('profiles')
+        .update({
+          full_name: full_name || existingProfile.full_name,
+          phone: phone || undefined,
+          company_name: company_name || undefined,
+          address: address || undefined,
+          neighborhood: neighborhood || undefined,
+          city: city || undefined,
+          state: state || undefined,
+          zip_code: zip_code || undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingProfile.id);
+
+      // Create new brand process if brand name is provided
+      let processId = null;
+      if (brand_name) {
+        const { data: processData, error: processError } = await supabase
+          .from('brand_processes')
+          .insert({
+            user_id: existingProfile.id,
+            brand_name,
+            business_area: business_area || null,
+            status: 'em_andamento',
+            pipeline_stage: 'protocolado',
+          })
+          .select('id')
+          .single();
+
+        if (processError) {
+          console.error('Error creating brand process for existing user:', processError);
+        } else {
+          processId = processData?.id;
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
           userId: existingProfile.id,
+          processId,
           isExisting: true,
-          message: 'Cliente já existe no sistema'
+          message: 'Cliente já cadastrado. Novo processo vinculado ao cadastro existente.'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Generate temporary password
+    // No existing profile - create new user
     const tempPassword = generateTempPassword();
 
     // Create user in auth.users
@@ -111,10 +191,11 @@ serve(async (req) => {
         company_name: company_name || null,
         cpf_cnpj: cpf_cnpj || null,
         address: address || null,
+        neighborhood: neighborhood || null,
         city: city || null,
         state: state || null,
         zip_code: zip_code || null,
-        origin: 'admin_form',
+        origin: 'form_checkout',
       });
 
     if (profileError) {
@@ -128,10 +209,11 @@ serve(async (req) => {
           company_name: company_name || null,
           cpf_cnpj: cpf_cnpj || null,
           address: address || null,
+          neighborhood: neighborhood || null,
           city: city || null,
           state: state || null,
           zip_code: zip_code || null,
-          origin: 'admin_form',
+          origin: 'form_checkout',
         })
         .eq('id', userId);
     }

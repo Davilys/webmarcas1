@@ -71,19 +71,94 @@ serve(async (req) => {
     console.log('Creating Asaas payment for:', personalData.fullName, '| Method:', paymentMethod);
 
     // ========================================
-    // STEP 1: Create Lead in database
+    // STEP 0: Normalize CPF/CNPJ and prepare unique identifier
     // ========================================
     const cpfCnpj = brandData.hasCNPJ && brandData.cnpj 
       ? brandData.cnpj.replace(/\D/g, '') 
       : personalData.cpf.replace(/\D/g, '');
+    
+    // Format CPF for storage (XXX.XXX.XXX-XX)
+    const formattedCpf = cpfCnpj.length === 11 
+      ? cpfCnpj.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+      : cpfCnpj.length === 14 
+        ? cpfCnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+        : cpfCnpj;
 
+    // ========================================
+    // STEP 0.1: Check for existing PROFILE by CPF (UNIQUE KEY)
+    // This prevents duplicate clients in the CRM
+    // ========================================
+    let existingProfileId: string | null = null;
+    
+    // First try formatted CPF
+    const { data: profileByCpf } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, full_name')
+      .eq('cpf_cnpj', formattedCpf)
+      .maybeSingle();
+    
+    if (profileByCpf) {
+      existingProfileId = profileByCpf.id;
+      console.log('Found existing profile by formatted CPF:', existingProfileId);
+    } else {
+      // Try with raw digits
+      const { data: profileByRawCpf } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('cpf_cnpj', cpfCnpj)
+        .maybeSingle();
+      
+      if (profileByRawCpf) {
+        existingProfileId = profileByRawCpf.id;
+        console.log('Found existing profile by raw CPF:', existingProfileId);
+      }
+    }
+    
+    // If no profile found by CPF, try by email
+    if (!existingProfileId) {
+      const { data: profileByEmail } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('email', personalData.email)
+        .maybeSingle();
+      
+      if (profileByEmail) {
+        existingProfileId = profileByEmail.id;
+        console.log('Found existing profile by email:', existingProfileId);
+      }
+    }
+    
+    // Use the found profile ID if we have a userId from session, otherwise use found profile
+    const effectiveUserId = userId || existingProfileId;
+    
+    if (existingProfileId) {
+      // Update existing profile with any new data (except CPF which is unique)
+      await supabaseAdmin
+        .from('profiles')
+        .update({
+          full_name: personalData.fullName,
+          phone: personalData.phone,
+          address: personalData.address,
+          neighborhood: personalData.neighborhood,
+          city: personalData.city,
+          state: personalData.state,
+          zip_code: personalData.cep,
+          company_name: brandData.hasCNPJ ? brandData.companyName : undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingProfileId);
+      console.log('Updated existing profile with new data');
+    }
+
+    // ========================================
+    // STEP 1: Create/Update Lead in database
+    // ========================================
     // Check if lead already exists by email or CPF/CNPJ
     const { data: existingLead } = await supabaseAdmin
       .from('leads')
       .select('id')
       .or(`email.eq.${personalData.email},cpf_cnpj.eq.${cpfCnpj}`)
-      .limit(1)
-      .single();
+      .maybeSingle();
 
     let leadId: string = '';
 
@@ -334,7 +409,7 @@ serve(async (req) => {
         signature_user_agent: userAgent,
         asaas_payment_id: paymentId || null, // Will be filled for card after payment
         lead_id: leadId || null,
-        user_id: userId || null,
+        user_id: effectiveUserId || null, // Use effective user ID (found profile or session)
         contract_html: contractHtml || null,
         visible_to_client: true,
       })
@@ -355,7 +430,7 @@ serve(async (req) => {
             name: `Contrato ${contractNumber} - ${brandData.brandName}`,
             document_type: 'contrato',
             file_url: '', // Will be updated when PDF is generated
-            user_id: userId || null, // Can be null for leads
+            user_id: effectiveUserId || null, // Use effective user ID
             contract_id: contractData.id, // Critical: link to contract for sync
             uploaded_by: 'system',
           });
@@ -367,12 +442,12 @@ serve(async (req) => {
         }
       }
 
-      // Create Brand Process entry (CRM sync)
-      if (userId) {
+      // Create Brand Process entry (CRM sync) - Use effectiveUserId
+      if (effectiveUserId) {
         const { data: existingProcess } = await supabaseAdmin
           .from('brand_processes')
           .select('id')
-          .eq('user_id', userId)
+          .eq('user_id', effectiveUserId)
           .eq('brand_name', brandData.brandName)
           .maybeSingle();
 
@@ -380,7 +455,7 @@ serve(async (req) => {
           const { error: processError } = await supabaseAdmin
             .from('brand_processes')
             .insert({
-              user_id: userId,
+              user_id: effectiveUserId, // Use effective user ID
               brand_name: brandData.brandName,
               business_area: brandData.businessArea,
               status: 'em_andamento',
@@ -454,7 +529,7 @@ serve(async (req) => {
         amount: paymentValue,
         due_date: dueDateString,
         status: 'pending',
-        user_id: userId || null,
+        user_id: effectiveUserId || null, // Use effective user ID
         // For card payments: NO invoice_url, boleto_code, pix_code, or asaas_invoice_id yet
         invoice_url: isCardPayment ? null : (paymentData.invoiceUrl as string || null),
         pix_code: isCardPayment ? null : (pixQrCode?.payload || null),
