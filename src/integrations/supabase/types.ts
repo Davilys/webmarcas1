@@ -1748,6 +1748,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_admin_role: { Args: { target_user_id: string }; Returns: undefined }
       has_current_user_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: boolean
