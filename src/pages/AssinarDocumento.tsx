@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { SignaturePad } from '@/components/signature/SignaturePad';
 import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
+import { generateAndUploadContractPdf, generateSignedContractHtml } from '@/hooks/useContractPdfUpload';
 import { toast } from 'sonner';
 import { Loader2, Download, Printer, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
@@ -132,6 +133,41 @@ export default function AssinarDocumento() {
 
       if (!response.ok || result.error) {
         throw new Error(result.error || 'Erro ao assinar documento');
+      }
+
+      // Generate and upload PDF after successful signing
+      if (contract.contract_html) {
+        const brandName = contract.subject || 'Documento';
+        
+        // Generate PDF with blockchain data
+        const signedHtml = generateSignedContractHtml(
+          contract.contract_html,
+          brandName,
+          contract.signatory_name || '',
+          contract.signatory_cpf || '',
+          {
+            hash: result.data?.hash,
+            timestamp: result.data?.timestamp,
+            txId: result.data?.txId,
+            network: result.data?.network,
+            ipAddress: result.data?.ipAddress,
+          }
+        );
+
+        generateAndUploadContractPdf({
+          contractId: contract.id,
+          contractHtml: signedHtml,
+          brandName,
+          documentType: contract.document_type || 'contrato',
+        }).then(uploadResult => {
+          if (uploadResult.success) {
+            console.log('Signed PDF uploaded successfully:', uploadResult.publicUrl);
+          } else {
+            console.error('Failed to upload signed PDF:', uploadResult.error);
+          }
+        }).catch(err => {
+          console.error('Error uploading signed PDF:', err);
+        });
       }
 
       toast.success('Documento assinado com sucesso!');

@@ -672,6 +672,7 @@ export type Database = {
       }
       documents: {
         Row: {
+          contract_id: string | null
           created_at: string | null
           document_type: string | null
           file_size: number | null
@@ -684,6 +685,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          contract_id?: string | null
           created_at?: string | null
           document_type?: string | null
           file_size?: number | null
@@ -696,6 +698,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          contract_id?: string | null
           created_at?: string | null
           document_type?: string | null
           file_size?: number | null
@@ -708,6 +711,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "documents_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "documents_process_id_fkey"
             columns: ["process_id"]

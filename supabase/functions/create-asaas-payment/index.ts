@@ -347,21 +347,23 @@ serve(async (req) => {
       console.log('Created contract:', contractData?.id);
 
       // Create Document entry for contract (CRM sync) - ALWAYS create, even without userId
+      // Link to contract_id for proper synchronization
       if (contractData?.id) {
         const { error: docError } = await supabaseAdmin
           .from('documents')
           .insert({
             name: `Contrato ${contractNumber} - ${brandData.brandName}`,
             document_type: 'contrato',
-            file_url: '',
+            file_url: '', // Will be updated when PDF is generated
             user_id: userId || null, // Can be null for leads
+            contract_id: contractData.id, // Critical: link to contract for sync
             uploaded_by: 'system',
           });
 
         if (docError) {
           console.error('Error creating document entry:', docError);
         } else {
-          console.log('Created document entry for contract');
+          console.log('Created document entry for contract with contract_id:', contractData.id);
         }
       }
 
