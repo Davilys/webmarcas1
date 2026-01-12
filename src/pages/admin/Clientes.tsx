@@ -13,6 +13,7 @@ import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters } from '@
 import { ClientListView } from '@/components/admin/clients/ClientListView';
 import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
 import { ClientImportExportDialog } from '@/components/admin/clients/ClientImportExportDialog';
+import { DuplicateClientsDialog } from '@/components/admin/clients/DuplicateClientsDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 type ViewMode = 'kanban' | 'list';
@@ -222,6 +223,15 @@ export default function AdminClientes() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <DuplicateClientsDialog 
+                onMergeComplete={() => { fetchClients(); fetchPerfexCustomers(); }}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Users className="h-4 w-4 mr-2" />
+                    Duplicados
+                  </Button>
+                }
+              />
               <Button 
                 variant="outline" 
                 onClick={syncWithPerfex}
