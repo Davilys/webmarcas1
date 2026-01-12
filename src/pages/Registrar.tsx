@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,10 +35,8 @@ export default function Registrar() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Typing effect state
-  const [currentTextIndex, setCurrentTextIndex] = useState(0);
-  const [displayedText, setDisplayedText] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
+  // Phrase animation state
+  const [phraseIndex, setPhraseIndex] = useState(0);
   
   const [viabilityData, setViabilityData] = useState<{
     brandName: string;
@@ -50,31 +49,14 @@ export default function Registrar() {
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [paymentValue, setPaymentValue] = useState<number>(0);
 
-  // Typing effect logic
+  // Phrase rotation effect
   useEffect(() => {
-    const currentFullText = dynamicTexts[currentTextIndex];
-    const typingSpeed = isDeleting ? 50 : 100;
-    const pauseTime = 2000;
-
-    const timeout = setTimeout(() => {
-      if (!isDeleting) {
-        if (displayedText.length < currentFullText.length) {
-          setDisplayedText(currentFullText.slice(0, displayedText.length + 1));
-        } else {
-          setTimeout(() => setIsDeleting(true), pauseTime);
-        }
-      } else {
-        if (displayedText.length > 0) {
-          setDisplayedText(displayedText.slice(0, -1));
-        } else {
-          setIsDeleting(false);
-          setCurrentTextIndex((prev) => (prev + 1) % dynamicTexts.length);
-        }
-      }
-    }, typingSpeed);
-
-    return () => clearTimeout(timeout);
-  }, [displayedText, isDeleting, currentTextIndex]);
+    const interval = setInterval(() => {
+      setPhraseIndex((prev) => (prev + 1) % dynamicTexts.length);
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Pre-fill personal data if user is logged in
   useEffect(() => {
@@ -233,9 +215,19 @@ export default function Registrar() {
         <div className="text-center mb-8">
           <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-4">
             {t("hero.title")}{" "}
-            <span className="gradient-text">
-              {displayedText}
-              <span className="animate-pulse">|</span>
+            <span className="inline-block overflow-hidden h-[1.2em] align-bottom relative">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={phraseIndex}
+                  initial={{ y: '100%', opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '-100%', opacity: 0 }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  className="inline-block gradient-text"
+                >
+                  {dynamicTexts[phraseIndex]}
+                </motion.span>
+              </AnimatePresence>
             </span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto">
