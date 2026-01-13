@@ -55,7 +55,7 @@ export function ContractRenderer({
       // Sub-items (like 1.1, 2.1, etc.)
       if (/^\d+\.\d+\s/.test(trimmedLine)) {
         elements.push(
-          <p key={index} className="text-sm mb-2 pl-4 text-foreground">
+          <p key={index} className="text-sm mb-2 pl-4" style={{ color: '#1f2937' }}>
             {trimmedLine}
           </p>
         );
@@ -65,7 +65,7 @@ export function ContractRenderer({
       // List items with letters (a), b), etc.)
       if (/^[a-z]\)/.test(trimmedLine)) {
         elements.push(
-          <p key={index} className="text-sm mb-1 pl-8 text-foreground">
+          <p key={index} className="text-sm mb-1 pl-8" style={{ color: '#1f2937' }}>
             {trimmedLine}
           </p>
         );
@@ -75,7 +75,7 @@ export function ContractRenderer({
       // Bullet points
       if (trimmedLine.startsWith('•')) {
         elements.push(
-          <p key={index} className="text-sm mb-2 pl-4 text-foreground">
+          <p key={index} className="text-sm mb-2 pl-4" style={{ color: '#1f2937' }}>
             {trimmedLine}
           </p>
         );
@@ -85,7 +85,7 @@ export function ContractRenderer({
       // Roman numerals (I), II))
       if (/^I+\)/.test(trimmedLine)) {
         elements.push(
-          <p key={index} className="text-sm mb-3 font-medium text-foreground">
+          <p key={index} className="text-sm mb-3 font-medium" style={{ color: '#1f2937' }}>
             {trimmedLine}
           </p>
         );
@@ -100,7 +100,7 @@ export function ContractRenderer({
       // Party identification headers (CONTRATADA:, CONTRATANTE:)
       if (trimmedLine === 'CONTRATADA:' || trimmedLine === 'CONTRATANTE:') {
         elements.push(
-          <p key={index} className="text-xs font-bold text-center text-foreground mt-6 mb-1">
+          <p key={index} className="text-xs font-bold text-center mt-6 mb-1" style={{ color: '#1f2937' }}>
             {trimmedLine}
           </p>
         );
@@ -113,7 +113,7 @@ export function ContractRenderer({
           trimmedLine.startsWith('CPF:') ||
           trimmedLine.startsWith('CPF/CNPJ:')) {
         elements.push(
-          <p key={index} className="text-xs text-center text-muted-foreground">
+          <p key={index} className="text-xs text-center" style={{ color: '#6b7280' }}>
             {trimmedLine}
           </p>
         );
@@ -123,7 +123,7 @@ export function ContractRenderer({
       // Date line
       if (trimmedLine.startsWith('São Paulo,')) {
         elements.push(
-          <p key={index} className="text-sm mt-6 mb-6 text-foreground">
+          <p key={index} className="text-sm mt-6 mb-6" style={{ color: '#1f2937' }}>
             {trimmedLine}
           </p>
         );
@@ -132,7 +132,7 @@ export function ContractRenderer({
 
       // Regular paragraphs
       elements.push(
-        <p key={index} className="text-sm mb-3 text-foreground leading-relaxed">
+        <p key={index} className="text-sm mb-3 leading-relaxed" style={{ color: '#1f2937' }}>
           {trimmedLine}
         </p>
       );
@@ -142,7 +142,7 @@ export function ContractRenderer({
   }, [content]);
 
   return (
-    <div className={`bg-white text-foreground ${className}`}>
+    <div className={`bg-white ${className}`} style={{ color: '#1f2937' }}>
       {showLetterhead && (
         <>
           {/* Header with Logo and URL */}
@@ -187,7 +187,8 @@ export function ContractRenderer({
             className="p-4 rounded mb-6 text-sm"
             style={{ 
               backgroundColor: '#fef3c7', 
-              border: '1px solid #f59e0b' 
+              border: '1px solid #f59e0b',
+              color: '#92400e'
             }}
           >
             <p className="mb-2">
@@ -208,7 +209,7 @@ export function ContractRenderer({
       {blockchainSignature?.hash && (
         <div className="mt-8 print:mt-4">
           {/* Footer text before certification */}
-          <div className="text-center py-4 text-xs text-muted-foreground border-t border-border">
+          <div className="text-center py-4 text-xs border-t" style={{ color: '#6b7280', borderColor: '#e5e7eb' }}>
             <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
             <p>www.webmarcas.net | contato@webmarcas.net</p>
             <p>Data e hora da geração: {new Date().toLocaleString('pt-BR')}</p>
@@ -234,39 +235,39 @@ export function ContractRenderer({
               {/* Left: Signature Data */}
               <div className="flex-1 space-y-4">
                 <div>
-                  <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">HASH SHA-256</p>
-                  <div className="bg-white p-3 rounded border border-slate-200 font-mono text-xs break-all text-foreground">
+                  <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: '#1f2937' }}>HASH SHA-256</p>
+                  <div className="bg-white p-3 rounded border border-slate-200 font-mono text-xs break-all" style={{ color: '#1f2937' }}>
                     {blockchainSignature.hash}
                   </div>
                 </div>
                 
                 <div>
-                  <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">DATA/HORA DA ASSINATURA</p>
-                  <p className="text-sm text-foreground">
+                  <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: '#1f2937' }}>DATA/HORA DA ASSINATURA</p>
+                  <p className="text-sm" style={{ color: '#1f2937' }}>
                     {blockchainSignature.timestamp || '-'}
                   </p>
                 </div>
                 
                 {blockchainSignature.txId && (
                   <div>
-                    <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">ID DA TRANSAÇÃO</p>
-                    <p className="text-sm font-mono text-foreground break-all">
+                    <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: '#1f2937' }}>ID DA TRANSAÇÃO</p>
+                    <p className="text-sm font-mono break-all" style={{ color: '#1f2937' }}>
                       {blockchainSignature.txId}
                     </p>
                   </div>
                 )}
                 
                 <div>
-                  <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">REDE BLOCKCHAIN</p>
-                  <p className="text-sm text-foreground">
+                  <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: '#1f2937' }}>REDE BLOCKCHAIN</p>
+                  <p className="text-sm" style={{ color: '#1f2937' }}>
                     {blockchainSignature.network || 'Bitcoin (OpenTimestamps via a.pool.opentimestamps.org)'}
                   </p>
                 </div>
                 
                 {blockchainSignature.ipAddress && (
                   <div>
-                    <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">IP DO SIGNATÁRIO</p>
-                    <p className="text-sm text-foreground">
+                    <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: '#1f2937' }}>IP DO SIGNATÁRIO</p>
+                    <p className="text-sm" style={{ color: '#1f2937' }}>
                       {blockchainSignature.ipAddress}
                     </p>
                   </div>
@@ -275,22 +276,22 @@ export function ContractRenderer({
               
               {/* Right: QR Code */}
               <div className="flex-shrink-0 text-center p-4 bg-white rounded-lg border border-slate-200">
-                <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">QR CODE DE VERIFICAÇÃO</p>
+                <p className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: '#1f2937' }}>QR CODE DE VERIFICAÇÃO</p>
                 <img 
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}`}
                   alt="QR Code de Verificação"
                   className="w-32 h-32 mx-auto"
                 />
-                <p className="text-[10px] text-muted-foreground mt-2">Escaneie para verificar</p>
+                <p className="text-[10px] mt-2" style={{ color: '#6b7280' }}>Escaneie para verificar</p>
               </div>
             </div>
             
             {/* Legal footer */}
             <div className="mt-6 pt-4 border-t border-slate-200 text-center">
-              <p className="text-xs text-muted-foreground italic">
+              <p className="text-xs italic" style={{ color: '#6b7280' }}>
                 Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
               </p>
-              <p className="text-xs text-primary mt-2">
+              <p className="text-xs mt-2" style={{ color: '#0284c7' }}>
                 Verifique a autenticidade em: {window.location.origin}/verificar-contrato
               </p>
             </div>
