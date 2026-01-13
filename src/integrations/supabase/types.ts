@@ -1563,6 +1563,7 @@ export type Database = {
           process_number: string
           publication_date: string | null
           rpi_upload_id: string
+          tag: string | null
           update_status: string | null
           updated_at: string | null
           updated_by: string | null
@@ -1582,6 +1583,7 @@ export type Database = {
           process_number: string
           publication_date?: string | null
           rpi_upload_id: string
+          tag?: string | null
           update_status?: string | null
           updated_at?: string | null
           updated_by?: string | null
@@ -1601,6 +1603,7 @@ export type Database = {
           process_number?: string
           publication_date?: string | null
           rpi_upload_id?: string
+          tag?: string | null
           update_status?: string | null
           updated_at?: string | null
           updated_by?: string | null

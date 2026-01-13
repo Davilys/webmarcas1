@@ -9,16 +9,8 @@ const corsHeaders = {
 };
 
 const ATTORNEY_NAME = "Davilys Danques Oliveira Cunha";
-const ATTORNEY_VARIATIONS = [
-  "davilys danques oliveira cunha",
-  "davilys danques de oliveira cunha",
-  "d. d. oliveira cunha",
-  "d d oliveira cunha",
-  "cunha, davilys danques de oliveira",
-  "cunha, davilys danques oliveira",
-  "davilys d. oliveira cunha",
-  "davilys d oliveira cunha",
-];
+// Busca simplificada apenas por "davilys" para capturar mais processos
+const ATTORNEY_SEARCH_TERM = "davilys";
 
 function normalizeText(str: string): string {
   return str
@@ -32,7 +24,8 @@ function normalizeText(str: string): string {
 
 function containsAttorney(text: string): boolean {
   const normalized = normalizeText(text);
-  return ATTORNEY_VARIATIONS.some((variation) => normalized.includes(normalizeText(variation)));
+  // Busca simplificada apenas por "davilys"
+  return normalized.includes(ATTORNEY_SEARCH_TERM);
 }
 
 function guessExtFromUrl(url: string): string | null {
@@ -95,22 +88,19 @@ async function extractTextFromPdf(bytes: Uint8Array): Promise<{ text: string; pa
 function extractAttorneyBlocks(text: string): string[] {
   const blocks: string[] = [];
   const normalized = normalizeText(text);
+  let idx = 0;
 
-  for (const variation of ATTORNEY_VARIATIONS) {
-    const normalizedVar = normalizeText(variation);
-    let idx = 0;
+  // Busca simplificada apenas por "davilys"
+  while ((idx = normalized.indexOf(ATTORNEY_SEARCH_TERM, idx)) !== -1) {
+    // Capturar contexto amplo ao redor do nome (5000 chars antes e depois)
+    const start = Math.max(0, idx - 5000);
+    const end = Math.min(text.length, idx + ATTORNEY_SEARCH_TERM.length + 5000);
+    const block = text.slice(start, end);
 
-    while ((idx = normalized.indexOf(normalizedVar, idx)) !== -1) {
-      // Capturar contexto amplo ao redor do nome (5000 chars antes e depois)
-      const start = Math.max(0, idx - 5000);
-      const end = Math.min(text.length, idx + normalizedVar.length + 5000);
-      const block = text.slice(start, end);
-
-      if (!blocks.some((b) => b.includes(block.slice(100, 200)))) {
-        blocks.push(block);
-      }
-      idx += normalizedVar.length;
+    if (!blocks.some((b) => b.includes(block.slice(100, 200)))) {
+      blocks.push(block);
     }
+    idx += ATTORNEY_SEARCH_TERM.length;
   }
 
   return blocks;

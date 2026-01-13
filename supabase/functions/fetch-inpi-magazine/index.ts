@@ -8,16 +8,8 @@ const corsHeaders = {
 };
 
 const ATTORNEY_NAME = 'Davilys Danques Oliveira Cunha';
-const ATTORNEY_VARIATIONS = [
-  'davilys danques oliveira cunha',
-  'davilys danques',
-  'davilys d. oliveira cunha',
-  'davilys d oliveira cunha',
-  'davilys oliveira cunha',
-  'd. danques oliveira cunha',
-  'davilys danques o. cunha',
-  'davilys',
-];
+// Busca simplificada apenas por "davilys" para capturar mais processos
+const ATTORNEY_SEARCH_TERM = 'davilys';
 
 function normalizeText(str: string): string {
   return str
@@ -55,7 +47,8 @@ function convertBrazilianDateToISO(dateStr: string | null): string | null {
 
 function containsAttorney(text: string): boolean {
   const normalized = normalizeText(text);
-  return ATTORNEY_VARIATIONS.some(variation => normalized.includes(normalizeText(variation)));
+  // Busca simplificada apenas por "davilys"
+  return normalized.includes(ATTORNEY_SEARCH_TERM);
 }
 
 // Calculate expected RPI number based on date (published every Tuesday)
