@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { checkViability, type ViabilityResult } from "@/lib/api/viability";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import webmarcasIcon from "@/assets/webmarcas-icon.png";
 
 interface ViabilityStepProps {
@@ -31,6 +32,13 @@ export function ViabilityStep({ onNext }: ViabilityStepProps) {
     try {
       const viabilityResult = await checkViability(brandName.trim(), businessArea.trim());
       setResult(viabilityResult);
+
+      // Save search to database for social proof notifications
+      await supabase.from('viability_searches').insert({
+        brand_name: brandName.trim(),
+        business_area: businessArea.trim(),
+        result_level: viabilityResult.level
+      });
     } catch (error) {
       console.error('Error checking viability:', error);
       toast.error("Não foi possível realizar a consulta. Tente novamente.");

@@ -1743,6 +1743,33 @@ export type Database = {
         }
         Relationships: []
       }
+      viability_searches: {
+        Row: {
+          brand_name: string
+          business_area: string
+          created_at: string | null
+          id: string
+          ip_hash: string | null
+          result_level: string | null
+        }
+        Insert: {
+          brand_name: string
+          business_area: string
+          created_at?: string | null
+          id?: string
+          ip_hash?: string | null
+          result_level?: string | null
+        }
+        Update: {
+          brand_name?: string
+          business_area?: string
+          created_at?: string | null
+          id?: string
+          ip_hash?: string | null
+          result_level?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_config: {
         Row: {
           api_key: string
