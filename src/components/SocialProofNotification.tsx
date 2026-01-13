@@ -62,7 +62,7 @@ const SocialProofNotification = () => {
     
     fetchRecentSearches();
     
-    // Subscribe to realtime updates
+    // Subscribe to realtime updates - trigger immediate notification on new search
     const channel = supabase
       .channel('viability_updates')
       .on('postgres_changes', {
@@ -72,7 +72,22 @@ const SocialProofNotification = () => {
       }, (payload) => {
         const newSearch = payload.new as RealSearch;
         if (newSearch.brand_name && newSearch.business_area) {
+          // Add to list and trigger immediate notification
           setRealSearches(prev => [newSearch, ...prev].slice(0, 50));
+          
+          // Force show new notification immediately
+          setIsVisible(false);
+          setTimeout(() => {
+            const genericName = genericNames[Math.floor(Math.random() * genericNames.length)];
+            const message = `${genericName} consultou "${newSearch.brand_name}" no ramo ${newSearch.business_area}`;
+            setNotification({
+              id: Date.now(),
+              message,
+              icon: "check",
+            });
+            setIsVisible(true);
+            setNotificationCount(prev => prev + 1);
+          }, 300);
         }
       })
       .subscribe();
