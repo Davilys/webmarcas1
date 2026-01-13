@@ -68,6 +68,7 @@ interface RpiEntry {
   matched_client_id: string | null;
   matched_process_id: string | null;
   update_status: string;
+  tag: string | null;
   deadline_date?: string | null;
   priority?: 'urgent' | 'medium' | null;
   client?: {
@@ -80,6 +81,16 @@ interface RpiEntry {
     status: string | null;
   };
 }
+
+// TAG options for RPI entries
+const TAG_OPTIONS = [
+  { value: 'pending', label: 'Aguardando', color: 'bg-gray-100 text-gray-800' },
+  { value: 'em_contato', label: 'Em contato', color: 'bg-blue-100 text-blue-800' },
+  { value: 'resolvido', label: 'Resolvido', color: 'bg-green-100 text-green-800' },
+  { value: 'nao_responde', label: 'Não responde', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'arquivado', label: 'Arquivado', color: 'bg-orange-100 text-orange-800' },
+  { value: 'prazo_encerrado', label: 'Prazo encerrado', color: 'bg-red-100 text-red-800' },
+];
 
 interface Profile {
   id: string;
@@ -166,6 +177,7 @@ export default function RevistaINPI() {
   const [selectedClient, setSelectedClient] = useState<Profile | null>(null);
   const [assignPriority, setAssignPriority] = useState<'urgent' | 'medium'>('medium');
   const [assigning, setAssigning] = useState(false);
+  const [updatingTag, setUpdatingTag] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUploads();
@@ -622,6 +634,33 @@ export default function RevistaINPI() {
     }
   };
 
+  const handleUpdateTag = async (entryId: string, newTag: string) => {
+    setUpdatingTag(entryId);
+    try {
+      const { error } = await supabase
+        .from('rpi_entries')
+        .update({ 
+          tag: newTag,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', entryId);
+
+      if (error) throw error;
+
+      toast.success('TAG atualizada com sucesso');
+      
+      // Update local state
+      setEntries(prev => prev.map(e => 
+        e.id === entryId ? { ...e, tag: newTag } : e
+      ));
+    } catch (error) {
+      console.error('Tag update error:', error);
+      toast.error('Erro ao atualizar TAG');
+    } finally {
+      setUpdatingTag(null);
+    }
+  };
+
   const filteredEntries = entries.filter(entry => {
     const matchesSearch = 
       entry.brand_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -989,9 +1028,9 @@ export default function RevistaINPI() {
                       <TableHead className="w-[180px]">Marca</TableHead>
                       <TableHead className="w-[130px]">Nº Processo</TableHead>
                       <TableHead className="w-[80px]">Classe</TableHead>
-                      <TableHead className="w-[250px]">O que saiu (Despacho)</TableHead>
+                      <TableHead className="w-[280px]">O que saiu (Despacho)</TableHead>
                       <TableHead className="w-[180px]">Cliente</TableHead>
-                      <TableHead className="w-[100px]">Situação</TableHead>
+                      <TableHead className="w-[150px]">TAG</TableHead>
                       <TableHead className="text-right w-[100px]">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1005,8 +1044,7 @@ export default function RevistaINPI() {
                         className="group hover:bg-muted/50"
                       >
                         <TableCell>
-                          <div className="font-semibold text-foreground">{entry.brand_name || '-'}</div>
-                          <div className="text-xs text-muted-foreground truncate max-w-[160px]">{entry.holder_name}</div>
+                          <div className="font-semibold text-foreground text-base">{entry.brand_name || '-'}</div>
                         </TableCell>
                         <TableCell>
                           <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
@@ -1019,17 +1057,13 @@ export default function RevistaINPI() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1.5">
-                            {getDispatchBadge(entry.dispatch_type)}
-                            <div className="text-sm">
-                              <span className="font-medium text-foreground">Despacho: </span>
-                              <span className="text-muted-foreground">
-                                {entry.dispatch_text || entry.dispatch_type || 'Sem descrição'}
-                              </span>
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium text-foreground leading-relaxed">
+                              {entry.dispatch_text || entry.dispatch_type || 'Sem descrição'}
                             </div>
                             {entry.dispatch_code && (
                               <span className="text-xs text-muted-foreground/70 font-mono">
-                                ({entry.dispatch_code})
+                                Código: {entry.dispatch_code}
                               </span>
                             )}
                           </div>
@@ -1060,25 +1094,28 @@ export default function RevistaINPI() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {entry.update_status === 'updated' ? (
-                            <div className="space-y-1">
-                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Atualizado
-                              </Badge>
-                            </div>
-                          ) : entry.matched_client_id ? (
-                            <div className="space-y-1">
-                              <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950">
-                                <Clock className="h-3 w-3 mr-1" />
-                                60 dias
-                              </Badge>
-                            </div>
-                          ) : (
-                            <Badge variant="outline" className="text-gray-500">
-                              Aguardando
-                            </Badge>
-                          )}
+                          <Select 
+                            value={entry.tag || 'pending'} 
+                            onValueChange={(value) => handleUpdateTag(entry.id, value)}
+                            disabled={updatingTag === entry.id}
+                          >
+                            <SelectTrigger className="w-[140px] h-8">
+                              {updatingTag === entry.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <SelectValue />
+                              )}
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TAG_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  <Badge className={`${opt.color} text-xs`}>
+                                    {opt.label}
+                                  </Badge>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
