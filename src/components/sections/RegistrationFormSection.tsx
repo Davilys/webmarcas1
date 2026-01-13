@@ -16,6 +16,7 @@ import {
 } from "@/lib/validators";
 import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
 import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
+import { downloadContractPDF } from "@/hooks/useContractPdfGenerator";
 import { usePricing } from "@/hooks/usePricing";
 // Form schemas with real validation
 const personalDataSchema = z.object({
@@ -350,23 +351,26 @@ const RegistrationFormSection = () => {
     };
   };
 
-  const downloadContract = () => {
-    const contractContent = getProcessedContract();
-    const contractHTML = generateContractPrintHTML(
-      contractContent,
-      brandData.brandName,
-      personalData.fullName,
-      personalData.cpf
-    );
-    const blob = new Blob([contractHTML], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Contrato_WebMarcas_${brandData.brandName.replace(/\s+/g, '_')}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const downloadContract = async () => {
+    try {
+      const contractContent = getProcessedContract();
+      await downloadContractPDF(contractContent, {
+        brandName: brandData.brandName,
+        clientName: personalData.fullName,
+        clientCpf: personalData.cpf
+      });
+      toast({
+        title: "PDF baixado",
+        description: "Contrato baixado com sucesso em PDF!",
+      });
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao gerar PDF. Tente novamente.",
+        variant: "destructive"
+      });
+    }
   };
 
   const generateContractHTML = () => {

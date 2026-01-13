@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
 import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
+import { downloadContractPDF } from "@/hooks/useContractPdfGenerator";
 import type { PersonalData } from "./PersonalDataStep";
 import type { BrandData } from "./BrandDataStep";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ export function ContractStep({
   isSubmitting,
 }: ContractStepProps) {
   const [accepted, setAccepted] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   // Busca o template "Contrato Padrão - Registro de Marca INPI" do banco de dados
   const { template, isLoading } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
 
@@ -65,24 +67,22 @@ export function ContractStep({
     };
   };
 
-  const downloadContract = () => {
-    const contractContent = getProcessedContract();
-    const contractHTML = generateContractPrintHTML(
-      contractContent,
-      brandData.brandName,
-      personalData.fullName,
-      personalData.cpf
-    );
-    const blob = new Blob([contractHTML], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Contrato_WebMarcas_${brandData.brandName.replace(/\s+/g, '_')}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success("Contrato baixado com sucesso!");
+  const downloadContract = async () => {
+    setIsDownloading(true);
+    try {
+      const contractContent = getProcessedContract();
+      await downloadContractPDF(contractContent, {
+        brandName: brandData.brandName,
+        clientName: personalData.fullName,
+        clientCpf: personalData.cpf
+      });
+      toast.success("Contrato baixado com sucesso em PDF!");
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error("Erro ao gerar PDF. Tente novamente.");
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleSubmit = () => {
@@ -169,9 +169,13 @@ export function ContractStep({
           <Printer className="w-4 h-4 mr-2" />
           Imprimir
         </Button>
-        <Button variant="outline" size="sm" onClick={downloadContract} className="flex-1">
-          <Download className="w-4 h-4 mr-2" />
-          Baixar
+        <Button variant="outline" size="sm" onClick={downloadContract} disabled={isDownloading} className="flex-1">
+          {isDownloading ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4 mr-2" />
+          )}
+          Baixar PDF
         </Button>
       </div>
 
