@@ -39,9 +39,9 @@ export async function generateContractPDF(
   // Load and add logo with correct aspect ratio
   try {
     const logoBase64 = await getLogoBase64();
-    // Logo dimensions: maintain aspect ratio (original is roughly 3:1 width:height)
-    const logoWidth = 40;
-    const logoHeight = 12;
+    // Logo dimensions: The WebMarcas logo has ~1.4:1 width:height ratio (wider than tall)
+    const logoWidth = 28;
+    const logoHeight = 20;
     pdf.addImage(logoBase64, 'PNG', margin, yPosition, logoWidth, logoHeight);
   } catch (error) {
     console.error('Failed to add logo:', error);
@@ -158,17 +158,21 @@ export async function generateContractPDF(
       continue;
     }
 
-    // Company/client details
+    // Company/client details - wrap long text to prevent overflow
     if (trimmed.includes('WEB MARCAS PATENTES EIRELI') || 
         trimmed.startsWith('CNPJ:') || 
         trimmed.startsWith('CPF:') ||
         trimmed.startsWith('CPF/CNPJ:')) {
       pdf.setTextColor(107, 114, 128); // Gray
       pdf.setFontSize(9);
-      pdf.text(trimmed, pageWidth / 2, yPosition, { align: 'center' });
+      const splitLine = pdf.splitTextToSize(trimmed, contentWidth);
+      checkNewPage(splitLine.length * 4 + 2);
+      splitLine.forEach((line: string) => {
+        pdf.text(line, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 4;
+      });
       pdf.setTextColor(31, 41, 55);
       pdf.setFontSize(10);
-      yPosition += 4;
       continue;
     }
 
