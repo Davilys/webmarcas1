@@ -36,10 +36,13 @@ export async function generateContractPDF(
     return false;
   };
 
-  // Load and add logo
+  // Load and add logo with correct aspect ratio
   try {
     const logoBase64 = await getLogoBase64();
-    pdf.addImage(logoBase64, 'PNG', margin, yPosition, 50, 15);
+    // Logo dimensions: maintain aspect ratio (original is roughly 3:1 width:height)
+    const logoWidth = 40;
+    const logoHeight = 12;
+    pdf.addImage(logoBase64, 'PNG', margin, yPosition, logoWidth, logoHeight);
   } catch (error) {
     console.error('Failed to add logo:', error);
   }
