@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
 import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
-import { downloadUnifiedContractPDF, printUnifiedContract } from "@/hooks/useUnifiedContractDownload";
+import { downloadContractPDF } from "@/hooks/useContractPdfGenerator";
 import type { PersonalData } from "./PersonalDataStep";
 import type { BrandData } from "./BrandDataStep";
 import { toast } from "sonner";
@@ -45,27 +45,36 @@ export function ContractStep({
     });
   }, [template, personalData, brandData, paymentMethod]);
 
-  const printContract = async () => {
+  const printContract = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("Não foi possível abrir a janela de impressão.");
+      return;
+    }
+
     const contractContent = getProcessedContract();
-    await printUnifiedContract({
-      content: contractContent,
-      documentType: 'contract',
-      subject: brandData.brandName,
-      signatoryName: personalData.fullName,
-      signatoryCpf: personalData.cpf,
-    });
+    const contractHTML = generateContractPrintHTML(
+      contractContent,
+      brandData.brandName,
+      personalData.fullName,
+      personalData.cpf
+    );
+    printWindow.document.write(contractHTML);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
   };
 
   const downloadContract = async () => {
     setIsDownloading(true);
     try {
       const contractContent = getProcessedContract();
-      await downloadUnifiedContractPDF({
-        content: contractContent,
-        documentType: 'contract',
-        subject: brandData.brandName,
-        signatoryName: personalData.fullName,
-        signatoryCpf: personalData.cpf,
+      await downloadContractPDF(contractContent, {
+        brandName: brandData.brandName,
+        clientName: personalData.fullName,
+        clientCpf: personalData.cpf
       });
       toast.success("Contrato baixado com sucesso em PDF!");
     } catch (error) {
