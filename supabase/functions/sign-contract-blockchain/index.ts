@@ -183,6 +183,35 @@ serve(async (req) => {
       );
     }
 
+    // ========================================
+    // UPDATE DOCUMENT ENTRY - Sync with CRM and Client Area
+    // ========================================
+    // Update existing document entry with blockchain data and file URL
+    const { data: existingDoc, error: docFetchError } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('contract_id', contractId)
+      .maybeSingle();
+
+    if (existingDoc) {
+      // Update existing document
+      const { error: docUpdateError } = await supabase
+        .from('documents')
+        .update({
+          name: `Contrato Assinado - ${contractData?.subject || 'Registro de Marca'}`,
+          // file_url will be updated when PDF is uploaded via upload-signed-contract-pdf
+        })
+        .eq('id', existingDoc.id);
+
+      if (docUpdateError) {
+        console.error('Error updating document:', docUpdateError);
+      } else {
+        console.log('Updated document entry:', existingDoc.id);
+      }
+    } else {
+      console.log('No existing document found for contract, will be created during PDF upload');
+    }
+
     // Update lead status if leadId provided
     if (leadId) {
       await supabase

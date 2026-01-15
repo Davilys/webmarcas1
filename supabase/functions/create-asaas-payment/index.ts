@@ -37,6 +37,186 @@ interface PaymentRequest {
   userId?: string;
 }
 
+interface ContractTemplate {
+  id: string;
+  name: string;
+  content: string;
+  is_active: boolean;
+}
+
+// Helper function to replace template variables with actual data
+function replaceContractVariables(
+  template: string,
+  data: {
+    personalData: PersonalData;
+    brandData: BrandData;
+    paymentMethod: string;
+  }
+): string {
+  const { personalData, brandData, paymentMethod } = data;
+
+  // Format current date in Portuguese
+  const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const now = new Date();
+  const currentDate = `${now.getDate()} de ${months[now.getMonth()]} de ${now.getFullYear()}`;
+
+  // Build complete address
+  const enderecoCompleto = `${personalData.address}, ${personalData.neighborhood}, ${personalData.city} - ${personalData.state}, CEP ${personalData.cep}`;
+
+  // Razão social or name
+  const razaoSocialOuNome = brandData.hasCNPJ && brandData.companyName 
+    ? brandData.companyName 
+    : personalData.fullName;
+
+  // CNPJ data
+  const dadosCnpj = brandData.hasCNPJ && brandData.cnpj 
+    ? `inscrita no CNPJ sob nº ${brandData.cnpj}, ` 
+    : '';
+
+  // Payment method details
+  const getPaymentDetails = () => {
+    switch (paymentMethod) {
+      case 'avista':
+        return `• Pagamento à vista via PIX: R$ 699,00 (seiscentos e noventa e nove reais) - com 43% de desconto sobre o valor integral de R$ 1.230,00.`;
+      case 'cartao6x':
+        return `• Pagamento parcelado no Cartão de Crédito: 6x de R$ 199,00 (cento e noventa e nove reais) = Total: R$ 1.194,00 - sem juros.`;
+      case 'boleto3x':
+        return `• Pagamento parcelado via Boleto Bancário: 3x de R$ 399,00 (trezentos e noventa e nove reais) = Total: R$ 1.197,00.`;
+      default:
+        return `• Forma de pagamento a ser definida.`;
+    }
+  };
+
+  // CPF or CNPJ for signature section
+  const cpfCnpj = brandData.hasCNPJ && brandData.cnpj 
+    ? brandData.cnpj 
+    : personalData.cpf;
+
+  // Replace all variables
+  let result = template
+    .replace(/\{\{nome_cliente\}\}/g, personalData.fullName)
+    .replace(/\{\{cpf\}\}/g, personalData.cpf)
+    .replace(/\{\{cpf_cnpj\}\}/g, cpfCnpj)
+    .replace(/\{\{email\}\}/g, personalData.email)
+    .replace(/\{\{telefone\}\}/g, personalData.phone)
+    .replace(/\{\{marca\}\}/g, brandData.brandName)
+    .replace(/\{\{ramo_atividade\}\}/g, brandData.businessArea)
+    .replace(/\{\{endereco_completo\}\}/g, enderecoCompleto)
+    .replace(/\{\{endereco\}\}/g, personalData.address)
+    .replace(/\{\{bairro\}\}/g, personalData.neighborhood)
+    .replace(/\{\{cidade\}\}/g, personalData.city)
+    .replace(/\{\{estado\}\}/g, personalData.state)
+    .replace(/\{\{cep\}\}/g, personalData.cep)
+    .replace(/\{\{razao_social_ou_nome\}\}/g, razaoSocialOuNome)
+    .replace(/\{\{dados_cnpj\}\}/g, dadosCnpj)
+    .replace(/\{\{forma_pagamento_detalhada\}\}/g, getPaymentDetails())
+    .replace(/\{\{data_extenso\}\}/g, currentDate)
+    .replace(/\{\{data\}\}/g, now.toLocaleDateString('pt-BR'));
+
+  return result;
+}
+
+// Generate full HTML for the contract with the standard layout
+function generateContractHtml(content: string): string {
+  const htmlContent = content
+    .split('\n')
+    .filter(line => !line.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS'))
+    .map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '<div style="height: 12px;"></div>';
+      
+      if (/^\d+\.\s*CLÁUSULA/.test(trimmed)) {
+        return `<h2 style="font-weight: bold; font-size: 12px; color: #0284c7; margin-top: 20px; margin-bottom: 8px;">${trimmed}</h2>`;
+      }
+      
+      if (/^\d+\.\d+\s/.test(trimmed)) {
+        return `<p style="font-size: 11px; margin-bottom: 8px; padding-left: 16px;">${trimmed}</p>`;
+      }
+      
+      if (/^[a-z]\)/.test(trimmed)) {
+        return `<p style="font-size: 11px; margin-bottom: 4px; padding-left: 32px;">${trimmed}</p>`;
+      }
+      
+      if (trimmed.startsWith('•')) {
+        return `<p style="font-size: 11px; margin-bottom: 8px; padding-left: 16px;">${trimmed}</p>`;
+      }
+      
+      if (/^I+\)/.test(trimmed)) {
+        return `<p style="font-size: 11px; margin-bottom: 12px; font-weight: 500;">${trimmed}</p>`;
+      }
+      
+      if (trimmed.match(/^_+$/)) return '';
+      
+      if (trimmed === 'CONTRATADA:' || trimmed === 'CONTRATANTE:') {
+        return `<p style="font-size: 11px; font-weight: bold; text-align: center; margin-top: 24px; margin-bottom: 4px;">${trimmed}</p>`;
+      }
+      
+      if (trimmed.includes('WEB MARCAS PATENTES EIRELI') || 
+          trimmed.startsWith('CNPJ:') || 
+          trimmed.startsWith('CPF:') ||
+          trimmed.startsWith('CPF/CNPJ:')) {
+        return `<p style="font-size: 10px; text-align: center; color: #6b7280; margin-bottom: 4px;">${trimmed}</p>`;
+      }
+      
+      if (trimmed.startsWith('São Paulo,')) {
+        return `<p style="font-size: 11px; margin-top: 24px; margin-bottom: 24px;">${trimmed}</p>`;
+      }
+      
+      return `<p style="font-size: 11px; margin-bottom: 12px; line-height: 1.6;">${trimmed}</p>`;
+    })
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Contrato WebMarcas</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      line-height: 1.6; 
+      color: #1a1a2e; 
+      background: white; 
+      padding: 30px; 
+      font-size: 11px; 
+      max-width: 800px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px;">
+    <span style="font-size: 24px; font-weight: bold; color: #0284c7;">WebMarcas</span>
+    <span style="color: #0284c7; font-size: 14px;">www.webmarcas.net</span>
+  </div>
+  
+  <div style="height: 8px; background: linear-gradient(90deg, #f97316, #fbbf24); border-radius: 2px; margin-bottom: 20px;"></div>
+  
+  <h1 style="text-align: center; color: #0284c7; font-size: 18px; font-weight: bold; margin-bottom: 16px;">Acordo do Contrato - Anexo I</h1>
+  
+  <div style="background-color: #1e3a5f; color: white; text-align: center; padding: 12px 16px; border-radius: 4px; margin-bottom: 16px;">
+    <p style="font-weight: 600; font-size: 12px;">CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI</p>
+  </div>
+  
+  <div style="background: #fef3c7; padding: 16px; border-radius: 4px; margin-bottom: 24px; border: 1px solid #f59e0b; font-size: 11px;">
+    <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+    <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
+  </div>
+  
+  <div>
+    ${htmlContent}
+  </div>
+  
+  <div style="margin-top: 40px; text-align: center; color: #6b7280; font-size: 9px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+    <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
+    <p>www.webmarcas.net | contato@webmarcas.net</p>
+  </div>
+</body>
+</html>`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -66,12 +246,51 @@ serve(async (req) => {
     // Create Supabase admin client
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { personalData, brandData, paymentMethod, paymentValue, contractHtml, userId }: PaymentRequest = await req.json();
+    const { personalData, brandData, paymentMethod, paymentValue, contractHtml: providedContractHtml, userId }: PaymentRequest = await req.json();
 
     console.log('Creating Asaas payment for:', personalData.fullName, '| Method:', paymentMethod);
 
     // ========================================
-    // STEP 0: Normalize CPF/CNPJ and prepare unique identifier
+    // STEP 0: Fetch the contract template from database
+    // This ensures we ALWAYS use the admin-defined template
+    // ========================================
+    let contractHtml = providedContractHtml;
+    let templateId: string | null = null;
+
+    // Always fetch the template from database to ensure we use the latest version
+    const { data: templateData, error: templateError } = await supabaseAdmin
+      .from('contract_templates')
+      .select('id, name, content, is_active')
+      .eq('is_active', true)
+      .or(`name.ilike.%Contrato Padrão - Registro de Marca INPI%,name.ilike.%Registro de Marca%`)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (templateData && templateData.length > 0) {
+      const template = templateData[0] as ContractTemplate;
+      templateId = template.id;
+      console.log('Using template from database:', template.name);
+
+      // Replace variables with actual data
+      const processedContent = replaceContractVariables(template.content, {
+        personalData,
+        brandData,
+        paymentMethod,
+      });
+
+      // Generate full HTML
+      contractHtml = generateContractHtml(processedContent);
+      console.log('Generated contract HTML from template');
+    } else {
+      console.log('No template found in database, using provided HTML or generating fallback');
+      if (!contractHtml) {
+        // Generate basic fallback
+        contractHtml = `<html><body><h1>Contrato de Registro de Marca</h1><p>Cliente: ${personalData.fullName}</p><p>Marca: ${brandData.brandName}</p></body></html>`;
+      }
+    }
+
+    // ========================================
+    // STEP 0.1: Normalize CPF/CNPJ and prepare unique identifier
     // ========================================
     const cpfCnpj = brandData.hasCNPJ && brandData.cnpj 
       ? brandData.cnpj.replace(/\D/g, '') 
@@ -407,6 +626,10 @@ serve(async (req) => {
         signed_at: new Date().toISOString(), // Electronic acceptance date
         signature_ip: clientIP,
         signature_user_agent: userAgent,
+        signatory_name: personalData.fullName, // Store signatory name
+        signatory_cpf: formattedCpf, // Store signatory CPF/CNPJ
+        signatory_cnpj: brandData.hasCNPJ ? brandData.cnpj : null,
+        template_id: templateId, // Link to the template used
         asaas_payment_id: paymentId || null, // Will be filled for card after payment
         lead_id: leadId || null,
         user_id: effectiveUserId || null, // Use effective user ID (found profile or session)

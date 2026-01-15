@@ -105,21 +105,32 @@ serve(async (req) => {
     // Check if document already exists for this contract
     const { data: existingDoc } = await supabase
       .from('documents')
-      .select('id')
+      .select('id, user_id')
       .eq('contract_id', contractId)
       .maybeSingle();
 
     let documentId: string;
 
+    // Get contract data to ensure we have the correct user_id
+    const { data: contractInfo } = await supabase
+      .from('contracts')
+      .select('user_id, subject, signatory_name, blockchain_hash')
+      .eq('id', contractId)
+      .single();
+
+    const effectiveUserId = userId || contractInfo?.user_id || null;
+    const documentName = fileName || `Contrato_Assinado_${contractInfo?.subject || contractId}.pdf`;
+
     if (existingDoc) {
-      // Update existing document
+      // Update existing document with the PDF URL
       const { data: updatedDoc, error: updateError } = await supabase
         .from('documents')
         .update({
           file_url: publicUrl,
           file_size: fileSize,
           mime_type: 'application/pdf',
-          name: fileName || `Contrato_${contractId}.pdf`,
+          name: documentName,
+          user_id: effectiveUserId, // Ensure user_id is set
         })
         .eq('id', existingDoc.id)
         .select('id')
@@ -129,19 +140,19 @@ serve(async (req) => {
         console.error('Error updating document:', updateError);
       } else {
         documentId = updatedDoc?.id || existingDoc.id;
-        console.log('Updated document:', documentId);
+        console.log('Updated document with PDF URL:', documentId);
       }
     } else {
       // Create new document entry
       const { data: newDoc, error: insertError } = await supabase
         .from('documents')
         .insert({
-          name: fileName || `Contrato_${contractId}.pdf`,
+          name: documentName,
           document_type: documentType || 'contrato',
           file_url: publicUrl,
           file_size: fileSize,
           mime_type: 'application/pdf',
-          user_id: userId || null,
+          user_id: effectiveUserId,
           process_id: processId || null,
           contract_id: contractId,
           uploaded_by: 'system',
