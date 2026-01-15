@@ -368,7 +368,7 @@ const ViabilitySearchSection = () => {
                   asChild
                 >
                   <a
-                    href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Acabei de consultar a viabilidade da marca "${brandName}" no ramo de "${businessArea}" e gostaria de falar com um especialista.`)}`}
+                    href={`https://wa.me/5511911120225?text=${encodeURIComponent(`Olá, estava no site da Webmarcas, quero registrar uma marca!`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
