@@ -1,4 +1,4 @@
-import { generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
+import { generateContractPrintHTML, getLogoBase64 } from '@/components/contracts/ContractRenderer';
 
 export interface BlockchainSignature {
   hash: string;
@@ -21,16 +21,14 @@ export interface UnifiedContractDownloadOptions {
 
 /**
  * Generates a PDF from contract HTML using the same method as the admin panel.
- * Uses html2canvas + jsPDF with generateDocumentPrintHTML for consistent formatting.
+ * Uses html2canvas + jsPDF with generateContractPrintHTML for consistent formatting.
  */
 export async function downloadUnifiedContractPDF(options: UnifiedContractDownloadOptions): Promise<void> {
   const {
     content,
-    documentType,
     subject,
     signatoryName,
     signatoryCpf,
-    signatoryCnpj,
     clientSignature,
     blockchainSignature,
   } = options;
@@ -43,23 +41,23 @@ export async function downloadUnifiedContractPDF(options: UnifiedContractDownloa
   const html2canvas = html2canvasModule.default;
   const { jsPDF } = jspdfModule;
 
-  // Get signature for procuracao type
-  let davilysSignatureBase64: string | undefined;
-  if (documentType === 'procuracao') {
-    davilysSignatureBase64 = await getSignatureBase64();
-  }
+  // Get logo base64 for the PDF
+  const logoBase64 = await getLogoBase64();
 
-  // Generate HTML using the same function as admin
-  const printHtml = generateDocumentPrintHTML(
-    documentType,
+  // Generate HTML using the same function as admin (ContractRenderer)
+  let printHtml = generateContractPrintHTML(
     content,
-    clientSignature || null,
+    subject || 'Contrato',
+    signatoryName || '',
+    signatoryCpf || '',
     blockchainSignature,
-    signatoryName,
-    signatoryCpf,
-    signatoryCnpj,
-    davilysSignatureBase64,
-    window.location.origin
+    !!blockchainSignature?.hash
+  );
+
+  // Replace the placeholder logo with actual base64 logo
+  printHtml = printHtml.replace(
+    /src="data:image\/svg\+xml;base64,[^"]+"/g,
+    `src="${logoBase64}"`
   );
 
   // Create temporary container
@@ -72,11 +70,15 @@ export async function downloadUnifiedContractPDF(options: UnifiedContractDownloa
   document.body.appendChild(container);
 
   try {
+    // Wait for images to load
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     // Capture with html2canvas
     const canvas = await html2canvas(container, { 
       scale: 2,
       useCORS: true,
       logging: false,
+      allowTaint: true,
     });
     
     // Generate paginated PDF
@@ -109,36 +111,34 @@ export async function downloadUnifiedContractPDF(options: UnifiedContractDownloa
 
 /**
  * Opens a print preview window with the contract content.
- * Uses generateDocumentPrintHTML for consistent formatting.
+ * Uses generateContractPrintHTML for consistent formatting.
  */
 export async function printUnifiedContract(options: UnifiedContractDownloadOptions): Promise<void> {
   const {
     content,
-    documentType,
+    subject,
     signatoryName,
     signatoryCpf,
-    signatoryCnpj,
-    clientSignature,
     blockchainSignature,
   } = options;
 
-  // Get signature for procuracao type
-  let davilysSignatureBase64: string | undefined;
-  if (documentType === 'procuracao') {
-    davilysSignatureBase64 = await getSignatureBase64();
-  }
+  // Get logo base64 for the print
+  const logoBase64 = await getLogoBase64();
 
   // Generate HTML using the same function as admin
-  const printHtml = generateDocumentPrintHTML(
-    documentType,
+  let printHtml = generateContractPrintHTML(
     content,
-    clientSignature || null,
+    subject || 'Contrato',
+    signatoryName || '',
+    signatoryCpf || '',
     blockchainSignature,
-    signatoryName,
-    signatoryCpf,
-    signatoryCnpj,
-    davilysSignatureBase64,
-    window.location.origin
+    !!blockchainSignature?.hash
+  );
+
+  // Replace the placeholder logo with actual base64 logo
+  printHtml = printHtml.replace(
+    /src="data:image\/svg\+xml;base64,[^"]+"/g,
+    `src="${logoBase64}"`
   );
 
   const printWindow = window.open('', '_blank');
