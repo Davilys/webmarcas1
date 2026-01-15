@@ -47,14 +47,13 @@ async function getLogoBase64(): Promise<string> {
 }
 
 /**
- * Generates HTML matching the exact visual of ContractRenderer component
- * This is the same layout the admin sees in the preview
+ * Generates HTML that renders the contract content with proper formatting.
+ * Uses the same formatting rules as ContractRenderer but generates pure HTML.
  */
 function generateContractHTML(
   content: string,
   logoBase64: string,
-  blockchainSignature?: BlockchainSignature,
-  verificationUrl?: string
+  blockchainSignature?: BlockchainSignature
 ): string {
   // Format content with proper styling - matching ContractRenderer component exactly
   const formatContent = (text: string): string => {
@@ -62,11 +61,6 @@ function generateContractHTML(
     return lines.map(line => {
       const trimmed = line.trim();
       if (!trimmed) return '<div style="height: 12px;"></div>';
-      
-      // Skip the main title as it's in the letterhead
-      if (trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS')) {
-        return '';
-      }
       
       // Clause titles - BLUE color as per design
       if (/^\d+\.\s*CLÁUSULA/.test(trimmed)) {
@@ -124,9 +118,7 @@ function generateContractHTML(
   // Build certification section if blockchain data exists
   let certificationSection = '';
   if (blockchainSignature?.hash) {
-    const qrUrl = verificationUrl 
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verificationUrl)}`
-      : `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}`;
     
     certificationSection = `
       <div style="margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; color: #6b7280; font-size: 9px;">
@@ -224,7 +216,7 @@ function generateContractHTML(
   </style>
 </head>
 <body>
-  <!-- Header with Logo and URL - matching ContractRenderer -->
+  <!-- Header with Logo and URL -->
   <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px;">
     <img src="${logoBase64}" alt="WebMarcas" style="height: 48px; object-fit: contain;" />
     <span style="color: #0284c7; font-weight: 500; font-size: 14px;">www.webmarcas.net</span>
@@ -233,30 +225,7 @@ function generateContractHTML(
   <!-- Orange/Yellow Gradient Bar -->
   <div style="height: 8px; background: linear-gradient(90deg, #f97316, #fbbf24); border-radius: 2px; margin-bottom: 24px;"></div>
   
-  <!-- Blue Title -->
-  <h1 style="text-align: center; color: #0284c7; font-size: 18px; font-weight: bold; margin-bottom: 16px;">
-    Acordo do Contrato - Anexo I
-  </h1>
-  
-  <!-- Dark Blue Box with Contract Title -->
-  <div style="background-color: #1e3a5f; text-align: center; padding: 12px 16px; border-radius: 4px; margin-bottom: 16px;">
-    <p style="color: white; font-weight: 600; font-size: 12px; line-height: 1.4; margin: 0;">
-      CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br />
-      PARA REGISTRO DE MARCA JUNTO AO INPI
-    </p>
-  </div>
-  
-  <!-- Yellow Highlight Section -->
-  <div style="background: #fef3c7; padding: 16px; border-radius: 4px; margin-bottom: 24px; border: 1px solid #f59e0b; font-size: 11px; line-height: 1.5; color: #92400e;">
-    <p style="margin-bottom: 8px;">
-      Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
-    </p>
-    <p style="margin: 0;">
-      Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
-    </p>
-  </div>
-  
-  <!-- Contract Content -->
+  <!-- Contract Content (from template) -->
   <div style="margin-top: 16px;">
     ${formatContent(content)}
   </div>
