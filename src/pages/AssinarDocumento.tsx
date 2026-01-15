@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { SignaturePad } from '@/components/signature/SignaturePad';
-import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer } from '@/components/contracts/DocumentRenderer';
 import { generateAndUploadContractPdf, generateSignedContractHtml } from '@/hooks/useContractPdfUpload';
+import { downloadUnifiedContractPDF, printUnifiedContract } from '@/hooks/useUnifiedContractDownload';
 import { toast } from 'sonner';
 import { Loader2, Download, Printer, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
@@ -186,42 +187,49 @@ export default function AssinarDocumento() {
   const handleDownloadPDF = async () => {
     if (!contract) return;
 
-    // Load signature base64 for procuracao documents
-    let signatureBase64: string | undefined;
-    if (contract.document_type === 'procuracao') {
-      signatureBase64 = await getSignatureBase64();
+    try {
+      await downloadUnifiedContractPDF({
+        content: contract.contract_html || '',
+        documentType: (contract.document_type as any) || 'contract',
+        subject: contract.subject || 'Documento',
+        signatoryName: contract.signatory_name || undefined,
+        signatoryCpf: contract.signatory_cpf || undefined,
+        signatoryCnpj: contract.signatory_cnpj || undefined,
+        clientSignature: contract.client_signature_image,
+        blockchainSignature: contract.blockchain_hash ? {
+          hash: contract.blockchain_hash,
+          timestamp: contract.blockchain_timestamp || '',
+          txId: contract.blockchain_tx_id || '',
+          network: contract.blockchain_network || '',
+          ipAddress: contract.signature_ip || '',
+        } : undefined,
+      });
+      toast.success('PDF baixado com sucesso!');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Erro ao gerar PDF');
     }
+  };
 
-    const html = generateDocumentPrintHTML(
-      (contract.document_type as any) || 'procuracao',
-      contract.contract_html || '',
-      contract.client_signature_image,
-      contract.blockchain_hash ? {
+  const handlePrint = async () => {
+    if (!contract) return;
+
+    await printUnifiedContract({
+      content: contract.contract_html || '',
+      documentType: (contract.document_type as any) || 'contract',
+      subject: contract.subject || 'Documento',
+      signatoryName: contract.signatory_name || undefined,
+      signatoryCpf: contract.signatory_cpf || undefined,
+      signatoryCnpj: contract.signatory_cnpj || undefined,
+      clientSignature: contract.client_signature_image,
+      blockchainSignature: contract.blockchain_hash ? {
         hash: contract.blockchain_hash,
         timestamp: contract.blockchain_timestamp || '',
         txId: contract.blockchain_tx_id || '',
         network: contract.blockchain_network || '',
         ipAddress: contract.signature_ip || '',
       } : undefined,
-      contract.signatory_name || undefined,
-      contract.signatory_cpf || undefined,
-      contract.signatory_cnpj || undefined,
-      signatureBase64
-    );
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
-    }
-  };
-
-  const handlePrint = () => {
-    handleDownloadPDF();
+    });
   };
 
   if (loading) {

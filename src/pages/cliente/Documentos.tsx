@@ -19,7 +19,8 @@ import {
   Image,
   File as FileIcon,
   FileSignature,
-  Inbox
+  Inbox,
+  Loader2
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,6 +28,7 @@ import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
 import { DocumentUploader } from '@/components/shared/DocumentUploader';
 import { DocumentPreview } from '@/components/shared/DocumentPreview';
+import { downloadUnifiedContractPDF } from '@/hooks/useUnifiedContractDownload';
 
 interface Document {
   id: string;
@@ -39,6 +41,15 @@ interface Document {
   // Extra fields for contracts
   signature_status?: string;
   blockchain_hash?: string;
+  blockchain_timestamp?: string;
+  blockchain_tx_id?: string;
+  blockchain_network?: string;
+  signature_ip?: string;
+  signatory_name?: string;
+  signatory_cpf?: string;
+  signatory_cnpj?: string;
+  client_signature_image?: string;
+  contract_html?: string;
   isContract?: boolean;
   contract_id?: string;
 }
@@ -69,6 +80,7 @@ export default function Documentos() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [uploadForm, setUploadForm] = useState({
     name: '',
     document_type: 'outro'
@@ -108,7 +120,12 @@ export default function Documentos() {
     // Also fetch contracts from contracts table (to ensure contracts always show)
     const { data: contractsData } = await supabase
       .from('contracts')
-      .select('id, contract_number, subject, signature_status, signed_at, created_at, blockchain_hash, contract_html, visible_to_client')
+      .select(`
+        id, contract_number, subject, signature_status, signed_at, created_at, 
+        blockchain_hash, blockchain_timestamp, blockchain_tx_id, blockchain_network,
+        signature_ip, contract_html, visible_to_client, document_type,
+        signatory_name, signatory_cpf, signatory_cnpj, client_signature_image
+      `)
       .eq('user_id', userId)
       .eq('visible_to_client', true)
       .order('created_at', { ascending: false });
@@ -127,13 +144,22 @@ export default function Documentos() {
       return {
         id: c.id,
         name: c.subject || `Contrato ${c.contract_number}`,
-        document_type: 'contrato',
+        document_type: c.document_type || 'contrato',
         file_url: linkedDoc?.file_url || '', // Use real PDF URL if available
         file_size: linkedDoc?.file_size || null,
         mime_type: linkedDoc?.mime_type || null,
         created_at: c.created_at || '',
         signature_status: c.signature_status,
         blockchain_hash: c.blockchain_hash,
+        blockchain_timestamp: c.blockchain_timestamp,
+        blockchain_tx_id: c.blockchain_tx_id,
+        blockchain_network: c.blockchain_network,
+        signature_ip: c.signature_ip,
+        signatory_name: c.signatory_name,
+        signatory_cpf: c.signatory_cpf,
+        signatory_cnpj: c.signatory_cnpj,
+        client_signature_image: c.client_signature_image,
+        contract_html: c.contract_html,
         isContract: true,
       };
     });
@@ -178,14 +204,50 @@ export default function Documentos() {
     }
   };
 
-  const handleDownload = (doc: Document) => {
-    const link = window.document.createElement('a');
-    link.href = doc.file_url;
-    link.download = doc.name;
-    link.target = '_blank';
-    window.document.body.appendChild(link);
-    link.click();
-    window.document.body.removeChild(link);
+  const handleDownload = async (doc: Document) => {
+    // If has file URL, download directly
+    if (doc.file_url) {
+      const link = window.document.createElement('a');
+      link.href = doc.file_url;
+      link.download = doc.name;
+      link.target = '_blank';
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      return;
+    }
+
+    // If is a contract without file URL but has contract_html, generate PDF
+    if (doc.isContract && doc.contract_html) {
+      setDownloadingId(doc.id);
+      try {
+        await downloadUnifiedContractPDF({
+          content: doc.contract_html,
+          documentType: (doc.document_type as 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa') || 'contract',
+          subject: doc.name,
+          signatoryName: doc.signatory_name,
+          signatoryCpf: doc.signatory_cpf,
+          signatoryCnpj: doc.signatory_cnpj,
+          clientSignature: doc.client_signature_image,
+          blockchainSignature: doc.blockchain_hash ? {
+            hash: doc.blockchain_hash,
+            timestamp: doc.blockchain_timestamp || '',
+            txId: doc.blockchain_tx_id || '',
+            network: doc.blockchain_network || '',
+            ipAddress: doc.signature_ip || '',
+          } : undefined,
+        });
+        toast.success('PDF gerado com sucesso!');
+      } catch (error) {
+        console.error('Error generating PDF:', error);
+        toast.error('Erro ao gerar PDF');
+      } finally {
+        setDownloadingId(null);
+      }
+      return;
+    }
+
+    toast.error('Documento não disponível para download');
   };
 
   const filteredDocs = documents.filter(doc =>
@@ -265,13 +327,18 @@ export default function Documentos() {
           >
             <Eye className="h-4 w-4" />
           </Button>
-          {doc.file_url && (
+          {(doc.file_url || (doc.isContract && doc.contract_html)) && (
             <Button 
               variant="ghost" 
               size="icon"
               onClick={() => handleDownload(doc)}
+              disabled={downloadingId === doc.id}
             >
-              <Download className="h-4 w-4" />
+              {downloadingId === doc.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
             </Button>
           )}
         </div>
