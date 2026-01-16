@@ -89,14 +89,52 @@ export function DocumentRenderer({
     ? getVerificationUrl(blockchainSignature.hash) 
     : '';
   
-  // Se for documento HTML completo, renderiza diretamente sem adicionar wrapper
+  // Função para extrair apenas o conteúdo do corpo (sem header duplicado)
+  const extractBodyContent = (html: string): string => {
+    // Remove header existente e gradient bar do HTML para evitar duplicação
+    let cleanedHtml = html
+      .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<img[^>]*header-logo[^>]*>/gi, '')
+      .replace(/WebMarcas<\/span>/gi, '')
+      .replace(/<span[^>]*font-size:\s*24px[^>]*>WebMarcas<\/span>/gi, '')
+      .trim();
+    return cleanedHtml;
+  };
+
+  // Se for documento HTML completo, adiciona cabeçalho correto com logo real
   if (isCompleteHtmlDocument) {
+    const bodyContent = extractBodyContent(formattedContent);
+    
     return (
-      <div className="bg-white text-black">
-        <div 
-          className="prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: formattedContent }}
-        />
+      <div className="bg-white text-black rounded-lg shadow-lg overflow-hidden">
+        {/* Header correto com Logo real */}
+        <div className="bg-white p-6 border-b">
+          <div className="flex items-center justify-between pb-3">
+            <img 
+              src={webmarcasLogo} 
+              alt="WebMarcas" 
+              className="h-12 object-contain"
+            />
+            <a 
+              href="https://www.webmarcas.net" 
+              className="text-sm font-medium"
+              style={{ color: '#0EA5E9' }}
+            >
+              www.webmarcas.net
+            </a>
+          </div>
+          {/* Gradient Bar */}
+          <div className="h-2 w-full rounded-sm" style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)' }} />
+        </div>
+
+        {/* Conteúdo do documento */}
+        <div className="px-8 py-6">
+          <div 
+            className="prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: bodyContent }}
+          />
+        </div>
         
         {/* Digital Certification Section - Sempre no final para documentos assinados */}
         {(showCertificationSection || blockchainSignature?.hash) && blockchainSignature && (
@@ -160,6 +198,13 @@ export function DocumentRenderer({
             </div>
           </div>
         )}
+
+        {/* Footer */}
+        <div className="bg-gray-100 px-8 py-4 border-t text-center text-xs text-gray-500">
+          <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
+          <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
+          <p>Tel: (11) 4200-1656 | contato@webmarcas.net</p>
+        </div>
       </div>
     );
   }
