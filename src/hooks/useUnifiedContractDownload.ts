@@ -121,70 +121,74 @@ function generateContractHTML(
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`${window.location.origin}/verificar-contrato?hash=${blockchainSignature.hash}`)}`;
     
     certificationSection = `
-      <div style="margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; color: #6b7280; font-size: 9px;">
+      <!-- Footer before certification -->
+      <div class="pdf-footer">
         <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
         <p>www.webmarcas.net | contato@webmarcas.net</p>
         <p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>
       </div>
       
-      <div style="height: 4px; width: 100%; background: #0284c7; margin: 16px 0;"></div>
+      <!-- Blue divider -->
+      <div class="pdf-blue-divider"></div>
       
-      <div style="padding: 24px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
-          <div style="width: 32px; height: 32px; background: #0284c7; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-            <svg style="width: 20px; height: 20px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-          </div>
-          <h3 style="font-size: 18px; font-weight: bold; color: #0284c7; margin: 0;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
-        </div>
-        
-        <div style="display: flex; gap: 24px; align-items: flex-start;">
-          <div style="flex: 1;">
-            <div style="margin-bottom: 16px;">
-              <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #1f2937; margin-bottom: 4px;">HASH SHA-256</p>
-              <div style="background: white; padding: 12px; border-radius: 4px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 10px; word-break: break-all; color: #1f2937;">
-                ${blockchainSignature.hash}
-              </div>
+      <!-- Certification Box -->
+      <div class="pdf-certification">
+        <div class="pdf-certification-box">
+          <div class="pdf-certification-header">
+            <div class="pdf-certification-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
             </div>
-            
-            <div style="margin-bottom: 16px;">
-              <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #1f2937; margin-bottom: 4px;">DATA/HORA DA ASSINATURA</p>
-              <p style="font-size: 11px; color: #1f2937; margin: 0;">${blockchainSignature.timestamp || '-'}</p>
-            </div>
-            
-            ${blockchainSignature.txId ? `
-            <div style="margin-bottom: 16px;">
-              <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #1f2937; margin-bottom: 4px;">ID DA TRANSAÇÃO</p>
-              <p style="font-size: 11px; font-family: monospace; word-break: break-all; color: #1f2937; margin: 0;">${blockchainSignature.txId}</p>
-            </div>
-            ` : ''}
-            
-            <div style="margin-bottom: 16px;">
-              <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #1f2937; margin-bottom: 4px;">REDE BLOCKCHAIN</p>
-              <p style="font-size: 11px; color: #1f2937; margin: 0;">${blockchainSignature.network || 'Bitcoin (OpenTimestamps via a.pool.opentimestamps.org)'}</p>
-            </div>
-            
-            ${blockchainSignature.ipAddress ? `
-            <div>
-              <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #1f2937; margin-bottom: 4px;">IP DO SIGNATÁRIO</p>
-              <p style="font-size: 11px; color: #1f2937; margin: 0;">${blockchainSignature.ipAddress}</p>
-            </div>
-            ` : ''}
+            <span class="pdf-certification-title">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</span>
           </div>
           
-          <div style="flex-shrink: 0; text-align: center; padding: 16px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <p style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #1f2937; margin-bottom: 12px;">QR CODE DE VERIFICAÇÃO</p>
-            <img src="${qrUrl}" alt="QR Code" style="width: 128px; height: 128px;" />
-            <p style="font-size: 9px; color: #6b7280; margin-top: 8px;">Escaneie para verificar</p>
+          <div class="pdf-certification-content">
+            <div class="pdf-certification-data">
+              <div style="margin-bottom: 16px;">
+                <p class="pdf-label">HASH SHA-256</p>
+                <div class="pdf-hash-box">${blockchainSignature.hash}</div>
+              </div>
+              
+              <div style="margin-bottom: 16px;">
+                <p class="pdf-label">DATA/HORA DA ASSINATURA</p>
+                <p style="font-size: 11px; color: #1f2937 !important;">${blockchainSignature.timestamp || '-'}</p>
+              </div>
+              
+              ${blockchainSignature.txId ? `
+              <div style="margin-bottom: 16px;">
+                <p class="pdf-label">ID DA TRANSAÇÃO</p>
+                <p style="font-size: 11px; font-family: monospace; word-break: break-all; color: #1f2937 !important;">${blockchainSignature.txId}</p>
+              </div>
+              ` : ''}
+              
+              <div style="margin-bottom: 16px;">
+                <p class="pdf-label">REDE BLOCKCHAIN</p>
+                <p style="font-size: 11px; color: #1f2937 !important;">${blockchainSignature.network || 'Bitcoin (OpenTimestamps via a.pool.opentimestamps.org)'}</p>
+              </div>
+              
+              ${blockchainSignature.ipAddress ? `
+              <div>
+                <p class="pdf-label">IP DO SIGNATÁRIO</p>
+                <p style="font-size: 11px; color: #1f2937 !important;">${blockchainSignature.ipAddress}</p>
+              </div>
+              ` : ''}
+            </div>
+            
+            <div class="pdf-certification-qr">
+              <p class="pdf-label">QR CODE DE VERIFICAÇÃO</p>
+              <img src="${qrUrl}" alt="QR Code" style="width: 128px; height: 128px; margin: 12px 0;" />
+              <p style="font-size: 9px; color: #6b7280 !important;">Escaneie para verificar</p>
+            </div>
           </div>
-        </div>
-        
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center;">
-          <p style="font-size: 10px; font-style: italic; color: #6b7280; margin: 0;">
-            Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
-          </p>
-          <p style="font-size: 10px; color: #0284c7; margin-top: 8px;">${window.location.origin}/verificar-contrato</p>
+          
+          <div class="pdf-legal-footer">
+            <p style="font-size: 10px; font-style: italic; color: #6b7280 !important;">
+              Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
+            </p>
+            <p style="font-size: 10px; color: #0284c7 !important; margin-top: 8px;">${window.location.origin}/verificar-contrato</p>
+          </div>
         </div>
       </div>
     `;
@@ -195,38 +199,279 @@ function generateContractHTML(
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=210mm, initial-scale=1.0">
   <title>Contrato WebMarcas</title>
   <style>
-    @page { size: A4; margin: 15mm; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* PDF/Print-specific settings - Fixed layout, no responsive */
+    @page { 
+      size: A4; 
+      margin: 20mm; 
+    }
+    
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+    
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       line-height: 1.6; 
-      color: #1f2937; 
-      background: white; 
+      color: #1f2937 !important; 
+      background: white !important; 
       padding: 30px; 
       font-size: 11px; 
-      max-width: 800px;
+      max-width: 210mm;
       margin: 0 auto;
     }
-    @media print { 
-      body { padding: 0; } 
+    
+    /* Header styles */
+    .pdf-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      page-break-inside: avoid;
+    }
+    
+    .pdf-header img {
+      height: 48px;
+      width: auto;
+      object-fit: contain;
+    }
+    
+    .pdf-header-url {
+      color: #0284c7 !important;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    /* Gradient bar - preserved colors */
+    .pdf-gradient-bar {
+      height: 8px;
+      width: 100%;
+      background: linear-gradient(90deg, #f97316, #fbbf24) !important;
+      border-radius: 3px;
+      margin-bottom: 24px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    /* Main title */
+    .pdf-main-title {
+      text-align: center;
+      color: #0284c7 !important;
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    
+    /* Contract title box */
+    .pdf-contract-title-box {
+      background-color: #1e3a5f !important;
+      color: white !important;
+      text-align: center;
+      padding: 14px 20px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .pdf-contract-title-box p {
+      font-weight: 600;
+      font-size: 12px;
+      line-height: 1.5;
+      color: white !important;
+    }
+    
+    /* Yellow highlight box */
+    .pdf-highlight-box {
+      background-color: #fef3c7 !important;
+      border: 1px solid #f59e0b !important;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 24px;
+      color: #92400e !important;
+      font-size: 11px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .pdf-highlight-box p {
+      color: #92400e !important;
+    }
+    
+    /* Content area */
+    .pdf-content {
+      margin-top: 16px;
+    }
+    
+    /* Certification section */
+    .pdf-certification {
+      margin-top: 32px;
+      page-break-inside: avoid;
+    }
+    
+    .pdf-certification-box {
+      padding: 24px;
+      background-color: #f8fafc !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 12px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .pdf-certification-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .pdf-certification-icon {
+      width: 32px;
+      height: 32px;
+      background-color: #0284c7 !important;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .pdf-certification-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #0284c7 !important;
+    }
+    
+    .pdf-certification-content {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    
+    .pdf-certification-data {
+      flex: 1;
+    }
+    
+    .pdf-certification-qr {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 16px;
+      background-color: white !important;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0 !important;
+    }
+    
+    .pdf-label {
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: #1f2937 !important;
+      margin-bottom: 4px;
+    }
+    
+    .pdf-hash-box {
+      background-color: white !important;
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0 !important;
+      font-family: monospace;
+      font-size: 10px;
+      word-break: break-all;
+      color: #1f2937 !important;
+    }
+    
+    /* Footer */
+    .pdf-footer {
+      margin-top: 32px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 16px;
+      text-align: center;
+      color: #6b7280 !important;
+      font-size: 9px;
+    }
+    
+    /* Blue divider */
+    .pdf-blue-divider {
+      height: 4px;
+      width: 100%;
+      background-color: #0284c7 !important;
+      margin: 16px 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    /* Legal footer */
+    .pdf-legal-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    
+    /* Print media query - reinforce colors */
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      
+      body {
+        padding: 0;
+      }
+      
+      .pdf-gradient-bar,
+      .pdf-contract-title-box,
+      .pdf-highlight-box,
+      .pdf-certification-box,
+      .pdf-certification-icon,
+      .pdf-blue-divider {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
     }
   </style>
 </head>
 <body>
   <!-- Header with Logo and URL -->
-  <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px;">
-    <img src="${logoBase64}" alt="WebMarcas" style="height: 48px; object-fit: contain;" />
-    <span style="color: #0284c7; font-weight: 500; font-size: 14px;">www.webmarcas.net</span>
+  <div class="pdf-header">
+    <img src="${logoBase64}" alt="WebMarcas" />
+    <span class="pdf-header-url">www.webmarcas.net</span>
   </div>
   
   <!-- Orange/Yellow Gradient Bar -->
-  <div style="height: 8px; background: linear-gradient(90deg, #f97316, #fbbf24); border-radius: 2px; margin-bottom: 24px;"></div>
+  <div class="pdf-gradient-bar"></div>
   
-  <!-- Contract Content (from template) -->
-  <div style="margin-top: 16px;">
+  <!-- Main Title -->
+  <h1 class="pdf-main-title">Acordo do Contrato - Anexo I</h1>
+  
+  <!-- Contract Title Box -->
+  <div class="pdf-contract-title-box">
+    <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
+  </div>
+  
+  <!-- Yellow Highlight Box -->
+  <div class="pdf-highlight-box">
+    <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+    <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
+  </div>
+  
+  <!-- Contract Content -->
+  <div class="pdf-content">
     ${formatContent(content)}
   </div>
   
