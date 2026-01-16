@@ -426,49 +426,6 @@ export function generateDocumentPrintHTML(
   baseUrl?: string,
   logoBase64?: string
 ): string {
-  // Detectar se o conteúdo já é HTML completo com estrutura de cabeçalho
-  const trimmedContent = content.trim();
-  const isCompleteHtmlDocument = 
-    trimmedContent.startsWith('<!DOCTYPE') || 
-    trimmedContent.startsWith('<html') ||
-    trimmedContent.includes('gradient-bar') ||
-    trimmedContent.includes('main-title') ||
-    trimmedContent.includes('header-logo') ||
-    trimmedContent.includes('pdf-header') ||
-    trimmedContent.includes('WebMarcas') && trimmedContent.includes('Acordo do Contrato');
-
-  // Se o conteúdo já é um documento HTML completo, retornar ele com CSS de impressão apenas
-  if (isCompleteHtmlDocument) {
-    // Adicionar CSS de impressão ao HTML existente
-    const printCSS = `
-      <style>
-        @page { size: A4; margin: 20mm; }
-        * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          color-adjust: exact !important;
-        }
-      </style>
-    `;
-    
-    // Se já é um documento completo, apenas injeta o CSS
-    if (trimmedContent.includes('<head>')) {
-      return trimmedContent.replace('<head>', `<head>${printCSS}`);
-    }
-    
-    // Caso contrário, envolve com estrutura básica
-    return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  ${printCSS}
-</head>
-<body style="font-family: 'Segoe UI', sans-serif; max-width: 210mm; margin: 0 auto; padding: 30px; background: white;">
-  ${trimmedContent}
-</body>
-</html>`;
-  }
-
   let documentTitle = 'DOCUMENTO';
   if (documentType === 'procuracao') {
     documentTitle = 'PROCURAÇÃO';
