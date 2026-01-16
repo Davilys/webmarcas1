@@ -91,29 +91,45 @@ export function DocumentRenderer({
   
   // Função para extrair apenas o conteúdo do corpo (sem header duplicado)
   const extractBodyContent = (html: string): string => {
+    let cleanedHtml = html;
+    
+    // Se o HTML tem estrutura de PDF gerado (com pdf-content), extrair apenas o conteúdo
+    const pdfContentMatch = html.match(/<div class="pdf-content">([\s\S]*?)(?:<div class="pdf-footer">|<div class="pdf-blue-divider">|<div class="pdf-certification">|$)/i);
+    if (pdfContentMatch) {
+      cleanedHtml = pdfContentMatch[1];
+    }
+    
     // Remove TODOS os elementos de cabeçalho que podem estar duplicados
-    let cleanedHtml = html
-      // Remove blocos completos que contêm o header (qualquer div que tenha logo + gradient dentro)
+    cleanedHtml = cleanedHtml
+      // Remove elementos com classes PDF específicas (pdf-header, pdf-gradient-bar, pdf-main-title, etc.)
+      .replace(/<div[^>]*class="[^"]*pdf-header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<div[^>]*class="[^"]*pdf-gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<h1[^>]*class="[^"]*pdf-main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
+      .replace(/<div[^>]*class="[^"]*pdf-contract-title-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<div[^>]*class="[^"]*pdf-highlight-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove blocos completos que contêm o header
       .replace(/<div[^>]*>\s*<span[^>]*>WebMarcas<\/span>[\s\S]*?<\/div>\s*<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove qualquer div que tenha "WebMarcas" como span filho direto e URL
-      .replace(/<div[^>]*>[\s\S]*?<span[^>]*>WebMarcas<\/span>[\s\S]*?www\.webmarcas\.net[\s\S]*?<\/div>/gi, '')
       // Remove gradient bars (qualquer estilo)
       .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
       .replace(/<div[^>]*style="[^"]*background:\s*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
       .replace(/<div[^>]*style="[^"]*background-image:\s*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
+      .replace(/<div[^>]*style="[^"]*background[^"]*#f97316[^"]*"[^>]*>\s*<\/div>/gi, '')
       // Remove imagens de logo (qualquer formato)
       .replace(/<img[^>]*src="[^"]*webmarcas[^"]*"[^>]*\/?>/gi, '')
       .replace(/<img[^>]*alt="[^"]*[Ww]eb[Mm]arcas[^"]*"[^>]*\/?>/gi, '')
+      .replace(/<img[^>]*alt="WebMarcas"[^>]*\/?>/gi, '')
       .replace(/<img[^>]*header-logo[^>]*\/?>/gi, '')
       // Remove spans e links com WebMarcas ou URL
       .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
       .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
       .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
-      // Remove títulos CONTRATO (vários formatos)
+      .replace(/<span[^>]*class="[^"]*pdf-header-url[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '')
+      // Remove títulos CONTRATO e Acordo do Contrato (vários formatos)
       .replace(/<h1[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
       .replace(/<h2[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h2>/gi, '')
       .replace(/<h1[^>]*>\s*CONTRATO\s*<\/h1>/gi, '')
       .replace(/<h2[^>]*>\s*CONTRATO\s*<\/h2>/gi, '')
+      .replace(/<h1[^>]*>\s*Acordo do Contrato[\s\S]*?<\/h1>/gi, '')
       .replace(/<div[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
       // Remove textos isolados
       .replace(/WebMarcas<\/span>/gi, '')
