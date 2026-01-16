@@ -122,7 +122,7 @@ export function DocumentRenderer({
     return (
       <div className="bg-white text-black rounded-lg shadow-lg overflow-hidden">
         {/* Header correto com Logo real */}
-        <div className="bg-white p-6 border-b">
+        <div className="bg-white p-6">
           <div className="flex items-center justify-between pb-3">
             <img 
               src={webmarcasLogo} 
