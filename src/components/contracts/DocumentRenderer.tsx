@@ -560,10 +560,15 @@ export function generateDocumentPrintHTML(
       object-fit: contain;
     }
     
-    .header-contact {
+    .header-url {
       text-align: right;
-      font-size: 12px;
-      color: #6B7280 !important;
+      font-size: 14px;
+    }
+    
+    .header-url a {
+      color: #0EA5E9 !important;
+      text-decoration: none;
+      font-weight: 500;
     }
     
     /* Gradient bar */
@@ -812,6 +817,17 @@ export function generateDocumentPrintHTML(
 </head>
 <body>
   <div class="document-container">
+    <!-- Header -->
+    <div class="header">
+      <img src="${logoSrc}" alt="WebMarcas" class="header-logo" />
+      <div class="header-url">
+        <a href="https://www.webmarcas.net" style="color: #0EA5E9 !important; text-decoration: none; font-weight: 500;">www.webmarcas.net</a>
+      </div>
+    </div>
+    
+    <!-- Gradient Bar -->
+    <div class="gradient-bar"></div>
+    
     <!-- Title -->
     <h1 class="document-title">${documentTitle}</h1>
 
