@@ -404,86 +404,228 @@ export function generateContractPrintHTML(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contrato WebMarcas - ${brandName}</title>
   <style>
-    @page { size: A4; margin: 15mm; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Print-specific settings for A4 with exact colors */
+    @page { 
+      size: A4; 
+      margin: 20mm; 
+    }
+    
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+    
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+    }
+    
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       line-height: 1.6; 
-      color: #1a1a2e; 
-      background: white; 
+      color: #1f2937; 
+      background: white !important; 
       padding: 30px; 
       font-size: 11px; 
-      max-width: 800px;
+      max-width: 210mm;
       margin: 0 auto;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
     }
-    .header { 
-      display: flex; 
+    
+    /* Header with logo and URL */
+    .header {
+      display: flex;
       justify-content: space-between;
       align-items: center;
       padding-bottom: 12px;
+      margin-bottom: 0;
     }
+    
     .header-logo {
       height: 48px;
+      width: auto;
+      object-fit: contain;
     }
+    
     .header-url {
-      color: #0284c7;
-      font-weight: 500;
+      color: #0284c7 !important;
+      font-weight: 600;
       font-size: 14px;
+      text-decoration: none;
     }
+    
+    /* Orange/Yellow Gradient Bar - MUST preserve colors */
     .gradient-bar {
       height: 8px;
-      background: linear-gradient(90deg, #f97316, #fbbf24);
-      border-radius: 2px;
-      margin-bottom: 20px;
+      width: 100%;
+      background: linear-gradient(90deg, #f97316, #fbbf24) !important;
+      border-radius: 3px;
+      margin-bottom: 24px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
+    
+    /* Blue Main Title */
     .main-title {
       text-align: center;
-      color: #0284c7;
-      font-size: 18px;
+      color: #0284c7 !important;
+      font-size: 20px;
       font-weight: bold;
       margin-bottom: 16px;
+      letter-spacing: -0.5px;
     }
+    
+    /* Dark Blue Box with Contract Title */
     .contract-title-box {
-      background-color: #1e3a5f;
-      color: white;
+      background-color: #1e3a5f !important;
+      color: white !important;
       text-align: center;
-      padding: 12px 16px;
-      border-radius: 4px;
+      padding: 14px 20px;
+      border-radius: 6px;
       margin-bottom: 16px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
+    
     .contract-title-box p {
       font-weight: 600;
-      font-size: 12px;
-      line-height: 1.4;
-    }
-    .highlight-box { 
-      background: #fef3c7; 
-      padding: 16px; 
-      border-radius: 4px; 
-      margin-bottom: 24px; 
-      border: 1px solid #f59e0b; 
-      font-size: 11px;
+      font-size: 13px;
       line-height: 1.5;
+      margin: 0;
+      color: white !important;
     }
+    
+    /* Yellow Highlight Box */
+    .highlight-box {
+      background-color: #fef3c7 !important;
+      padding: 16px 20px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      border: 2px solid #f59e0b !important;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #92400e !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
     .highlight-box p {
-      margin-bottom: 8px;
+      margin-bottom: 10px;
+      color: #92400e !important;
     }
+    
     .highlight-box p:last-child {
       margin-bottom: 0;
     }
+    
+    /* Contract Content */
     .content {
-      margin-top: 16px;
+      margin-top: 20px;
+      color: #1f2937;
     }
+    
+    .content h2 {
+      color: #0284c7 !important;
+      font-size: 13px;
+      font-weight: bold;
+      margin-top: 24px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+    }
+    
+    .content p {
+      color: #1f2937;
+      font-size: 11px;
+      line-height: 1.7;
+      margin-bottom: 10px;
+      text-align: justify;
+      orphans: 3;
+      widows: 3;
+    }
+    
+    /* Footer */
     .footer { 
       margin-top: 40px; 
       text-align: center; 
-      color: #6b7280; 
-      font-size: 9px; 
+      color: #6b7280 !important; 
+      font-size: 10px; 
       border-top: 1px solid #e5e7eb;
       padding-top: 16px;
+      page-break-inside: avoid;
     }
-    @media print { 
-      body { padding: 0; } 
+    
+    .footer p {
+      margin-bottom: 4px;
+      color: #6b7280 !important;
+    }
+    
+    /* Certification section */
+    .certification-box {
+      padding: 24px;
+      background-color: #f8fafc !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 12px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    /* Print-specific overrides */
+    @media print {
+      html, body {
+        width: 210mm;
+        min-height: 297mm;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      
+      body {
+        padding: 0;
+        margin: 0;
+      }
+      
+      .gradient-bar {
+        background: linear-gradient(90deg, #f97316, #fbbf24) !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      
+      .contract-title-box {
+        background-color: #1e3a5f !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      
+      .highlight-box {
+        background-color: #fef3c7 !important;
+        border-color: #f59e0b !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      
+      .certification-box {
+        background-color: #f8fafc !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      
+      /* Avoid page breaks in important sections */
+      .header, .gradient-bar, .main-title, .contract-title-box, .highlight-box {
+        page-break-inside: avoid;
+        page-break-after: avoid;
+      }
+      
+      .content h2 {
+        page-break-after: avoid;
+      }
+      
+      .content p {
+        orphans: 3;
+        widows: 3;
+      }
     }
   </style>
 </head>
@@ -514,6 +656,7 @@ export function generateContractPrintHTML(
   <div class="content">
     ${htmlContent}
   </div>
+  
   
   ${blockchainSignature?.hash ? `
   <!-- Digital Certification Section - ONLY shown when signed -->
