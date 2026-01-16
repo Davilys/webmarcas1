@@ -812,18 +812,6 @@ export function generateDocumentPrintHTML(
 </head>
 <body>
   <div class="document-container">
-    <!-- Header -->
-    <div class="header">
-      <img src="${logoSrc}" alt="WebMarcas" class="header-logo" />
-      <div class="header-contact">
-        <p>www.webmarcas.net</p>
-        <p>contato@webmarcas.net</p>
-      </div>
-    </div>
-    
-    <!-- Gradient Bar -->
-    <div class="gradient-bar"></div>
-    
     <!-- Title -->
     <h1 class="document-title">${documentTitle}</h1>
 
