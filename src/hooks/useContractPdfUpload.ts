@@ -462,6 +462,13 @@ export function generateSignedContractHtml(
   </style>
 </head>
 <body>
+  <div class="header">
+    <span class="header-logo">WebMarcas</span>
+    <span class="header-url">www.webmarcas.net</span>
+  </div>
+  
+  <div class="gradient-bar"></div>
+  
   <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
   
   <div class="contract-title-box">

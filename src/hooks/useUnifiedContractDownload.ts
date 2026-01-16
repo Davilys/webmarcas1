@@ -447,6 +447,15 @@ function generateContractHTML(
   </style>
 </head>
 <body>
+  <!-- Header with Logo and URL -->
+  <div class="pdf-header">
+    <img src="${logoBase64}" alt="WebMarcas" />
+    <span class="pdf-header-url">www.webmarcas.net</span>
+  </div>
+  
+  <!-- Orange/Yellow Gradient Bar -->
+  <div class="pdf-gradient-bar"></div>
+  
   <!-- Main Title -->
   <h1 class="pdf-main-title">Acordo do Contrato - Anexo I</h1>
   
