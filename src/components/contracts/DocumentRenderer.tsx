@@ -91,37 +91,40 @@ export function DocumentRenderer({
   
   // Função para extrair apenas o conteúdo do corpo (sem header duplicado)
   const extractBodyContent = (html: string): string => {
-    // Remove header existente, gradient bar, títulos e URLs do HTML para evitar duplicação
+    // Remove TODOS os elementos de cabeçalho que podem estar duplicados
     let cleanedHtml = html
-      // Remove divs com class header
-      .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove gradient bar divs
-      .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove divs com style de gradient (incluindo orange-yellow)
+      // Remove blocos completos que contêm o header (qualquer div que tenha logo + gradient dentro)
+      .replace(/<div[^>]*>\s*<span[^>]*>WebMarcas<\/span>[\s\S]*?<\/div>\s*<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove qualquer div que tenha "WebMarcas" como span filho direto e URL
+      .replace(/<div[^>]*>[\s\S]*?<span[^>]*>WebMarcas<\/span>[\s\S]*?www\.webmarcas\.net[\s\S]*?<\/div>/gi, '')
+      // Remove gradient bars (qualquer estilo)
       .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div[^>]*style="[^"]*background[^"]*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
-      // Remove imagens de logo
-      .replace(/<img[^>]*header-logo[^>]*>/gi, '')
-      .replace(/<img[^>]*alt="WebMarcas"[^>]*>/gi, '')
-      .replace(/<img[^>]*webmarcas[^>]*>/gi, '')
-      // Remove título CONTRATO duplicado
+      .replace(/<div[^>]*style="[^"]*background:\s*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
+      .replace(/<div[^>]*style="[^"]*background-image:\s*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
+      // Remove imagens de logo (qualquer formato)
+      .replace(/<img[^>]*src="[^"]*webmarcas[^"]*"[^>]*\/?>/gi, '')
+      .replace(/<img[^>]*alt="[^"]*[Ww]eb[Mm]arcas[^"]*"[^>]*\/?>/gi, '')
+      .replace(/<img[^>]*header-logo[^>]*\/?>/gi, '')
+      // Remove spans e links com WebMarcas ou URL
+      .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
+      .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
+      .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
+      // Remove títulos CONTRATO (vários formatos)
       .replace(/<h1[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
       .replace(/<h2[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h2>/gi, '')
-      .replace(/<div[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove links e spans com www.webmarcas.net
-      .replace(/<a[^>]*>www\.webmarcas\.net<\/a>/gi, '')
-      .replace(/<span[^>]*>www\.webmarcas\.net<\/span>/gi, '')
-      .replace(/www\.webmarcas\.net/gi, '')
-      // Remove textos WebMarcas isolados
-      .replace(/<span[^>]*font-size:\s*24px[^>]*>WebMarcas<\/span>/gi, '')
-      .replace(/<span[^>]*>WebMarcas<\/span>/gi, '')
-      .replace(/WebMarcas<\/span>/gi, '')
-      // Remove h1/h2 com texto CONTRATO sozinho
       .replace(/<h1[^>]*>\s*CONTRATO\s*<\/h1>/gi, '')
       .replace(/<h2[^>]*>\s*CONTRATO\s*<\/h2>/gi, '')
-      // Remove divs vazios resultantes
+      .replace(/<div[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove textos isolados
+      .replace(/WebMarcas<\/span>/gi, '')
+      .replace(/www\.webmarcas\.net/gi, '')
+      // Remove divs com class header ou gradient-bar
+      .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Limpeza final - remove divs vazios em múltiplas passadas
       .replace(/<div[^>]*>\s*<\/div>/gi, '')
-      .replace(/<div[^>]*>\s*<\/div>/gi, '') // Segunda passada
+      .replace(/<div[^>]*>\s*<\/div>/gi, '')
+      .replace(/<div[^>]*>\s*<\/div>/gi, '')
       .trim();
     return cleanedHtml;
   };
