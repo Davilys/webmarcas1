@@ -91,13 +91,26 @@ export function DocumentRenderer({
   
   // Função para extrair apenas o conteúdo do corpo (sem header duplicado)
   const extractBodyContent = (html: string): string => {
-    // Remove header existente e gradient bar do HTML para evitar duplicação
+    // Remove header existente, gradient bar e URLs do HTML para evitar duplicação
     let cleanedHtml = html
+      // Remove divs com class header
       .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove gradient bar divs
       .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove divs com style de gradient
+      .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      // Remove imagens de logo
       .replace(/<img[^>]*header-logo[^>]*>/gi, '')
-      .replace(/WebMarcas<\/span>/gi, '')
+      .replace(/<img[^>]*alt="WebMarcas"[^>]*>/gi, '')
+      // Remove links e spans com www.webmarcas.net
+      .replace(/<a[^>]*>www\.webmarcas\.net<\/a>/gi, '')
+      .replace(/<span[^>]*>www\.webmarcas\.net<\/span>/gi, '')
+      .replace(/www\.webmarcas\.net/gi, '')
+      // Remove textos WebMarcas isolados em spans
       .replace(/<span[^>]*font-size:\s*24px[^>]*>WebMarcas<\/span>/gi, '')
+      .replace(/WebMarcas<\/span>/gi, '')
+      // Remove divs vazios resultantes
+      .replace(/<div[^>]*>\s*<\/div>/gi, '')
       .trim();
     return cleanedHtml;
   };
