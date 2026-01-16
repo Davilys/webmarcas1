@@ -321,59 +321,150 @@ export function generateSignedContractHtml(
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=210mm, initial-scale=1.0">
   <title>Contrato WebMarcas - ${brandName}</title>
   <style>
+    /* PDF/Print-specific settings - Fixed layout, no responsive */
+    @page { 
+      size: A4; 
+      margin: 20mm; 
+    }
+    
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+    
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
     body { 
-      font-family: 'Segoe UI', sans-serif; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       line-height: 1.6; 
-      color: #1a1a2e; 
-      background: white; 
+      color: #1f2937 !important; 
+      background: white !important; 
       padding: 40px; 
       font-size: 11px; 
-      max-width: 800px;
+      max-width: 210mm;
       margin: 0 auto;
     }
+    
     .header { 
       display: flex; 
       justify-content: space-between;
       align-items: center;
       padding-bottom: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 0;
     }
+    
+    .header-logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #0284c7 !important;
+    }
+    
+    .header-url {
+      color: #0284c7 !important;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
     .gradient-bar {
       height: 8px;
-      background: linear-gradient(90deg, #f97316, #fbbf24);
-      border-radius: 2px;
-      margin-bottom: 20px;
+      width: 100%;
+      background: linear-gradient(90deg, #f97316, #fbbf24) !important;
+      border-radius: 3px;
+      margin-bottom: 24px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
+    
     .main-title {
       text-align: center;
-      color: #0284c7;
-      font-size: 18px;
+      color: #0284c7 !important;
+      font-size: 20px;
       font-weight: bold;
       margin-bottom: 16px;
     }
+    
     .contract-title-box {
-      background-color: #1e3a5f;
-      color: white;
+      background-color: #1e3a5f !important;
+      color: white !important;
       text-align: center;
-      padding: 12px 16px;
-      border-radius: 4px;
+      padding: 14px 20px;
+      border-radius: 6px;
       margin-bottom: 16px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
+    
+    .contract-title-box p {
+      font-weight: 600;
+      font-size: 12px;
+      line-height: 1.5;
+      color: white !important;
+    }
+    
     .highlight-box { 
-      background: #fef3c7; 
+      background-color: #fef3c7 !important; 
       padding: 16px; 
-      border-radius: 4px; 
+      border-radius: 6px; 
       margin-bottom: 24px; 
-      border: 1px solid #f59e0b; 
+      border: 1px solid #f59e0b !important;
+      color: #92400e !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .highlight-box p {
+      color: #92400e !important;
+    }
+    
+    .content-area {
+      margin-top: 16px;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #6b7280 !important;
+      font-size: 9px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 16px;
+    }
+    
+    /* Print media query - reinforce colors */
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      
+      body {
+        padding: 0;
+      }
+      
+      .gradient-bar,
+      .contract-title-box,
+      .highlight-box {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <span style="font-size: 24px; font-weight: bold; color: #0284c7;">WebMarcas</span>
-    <span style="color: #0284c7; font-size: 14px;">www.webmarcas.net</span>
+    <span class="header-logo">WebMarcas</span>
+    <span class="header-url">www.webmarcas.net</span>
   </div>
   
   <div class="gradient-bar"></div>
@@ -381,21 +472,21 @@ export function generateSignedContractHtml(
   <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
   
   <div class="contract-title-box">
-    <p style="font-weight: 600; font-size: 12px;">CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI</p>
+    <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
   </div>
   
   <div class="highlight-box">
-    <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas.</p>
-    <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças".</p>
+    <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+    <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
   </div>
   
-  <div>
+  <div class="content-area">
     ${htmlContent}
   </div>
   
   ${certificationSection}
   
-  <div style="margin-top: 40px; text-align: center; color: #6b7280; font-size: 9px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+  <div class="footer">
     <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
     <p>www.webmarcas.net | contato@webmarcas.net</p>
   </div>
