@@ -91,26 +91,37 @@ export function DocumentRenderer({
   
   // Função para extrair apenas o conteúdo do corpo (sem header duplicado)
   const extractBodyContent = (html: string): string => {
-    // Remove header existente, gradient bar e URLs do HTML para evitar duplicação
+    // Remove header existente, gradient bar, títulos e URLs do HTML para evitar duplicação
     let cleanedHtml = html
       // Remove divs com class header
       .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
       // Remove gradient bar divs
       .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove divs com style de gradient
+      // Remove divs com style de gradient (incluindo orange-yellow)
       .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<div[^>]*style="[^"]*background[^"]*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
       // Remove imagens de logo
       .replace(/<img[^>]*header-logo[^>]*>/gi, '')
       .replace(/<img[^>]*alt="WebMarcas"[^>]*>/gi, '')
+      .replace(/<img[^>]*webmarcas[^>]*>/gi, '')
+      // Remove título CONTRATO duplicado
+      .replace(/<h1[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
+      .replace(/<h2[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h2>/gi, '')
+      .replace(/<div[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
       // Remove links e spans com www.webmarcas.net
       .replace(/<a[^>]*>www\.webmarcas\.net<\/a>/gi, '')
       .replace(/<span[^>]*>www\.webmarcas\.net<\/span>/gi, '')
       .replace(/www\.webmarcas\.net/gi, '')
-      // Remove textos WebMarcas isolados em spans
+      // Remove textos WebMarcas isolados
       .replace(/<span[^>]*font-size:\s*24px[^>]*>WebMarcas<\/span>/gi, '')
+      .replace(/<span[^>]*>WebMarcas<\/span>/gi, '')
       .replace(/WebMarcas<\/span>/gi, '')
+      // Remove h1/h2 com texto CONTRATO sozinho
+      .replace(/<h1[^>]*>\s*CONTRATO\s*<\/h1>/gi, '')
+      .replace(/<h2[^>]*>\s*CONTRATO\s*<\/h2>/gi, '')
       // Remove divs vazios resultantes
       .replace(/<div[^>]*>\s*<\/div>/gi, '')
+      .replace(/<div[^>]*>\s*<\/div>/gi, '') // Segunda passada
       .trim();
     return cleanedHtml;
   };
