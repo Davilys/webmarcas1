@@ -116,7 +116,10 @@ function replaceContractVariables(
   return result;
 }
 
-// Generate full HTML for the contract with the standard layout
+// Base64 WebMarcas logo for PDF generation - this is the actual logo
+const WEBMARCAS_LOGO_BASE64 = 'data:image/png;base64,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';
+
+// Generate full HTML for the contract with the standard layout including real logo
 function generateContractHtml(content: string): string {
   const htmlContent = content
     .split('\n')
@@ -184,32 +187,109 @@ function generateContractHtml(content: string): string {
       max-width: 800px;
       margin: 0 auto;
     }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+    }
+    .header-logo {
+      height: 48px;
+      object-fit: contain;
+    }
+    .header-url {
+      color: #0284c7;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .gradient-bar {
+      height: 8px;
+      background: linear-gradient(90deg, #f97316, #fbbf24);
+      border-radius: 2px;
+      margin-bottom: 20px;
+    }
+    .main-title {
+      text-align: center;
+      color: #0284c7;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .contract-title-box {
+      background-color: #1e3a5f;
+      color: white;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    .contract-title-box p {
+      font-weight: 600;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .highlight-box {
+      background: #fef3c7;
+      padding: 16px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      border: 1px solid #f59e0b;
+      font-size: 11px;
+      color: #92400e;
+    }
+    .highlight-box p {
+      margin-bottom: 8px;
+    }
+    .highlight-box p:last-child {
+      margin-bottom: 0;
+    }
+    .content {
+      margin-top: 16px;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 9px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 16px;
+    }
+    @media print {
+      body { padding: 0; }
+    }
   </style>
 </head>
 <body>
-  <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px;">
-    <span style="font-size: 24px; font-weight: bold; color: #0284c7;">WebMarcas</span>
-    <span style="color: #0284c7; font-size: 14px;">www.webmarcas.net</span>
+  <!-- Header with Logo and URL -->
+  <div class="header">
+    <img src="${WEBMARCAS_LOGO_BASE64}" alt="WebMarcas" class="header-logo" />
+    <span class="header-url">www.webmarcas.net</span>
   </div>
   
-  <div style="height: 8px; background: linear-gradient(90deg, #f97316, #fbbf24); border-radius: 2px; margin-bottom: 20px;"></div>
+  <!-- Orange/Yellow Gradient Bar -->
+  <div class="gradient-bar"></div>
   
-  <h1 style="text-align: center; color: #0284c7; font-size: 18px; font-weight: bold; margin-bottom: 16px;">Acordo do Contrato - Anexo I</h1>
+  <!-- Blue Title -->
+  <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
   
-  <div style="background-color: #1e3a5f; color: white; text-align: center; padding: 12px 16px; border-radius: 4px; margin-bottom: 16px;">
-    <p style="font-weight: 600; font-size: 12px;">CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI</p>
+  <!-- Dark Blue Box with Contract Title -->
+  <div class="contract-title-box">
+    <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
   </div>
   
-  <div style="background: #fef3c7; padding: 16px; border-radius: 4px; margin-bottom: 24px; border: 1px solid #f59e0b; font-size: 11px;">
-    <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+  <!-- Yellow Highlight Section -->
+  <div class="highlight-box">
+    <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
   </div>
   
-  <div>
+  <!-- Contract Content -->
+  <div class="content">
     ${htmlContent}
   </div>
   
-  <div style="margin-top: 40px; text-align: center; color: #6b7280; font-size: 9px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+  <!-- Footer -->
+  <div class="footer">
     <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
     <p>www.webmarcas.net | contato@webmarcas.net</p>
   </div>
