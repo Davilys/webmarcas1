@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DocumentRenderer, generateDocumentPrintHTML } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 
 interface Contract {
   id: string;
@@ -253,11 +253,14 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     return labels[eventType] || eventType;
   };
 
-  const openPreview = () => {
+  const openPreview = async () => {
     if (!contract?.contract_html) {
       toast.error('Documento sem conteúdo');
       return;
     }
+
+    // Get logo as base64 for proper rendering
+    const logoBase64 = await getLogoBase64ForPDF();
 
     const printHtml = generateDocumentPrintHTML(
       (contract.document_type as any) || 'procuracao',
@@ -274,7 +277,8 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       contract.signatory_cpf || undefined,
       contract.signatory_cnpj || undefined,
       undefined,
-      window.location.origin
+      window.location.origin,
+      logoBase64
     );
 
     const newWindow = window.open('', '_blank');
@@ -300,6 +304,9 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       const html2canvas = html2canvasModule.default;
       const { jsPDF } = jspdfModule;
 
+      // Get logo as base64 for proper PDF rendering
+      const logoBase64 = await getLogoBase64ForPDF();
+
       const printHtml = generateDocumentPrintHTML(
         (contract.document_type as any) || 'procuracao',
         contract.contract_html,
@@ -315,7 +322,8 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
         contract.signatory_cpf || undefined,
         contract.signatory_cnpj || undefined,
         undefined,
-        window.location.origin
+        window.location.origin,
+        logoBase64
       );
 
       const container = document.createElement('div');
@@ -326,10 +334,14 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       container.style.background = 'white';
       document.body.appendChild(container);
 
+      // Wait for images to load
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const canvas = await html2canvas(container, { 
         scale: 2,
         useCORS: true,
         logging: false,
+        allowTaint: true,
       });
       
       const imgData = canvas.toDataURL('image/png');

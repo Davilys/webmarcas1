@@ -391,6 +391,29 @@ export async function getSignatureBase64(): Promise<string> {
   }
 }
 
+// Helper function to convert imported logo to base64
+export async function getLogoBase64ForPDF(): Promise<string> {
+  try {
+    const response = await fetch(webmarcasLogo);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        if (result && result.startsWith('data:')) {
+          resolve(result);
+        } else {
+          reject(new Error('Invalid base64 result'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read blob'));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+}
+
 export function generateDocumentPrintHTML(
   documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' | 'contract',
   content: string,
@@ -400,7 +423,8 @@ export function generateDocumentPrintHTML(
   signatoryCpf?: string,
   signatoryCnpj?: string,
   davilysSignatureBase64?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  logoBase64?: string
 ): string {
   let documentTitle = 'DOCUMENTO';
   if (documentType === 'procuracao') {
@@ -412,7 +436,7 @@ export function generateDocumentPrintHTML(
   }
 
   const legalNotice = (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa')
-    ? `<div style="background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 14px; color: #374151; font-style: italic;">
+    ? `<div class="legal-notice">
         <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
         <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
       </div>`
@@ -421,7 +445,7 @@ export function generateDocumentPrintHTML(
   const formattedContent = content
     .replace(/\{contract_signature\}/g, '')
     .split('\n\n')
-    .map(p => `<p style="margin-bottom: 16px; text-align: justify;">${p}</p>`)
+    .map(p => `<p class="content-paragraph">${p}</p>`)
     .join('');
 
   // URL de verificação dinâmica
@@ -436,104 +460,397 @@ export function generateDocumentPrintHTML(
     : '';
 
   const certificationSection = blockchainSignature?.hash
-    ? `<div style="margin-top: 48px; padding-top: 32px; border-top: 2px solid #1E40AF;">
-        <div style="background: #EFF6FF; border-radius: 8px; padding: 24px;">
-          <h3 style="font-size: 18px; font-weight: bold; color: #1E3A8A; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+    ? `<div class="certification-section">
+        <div class="certification-box">
+          <h3 class="certification-title">
             <span style="color: #16A34A;">✓</span>
             CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
           </h3>
-          <div style="display: flex; gap: 24px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 280px;">
-              <p style="font-size: 12px; font-weight: 600; color: #6B7280;">HASH SHA-256</p>
-              <p style="font-size: 10px; font-family: monospace; background: white; padding: 8px; border-radius: 4px; word-break: break-all;">
-                ${blockchainSignature.hash}
-              </p>
-              <p style="font-size: 12px; font-weight: 600; color: #6B7280; margin-top: 12px;">DATA/HORA</p>
-              <p style="font-size: 14px;">${blockchainSignature.timestamp}</p>
-              <p style="font-size: 12px; font-weight: 600; color: #6B7280; margin-top: 12px;">ID TRANSAÇÃO</p>
-              <p style="font-size: 10px; font-family: monospace;">${blockchainSignature.txId}</p>
-              <p style="font-size: 12px; font-weight: 600; color: #6B7280; margin-top: 12px;">REDE BLOCKCHAIN</p>
-              <p style="font-size: 14px;">${blockchainSignature.network}</p>
-              <p style="font-size: 12px; font-weight: 600; color: #6B7280; margin-top: 12px;">IP SIGNATÁRIO</p>
-              <p style="font-size: 14px;">${blockchainSignature.ipAddress}</p>
+          <div class="certification-content">
+            <div class="certification-data">
+              <p class="cert-label">HASH SHA-256</p>
+              <p class="cert-hash">${blockchainSignature.hash}</p>
+              <p class="cert-label">DATA/HORA</p>
+              <p class="cert-value">${blockchainSignature.timestamp}</p>
+              <p class="cert-label">ID TRANSAÇÃO</p>
+              <p class="cert-hash">${blockchainSignature.txId}</p>
+              <p class="cert-label">REDE BLOCKCHAIN</p>
+              <p class="cert-value">${blockchainSignature.network}</p>
+              <p class="cert-label">IP SIGNATÁRIO</p>
+              <p class="cert-value">${blockchainSignature.ipAddress}</p>
             </div>
-            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 180px;">
-              <p style="font-size: 12px; font-weight: 600; color: #6B7280; margin-bottom: 8px;">QR CODE VERIFICAÇÃO</p>
-              <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div class="certification-qr">
+              <p class="cert-label">QR CODE VERIFICAÇÃO</p>
+              <div class="qr-box">
                 <img src="${qrCodeUrl}" alt="QR Code Verificação" style="width: 120px; height: 120px;" />
               </div>
-              <p style="font-size: 10px; color: #6B7280; margin-top: 8px;">
-                Escaneie para verificar
-              </p>
+              <p class="qr-text">Escaneie para verificar</p>
             </div>
           </div>
-          <p style="font-size: 12px; color: #4B5563; margin-top: 16px; font-style: italic; text-align: center;">
+          <p class="cert-legal">
             Documento com validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
           </p>
-          <p style="font-size: 12px; color: #1D4ED8; margin-top: 8px; text-align: center; font-weight: 500;">
+          <p class="cert-verify">
             Verifique a autenticidade em: ${verificationBaseUrl}/verificar-contrato
           </p>
         </div>
       </div>`
     : '';
 
+  // Logo: usar base64 se fornecido, senão usar fallback SVG
+  const logoSrc = logoBase64 || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgNTAiPjxyZWN0IGZpbGw9IiMxZTNhNWYiIHdpZHRoPSIyMDAiIGhlaWdodD0iNTAiLz48dGV4dCB4PSIxMCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmYiPldlYk1hcmNhczwvdGV4dD48L3N2Zz4=';
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=210mm, initial-scale=1.0">
   <title>${documentTitle} - WebMarcas</title>
   <style>
-    @media print {
-      body { margin: 0; padding: 20px; }
-      @page { margin: 1cm; }
+    /* PDF/Print-specific settings - Fixed A4 layout */
+    @page { 
+      size: A4; 
+      margin: 20mm; 
     }
-    body { font-family: Arial, sans-serif; color: #1F2937; line-height: 1.6; }
+    
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
+    html, body {
+      width: 210mm;
+      min-height: 297mm;
+    }
+    
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      color: #1F2937 !important; 
+      line-height: 1.6; 
+      background: white !important;
+      font-size: 11px;
+      max-width: 210mm;
+      margin: 0 auto;
+    }
+    
+    .document-container {
+      max-width: 170mm;
+      margin: 0 auto;
+      background: white !important;
+      padding: 0;
+    }
+    
+    /* Header with logo */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      margin-bottom: 0;
+      page-break-inside: avoid;
+    }
+    
+    .header-logo {
+      height: 48px;
+      width: auto;
+      object-fit: contain;
+    }
+    
+    .header-contact {
+      text-align: right;
+      font-size: 12px;
+      color: #6B7280 !important;
+    }
+    
+    /* Gradient bar */
+    .gradient-bar {
+      height: 8px;
+      width: 100%;
+      background: linear-gradient(90deg, #f97316, #fbbf24) !important;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    /* Document title */
+    .document-title {
+      text-align: center;
+      color: #1E40AF !important;
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 24px;
+    }
+    
+    /* Legal notice */
+    .legal-notice {
+      background: #FFFBEB !important;
+      border: 1px solid #FCD34D !important;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-size: 12px;
+      color: #374151 !important;
+      font-style: italic;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    /* Content paragraphs */
+    .content-paragraph {
+      margin-bottom: 16px;
+      text-align: justify;
+      font-size: 12px;
+      color: #374151 !important;
+    }
+    
+    /* Signatures section */
+    .signatures-section {
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid #E5E7EB;
+      page-break-inside: avoid;
+    }
+    
+    .signatures-intro {
+      font-size: 12px;
+      color: #4B5563 !important;
+      margin-bottom: 32px;
+    }
+    
+    .signatures-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+    
+    .signature-box {
+      text-align: center;
+    }
+    
+    .signature-box h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1F2937 !important;
+    }
+    
+    .signature-box .details {
+      font-size: 11px;
+      color: #4B5563 !important;
+    }
+    
+    .signature-line {
+      border-bottom: 2px solid black;
+      width: 200px;
+      margin: 16px auto;
+      padding-bottom: 8px;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .signature-line img {
+      height: 64px;
+      object-fit: contain;
+    }
+    
+    .digital-signature {
+      color: #2563EB !important;
+      font-weight: 500;
+      font-size: 12px;
+    }
+    
+    .awaiting-signature {
+      color: #9CA3AF !important;
+      font-style: italic;
+      padding: 16px 0;
+    }
+    
+    .signature-caption {
+      font-size: 10px;
+      color: #6B7280 !important;
+    }
+    
+    /* Certification section */
+    .certification-section {
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 2px solid #1E40AF !important;
+      page-break-inside: avoid;
+    }
+    
+    .certification-box {
+      background: #EFF6FF !important;
+      border-radius: 8px;
+      padding: 24px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .certification-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #1E3A8A !important;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .certification-content {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    
+    .certification-data {
+      flex: 1;
+      min-width: 280px;
+    }
+    
+    .certification-qr {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 150px;
+    }
+    
+    .cert-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #6B7280 !important;
+      margin-top: 12px;
+      margin-bottom: 2px;
+    }
+    
+    .cert-label:first-child {
+      margin-top: 0;
+    }
+    
+    .cert-hash {
+      font-size: 9px;
+      font-family: monospace;
+      background: white !important;
+      padding: 8px;
+      border-radius: 4px;
+      word-break: break-all;
+      color: #1F2937 !important;
+    }
+    
+    .cert-value {
+      font-size: 12px;
+      color: #1F2937 !important;
+    }
+    
+    .qr-box {
+      background: white !important;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin: 8px 0;
+    }
+    
+    .qr-text {
+      font-size: 9px;
+      color: #6B7280 !important;
+    }
+    
+    .cert-legal {
+      font-size: 11px;
+      color: #4B5563 !important;
+      margin-top: 16px;
+      font-style: italic;
+      text-align: center;
+    }
+    
+    .cert-verify {
+      font-size: 11px;
+      color: #1D4ED8 !important;
+      margin-top: 8px;
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    /* Footer */
+    .footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid #E5E7EB;
+      text-align: center;
+      font-size: 10px;
+      color: #6B7280 !important;
+    }
+    
+    /* Print media query - reinforce colors */
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      
+      body {
+        padding: 0;
+      }
+      
+      .gradient-bar,
+      .legal-notice,
+      .certification-box {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+    }
   </style>
 </head>
 <body>
-  <div style="max-width: 800px; margin: 0 auto; background: white; padding: 32px;">
+  <div class="document-container">
     <!-- Header -->
-    <div style="border-bottom: 2px solid #E5E7EB; padding-bottom: 16px; margin-bottom: 24px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="font-size: 24px; font-weight: bold; color: #1E40AF;">WebMarcas</div>
-        <div style="text-align: right; font-size: 12px; color: #6B7280;">
-          <p>www.webmarcas.net</p>
-          <p>contato@webmarcas.net</p>
-        </div>
+    <div class="header">
+      <img src="${logoSrc}" alt="WebMarcas" class="header-logo" />
+      <div class="header-contact">
+        <p>www.webmarcas.net</p>
+        <p>contato@webmarcas.net</p>
       </div>
-      <div style="height: 8px; margin-top: 16px; border-radius: 4px; background: linear-gradient(to right, #FB923C, #FACC15, #FDE047);"></div>
     </div>
-
+    
+    <!-- Gradient Bar -->
+    <div class="gradient-bar"></div>
+    
     <!-- Title -->
-    <h1 style="text-align: center; color: #1E40AF; font-size: 24px; margin-bottom: 24px;">
-      ${documentTitle}
-    </h1>
+    <h1 class="document-title">${documentTitle}</h1>
 
     ${legalNotice}
 
     <!-- Content -->
-    <div style="font-size: 14px; color: #374151;">
+    <div class="document-content">
       ${formattedContent}
     </div>
 
     <!-- Signatures -->
-    <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid #E5E7EB;">
-      <p style="font-size: 14px; color: #4B5563; margin-bottom: 32px;">
+    <div class="signatures-section">
+      <p class="signatures-intro">
         Por estarem justas e contratadas, as partes assinam o presente de igual teor e forma, de forma digital válido juridicamente.
       </p>
       
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
-        <div style="text-align: center;">
-          <p style="font-size: 14px; font-weight: 600;">Assinatura autorizada:</p>
-          <p style="font-size: 12px; color: #4B5563;">WebMarcas Patentes - CNPJ/MF sob o nº 39.528.012/0001-29</p>
-          <div style="border-bottom: 2px solid black; width: 256px; margin: 16px auto; padding-bottom: 8px; min-height: 64px; display: flex; align-items: center; justify-content: center;">
+      <div class="signatures-grid">
+        <div class="signature-box">
+          <h4>Assinatura autorizada:</h4>
+          <p class="details">WebMarcas Patentes - CNPJ/MF sob o nº 39.528.012/0001-29</p>
+          <div class="signature-line">
             ${documentType === 'procuracao' && davilysSignatureBase64 
-              ? `<img src="${davilysSignatureBase64}" alt="Assinatura" style="height: 64px; object-fit: contain;">`
-              : '<span style="color: #2563EB; font-weight: 500; font-size: 14px;">✓ Assinado Digitalmente</span>'
+              ? `<img src="${davilysSignatureBase64}" alt="Assinatura">`
+              : '<span class="digital-signature">✓ Assinado Digitalmente</span>'
             }
           </div>
-          <p style="font-size: 10px; color: #6B7280;">
+          <p class="signature-caption">
             ${documentType === 'procuracao' 
               ? 'Davilys Danques de Oliveira Cunha'
               : 'Certificação Digital - Lei 14.063/2020'
@@ -541,15 +858,18 @@ export function generateDocumentPrintHTML(
           </p>
         </div>
         
-        <div style="text-align: center;">
-          <p style="font-size: 14px; font-weight: 600;">Contratante:</p>
-          <p style="font-size: 12px; color: #4B5563;">
+        <div class="signature-box">
+          <h4>Contratante:</h4>
+          <p class="details">
             ${signatoryName || 'Nome do Representante'}
             ${signatoryCnpj ? ` - CNPJ sob o nº ${signatoryCnpj}` : ''}
             ${signatoryCpf ? `, CPF sob o n⁰ ${signatoryCpf}` : ''}
           </p>
-          <div style="border-bottom: 2px solid black; width: 256px; margin: 16px auto; padding-bottom: 8px; min-height: 64px;">
-            ${clientSignature ? `<img src="${clientSignature}" alt="Assinatura Cliente" style="height: 64px; object-fit: contain;">` : '<p style="color: #9CA3AF; font-style: italic; padding: 16px 0;">Aguardando assinatura...</p>'}
+          <div class="signature-line">
+            ${clientSignature 
+              ? `<img src="${clientSignature}" alt="Assinatura Cliente">`
+              : '<span class="awaiting-signature">Aguardando assinatura...</span>'
+            }
           </div>
         </div>
       </div>
@@ -558,7 +878,7 @@ export function generateDocumentPrintHTML(
     ${certificationSection}
 
     <!-- Footer -->
-    <div style="margin-top: 48px; padding-top: 16px; border-top: 1px solid #E5E7EB; text-align: center; font-size: 12px; color: #6B7280;">
+    <div class="footer">
       <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
       <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
       <p>Tel: (11) 4200-1656 | contato@webmarcas.net</p>
