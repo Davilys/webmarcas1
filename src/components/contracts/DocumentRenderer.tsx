@@ -99,49 +99,81 @@ export function DocumentRenderer({
       cleanedHtml = pdfContentMatch[1];
     }
     
-    // Remove TODOS os elementos de cabeçalho que podem estar duplicados
+    // ESTRATÉGIA: Localizar onde começa o conteúdo real (após "Acordo do Contrato" ou box azul)
+    // e remover tudo antes disso que seja header duplicado
+    
+    // Encontrar a posição do box azul (CONTRATO PARTICULAR...) que marca início do conteúdo real
+    const blueBoxMatch = cleanedHtml.match(/<div[^>]*(?:background[^>]*#0ea5e9|background[^>]*rgb\(14,\s*165,\s*233\)|class="[^"]*highlight-box[^"]*")[^>]*>/i);
+    
+    if (blueBoxMatch && blueBoxMatch.index !== undefined) {
+      // Remover tudo antes do box azul que seja parte do header duplicado
+      const beforeBlueBox = cleanedHtml.substring(0, blueBoxMatch.index);
+      const afterBlueBox = cleanedHtml.substring(blueBoxMatch.index);
+      
+      // Limpar a parte antes do box azul de elementos de header
+      let cleanedBefore = beforeBlueBox
+        // Remove qualquer coisa que contenha WebMarcas ou www.webmarcas
+        .replace(/<[^>]*>[\s\S]*?WebMarcas[\s\S]*?<\/[^>]*>/gi, '')
+        .replace(/<[^>]*>[\s\S]*?www\.webmarcas\.net[\s\S]*?<\/[^>]*>/gi, '')
+        // Remove gradient bars
+        .replace(/<div[^>]*style="[^"]*(?:linear-gradient|#f97316|#fbbf24)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove títulos CONTRATO e Acordo do Contrato
+        .replace(/<h1[^>]*>[\s\S]*?CONTRATO[\s\S]*?<\/h1>/gi, '')
+        .replace(/<h2[^>]*>[\s\S]*?CONTRATO[\s\S]*?<\/h2>/gi, '')
+        .replace(/<h1[^>]*>[\s\S]*?Acordo do Contrato[\s\S]*?<\/h1>/gi, '')
+        .replace(/<h2[^>]*>[\s\S]*?Acordo do Contrato[\s\S]*?<\/h2>/gi, '')
+        // Remove imagens de logo
+        .replace(/<img[^>]*>/gi, '')
+        // Remove spans/links com WebMarcas ou URL
+        .replace(/<span[^>]*>[\s\S]*?WebMarcas[\s\S]*?<\/span>/gi, '')
+        .replace(/<a[^>]*>[\s\S]*?www\.webmarcas[\s\S]*?<\/a>/gi, '')
+        // Limpar texto solto
+        .replace(/WebMarcas/gi, '')
+        .replace(/www\.webmarcas\.net/gi, '')
+        // Limpar divs vazios
+        .replace(/<div[^>]*>\s*<\/div>/gi, '')
+        .replace(/<div[^>]*>\s*<\/div>/gi, '');
+      
+      cleanedHtml = cleanedBefore + afterBlueBox;
+    } else {
+      // Fallback: usar regex para limpar elementos comuns de header
+      cleanedHtml = cleanedHtml
+        // Remove elementos com classes PDF específicas
+        .replace(/<div[^>]*class="[^"]*pdf-header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*class="[^"]*pdf-gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<h1[^>]*class="[^"]*pdf-main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
+        // Remove blocos com WebMarcas + URL + gradient
+        .replace(/<div[^>]*>[\s\S]*?WebMarcas[\s\S]*?www\.webmarcas\.net[\s\S]*?<\/div>\s*<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove gradient bars
+        .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*style="[^"]*background[^"]*#f97316[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove imagens de logo
+        .replace(/<img[^>]*webmarcas[^>]*\/?>/gi, '')
+        .replace(/<img[^>]*alt="WebMarcas"[^>]*\/?>/gi, '')
+        // Remove spans e links com WebMarcas ou URL
+        .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
+        .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
+        .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
+        // Remove títulos CONTRATO e Acordo do Contrato
+        .replace(/<h1[^>]*>\s*CONTRATO\s*<\/h1>/gi, '')
+        .replace(/<h2[^>]*>\s*CONTRATO\s*<\/h2>/gi, '')
+        .replace(/<h1[^>]*>\s*Acordo do Contrato[\s\S]*?<\/h1>/gi, '')
+        .replace(/<h2[^>]*>\s*Acordo do Contrato[\s\S]*?<\/h2>/gi, '')
+        // Remove textos isolados
+        .replace(/WebMarcas<\/span>/gi, '')
+        .replace(/www\.webmarcas\.net/gi, '')
+        // Remove divs com class header ou gradient-bar
+        .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+    }
+    
+    // Limpeza final - remove divs vazios em múltiplas passadas
     cleanedHtml = cleanedHtml
-      // Remove elementos com classes PDF específicas (pdf-header, pdf-gradient-bar, pdf-main-title, etc.)
-      .replace(/<div[^>]*class="[^"]*pdf-header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div[^>]*class="[^"]*pdf-gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<h1[^>]*class="[^"]*pdf-main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
-      .replace(/<div[^>]*class="[^"]*pdf-contract-title-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div[^>]*class="[^"]*pdf-highlight-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove blocos completos que contêm o header
-      .replace(/<div[^>]*>\s*<span[^>]*>WebMarcas<\/span>[\s\S]*?<\/div>\s*<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove gradient bars (qualquer estilo)
-      .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div[^>]*style="[^"]*background:\s*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
-      .replace(/<div[^>]*style="[^"]*background-image:\s*linear-gradient[^"]*"[^>]*>\s*<\/div>/gi, '')
-      .replace(/<div[^>]*style="[^"]*background[^"]*#f97316[^"]*"[^>]*>\s*<\/div>/gi, '')
-      // Remove imagens de logo (qualquer formato)
-      .replace(/<img[^>]*src="[^"]*webmarcas[^"]*"[^>]*\/?>/gi, '')
-      .replace(/<img[^>]*alt="[^"]*[Ww]eb[Mm]arcas[^"]*"[^>]*\/?>/gi, '')
-      .replace(/<img[^>]*alt="WebMarcas"[^>]*\/?>/gi, '')
-      .replace(/<img[^>]*header-logo[^>]*\/?>/gi, '')
-      // Remove spans e links com WebMarcas ou URL
-      .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
-      .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
-      .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
-      .replace(/<span[^>]*class="[^"]*pdf-header-url[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '')
-      // Remove títulos CONTRATO e Acordo do Contrato (vários formatos)
-      .replace(/<h1[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
-      .replace(/<h2[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/h2>/gi, '')
-      .replace(/<h1[^>]*>\s*CONTRATO\s*<\/h1>/gi, '')
-      .replace(/<h2[^>]*>\s*CONTRATO\s*<\/h2>/gi, '')
-      .replace(/<h1[^>]*>\s*Acordo do Contrato[\s\S]*?<\/h1>/gi, '')
-      .replace(/<div[^>]*class="[^"]*main-title[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Remove textos isolados
-      .replace(/WebMarcas<\/span>/gi, '')
-      .replace(/www\.webmarcas\.net/gi, '')
-      // Remove divs com class header ou gradient-bar
-      .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-      // Limpeza final - remove divs vazios em múltiplas passadas
       .replace(/<div[^>]*>\s*<\/div>/gi, '')
       .replace(/<div[^>]*>\s*<\/div>/gi, '')
       .replace(/<div[^>]*>\s*<\/div>/gi, '')
       .trim();
+      
     return cleanedHtml;
   };
 
