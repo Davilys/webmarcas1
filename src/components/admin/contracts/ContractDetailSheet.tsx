@@ -296,296 +296,81 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
 
     setDownloadingPdf(true);
     try {
-      const { jsPDF } = await import('jspdf');
-      const { getLogoBase64 } = await import('@/components/contracts/ContractRenderer');
+      const [html2canvasModule, jspdfModule] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf')
+      ]);
+      const html2canvas = html2canvasModule.default;
+      const { jsPDF } = jspdfModule;
 
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
+      // Get logo as base64 for proper PDF rendering
+      const logoBase64 = await getLogoBase64ForPDF();
+
+      const printHtml = generateDocumentPrintHTML(
+        (contract.document_type as any) || 'procuracao',
+        contract.contract_html,
+        contract.client_signature_image || null,
+        contract.blockchain_hash ? {
+          hash: contract.blockchain_hash,
+          timestamp: contract.blockchain_timestamp || '',
+          txId: contract.blockchain_tx_id || '',
+          network: contract.blockchain_network || '',
+          ipAddress: contract.signature_ip || '',
+        } : undefined,
+        contract.signatory_name || undefined,
+        contract.signatory_cpf || undefined,
+        contract.signatory_cnpj || undefined,
+        undefined,
+        window.location.origin,
+        logoBase64
+      );
+
+      // Create container for rendering
+      const container = document.createElement('div');
+      container.innerHTML = printHtml;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '794px';
+      container.style.background = 'white';
+      container.style.padding = '0';
+      container.style.margin = '0';
+      document.body.appendChild(container);
+
+      // Wait for fonts and images to load
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const canvas = await html2canvas(container, { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        imageTimeout: 15000,
+        windowWidth: 794,
+        windowHeight: container.scrollHeight,
       });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - margin * 2;
-      let yPosition = margin;
-
-      // Helper function to add new page if needed
-      const checkNewPage = (requiredSpace: number) => {
-        if (yPosition + requiredSpace > pageHeight - margin) {
-          pdf.addPage();
-          yPosition = margin;
-          return true;
-        }
-        return false;
-      };
-
-      // Load and add logo
-      try {
-        const logoBase64 = await getLogoBase64();
-        const logoWidth = 28;
-        const logoHeight = 20;
-        pdf.addImage(logoBase64, 'PNG', margin, yPosition, logoWidth, logoHeight);
-      } catch (error) {
-        console.error('Failed to add logo:', error);
-      }
-
-      // Add website URL
-      pdf.setFontSize(10);
-      pdf.setTextColor(2, 132, 199);
-      pdf.text('www.webmarcas.net', pageWidth - margin, yPosition + 10, { align: 'right' });
-      yPosition += 20;
-
-      // Orange Gradient Bar
-      pdf.setFillColor(249, 115, 22);
-      pdf.rect(margin, yPosition, contentWidth, 3, 'F');
-      yPosition += 8;
-
-      // Document type title
-      const documentTypeLabel = DOCUMENT_TYPE_LABELS[contract.document_type || 'contract'] || 'Documento';
-      pdf.setFontSize(16);
-      pdf.setTextColor(2, 132, 199);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(documentTypeLabel.toUpperCase(), pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 10;
-
-      // Subject box
-      if (contract.subject) {
-        pdf.setFillColor(30, 58, 95);
-        const subjectLines = pdf.splitTextToSize(contract.subject, contentWidth - 8);
-        const boxHeight = Math.max(12, subjectLines.length * 5 + 8);
-        pdf.rect(margin, yPosition, contentWidth, boxHeight, 'F');
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'bold');
-        subjectLines.forEach((line: string, idx: number) => {
-          pdf.text(line, pageWidth / 2, yPosition + 6 + idx * 5, { align: 'center' });
-        });
-        yPosition += boxHeight + 6;
-      }
-
-      // Extract text from HTML - remove style and script tags first
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = contract.contract_html;
       
-      // Remove all style and script elements to avoid CSS/JS appearing as text
-      const styleTags = tempDiv.querySelectorAll('style, script, head');
-      styleTags.forEach(tag => tag.remove());
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
-      // Also remove elements that are just for styling/structure
-      const headerElements = tempDiv.querySelectorAll('.header, .pdf-header, .gradient-bar, [class*="header"]');
-      headerElements.forEach(el => el.remove());
-      
-      const textContent = tempDiv.textContent || tempDiv.innerText || '';
-      
-      // Process content
-      pdf.setTextColor(31, 41, 55);
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      const lines = textContent.split('\n');
-      
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          yPosition += 3;
-          continue;
-        }
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
 
-        // Skip CSS rules, JS code, and duplicated titles
-        if (trimmed.startsWith('@page') ||
-            trimmed.startsWith('@media') ||
-            trimmed.startsWith('*') ||
-            trimmed.startsWith('body') ||
-            trimmed.startsWith('.') ||
-            trimmed.includes('font-family:') ||
-            trimmed.includes('font-size:') ||
-            trimmed.includes('line-height:') ||
-            trimmed.includes('margin:') ||
-            trimmed.includes('padding:') ||
-            trimmed.includes('color:') ||
-            trimmed.includes('background:') ||
-            trimmed.includes('max-width:') ||
-            trimmed.includes('box-sizing:') ||
-            trimmed === '{' ||
-            trimmed === '}' ||
-            trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS') ||
-            trimmed.includes('Acordo do Contrato') ||
-            trimmed === 'CONTRATO' ||
-            trimmed === 'Contrato WebMarcas' ||
-            trimmed === 'WebMarcas' ||
-            trimmed === 'www.webmarcas.net') {
-          continue;
-        }
-
-        checkNewPage(8);
-
-        // Clause titles - Blue and bold
-        if (/^\d+\.\s*CLÁUSULA/.test(trimmed) || /^CLÁUSULA/.test(trimmed)) {
-          yPosition += 4;
-          pdf.setTextColor(2, 132, 199);
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(10);
-          const splitLine = pdf.splitTextToSize(trimmed, contentWidth);
-          pdf.text(splitLine, margin, yPosition);
-          yPosition += splitLine.length * 5 + 2;
-          pdf.setTextColor(31, 41, 55);
-          pdf.setFont('helvetica', 'normal');
-          continue;
-        }
-
-        // Sub-items
-        if (/^\d+\.\d+/.test(trimmed)) {
-          const splitLine = pdf.splitTextToSize(trimmed, contentWidth - 8);
-          checkNewPage(splitLine.length * 4 + 2);
-          pdf.text(splitLine, margin + 8, yPosition);
-          yPosition += splitLine.length * 4 + 2;
-          continue;
-        }
-
-        // List items with letters
-        if (/^[a-z]\)/.test(trimmed)) {
-          const splitLine = pdf.splitTextToSize(trimmed, contentWidth - 16);
-          checkNewPage(splitLine.length * 4 + 1);
-          pdf.text(splitLine, margin + 16, yPosition);
-          yPosition += splitLine.length * 4 + 1;
-          continue;
-        }
-
-        // Party identification headers
-        if (trimmed === 'CONTRATADA:' || trimmed === 'CONTRATANTE:') {
-          yPosition += 6;
-          checkNewPage(10);
-          pdf.setFont('helvetica', 'bold');
-          pdf.text(trimmed, pageWidth / 2, yPosition, { align: 'center' });
-          pdf.setFont('helvetica', 'normal');
-          yPosition += 5;
-          continue;
-        }
-
-        // Regular paragraphs
-        const splitLine = pdf.splitTextToSize(trimmed, contentWidth);
-        checkNewPage(splitLine.length * 4 + 3);
-        pdf.text(splitLine, margin, yPosition);
-        yPosition += splitLine.length * 4 + 3;
-      }
-
-      // Add signature if exists
-      if (contract.client_signature_image) {
-        yPosition += 10;
-        checkNewPage(50);
-        
-        pdf.setDrawColor(229, 231, 235);
-        pdf.setLineWidth(0.3);
-        pdf.line(margin + 20, yPosition, pageWidth - margin - 20, yPosition);
-        yPosition += 5;
-        
-        try {
-          pdf.addImage(contract.client_signature_image, 'PNG', pageWidth / 2 - 25, yPosition, 50, 25);
-          yPosition += 30;
-        } catch (e) {
-          console.error('Error adding signature image:', e);
-        }
-        
-        if (contract.signatory_name) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(10);
-          pdf.text(contract.signatory_name, pageWidth / 2, yPosition, { align: 'center' });
-          yPosition += 5;
-        }
-        if (contract.signatory_cpf) {
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(9);
-          pdf.text(`CPF: ${contract.signatory_cpf}`, pageWidth / 2, yPosition, { align: 'center' });
-        }
-      }
-
-      // Footer
-      yPosition += 10;
-      checkNewPage(30);
-      
-      pdf.setDrawColor(229, 231, 235);
-      pdf.setLineWidth(0.3);
-      pdf.line(margin, yPosition, pageWidth - margin, yPosition);
-      yPosition += 6;
-
-      pdf.setTextColor(107, 114, 128);
-      pdf.setFontSize(8);
-      pdf.text('Documento gerado pelo sistema WebMarcas', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 4;
-      pdf.text('www.webmarcas.net | contato@webmarcas.net', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += 4;
-      pdf.text(`Data e hora da geração: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, yPosition, { align: 'center' });
-
-      // Add blockchain certification if signed
-      if (contract.blockchain_hash) {
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
         pdf.addPage();
-        yPosition = margin;
-
-        pdf.setFillColor(2, 132, 199);
-        pdf.rect(margin, yPosition, contentWidth, 3, 'F');
-        yPosition += 10;
-
-        pdf.setTextColor(2, 132, 199);
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA', pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 12;
-
-        pdf.setFillColor(248, 250, 252);
-        pdf.setDrawColor(226, 232, 240);
-        pdf.rect(margin, yPosition, contentWidth, 60, 'FD');
-
-        pdf.setTextColor(30, 41, 59);
-        pdf.setFontSize(9);
-        pdf.setFont('helvetica', 'bold');
-        
-        let certY = yPosition + 8;
-        pdf.text('HASH SHA-256', margin + 4, certY);
-        certY += 5;
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7);
-        const hashLines = pdf.splitTextToSize(contract.blockchain_hash, contentWidth - 8);
-        pdf.text(hashLines, margin + 4, certY);
-        certY += hashLines.length * 3 + 6;
-
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9);
-        pdf.text('DATA/HORA DA ASSINATURA', margin + 4, certY);
-        certY += 5;
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(contract.blockchain_timestamp || '-', margin + 4, certY);
-        certY += 8;
-
-        if (contract.blockchain_tx_id) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('ID DA TRANSAÇÃO', margin + 4, certY);
-          certY += 5;
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(7);
-          const txLines = pdf.splitTextToSize(contract.blockchain_tx_id, contentWidth - 8);
-          pdf.text(txLines, margin + 4, certY);
-          certY += txLines.length * 3 + 6;
-        }
-
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9);
-        pdf.text('REDE BLOCKCHAIN', margin + 4, certY);
-        certY += 5;
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(contract.blockchain_network || 'Bitcoin (OpenTimestamps)', margin + 4, certY);
-
-        yPosition += 70;
-
-        pdf.setTextColor(100, 116, 139);
-        pdf.setFontSize(8);
-        pdf.setFont('helvetica', 'italic');
-        pdf.text('Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.', pageWidth / 2, yPosition, { align: 'center' });
-        yPosition += 5;
-        pdf.setTextColor(2, 132, 199);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(`Verifique a autenticidade em: ${window.location.origin}/verificar-contrato`, pageWidth / 2, yPosition, { align: 'center' });
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
       }
 
       pdf.save(`${contract.subject || contract.contract_number || 'contrato'}.pdf`);
