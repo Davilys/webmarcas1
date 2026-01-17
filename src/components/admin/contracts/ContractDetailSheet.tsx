@@ -365,9 +365,18 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
         yPosition += boxHeight + 6;
       }
 
-      // Extract text from HTML and render
+      // Extract text from HTML - remove style and script tags first
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = contract.contract_html;
+      
+      // Remove all style and script elements to avoid CSS/JS appearing as text
+      const styleTags = tempDiv.querySelectorAll('style, script, head');
+      styleTags.forEach(tag => tag.remove());
+      
+      // Also remove elements that are just for styling/structure
+      const headerElements = tempDiv.querySelectorAll('.header, .pdf-header, .gradient-bar, [class*="header"]');
+      headerElements.forEach(el => el.remove());
+      
       const textContent = tempDiv.textContent || tempDiv.innerText || '';
       
       // Process content
@@ -384,10 +393,27 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
           continue;
         }
 
-        // Skip duplicated titles
-        if (trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS') ||
+        // Skip CSS rules, JS code, and duplicated titles
+        if (trimmed.startsWith('@page') ||
+            trimmed.startsWith('@media') ||
+            trimmed.startsWith('*') ||
+            trimmed.startsWith('body') ||
+            trimmed.startsWith('.') ||
+            trimmed.includes('font-family:') ||
+            trimmed.includes('font-size:') ||
+            trimmed.includes('line-height:') ||
+            trimmed.includes('margin:') ||
+            trimmed.includes('padding:') ||
+            trimmed.includes('color:') ||
+            trimmed.includes('background:') ||
+            trimmed.includes('max-width:') ||
+            trimmed.includes('box-sizing:') ||
+            trimmed === '{' ||
+            trimmed === '}' ||
+            trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS') ||
             trimmed.includes('Acordo do Contrato') ||
             trimmed === 'CONTRATO' ||
+            trimmed === 'Contrato WebMarcas' ||
             trimmed === 'WebMarcas' ||
             trimmed === 'www.webmarcas.net') {
           continue;
