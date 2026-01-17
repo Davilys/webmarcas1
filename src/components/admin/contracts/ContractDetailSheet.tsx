@@ -330,36 +330,43 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       container.innerHTML = printHtml;
       container.style.position = 'absolute';
       container.style.left = '-9999px';
-      container.style.width = '210mm';
+      container.style.width = '794px'; // A4 width at 96 DPI
       container.style.background = 'white';
+      container.style.padding = '0';
+      container.style.margin = '0';
       document.body.appendChild(container);
 
-      // Wait for images to load
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Wait for images and fonts to load
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(container, { 
-        scale: 2,
+        scale: 3, // Higher scale for better quality
         useCORS: true,
         logging: false,
         allowTaint: true,
+        backgroundColor: '#ffffff',
+        imageTimeout: 15000,
+        removeContainer: false,
       });
       
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG with high quality for smaller file size and good quality
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 297;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pdfHeight;
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pdfHeight;
       }
 
       pdf.save(`${contract.subject || contract.contract_number || 'contrato'}.pdf`);
