@@ -562,11 +562,51 @@ export function generateDocumentPrintHTML(
       </div>`
     : '';
 
-  const formattedContent = content
-    .replace(/\{contract_signature\}/g, '')
-    .split('\n\n')
-    .map(p => `<p class="content-paragraph">${p}</p>`)
-    .join('');
+  // Limpar o conteúdo de headers duplicados antes de formatar
+  const cleanContent = (html: string): string => {
+    let cleaned = html;
+    
+    // Se for HTML, remover elementos de header que já existem
+    if (html.includes('<') && html.includes('>')) {
+      cleaned = cleaned
+        // Remove elementos de header
+        .replace(/<div[^>]*class="[^"]*(?:header|pdf-header)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove gradient bars
+        .replace(/<div[^>]*class="[^"]*(?:gradient-bar|pdf-gradient-bar)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*style="[^"]*(?:linear-gradient|#f97316|#fbbf24)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove títulos duplicados
+        .replace(/<h1[^>]*class="[^"]*(?:document-title|main-title|pdf-main-title)[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
+        .replace(/<h1[^>]*>\s*(?:CONTRATO|Acordo do Contrato[^<]*)\s*<\/h1>/gi, '')
+        .replace(/<h2[^>]*>\s*(?:CONTRATO|Acordo do Contrato[^<]*)\s*<\/h2>/gi, '')
+        // Remove imagens de logo
+        .replace(/<img[^>]*(?:header-logo|webmarcas|alt="WebMarcas")[^>]*\/?>/gi, '')
+        // Remove spans/links com WebMarcas ou URL
+        .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
+        .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
+        .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
+        .replace(/<div[^>]*class="[^"]*header-url[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove divs de container que envolvem o header
+        .replace(/<div[^>]*class="[^"]*document-container[^"]*"[^>]*>/gi, '')
+        // Limpar divs vazios
+        .replace(/<div[^>]*>\s*<\/div>/gi, '')
+        .replace(/<div[^>]*>\s*<\/div>/gi, '');
+    }
+    
+    return cleaned.replace(/\{contract_signature\}/g, '').trim();
+  };
+  
+  const cleanedContent = cleanContent(content);
+  
+  // Verificar se o conteúdo é HTML ou texto puro
+  const isHtmlContent = cleanedContent.includes('<') && cleanedContent.includes('>') && 
+                        (cleanedContent.includes('<p') || cleanedContent.includes('<div') || cleanedContent.includes('<span'));
+  
+  const formattedContent = isHtmlContent 
+    ? cleanedContent
+    : cleanedContent
+        .split('\n\n')
+        .map(p => `<p class="content-paragraph">${p}</p>`)
+        .join('');
 
   // URL de verificação dinâmica
   const verificationBaseUrl = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.lovable.app');
