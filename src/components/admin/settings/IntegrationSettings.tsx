@@ -142,7 +142,7 @@ export function IntegrationSettings() {
     
     try {
       const { data, error } = await supabase.functions.invoke('sync-perfex', {
-        body: { action: 'test' }
+        body: { action: 'test_connection' }
       });
       
       if (error) {
@@ -150,10 +150,10 @@ export function IntegrationSettings() {
         toast.error('Erro ao conectar com Perfex');
       } else if (data?.success) {
         setPerfexStatus('success');
-        toast.success('Conexão com Perfex funcionando!');
+        toast.success(data?.message || 'Conexão com Perfex funcionando!');
       } else {
         setPerfexStatus('error');
-        toast.error(data?.error || 'Erro na conexão com Perfex');
+        toast.error(data?.message || data?.error || 'Erro na conexão com Perfex');
       }
     } catch {
       setPerfexStatus('error');
