@@ -153,23 +153,45 @@ serve(async (req) => {
   try {
     const { action, data } = await req.json();
     
-    const perfexApiUrl = Deno.env.get('PERFEX_API_URL');
-    const perfexApiToken = Deno.env.get('PERFEX_API_TOKEN');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Get Perfex credentials from secrets or fallback to system_settings
+    let perfexApiUrl = Deno.env.get('PERFEX_API_URL');
+    let perfexApiToken = Deno.env.get('PERFEX_API_TOKEN');
+    
+    // Fallback: if secrets are not configured properly, try system_settings
+    if (!perfexApiUrl || !perfexApiToken || perfexApiUrl === 'webmarcas') {
+      console.log('Secrets not configured properly, checking system_settings...');
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'perfex')
+        .single();
+      
+      if (settings?.value) {
+        const perfexSettings = settings.value as { url?: string; token?: string; enabled?: boolean };
+        if (perfexSettings.url && !perfexApiUrl) {
+          perfexApiUrl = perfexSettings.url;
+          console.log('Using URL from system_settings:', perfexApiUrl);
+        }
+      }
+    }
+    
+    console.log('Perfex API URL:', perfexApiUrl);
+    console.log('Perfex API Token configured:', !!perfexApiToken);
     
     if (!perfexApiUrl || !perfexApiToken) {
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'PERFEX_NOT_CONFIGURED',
-          message: 'Credenciais do Perfex não configuradas. Configure PERFEX_API_URL e PERFEX_API_TOKEN.' 
+          message: 'Credenciais do Perfex não configuradas. Configure PERFEX_API_URL e PERFEX_API_TOKEN nos secrets ou na aba de Integrações.' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Test connection
     if (action === 'test_connection') {
