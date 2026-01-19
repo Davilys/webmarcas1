@@ -72,10 +72,10 @@ export function ContractStep({
         signatoryName: personalData.fullName,
         signatoryCpf: personalData.cpf,
       });
-      toast.success("Contrato baixado com sucesso em PDF!");
+      // Print dialog opened - no success toast needed
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      toast.error("Erro ao gerar PDF. Tente novamente.");
+      toast.error("Erro ao abrir visualização do contrato.");
     } finally {
       setIsDownloading(false);
     }

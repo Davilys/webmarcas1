@@ -482,8 +482,8 @@ function generateContractHTML(
 }
 
 /**
- * Generates a PDF from contract HTML using the same method as the admin panel.
- * Uses html2canvas + jsPDF for consistent formatting.
+ * Opens a preview window with the contract content and triggers print dialog for PDF download.
+ * Uses native browser print-to-PDF for text-selectable output.
  */
 export async function downloadUnifiedContractPDF(options: UnifiedContractDownloadOptions): Promise<void> {
   const {
@@ -492,66 +492,90 @@ export async function downloadUnifiedContractPDF(options: UnifiedContractDownloa
     blockchainSignature,
   } = options;
 
-  // Dynamic imports
-  const [html2canvasModule, jspdfModule] = await Promise.all([
-    import('html2canvas'),
-    import('jspdf')
-  ]);
-  const html2canvas = html2canvasModule.default;
-  const { jsPDF } = jspdfModule;
-
-  // Get logo as base64
   const logoBase64 = await getLogoBase64();
+  let printHtml = generateContractHTML(content, logoBase64, blockchainSignature);
+  
+  // Add print-specific styles and floating save button
+  const printStyles = `
+    <style>
+      @media print {
+        .no-print { display: none !important; }
+      }
+      .save-pdf-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        gap: 8px;
+      }
+      .save-pdf-btn {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .save-pdf-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.4);
+      }
+      .close-btn {
+        background: #6b7280;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .close-btn:hover {
+        background: #4b5563;
+      }
+    </style>
+  `;
+  
+  const floatingButtons = `
+    <div class="save-pdf-container no-print">
+      <button class="save-pdf-btn" onclick="window.print()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Salvar como PDF
+      </button>
+      <button class="close-btn" onclick="window.close()">Fechar</button>
+    </div>
+  `;
+  
+  // Insert styles before </head> and buttons after <body>
+  printHtml = printHtml.replace('</head>', `${printStyles}</head>`);
+  printHtml = printHtml.replace('<body>', `<body>${floatingButtons}`);
 
-  // Generate HTML matching ContractRenderer
-  const printHtml = generateContractHTML(content, logoBase64, blockchainSignature);
-
-  // Create temporary container
-  const container = document.createElement('div');
-  container.innerHTML = printHtml;
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.width = '210mm';
-  container.style.background = 'white';
-  document.body.appendChild(container);
-
-  try {
-    // Wait for images to load
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Capture with html2canvas
-    const canvas = await html2canvas(container, { 
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      allowTaint: true,
-    });
-    
-    // Generate paginated PDF
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const pageHeight = 297;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
-
-    // Download
-    const filename = subject || 'contrato';
-    pdf.save(`${filename.replace(/[^a-zA-Z0-9áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ\s-]/g, '')}.pdf`);
-  } finally {
-    document.body.removeChild(container);
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    throw new Error('Não foi possível abrir a janela de visualização.');
   }
+
+  printWindow.document.write(printHtml);
+  printWindow.document.close();
+  
+  // Auto-trigger print dialog after page loads
+  printWindow.onload = () => {
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+  };
 }
 
 /**
@@ -564,7 +588,74 @@ export async function printUnifiedContract(options: UnifiedContractDownloadOptio
   } = options;
 
   const logoBase64 = await getLogoBase64();
-  const printHtml = generateContractHTML(content, logoBase64, blockchainSignature);
+  let printHtml = generateContractHTML(content, logoBase64, blockchainSignature);
+  
+  // Add print-specific styles and floating buttons
+  const printStyles = `
+    <style>
+      @media print {
+        .no-print { display: none !important; }
+      }
+      .save-pdf-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        gap: 8px;
+      }
+      .save-pdf-btn {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .save-pdf-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.4);
+      }
+      .close-btn {
+        background: #6b7280;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .close-btn:hover {
+        background: #4b5563;
+      }
+    </style>
+  `;
+  
+  const floatingButtons = `
+    <div class="save-pdf-container no-print">
+      <button class="save-pdf-btn" onclick="window.print()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Salvar como PDF
+      </button>
+      <button class="close-btn" onclick="window.close()">Fechar</button>
+    </div>
+  `;
+  
+  printHtml = printHtml.replace('</head>', `${printStyles}</head>`);
+  printHtml = printHtml.replace('<body>', `<body>${floatingButtons}`);
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
