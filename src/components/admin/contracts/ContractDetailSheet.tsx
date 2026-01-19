@@ -253,7 +253,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     return labels[eventType] || eventType;
   };
 
-  const openPreview = async () => {
+  const openPreview = async (triggerPrint = false) => {
     if (!contract?.contract_html) {
       toast.error('Documento sem conteúdo');
       return;
@@ -281,106 +281,74 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       logoBase64
     );
 
+    // Inject floating save button and print styles
+    const enhancedHtml = printHtml.replace('</head>', `
+      <style>
+        @media print {
+          .no-print { display: none !important; }
+          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+        .save-pdf-btn {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          z-index: 9999;
+          display: flex;
+          gap: 10px;
+        }
+        .save-pdf-btn button {
+          padding: 12px 24px;
+          font-size: 14px;
+          font-weight: 600;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          transition: all 0.2s ease;
+        }
+        .save-pdf-btn button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+        }
+        .btn-primary {
+          background: linear-gradient(135deg, #f97316, #ea580c);
+          color: white;
+        }
+        .btn-secondary {
+          background: #f1f5f9;
+          color: #334155;
+        }
+      </style>
+    </head>`).replace('<body', `<body><div class="save-pdf-btn no-print">
+        <button class="btn-primary" onclick="window.print()">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Salvar como PDF
+        </button>
+        <button class="btn-secondary" onclick="window.close()">
+          Fechar
+        </button>
+      </div><body`);
+
     const newWindow = window.open('', '_blank');
     if (newWindow) {
-      newWindow.document.write(printHtml);
+      newWindow.document.write(enhancedHtml);
       newWindow.document.close();
+      
+      // If triggered from download button, auto-open print dialog
+      if (triggerPrint) {
+        newWindow.onload = () => {
+          setTimeout(() => newWindow.print(), 500);
+        };
+      }
     }
   };
 
   const downloadPDF = async () => {
-    if (!contract?.contract_html) {
-      toast.error('Documento sem conteúdo');
-      return;
-    }
-
-    setDownloadingPdf(true);
-    try {
-      const [html2canvasModule, jspdfModule] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf')
-      ]);
-      const html2canvas = html2canvasModule.default;
-      const { jsPDF } = jspdfModule;
-
-      // Get logo as base64 for proper PDF rendering
-      const logoBase64 = await getLogoBase64ForPDF();
-
-      const printHtml = generateDocumentPrintHTML(
-        (contract.document_type as any) || 'procuracao',
-        contract.contract_html,
-        contract.client_signature_image || null,
-        contract.blockchain_hash ? {
-          hash: contract.blockchain_hash,
-          timestamp: contract.blockchain_timestamp || '',
-          txId: contract.blockchain_tx_id || '',
-          network: contract.blockchain_network || '',
-          ipAddress: contract.signature_ip || '',
-        } : undefined,
-        contract.signatory_name || undefined,
-        contract.signatory_cpf || undefined,
-        contract.signatory_cnpj || undefined,
-        undefined,
-        window.location.origin,
-        logoBase64
-      );
-
-      // Create container for rendering
-      const container = document.createElement('div');
-      container.innerHTML = printHtml;
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '0';
-      container.style.width = '794px';
-      container.style.background = 'white';
-      container.style.padding = '0';
-      container.style.margin = '0';
-      document.body.appendChild(container);
-
-      // Wait for fonts and images to load
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const canvas = await html2canvas(container, { 
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        imageTimeout: 15000,
-        windowWidth: 794,
-        windowHeight: container.scrollHeight,
-      });
-      
-      document.body.removeChild(container);
-
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      pdf.save(`${contract.subject || contract.contract_number || 'contrato'}.pdf`);
-      toast.success('PDF baixado com sucesso!');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('Erro ao gerar PDF');
-    } finally {
-      setDownloadingPdf(false);
-    }
+    // Use browser's native print-to-PDF for real selectable text
+    await openPreview(true);
   };
 
   const sendContractEmail = async () => {
@@ -540,14 +508,14 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={openPreview}>
+              <Button variant="outline" size="sm" onClick={() => openPreview()}>
                 <Eye className="h-4 w-4 mr-2" />
                 Visualizar
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={downloadPDF}
+                onClick={() => downloadPDF()}
                 disabled={downloadingPdf}
                 title="Download PDF"
               >
@@ -572,11 +540,11 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={openPreview}>
+                  <DropdownMenuItem onClick={() => openPreview()}>
                     <Eye className="h-4 w-4 mr-2" />
                     Visualizar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={downloadPDF}>
+                  <DropdownMenuItem onClick={() => downloadPDF()}>
                     <Download className="h-4 w-4 mr-2" />
                     Download PDF
                   </DropdownMenuItem>
