@@ -93,11 +93,16 @@ export function DocumentUploader({
 
       setProgress(100);
 
-      const { data: urlData } = supabase.storage
+      // Use signed URL for security (valid for 1 hour)
+      const { data: signedData, error: signedError } = await supabase.storage
         .from('documents')
-        .getPublicUrl(fileName);
+        .createSignedUrl(fileName, 3600);
 
-      onUploadComplete?.(urlData.publicUrl, file.name, file.size);
+      if (signedError || !signedData?.signedUrl) {
+        throw new Error('Failed to create signed URL');
+      }
+
+      onUploadComplete?.(signedData.signedUrl, file.name, file.size);
       toast.success('Arquivo enviado com sucesso!');
       setFile(null);
       setProgress(0);

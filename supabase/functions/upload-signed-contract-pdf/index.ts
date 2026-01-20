@@ -91,13 +91,16 @@ serve(async (req) => {
 
     console.log('PDF uploaded successfully:', uploadData?.path);
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
+    // Use signed URL for security (valid for 24 hours for contract access)
+    const { data: signedData, error: signedError } = await supabase.storage
       .from('documents')
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 86400); // 24 hours
 
-    const publicUrl = urlData?.publicUrl || '';
-    console.log('Public URL:', publicUrl);
+    const publicUrl = signedData?.signedUrl || '';
+    if (signedError) {
+      console.error('Error creating signed URL:', signedError);
+    }
+    console.log('Signed URL:', publicUrl);
 
     // Calculate file size
     const fileSize = bytes.length;
