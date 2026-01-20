@@ -17,7 +17,6 @@ import {
   UserPlus,
   FileSignature,
   FileStack,
-  Database,
   MessageCircle,
   Mail,
   ChevronRight,
@@ -164,15 +163,6 @@ const menuItems: MenuItem[] = [
     iconColor: 'text-purple-500',
     iconBg: 'bg-purple-100 dark:bg-purple-900/30',
     permissionKey: 'inpi_resources'
-  },
-  { 
-    icon: Database, 
-    label: 'Integração Perfex', 
-    subtitle: 'Sincronização CRM',
-    href: '/admin/integracao-perfex',
-    iconColor: 'text-slate-500',
-    iconBg: 'bg-slate-100 dark:bg-slate-900/30',
-    permissionKey: 'perfex_integration'
   },
   { 
     icon: Settings, 

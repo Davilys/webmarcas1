@@ -3,23 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CreditCard, Database, CheckCircle2, XCircle, Loader2, Save, RefreshCw } from 'lucide-react';
+import { CreditCard, CheckCircle2, XCircle, Loader2, Save, RefreshCw } from 'lucide-react';
 
 interface AsaasSettings {
   environment: 'sandbox' | 'production';
   enabled: boolean;
-}
-
-interface PerfexSettings {
-  url: string;
-  enabled: boolean;
-  auto_sync: boolean;
 }
 
 export function IntegrationSettings() {
@@ -39,40 +32,17 @@ export function IntegrationSettings() {
     },
   });
 
-  const { data: perfexData, isLoading: loadingPerfex } = useQuery({
-    queryKey: ['system-settings', 'perfex'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'perfex')
-        .single();
-      
-      if (error) throw error;
-      return data?.value as unknown as PerfexSettings;
-    },
-  });
-
   const [asaas, setAsaas] = useState<AsaasSettings>({
     environment: 'sandbox',
     enabled: false,
   });
 
-  const [perfex, setPerfex] = useState<PerfexSettings>({
-    url: '',
-    enabled: false,
-    auto_sync: false,
-  });
-
   const [testingAsaas, setTestingAsaas] = useState(false);
-  const [testingPerfex, setTestingPerfex] = useState(false);
   const [asaasStatus, setAsaasStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [perfexStatus, setPerfexStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
     if (asaasData) setAsaas(asaasData);
-    if (perfexData) setPerfex(perfexData);
-  }, [asaasData, perfexData]);
+  }, [asaasData]);
 
   const saveAsaasMutation = useMutation({
     mutationFn: async (data: AsaasSettings) => {
@@ -86,24 +56,6 @@ export function IntegrationSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['system-settings', 'asaas'] });
       toast.success('Configurações do Asaas salvas!');
-    },
-    onError: () => {
-      toast.error('Erro ao salvar configurações');
-    },
-  });
-
-  const savePerfexMutation = useMutation({
-    mutationFn: async (data: PerfexSettings) => {
-      const { error } = await supabase
-        .from('system_settings')
-        .update({ value: JSON.parse(JSON.stringify(data)), updated_at: new Date().toISOString() })
-        .eq('key', 'perfex');
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-settings', 'perfex'] });
-      toast.success('Configurações do Perfex salvas!');
     },
     onError: () => {
       toast.error('Erro ao salvar configurações');
@@ -136,36 +88,7 @@ export function IntegrationSettings() {
     }
   };
 
-  const testPerfexConnection = async () => {
-    setTestingPerfex(true);
-    setPerfexStatus('idle');
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('sync-perfex', {
-        body: { action: 'test_connection' }
-      });
-      
-      if (error) {
-        setPerfexStatus('error');
-        toast.error('Erro ao conectar com Perfex');
-      } else if (data?.success) {
-        setPerfexStatus('success');
-        toast.success(data?.message || 'Conexão com Perfex funcionando!');
-      } else {
-        setPerfexStatus('error');
-        toast.error(data?.message || data?.error || 'Erro na conexão com Perfex');
-      }
-    } catch {
-      setPerfexStatus('error');
-      toast.error('Erro ao testar conexão');
-    } finally {
-      setTestingPerfex(false);
-    }
-  };
-
-  const isLoading = loadingAsaas || loadingPerfex;
-
-  if (isLoading) {
+  if (loadingAsaas) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -255,100 +178,6 @@ export function IntegrationSettings() {
             disabled={saveAsaasMutation.isPending}
           >
             {saveAsaasMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Salvar Configurações
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Perfex CRM Integration */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Database className="h-5 w-5 text-slate-500" />
-              <CardTitle>Perfex CRM</CardTitle>
-            </div>
-            <Badge variant={perfex.enabled ? 'default' : 'secondary'}>
-              {perfex.enabled ? 'Ativo' : 'Inativo'}
-            </Badge>
-          </div>
-          <CardDescription>
-            Configure a integração bidirecional com o Perfex CRM para sincronização de leads, clientes e contratos
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Ativar Integração</Label>
-              <p className="text-sm text-muted-foreground">Habilitar sincronização com Perfex CRM</p>
-            </div>
-            <Switch
-              checked={perfex.enabled}
-              onCheckedChange={(checked) => setPerfex({ ...perfex, enabled: checked })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="perfex-url">URL da Instância</Label>
-            <Input
-              id="perfex-url"
-              value={perfex.url}
-              onChange={(e) => setPerfex({ ...perfex, url: e.target.value })}
-              placeholder="https://seu-perfex.com.br"
-            />
-            <p className="text-xs text-muted-foreground">
-              URL base da sua instalação do Perfex. O Token de API deve ser configurado nas variáveis de ambiente.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Sincronização Automática</Label>
-              <p className="text-sm text-muted-foreground">Sincronizar automaticamente novos registros</p>
-            </div>
-            <Switch
-              checked={perfex.auto_sync}
-              onCheckedChange={(checked) => setPerfex({ ...perfex, auto_sync: checked })}
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              onClick={testPerfexConnection}
-              disabled={testingPerfex || !perfex.url}
-            >
-              {testingPerfex ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Testar Conexão
-            </Button>
-
-            {perfexStatus === 'success' && (
-              <div className="flex items-center gap-1 text-green-600">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="text-sm">Conectado</span>
-              </div>
-            )}
-            {perfexStatus === 'error' && (
-              <div className="flex items-center gap-1 text-destructive">
-                <XCircle className="h-4 w-4" />
-                <span className="text-sm">Falha na conexão</span>
-              </div>
-            )}
-          </div>
-
-          <Button 
-            onClick={() => savePerfexMutation.mutate(perfex)}
-            disabled={savePerfexMutation.isPending}
-          >
-            {savePerfexMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Save className="h-4 w-4 mr-2" />
