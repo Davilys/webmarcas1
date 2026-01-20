@@ -553,8 +553,6 @@ export type Database = {
           lead_id: string | null
           ots_file_url: string | null
           penalty_value: number | null
-          perfex_contract_id: string | null
-          perfex_customer_id: string | null
           process_id: string | null
           signatory_cnpj: string | null
           signatory_cpf: string | null
@@ -596,8 +594,6 @@ export type Database = {
           lead_id?: string | null
           ots_file_url?: string | null
           penalty_value?: number | null
-          perfex_contract_id?: string | null
-          perfex_customer_id?: string | null
           process_id?: string | null
           signatory_cnpj?: string | null
           signatory_cpf?: string | null
@@ -639,8 +635,6 @@ export type Database = {
           lead_id?: string | null
           ots_file_url?: string | null
           penalty_value?: number | null
-          perfex_contract_id?: string | null
-          perfex_customer_id?: string | null
           process_id?: string | null
           signatory_cnpj?: string | null
           signatory_cpf?: string | null
@@ -671,13 +665,6 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contracts_perfex_customer_id_fkey"
-            columns: ["perfex_customer_id"]
-            isOneToOne: false
-            referencedRelation: "perfex_customers"
             referencedColumns: ["id"]
           },
           {
@@ -1378,68 +1365,6 @@ export type Database = {
           },
         ]
       }
-      perfex_customers: {
-        Row: {
-          active: boolean | null
-          address: string | null
-          city: string | null
-          company_name: string | null
-          cpf_cnpj: string | null
-          created_at: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          perfex_id: string
-          phone: string | null
-          state: string | null
-          synced_profile_id: string | null
-          updated_at: string | null
-          zip_code: string | null
-        }
-        Insert: {
-          active?: boolean | null
-          address?: string | null
-          city?: string | null
-          company_name?: string | null
-          cpf_cnpj?: string | null
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          perfex_id: string
-          phone?: string | null
-          state?: string | null
-          synced_profile_id?: string | null
-          updated_at?: string | null
-          zip_code?: string | null
-        }
-        Update: {
-          active?: boolean | null
-          address?: string | null
-          city?: string | null
-          company_name?: string | null
-          cpf_cnpj?: string | null
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          perfex_id?: string
-          phone?: string | null
-          state?: string | null
-          synced_profile_id?: string | null
-          updated_at?: string | null
-          zip_code?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "perfex_customers_synced_profile_id_fkey"
-            columns: ["synced_profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       process_events: {
         Row: {
           created_at: string | null
@@ -1496,7 +1421,6 @@ export type Database = {
           last_contact: string | null
           neighborhood: string | null
           origin: string | null
-          perfex_customer_id: string | null
           phone: string | null
           priority: string | null
           state: string | null
@@ -1517,7 +1441,6 @@ export type Database = {
           last_contact?: string | null
           neighborhood?: string | null
           origin?: string | null
-          perfex_customer_id?: string | null
           phone?: string | null
           priority?: string | null
           state?: string | null
@@ -1538,7 +1461,6 @@ export type Database = {
           last_contact?: string | null
           neighborhood?: string | null
           origin?: string | null
-          perfex_customer_id?: string | null
           phone?: string | null
           priority?: string | null
           state?: string | null
