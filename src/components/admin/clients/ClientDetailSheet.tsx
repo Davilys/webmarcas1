@@ -300,12 +300,19 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
 
       console.log('Upload successful:', uploadData);
 
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      // Use signed URL for security (valid for 1 hour)
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(fileName, 3600);
+
+      if (signedError || !signedData?.signedUrl) {
+        throw new Error('Failed to create signed URL');
+      }
 
       const { error: dbError } = await supabase.from('documents').insert({
         user_id: client.id,
         name: file.name,
-        file_url: urlData.publicUrl,
+        file_url: signedData.signedUrl,
         document_type: 'anexo',
         uploaded_by: 'admin',
         file_size: file.size,
