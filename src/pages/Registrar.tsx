@@ -136,19 +136,38 @@ export default function Registrar() {
       if (error) throw error;
 
       if (data?.success) {
-        // Store order data in sessionStorage for the status page
-        sessionStorage.setItem('orderData', JSON.stringify({
-          paymentId: data.payment?.id,
-          invoiceUrl: data.payment?.invoiceUrl,
-          pixCode: data.payment?.pixQrCode?.payload,
-          pixImage: data.payment?.pixQrCode?.encodedImage,
-          boletoCode: data.payment?.identificationField,
+        // Store complete order data in sessionStorage for the status page
+        // Structure must match what StatusPedido.tsx expects (OrderData interface)
+        const orderData = {
+          personalData: {
+            ...personalData,
+            neighborhood: personalData.neighborhood || '',
+          },
+          brandData: {
+            ...brandData,
+            businessArea: viabilityData.businessArea,
+          },
           paymentMethod,
           paymentValue,
-          brandName: brandData.brandName,
-          contractId: data.contract?.id || data.contractId,
+          acceptedAt: new Date().toISOString(),
           leadId: data.leadId,
-        }));
+          contractId: data.contractId,
+          invoiceId: data.invoiceId,
+          contractNumber: data.contractNumber,
+          asaas: {
+            customerId: data.customerId,
+            asaasCustomerId: data.asaasCustomerId || data.customerId,
+            paymentId: data.paymentId,
+            status: data.status || 'PENDING',
+            billingType: data.billingType,
+            dueDate: data.dueDate,
+            invoiceUrl: data.invoiceUrl,
+            bankSlipUrl: data.bankSlipUrl,
+            pixQrCode: data.pixQrCode,
+          },
+        };
+        
+        sessionStorage.setItem('orderData', JSON.stringify(orderData));
 
         toast.success("Pedido realizado com sucesso!");
         navigate('/status-pedido');
