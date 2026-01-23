@@ -178,6 +178,47 @@ const StatusPedido = () => {
     );
   }
 
+  // Validate credit card required data
+  const isCreditCard = orderData.paymentMethod === 'cartao6x';
+  const hasCreditCardData = isCreditCard && orderData.asaas?.asaasCustomerId && orderData.invoiceId;
+  
+  // If credit card but missing required data, show error with restart option
+  if (isCreditCard && !hasCreditCardData) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="pt-20 pb-12">
+          <div className="container mx-auto px-4">
+            <div className="max-w-md mx-auto text-center">
+              <div className="glass-card p-8">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <CreditCard className="w-8 h-8 text-destructive" />
+                </div>
+                <h2 className="text-xl font-bold mb-2">Dados de Pagamento Incompletos</h2>
+                <p className="text-muted-foreground mb-6">
+                  Houve um problema ao processar seus dados de pagamento. 
+                  Por favor, reinicie o processo de cadastro.
+                </p>
+                <Button
+                  variant="hero"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => {
+                    sessionStorage.removeItem('orderData');
+                    navigate('/registrar');
+                  }}
+                >
+                  Reiniciar Cadastro
+                </Button>
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />

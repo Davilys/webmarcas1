@@ -103,7 +103,21 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
     
     if (!validateForm()) return;
     
+    // Validate required IDs before processing
+    if (!customerId || !invoiceId) {
+      const errorMsg = 'Dados de pagamento incompletos. Por favor, reinicie o processo de cadastro.';
+      toast.error(errorMsg);
+      onError(errorMsg);
+      return;
+    }
+    
     setIsProcessing(true);
+    
+    // Create AbortController for timeout (60 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 60000);
     
     try {
       // Use supabase.functions.invoke for consistent auth handling
@@ -134,18 +148,31 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
         },
       });
       
+      clearTimeout(timeoutId);
+      
       if (error) throw new Error(error.message);
       
       if (data.success) {
         toast.success('Pagamento aprovado!');
         onSuccess();
       } else {
-        toast.error(data.error || 'Erro ao processar pagamento');
-        onError(data.error || 'Erro ao processar pagamento');
+        const errorMsg = data.error || 'Erro ao processar pagamento';
+        toast.error(errorMsg);
+        onError(errorMsg);
       }
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('Payment error:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Erro de conexão. Tente novamente.';
+      
+      let errorMsg = 'Erro de conexão. Tente novamente.';
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMsg = 'Tempo limite excedido. Por favor, tente novamente.';
+        } else {
+          errorMsg = error.message;
+        }
+      }
+      
       toast.error(errorMsg);
       onError(errorMsg);
     } finally {
