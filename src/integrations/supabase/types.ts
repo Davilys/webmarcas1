@@ -1074,16 +1074,21 @@ export type Database = {
       invoices: {
         Row: {
           amount: number
+          asaas_customer_id: string | null
           asaas_invoice_id: string | null
           boleto_code: string | null
+          contract_id: string | null
           created_at: string | null
           description: string
           due_date: string
           id: string
           invoice_url: string | null
           payment_date: string | null
+          payment_link: string | null
           payment_method: string | null
           pix_code: string | null
+          pix_payload: string | null
+          pix_qr_code: string | null
           process_id: string | null
           status: string | null
           updated_at: string | null
@@ -1091,16 +1096,21 @@ export type Database = {
         }
         Insert: {
           amount: number
+          asaas_customer_id?: string | null
           asaas_invoice_id?: string | null
           boleto_code?: string | null
+          contract_id?: string | null
           created_at?: string | null
           description: string
           due_date: string
           id?: string
           invoice_url?: string | null
           payment_date?: string | null
+          payment_link?: string | null
           payment_method?: string | null
           pix_code?: string | null
+          pix_payload?: string | null
+          pix_qr_code?: string | null
           process_id?: string | null
           status?: string | null
           updated_at?: string | null
@@ -1108,22 +1118,34 @@ export type Database = {
         }
         Update: {
           amount?: number
+          asaas_customer_id?: string | null
           asaas_invoice_id?: string | null
           boleto_code?: string | null
+          contract_id?: string | null
           created_at?: string | null
           description?: string
           due_date?: string
           id?: string
           invoice_url?: string | null
           payment_date?: string | null
+          payment_link?: string | null
           payment_method?: string | null
           pix_code?: string | null
+          pix_payload?: string | null
+          pix_qr_code?: string | null
           process_id?: string | null
           status?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "invoices_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_process_id_fkey"
             columns: ["process_id"]
