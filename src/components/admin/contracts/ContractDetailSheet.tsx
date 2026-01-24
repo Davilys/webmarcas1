@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF, getQRCodeBase64 } from '@/components/contracts/DocumentRenderer';
 
 interface Contract {
   id: string;
@@ -262,6 +262,12 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     // Get logo as base64 for proper rendering
     const logoBase64 = await getLogoBase64ForPDF();
 
+    // Generate verification URL and get QR Code as base64 for reliable printing
+    const verificationUrl = contract.blockchain_hash 
+      ? `${window.location.origin}/verificar-contrato?hash=${contract.blockchain_hash}`
+      : '';
+    const qrCodeBase64 = verificationUrl ? await getQRCodeBase64(verificationUrl) : undefined;
+
     const printHtml = generateDocumentPrintHTML(
       (contract.document_type as any) || 'procuracao',
       contract.contract_html,
@@ -278,7 +284,8 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       contract.signatory_cnpj || undefined,
       undefined,
       window.location.origin,
-      logoBase64
+      logoBase64,
+      qrCodeBase64
     );
 
     // Inject floating save button and print styles

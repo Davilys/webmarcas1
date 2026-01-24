@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { SignaturePad } from '@/components/signature/SignaturePad';
-import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64, getLogoBase64ForPDF, getQRCodeBase64 } from '@/components/contracts/DocumentRenderer';
 import { generateAndUploadContractPdf, generateSignedContractHtml } from '@/hooks/useContractPdfUpload';
 import { toast } from 'sonner';
 import { Loader2, Download, Printer, CheckCircle, AlertCircle, FileText } from 'lucide-react';
@@ -192,6 +192,15 @@ export default function AssinarDocumento() {
       signatureBase64 = await getSignatureBase64();
     }
 
+    // Get logo as base64 for proper rendering
+    const logoBase64 = await getLogoBase64ForPDF();
+
+    // Generate verification URL and get QR Code as base64 for reliable printing
+    const verificationUrl = contract.blockchain_hash 
+      ? `${window.location.origin}/verificar-contrato?hash=${contract.blockchain_hash}`
+      : '';
+    const qrCodeBase64 = verificationUrl ? await getQRCodeBase64(verificationUrl) : undefined;
+
     const html = generateDocumentPrintHTML(
       (contract.document_type as any) || 'procuracao',
       contract.contract_html || '',
@@ -206,7 +215,10 @@ export default function AssinarDocumento() {
       contract.signatory_name || undefined,
       contract.signatory_cpf || undefined,
       contract.signatory_cnpj || undefined,
-      signatureBase64
+      signatureBase64,
+      window.location.origin,
+      logoBase64,
+      qrCodeBase64
     );
 
     const printWindow = window.open('', '_blank');

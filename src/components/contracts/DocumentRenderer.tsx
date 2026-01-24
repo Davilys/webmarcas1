@@ -534,6 +534,31 @@ export async function getLogoBase64ForPDF(): Promise<string> {
   }
 }
 
+// Helper function to generate QR Code as base64 for PDF printing
+export async function getQRCodeBase64(verificationUrl: string): Promise<string> {
+  if (!verificationUrl) return '';
+  try {
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`;
+    const response = await fetch(qrApiUrl);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        if (result && result.startsWith('data:')) {
+          resolve(result);
+        } else {
+          reject(new Error('Invalid base64 result'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read blob'));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+}
+
 export function generateDocumentPrintHTML(
   documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' | 'contract',
   content: string,
@@ -544,7 +569,8 @@ export function generateDocumentPrintHTML(
   signatoryCnpj?: string,
   davilysSignatureBase64?: string,
   baseUrl?: string,
-  logoBase64?: string
+  logoBase64?: string,
+  qrCodeBase64?: string
 ): string {
   let documentTitle = 'DOCUMENTO';
   if (documentType === 'procuracao') {
@@ -614,10 +640,10 @@ export function generateDocumentPrintHTML(
     ? `${verificationBaseUrl}/verificar-contrato?hash=${blockchainSignature.hash}`
     : '';
 
-  // Gerar QR Code como imagem usando API do QRServer (Google Charts foi descontinuado)
-  const qrCodeUrl = blockchainSignature?.hash 
+  // Usar QR Code base64 se fornecido, senão usar URL da API externa
+  const qrCodeSrc = qrCodeBase64 || (blockchainSignature?.hash 
     ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`
-    : '';
+    : '');
 
   const certificationSection = blockchainSignature?.hash
     ? `<div class="certification-section">
@@ -642,7 +668,7 @@ export function generateDocumentPrintHTML(
             <div class="certification-qr">
               <p class="cert-label">QR CODE VERIFICAÇÃO</p>
               <div class="qr-box">
-                <img src="${qrCodeUrl}" alt="QR Code Verificação" style="width: 120px; height: 120px;" />
+                <img src="${qrCodeSrc}" alt="QR Code Verificação" style="width: 120px; height: 120px;" />
               </div>
               <p class="qr-text">Escaneie para verificar</p>
             </div>
