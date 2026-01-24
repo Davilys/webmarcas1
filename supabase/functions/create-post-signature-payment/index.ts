@@ -172,12 +172,12 @@ serve(async (req) => {
         .from('invoices')
         .insert({
           user_id: profile.id,
-          contract_id: contractId,
+          process_id: contract.process_id || null,
           amount: totalValue,
           status: 'pending',
           due_date: dueDate.toISOString().split('T')[0],
           description: `Registro de Marca - ${contract.subject || 'Contrato'}`,
-          asaas_customer_id: customerId,
+          payment_method: 'CREDIT_CARD',
         })
         .select()
         .single();
@@ -331,16 +331,15 @@ serve(async (req) => {
       .from('invoices')
       .insert({
         user_id: profile.id,
-        contract_id: contractId,
+        process_id: contract.process_id || null,
         amount: totalValue,
         status: 'pending',
         due_date: dueDate.toISOString().split('T')[0],
         description: `Registro de Marca - ${contract.subject || 'Contrato'}`,
-        asaas_payment_id: paymentData.id,
-        asaas_customer_id: customerId,
-        payment_link: paymentData.invoiceUrl,
-        pix_qr_code: pixQrCode,
-        pix_payload: pixPayload,
+        asaas_invoice_id: paymentData.id,
+        invoice_url: paymentData.invoiceUrl,
+        pix_code: pixPayload,
+        payment_method: billingType,
       })
       .select()
       .single();
