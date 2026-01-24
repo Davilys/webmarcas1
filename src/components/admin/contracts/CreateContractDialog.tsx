@@ -443,6 +443,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         signatory_cpf: isNewClient ? personalData.cpf : (formData.signatory_cpf || null),
         signatory_cnpj: isNewClient && brandData.hasCNPJ ? brandData.cnpj : (formData.signatory_cnpj || null),
         penalty_value: formData.penalty_value ? parseFloat(formData.penalty_value) : null,
+        payment_method: isNewClient ? paymentMethod : null,
         signature_status: 'not_signed',
         visible_to_client: true,
         lead_id: leadId || null,
