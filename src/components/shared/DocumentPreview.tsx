@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, ExternalLink, FileText, Image, Video, Music, Loader2, CheckCircle, Shield } from 'lucide-react';
+import { Download, ExternalLink, FileText, Image, Video, Music, Loader2, CheckCircle, Shield, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { ContractRenderer } from '@/components/contracts/ContractRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface DocumentPreviewProps {
@@ -21,12 +21,26 @@ interface DocumentPreviewProps {
   } | null;
 }
 
+interface ContractData {
+  contract_html: string | null;
+  blockchain_hash: string | null;
+  blockchain_timestamp: string | null;
+  signature_ip: string | null;
+  blockchain_tx_id: string | null;
+  blockchain_network: string | null;
+  document_type: string | null;
+  signatory_name: string | null;
+  signatory_cpf: string | null;
+  signatory_cnpj: string | null;
+  client_signature_image: string | null;
+}
+
 export function DocumentPreview({ open, onOpenChange, document }: DocumentPreviewProps) {
   const [imageError, setImageError] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [effectiveUrl, setEffectiveUrl] = useState<string>('');
-  const [contractHtml, setContractHtml] = useState<string | null>(null);
+  const [contractData, setContractData] = useState<ContractData | null>(null);
 
   // Reset states when document changes
   useEffect(() => {
@@ -35,30 +49,42 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
       setSignedUrl(null);
       setLoading(false);
       setEffectiveUrl(document.file_url);
-      setContractHtml(null);
+      setContractData(null);
       
-      // If it's a contract without file_url, fetch contract_html
+      // If it's a contract without file_url, fetch contract data
       if (document.isContract && !document.file_url && document.id) {
-        fetchContractHtml(document.id);
+        fetchContractData(document.id);
       }
     }
   }, [document]);
 
-  // Fetch contract HTML for digital contracts
-  const fetchContractHtml = async (contractId: string) => {
+  // Fetch complete contract data for digital contracts
+  const fetchContractData = async (contractId: string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('contracts')
-        .select('contract_html, blockchain_hash, blockchain_timestamp, signature_ip, blockchain_tx_id, blockchain_network')
+        .select(`
+          contract_html, 
+          blockchain_hash, 
+          blockchain_timestamp, 
+          signature_ip, 
+          blockchain_tx_id, 
+          blockchain_network,
+          document_type,
+          signatory_name,
+          signatory_cpf,
+          signatory_cnpj,
+          client_signature_image
+        `)
         .eq('id', contractId)
         .single();
       
-      if (data?.contract_html) {
-        setContractHtml(data.contract_html);
+      if (data) {
+        setContractData(data);
       }
     } catch (err) {
-      console.error('Error fetching contract HTML:', err);
+      console.error('Error fetching contract data:', err);
     } finally {
       setLoading(false);
     }
@@ -89,6 +115,43 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
       console.error('Error getting signed URL:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle PDF print (same as admin)
+  const handlePrintPDF = async () => {
+    if (!contractData?.contract_html) return;
+    
+    try {
+      const logoBase64 = await getLogoBase64ForPDF();
+      const documentType = (contractData.document_type || 'contract') as 'contract' | 'distrato_multa' | 'distrato_sem_multa' | 'procuracao';
+      const printHtml = generateDocumentPrintHTML(
+        documentType,
+        contractData.contract_html,
+        contractData.client_signature_image || undefined,
+        contractData.blockchain_hash ? {
+          hash: contractData.blockchain_hash,
+          timestamp: contractData.blockchain_timestamp || '',
+          txId: contractData.blockchain_tx_id || '',
+          network: contractData.blockchain_network || '',
+          ipAddress: contractData.signature_ip || '',
+        } : undefined,
+        contractData.signatory_name || undefined,
+        contractData.signatory_cpf || undefined,
+        contractData.signatory_cnpj || undefined,
+        undefined,
+        window.location.origin,
+        logoBase64
+      );
+      
+      const newWindow = window.open('', '_blank');
+      if (newWindow) {
+        newWindow.document.write(printHtml);
+        newWindow.document.close();
+        newWindow.onload = () => setTimeout(() => newWindow.print(), 500);
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
     }
   };
 
@@ -153,24 +216,38 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
       );
     }
 
-    // Digital contract with HTML content (no PDF file)
-    if (document.isContract && contractHtml) {
+    // Digital contract with HTML content (no PDF file) - using DocumentRenderer like admin
+    if (document.isContract && contractData?.contract_html) {
+      const isSigned = document.signature_status === 'signed';
+      const blockchainSignature = contractData.blockchain_hash ? {
+        hash: contractData.blockchain_hash,
+        timestamp: contractData.blockchain_timestamp || '',
+        txId: contractData.blockchain_tx_id || '',
+        network: contractData.blockchain_network || '',
+        ipAddress: contractData.signature_ip || '',
+      } : undefined;
+
       return (
         <ScrollArea className="h-[60vh]">
           <div className="p-4 bg-white rounded-lg">
-            {document.signature_status === 'signed' && (
+            {isSigned && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
                 <span className="text-green-800 font-medium">Contrato Assinado Digitalmente</span>
-                {document.blockchain_hash && (
+                {contractData.blockchain_hash && (
                   <Shield className="h-4 w-4 text-blue-600 ml-2" />
                 )}
               </div>
             )}
-            <ContractRenderer 
-              content={contractHtml}
-              showLetterhead={true}
-              showCertificationSection={document.signature_status === 'signed'}
+            <DocumentRenderer 
+              documentType={(contractData.document_type || 'contract') as 'contract' | 'distrato_multa' | 'distrato_sem_multa' | 'procuracao'}
+              content={contractData.contract_html}
+              clientSignature={contractData.client_signature_image || undefined}
+              blockchainSignature={blockchainSignature}
+              showCertificationSection={isSigned}
+              signatoryName={contractData.signatory_name || undefined}
+              signatoryCpf={contractData.signatory_cpf || undefined}
+              signatoryCnpj={contractData.signatory_cnpj || undefined}
             />
           </div>
         </ScrollArea>
@@ -178,7 +255,7 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
     }
 
     // Digital contract without HTML - show message
-    if (document.isContract && !contractHtml && !url) {
+    if (document.isContract && !contractData?.contract_html && !url) {
       return (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <FileText className="h-16 w-16 mb-4 opacity-50" />
@@ -261,6 +338,9 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
     return <FileText className="h-5 w-5" />;
   };
 
+  // Check if we should show the print button (only for digital contracts)
+  const showPrintButton = document.isContract && contractData?.contract_html;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -271,10 +351,18 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
               <span className="truncate max-w-[300px]">{document.name}</span>
             </DialogTitle>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={openInNewTab}>
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Abrir
-              </Button>
+              {showPrintButton && (
+                <Button variant="outline" size="sm" onClick={handlePrintPDF}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimir/PDF
+                </Button>
+              )}
+              {!showPrintButton && (
+                <Button variant="outline" size="sm" onClick={openInNewTab}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Abrir
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={handleDownload}>
                 <Download className="h-4 w-4 mr-2" />
                 Baixar
