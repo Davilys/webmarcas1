@@ -614,9 +614,9 @@ export function generateDocumentPrintHTML(
     ? `${verificationBaseUrl}/verificar-contrato?hash=${blockchainSignature.hash}`
     : '';
 
-  // Gerar QR Code como imagem usando API do Google Charts
+  // Gerar QR Code como imagem usando API do QRServer (Google Charts foi descontinuado)
   const qrCodeUrl = blockchainSignature?.hash 
-    ? `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${encodeURIComponent(verificationUrl)}&choe=UTF-8`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`
     : '';
 
   const certificationSection = blockchainSignature?.hash
