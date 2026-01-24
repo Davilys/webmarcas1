@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +9,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, FileText, Send, Copy, Link, UserPlus } from 'lucide-react';
+import { Loader2, FileText, Send, Copy, Link, UserPlus, Search } from 'lucide-react';
 import { generateDocumentContent } from '@/lib/documentTemplates';
+import { replaceContractVariables } from '@/hooks/useContractTemplate';
+import { 
+  validateCPF, 
+  validateCNPJ, 
+  formatCPF, 
+  formatCNPJ, 
+  formatCEP, 
+  formatPhone,
+  fetchAddressByCEP 
+} from '@/lib/validators';
+import { z } from 'zod';
 
 interface CreateContractDialogProps {
   open: boolean;
@@ -41,6 +52,36 @@ interface ContractTemplate {
 
 type DocumentType = 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
 
+// Validation schemas matching public form
+const personalDataSchema = z.object({
+  fullName: z.string().min(3, "Nome completo obrigatório"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().min(14, "Telefone obrigatório"),
+  cpf: z.string().refine(validateCPF, "CPF inválido"),
+  cep: z.string().min(9, "CEP obrigatório"),
+  address: z.string().min(5, "Endereço obrigatório"),
+  neighborhood: z.string().min(2, "Bairro obrigatório"),
+  city: z.string().min(2, "Cidade obrigatória"),
+  state: z.string().length(2, "UF obrigatório"),
+});
+
+const brandDataSchema = z.object({
+  brandName: z.string().min(2, "Nome da marca obrigatório"),
+  businessArea: z.string().min(3, "Ramo de atividade obrigatório"),
+  hasCNPJ: z.boolean(),
+  cnpj: z.string().optional(),
+  companyName: z.string().optional(),
+}).refine((data) => {
+  if (data.hasCNPJ) {
+    if (!data.cnpj || !validateCNPJ(data.cnpj)) return false;
+    if (!data.companyName || data.companyName.length < 3) return false;
+  }
+  return true;
+}, {
+  message: "CNPJ ou Razão Social inválidos",
+  path: ["cnpj"],
+});
+
 // Mapeamento de nomes de templates para document_type
 const getDocumentTypeFromTemplateName = (name: string): DocumentType => {
   const lowerName = name.toLowerCase();
@@ -61,11 +102,37 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   const [createdContractId, setCreatedContractId] = useState<string | null>(null);
   const [isNewClient, setIsNewClient] = useState(false);
   const [creatingClient, setCreatingClient] = useState(false);
+  const [isLoadingCEP, setIsLoadingCEP] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [currentTab, setCurrentTab] = useState('personal');
   
+  // New client personal data - matching public form exactly
+  const [personalData, setPersonalData] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    cpf: '',
+    cep: '',
+    address: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+  });
+
+  // Brand data - matching public form exactly
+  const [brandData, setBrandData] = useState({
+    brandName: '',
+    businessArea: '',
+    hasCNPJ: false,
+    cnpj: '',
+    companyName: '',
+  });
+
+  // Legacy form data for existing client flows
   const [formData, setFormData] = useState({
     user_id: '',
     subject: '',
-    contract_value: '',
+    contract_value: '699',
     start_date: new Date().toISOString().split('T')[0],
     end_date: '',
     template_id: '',
@@ -82,11 +149,6 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     brand_name: '',
     penalty_value: '',
     penalty_installments: '1',
-    // New client fields
-    signatory_email: '',
-    signatory_phone: '',
-    signatory_company: '',
-    business_area: '',
   });
 
   useEffect(() => {
@@ -125,6 +187,16 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
     setProfiles(profilesRes.data || []);
     setTemplates(templatesRes.data || []);
+
+    // Auto-select the standard contract template for new clients
+    const standardTemplate = templatesRes.data?.find(t => 
+      t.name.toLowerCase().includes('registro de marca') || 
+      t.name.toLowerCase().includes('padrão')
+    );
+    if (standardTemplate) {
+      setSelectedTemplate(standardTemplate);
+      setFormData(prev => ({ ...prev, template_id: standardTemplate.id }));
+    }
   };
 
   const generateContractNumber = () => {
@@ -133,7 +205,62 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     return `${year}${random}`;
   };
 
+  // CEP auto-fill - same as public form
+  const handleCEPChange = useCallback(async (value: string) => {
+    const formatted = formatCEP(value);
+    setPersonalData(prev => ({ ...prev, cep: formatted }));
+
+    const cleanCEP = formatted.replace(/\D/g, '');
+    if (cleanCEP.length === 8) {
+      setIsLoadingCEP(true);
+      const addressData = await fetchAddressByCEP(cleanCEP);
+      if (addressData) {
+        setPersonalData(prev => ({
+          ...prev,
+          address: addressData.logradouro || prev.address,
+          neighborhood: addressData.bairro || prev.neighborhood,
+          city: addressData.localidade || prev.city,
+          state: addressData.uf || prev.state,
+        }));
+      }
+      setIsLoadingCEP(false);
+    }
+  }, []);
+
+  // Generate contract HTML using standard template - EXACTLY like public form
+  const generateNewClientContractHtml = () => {
+    const template = selectedTemplate?.content || '';
+    
+    return replaceContractVariables(template, {
+      personalData: {
+        fullName: personalData.fullName,
+        email: personalData.email,
+        phone: personalData.phone,
+        cpf: personalData.cpf,
+        cep: personalData.cep,
+        address: personalData.address,
+        neighborhood: personalData.neighborhood,
+        city: personalData.city,
+        state: personalData.state,
+      },
+      brandData: {
+        brandName: brandData.brandName,
+        businessArea: brandData.businessArea,
+        hasCNPJ: brandData.hasCNPJ,
+        cnpj: brandData.cnpj,
+        companyName: brandData.companyName,
+      },
+      paymentMethod: 'avista', // Default to PIX à vista
+    });
+  };
+
   const generateDocumentHtml = () => {
+    // For new clients, use the standard contract template with replaced variables
+    if (isNewClient) {
+      return generateNewClientContractHtml();
+    }
+
+    // Legacy flow for existing clients
     if (formData.document_type === 'contract') {
       return formData.description || '';
     }
@@ -169,17 +296,17 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
           body: JSON.stringify({
-            email: formData.signatory_email,
-            full_name: formData.signatory_name,
-            phone: formData.signatory_phone,
-            company_name: formData.signatory_company || null,
-            cpf_cnpj: formData.signatory_cnpj || formData.signatory_cpf || null,
-            address: formData.company_address || null,
-            city: formData.company_city || null,
-            state: formData.company_state || null,
-            zip_code: formData.company_cep || null,
-            brand_name: formData.brand_name || null,
-            business_area: formData.business_area || null,
+            email: personalData.email,
+            full_name: personalData.fullName,
+            phone: personalData.phone,
+            cpf_cnpj: brandData.hasCNPJ ? brandData.cnpj : personalData.cpf,
+            company_name: brandData.hasCNPJ ? brandData.companyName : null,
+            address: `${personalData.address}, ${personalData.neighborhood}`,
+            city: personalData.city,
+            state: personalData.state,
+            zip_code: personalData.cep,
+            brand_name: brandData.brandName,
+            business_area: brandData.businessArea,
           }),
         }
       );
@@ -191,7 +318,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       }
 
       if (result.isExisting) {
-        toast.info('Cliente já existente - documento será vinculado');
+        toast.info('Cliente já existente - contrato será vinculado');
       } else {
         toast.success('Novo cliente criado com sucesso');
       }
@@ -206,28 +333,63 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     }
   };
 
+  const validateNewClientData = (): boolean => {
+    setValidationErrors({});
+    const errors: Record<string, string> = {};
+
+    // Validate personal data
+    const personalResult = personalDataSchema.safeParse(personalData);
+    if (!personalResult.success) {
+      personalResult.error.errors.forEach(err => {
+        if (err.path[0]) {
+          errors[`personal_${err.path[0]}`] = err.message;
+        }
+      });
+    }
+
+    // Validate brand data
+    const brandResult = brandDataSchema.safeParse(brandData);
+    if (!brandResult.success) {
+      brandResult.error.errors.forEach(err => {
+        if (err.path[0]) {
+          errors[`brand_${err.path[0]}`] = err.message;
+        }
+      });
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      // Switch to tab with first error
+      const firstErrorKey = Object.keys(errors)[0];
+      if (firstErrorKey.startsWith('personal_')) {
+        setCurrentTab('personal');
+      } else if (firstErrorKey.startsWith('brand_')) {
+        setCurrentTab('brand');
+      }
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent, sendLink = false) => {
     e.preventDefault();
     
     // Validate based on new client or existing
     if (isNewClient) {
-      if (!formData.signatory_email || !formData.signatory_name) {
-        toast.error('Preencha Email e Nome do cliente');
+      if (!validateNewClientData()) {
+        toast.error('Preencha todos os campos obrigatórios corretamente');
         return;
       }
     } else if (!formData.user_id) {
       toast.error('Selecione um cliente');
       return;
     }
-    
-    if (!formData.subject) {
-      toast.error('Preencha o assunto do documento');
-      return;
-    }
 
     setLoading(true);
     try {
       let userId = formData.user_id;
+      let contractSubject = formData.subject;
 
       // If new client, create first
       if (isNewClient) {
@@ -237,6 +399,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
           return;
         }
         userId = newUserId;
+        // Auto-generate subject for new clients
+        contractSubject = `CONTRATO REGISTRO DE MARCA - ${brandData.brandName.toUpperCase()}`;
       }
 
       const contractHtml = generateDocumentHtml();
@@ -244,17 +408,17 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       const { data: contract, error } = await supabase.from('contracts').insert({
         user_id: userId,
         contract_number: generateContractNumber(),
-        subject: formData.subject,
-        contract_value: formData.contract_value ? parseFloat(formData.contract_value) : null,
+        subject: contractSubject,
+        contract_value: isNewClient ? 699 : (formData.contract_value ? parseFloat(formData.contract_value) : null),
         start_date: formData.start_date,
         end_date: formData.end_date || null,
-        template_id: formData.template_id || null,
-        description: formData.description || null,
+        template_id: selectedTemplate?.id || null,
+        description: isNewClient ? null : (formData.description || null),
         contract_html: contractHtml,
-        document_type: formData.document_type,
-        signatory_name: formData.signatory_name || null,
-        signatory_cpf: formData.signatory_cpf || null,
-        signatory_cnpj: formData.signatory_cnpj || null,
+        document_type: 'contract',
+        signatory_name: isNewClient ? personalData.fullName : (formData.signatory_name || null),
+        signatory_cpf: isNewClient ? personalData.cpf : (formData.signatory_cpf || null),
+        signatory_cnpj: isNewClient && brandData.hasCNPJ ? brandData.cnpj : (formData.signatory_cnpj || null),
         penalty_value: formData.penalty_value ? parseFloat(formData.penalty_value) : null,
         signature_status: 'not_signed',
         visible_to_client: true,
@@ -264,14 +428,14 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       if (error) throw error;
 
       setCreatedContractId(contract.id);
-      toast.success('Documento criado com sucesso');
+      toast.success('Contrato criado com sucesso');
 
       if (sendLink) {
         // Pass new client contact info for sending
         await generateAndSendLink(contract.id, isNewClient ? {
-          email: formData.signatory_email,
-          phone: formData.signatory_phone,
-          name: formData.signatory_name,
+          email: personalData.email,
+          phone: personalData.phone,
+          name: personalData.fullName,
         } : undefined);
       } else {
         onSuccess();
@@ -280,7 +444,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       }
     } catch (error) {
       console.error('Error creating contract:', error);
-      toast.error('Erro ao criar documento');
+      toast.error('Erro ao criar contrato');
     } finally {
       setLoading(false);
     }
@@ -334,7 +498,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       if (sendResponse.ok && sendResult.success) {
         toast.success('Link de assinatura enviado!');
       } else {
-        toast.warning('Documento criado, mas houve erro ao enviar notificações');
+        toast.warning('Contrato criado, mas houve erro ao enviar notificações');
       }
     } catch (error: any) {
       console.error('Error generating/sending link:', error);
@@ -352,10 +516,28 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   };
 
   const resetForm = () => {
+    setPersonalData({
+      fullName: '',
+      email: '',
+      phone: '',
+      cpf: '',
+      cep: '',
+      address: '',
+      neighborhood: '',
+      city: '',
+      state: '',
+    });
+    setBrandData({
+      brandName: '',
+      businessArea: '',
+      hasCNPJ: false,
+      cnpj: '',
+      companyName: '',
+    });
     setFormData({
       user_id: '',
       subject: '',
-      contract_value: '',
+      contract_value: '699',
       start_date: new Date().toISOString().split('T')[0],
       end_date: '',
       template_id: '',
@@ -371,16 +553,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       brand_name: '',
       penalty_value: '',
       penalty_installments: '1',
-      signatory_email: '',
-      signatory_phone: '',
-      signatory_company: '',
-      business_area: '',
     });
     setSelectedProfile(null);
-    setSelectedTemplate(null);
     setGeneratedLink(null);
     setCreatedContractId(null);
     setIsNewClient(false);
+    setValidationErrors({});
+    setCurrentTab('personal');
   };
 
   const handleProfileChange = (userId: string) => {
@@ -394,6 +573,14 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     if (checked) {
       setFormData(prev => ({ ...prev, user_id: '' }));
       setSelectedProfile(null);
+      // Force standard template for new clients
+      const standardTemplate = templates.find(t => 
+        t.name.toLowerCase().includes('registro de marca') || 
+        t.name.toLowerCase().includes('padrão')
+      );
+      if (standardTemplate) {
+        setSelectedTemplate(standardTemplate);
+      }
     }
   };
 
@@ -406,7 +593,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Novo Documento
+            {isNewClient ? 'Criar Novo Cliente + Contrato' : 'Novo Documento'}
           </DialogTitle>
         </DialogHeader>
 
@@ -417,7 +604,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
                 <Link className="h-8 w-8 text-green-600" />
               </div>
-              <h3 className="text-lg font-semibold text-green-800">Documento Criado!</h3>
+              <h3 className="text-lg font-semibold text-green-800">Contrato Criado!</h3>
               <p className="text-sm text-muted-foreground mt-1">
                 O link de assinatura foi gerado e enviado ao cliente.
               </p>
@@ -448,328 +635,531 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
           </div>
         ) : (
           <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
-            {/* Template Selection */}
-            <div className="space-y-2">
-              <Label>Modelo de Documento *</Label>
-              <Select 
-                value={selectedTemplate?.id || ''}
-                onValueChange={(value) => {
-                  const template = templates.find(t => t.id === value);
-                  setSelectedTemplate(template || null);
-                  if (template) {
-                    const docType = getDocumentTypeFromTemplateName(template.name);
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      document_type: docType,
-                      template_id: template.id
-                    }));
-                  }
-                }}
+            {/* Toggle between existing and new client */}
+            <div className="flex items-center space-x-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+              <Checkbox 
+                id="newClient" 
+                checked={isNewClient}
+                onCheckedChange={handleNewClientToggle}
+              />
+              <label 
+                htmlFor="newClient" 
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o modelo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map(template => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <UserPlus className="h-4 w-4" />
+                Criar novo cliente (formulário completo)
+              </label>
             </div>
 
-            <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="basic">Informações Básicas</TabsTrigger>
-                <TabsTrigger value="details">Dados do Signatário</TabsTrigger>
-              </TabsList>
+            {isNewClient ? (
+              /* NEW CLIENT FORM - Matching public form exactly */
+              <>
+                <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+                  <strong>Contrato:</strong> Contrato Padrão - Registro de Marca INPI
+                  <br />
+                  <span className="text-xs">O mesmo contrato do formulário público será utilizado.</span>
+                </div>
 
-              <TabsContent value="basic" className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Toggle between existing and new client */}
-                  <div className="col-span-2 flex items-center space-x-2 p-3 bg-muted/50 rounded-lg">
-                    <Checkbox 
-                      id="newClient" 
-                      checked={isNewClient}
-                      onCheckedChange={handleNewClientToggle}
-                    />
-                    <label 
-                      htmlFor="newClient" 
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer"
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Criar novo cliente
-                    </label>
-                  </div>
+                <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="personal">Dados Pessoais</TabsTrigger>
+                    <TabsTrigger value="brand">Dados da Marca</TabsTrigger>
+                  </TabsList>
 
-                  {!isNewClient ? (
-                    <div className="space-y-2 col-span-2">
-                      <Label>Cliente *</Label>
-                      <Select 
-                        value={formData.user_id}
-                        onValueChange={handleProfileChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o cliente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {profiles.map(profile => (
-                            <SelectItem key={profile.id} value={profile.id}>
-                              {profile.full_name || profile.email}
-                              {profile.company_name && ` - ${profile.company_name}`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <>
-                      {/* New Client Form Fields */}
-                      <div className="space-y-2">
-                        <Label>Email *</Label>
+                  <TabsContent value="personal" className="space-y-4 mt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Preencha os dados do cliente exatamente como no formulário público.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="fullName">Nome Completo *</Label>
                         <Input
+                          id="fullName"
+                          value={personalData.fullName}
+                          onChange={(e) => setPersonalData({ ...personalData, fullName: e.target.value })}
+                          placeholder="Seu nome completo"
+                        />
+                        {validationErrors.personal_fullName && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_fullName}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="email">E-mail *</Label>
+                        <Input
+                          id="email"
                           type="email"
-                          value={formData.signatory_email}
-                          onChange={(e) => setFormData({ ...formData, signatory_email: e.target.value })}
-                          placeholder="cliente@email.com"
-                          required={isNewClient}
+                          value={personalData.email}
+                          onChange={(e) => setPersonalData({ ...personalData, email: e.target.value })}
+                          placeholder="seu@email.com"
                         />
+                        {validationErrors.personal_email && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_email}</p>
+                        )}
                       </div>
+
                       <div className="space-y-2">
-                        <Label>Telefone (WhatsApp)</Label>
+                        <Label htmlFor="phone">Telefone *</Label>
                         <Input
-                          value={formData.signatory_phone}
-                          onChange={(e) => setFormData({ ...formData, signatory_phone: e.target.value })}
-                          placeholder="(11) 99999-9999"
+                          id="phone"
+                          value={personalData.phone}
+                          onChange={(e) => setPersonalData({ ...personalData, phone: formatPhone(e.target.value) })}
+                          placeholder="(00) 00000-0000"
+                          maxLength={15}
+                        />
+                        {validationErrors.personal_phone && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_phone}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="cpf">CPF *</Label>
+                        <Input
+                          id="cpf"
+                          value={personalData.cpf}
+                          onChange={(e) => setPersonalData({ ...personalData, cpf: formatCPF(e.target.value) })}
+                          placeholder="000.000.000-00"
+                          maxLength={14}
+                        />
+                        {validationErrors.personal_cpf && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_cpf}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="cep">CEP *</Label>
+                        <div className="relative">
+                          <Input
+                            id="cep"
+                            value={personalData.cep}
+                            onChange={(e) => handleCEPChange(e.target.value)}
+                            placeholder="00000-000"
+                            maxLength={9}
+                          />
+                          {isLoadingCEP && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                        {validationErrors.personal_cep && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_cep}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="address">Endereço *</Label>
+                        <Input
+                          id="address"
+                          value={personalData.address}
+                          onChange={(e) => setPersonalData({ ...personalData, address: e.target.value })}
+                          placeholder="Rua, número, complemento"
+                        />
+                        {validationErrors.personal_address && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_address}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="neighborhood">Bairro *</Label>
+                        <Input
+                          id="neighborhood"
+                          value={personalData.neighborhood}
+                          onChange={(e) => setPersonalData({ ...personalData, neighborhood: e.target.value })}
+                          placeholder="Bairro"
+                        />
+                        {validationErrors.personal_neighborhood && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_neighborhood}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="city">Cidade *</Label>
+                        <Input
+                          id="city"
+                          value={personalData.city}
+                          onChange={(e) => setPersonalData({ ...personalData, city: e.target.value })}
+                          placeholder="Cidade"
+                        />
+                        {validationErrors.personal_city && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_city}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="state">UF *</Label>
+                        <Input
+                          id="state"
+                          value={personalData.state}
+                          onChange={(e) => setPersonalData({ ...personalData, state: e.target.value.toUpperCase() })}
+                          placeholder="UF"
+                          maxLength={2}
+                        />
+                        {validationErrors.personal_state && (
+                          <p className="text-destructive text-xs">{validationErrors.personal_state}</p>
+                        )}
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="brand" className="space-y-4 mt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Informe os dados da marca que será registrada.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="brandName">Nome da Marca *</Label>
+                        <Input
+                          id="brandName"
+                          value={brandData.brandName}
+                          onChange={(e) => setBrandData({ ...brandData, brandName: e.target.value })}
+                          placeholder="Nome que será registrado"
+                        />
+                        {validationErrors.brand_brandName && (
+                          <p className="text-destructive text-xs">{validationErrors.brand_brandName}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="businessArea">Ramo de Atividade *</Label>
+                        <Input
+                          id="businessArea"
+                          value={brandData.businessArea}
+                          onChange={(e) => setBrandData({ ...brandData, businessArea: e.target.value })}
+                          placeholder="Ex: Serviços Jurídicos, Alimentação, etc."
+                        />
+                        {validationErrors.brand_businessArea && (
+                          <p className="text-destructive text-xs">{validationErrors.brand_businessArea}</p>
+                        )}
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <div className="flex items-center space-x-2 py-2">
+                          <Checkbox
+                            id="hasCNPJ"
+                            checked={brandData.hasCNPJ}
+                            onCheckedChange={(checked) => setBrandData({ ...brandData, hasCNPJ: !!checked })}
+                          />
+                          <Label htmlFor="hasCNPJ" className="text-sm font-normal cursor-pointer">
+                            Tenho CNPJ e quero vincular à marca
+                          </Label>
+                        </div>
+                      </div>
+
+                      {brandData.hasCNPJ && (
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="cnpj">CNPJ *</Label>
+                            <Input
+                              id="cnpj"
+                              value={brandData.cnpj}
+                              onChange={(e) => setBrandData({ ...brandData, cnpj: formatCNPJ(e.target.value) })}
+                              placeholder="00.000.000/0000-00"
+                              maxLength={18}
+                            />
+                            {validationErrors.brand_cnpj && (
+                              <p className="text-destructive text-xs">{validationErrors.brand_cnpj}</p>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="companyName">Razão Social *</Label>
+                            <Input
+                              id="companyName"
+                              value={brandData.companyName}
+                              onChange={(e) => setBrandData({ ...brandData, companyName: e.target.value })}
+                              placeholder="Nome da empresa"
+                            />
+                            {validationErrors.brand_companyName && (
+                              <p className="text-destructive text-xs">{validationErrors.brand_companyName}</p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </>
+            ) : (
+              /* EXISTING CLIENT FORM - Legacy flow */
+              <>
+                {/* Template Selection */}
+                <div className="space-y-2">
+                  <Label>Modelo de Documento *</Label>
+                  <Select 
+                    value={selectedTemplate?.id || ''}
+                    onValueChange={(value) => {
+                      const template = templates.find(t => t.id === value);
+                      setSelectedTemplate(template || null);
+                      if (template) {
+                        const docType = getDocumentTypeFromTemplateName(template.name);
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          document_type: docType,
+                          template_id: template.id
+                        }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map(template => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Tabs defaultValue="basic" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="basic">Informações Básicas</TabsTrigger>
+                    <TabsTrigger value="details">Dados do Signatário</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="basic" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2 col-span-2">
+                        <Label>Cliente *</Label>
+                        <Select 
+                          value={formData.user_id}
+                          onValueChange={handleProfileChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o cliente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {profiles.map(profile => (
+                              <SelectItem key={profile.id} value={profile.id}>
+                                {profile.full_name || profile.email}
+                                {profile.company_name && ` - ${profile.company_name}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2 col-span-2">
+                        <Label>Assunto *</Label>
+                        <Input
+                          value={formData.subject}
+                          onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                          placeholder={isSpecialDocument 
+                            ? `Ex: ${formData.document_type === 'procuracao' ? 'Procuração INPI - Marca XYZ' : 'Distrato - Marca XYZ'}` 
+                            : 'Ex: CONTRATO REGISTRO DE MARCA 699,00'
+                          }
+                          required
                         />
                       </div>
-                    </>
-                  )}
 
-                  <div className="space-y-2 col-span-2">
-                    <Label>Assunto *</Label>
-                    <Input
-                      value={formData.subject}
-                      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                      placeholder={isSpecialDocument 
-                        ? `Ex: ${formData.document_type === 'procuracao' ? 'Procuração INPI - Marca XYZ' : 'Distrato - Marca XYZ'}` 
-                        : 'Ex: CONTRATO REGISTRO DE MARCA 699,00'
-                      }
-                      required
-                    />
-                  </div>
+                      {isDistrato && (
+                        <div className="space-y-2 col-span-2">
+                          <Label>Nome da Marca</Label>
+                          <Input
+                            value={formData.brand_name}
+                            onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                            placeholder="Nome da marca relacionada ao distrato"
+                          />
+                        </div>
+                      )}
 
-                  {isDistrato && (
-                    <div className="space-y-2 col-span-2">
-                      <Label>Nome da Marca</Label>
-                      <Input
-                        value={formData.brand_name}
-                        onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
-                        placeholder="Nome da marca relacionada ao distrato"
-                      />
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>Valor do Documento</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.contract_value}
-                      onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  {formData.document_type === 'distrato_multa' && (
-                    <>
                       <div className="space-y-2">
-                        <Label>Valor da Multa (R$)</Label>
+                        <Label>Valor do Documento</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          value={formData.penalty_value}
-                          onChange={(e) => setFormData({ ...formData, penalty_value: e.target.value })}
-                          placeholder="398.00"
+                          value={formData.contract_value}
+                          onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
+                          placeholder="0.00"
                         />
                       </div>
+
+                      {formData.document_type === 'distrato_multa' && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Valor da Multa (R$)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={formData.penalty_value}
+                              onChange={(e) => setFormData({ ...formData, penalty_value: e.target.value })}
+                              placeholder="398.00"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Nº de Parcelas da Multa</Label>
+                            <Input
+                              type="number"
+                              value={formData.penalty_installments}
+                              onChange={(e) => setFormData({ ...formData, penalty_installments: e.target.value })}
+                              placeholder="1"
+                            />
+                          </div>
+                        </>
+                      )}
+
                       <div className="space-y-2">
-                        <Label>Nº de Parcelas da Multa</Label>
+                        <Label>Data de Início</Label>
                         <Input
-                          type="number"
-                          value={formData.penalty_installments}
-                          onChange={(e) => setFormData({ ...formData, penalty_installments: e.target.value })}
-                          placeholder="1"
+                          type="date"
+                          value={formData.start_date}
+                          onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                         />
                       </div>
-                    </>
-                  )}
 
+                      <div className="space-y-2">
+                        <Label>Data Final</Label>
+                        <Input
+                          type="date"
+                          value={formData.end_date}
+                          onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>Data de Início</Label>
-                    <Input
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Data Final</Label>
-                    <Input
-                      type="date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                    />
-                  </div>
-
-                  {!isSpecialDocument && (
-                    <div className="space-y-2 col-span-2">
-                      <Label>Descrição / Conteúdo</Label>
-                      <Textarea
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        rows={4}
-                        placeholder="Detalhes do contrato..."
-                      />
+                      {!isSpecialDocument && (
+                        <div className="space-y-2 col-span-2">
+                          <Label>Descrição / Conteúdo</Label>
+                          <Textarea
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            rows={4}
+                            placeholder="Detalhes do contrato..."
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </TabsContent>
+                  </TabsContent>
 
-              <TabsContent value="details" className="space-y-4 mt-4">
-                <p className="text-sm text-muted-foreground mb-4">
-                  {isNewClient 
-                    ? 'Preencha os dados completos do novo cliente e representante legal.'
-                    : isSpecialDocument 
-                      ? 'Preencha os dados do representante legal que irá assinar o documento.'
-                      : 'Dados opcionais do signatário.'}
-                </p>
+                  <TabsContent value="details" className="space-y-4 mt-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {isSpecialDocument 
+                        ? 'Preencha os dados do representante legal que irá assinar o documento.'
+                        : 'Dados opcionais do signatário.'}
+                    </p>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label>Nome do Representante Legal {(isSpecialDocument || isNewClient) && '*'}</Label>
-                    <Input
-                      value={formData.signatory_name}
-                      onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
-                      placeholder="Nome completo"
-                      required={isNewClient}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>CPF do Representante</Label>
-                    <Input
-                      value={formData.signatory_cpf}
-                      onChange={(e) => setFormData({ ...formData, signatory_cpf: e.target.value })}
-                      placeholder="000.000.000-00"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>CNPJ da Empresa {isNewClient && '(opcional)'}</Label>
-                    <Input
-                      value={formData.signatory_cnpj}
-                      onChange={(e) => setFormData({ ...formData, signatory_cnpj: e.target.value })}
-                      placeholder="00.000.000/0001-00"
-                    />
-                  </div>
-
-                  {isNewClient && (
-                    <>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2 col-span-2">
-                        <Label>Razão Social (opcional)</Label>
+                        <Label>Nome do Representante Legal {isSpecialDocument && '*'}</Label>
                         <Input
-                          value={formData.signatory_company}
-                          onChange={(e) => setFormData({ ...formData, signatory_company: e.target.value })}
-                          placeholder="Nome da empresa"
+                          value={formData.signatory_name}
+                          onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
+                          placeholder="Nome completo"
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Nome da Marca</Label>
+                        <Label>CPF do Representante</Label>
                         <Input
-                          value={formData.brand_name}
-                          onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
-                          placeholder="Nome da marca"
+                          value={formData.signatory_cpf}
+                          onChange={(e) => setFormData({ ...formData, signatory_cpf: formatCPF(e.target.value) })}
+                          placeholder="000.000.000-00"
+                          maxLength={14}
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Ramo de Atividade</Label>
+                        <Label>CNPJ da Empresa</Label>
                         <Input
-                          value={formData.business_area}
-                          onChange={(e) => setFormData({ ...formData, business_area: e.target.value })}
-                          placeholder="Ex: Alimentação, Vestuário..."
+                          value={formData.signatory_cnpj}
+                          onChange={(e) => setFormData({ ...formData, signatory_cnpj: formatCNPJ(e.target.value) })}
+                          placeholder="00.000.000/0001-00"
+                          maxLength={18}
                         />
                       </div>
-                    </>
-                  )}
 
-                  <div className="space-y-2 col-span-2">
-                    <Label>Endereço</Label>
-                    <Input
-                      value={formData.company_address}
-                      onChange={(e) => setFormData({ ...formData, company_address: e.target.value })}
-                      placeholder="Rua, número, bairro"
-                    />
-                  </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label>Endereço</Label>
+                        <Input
+                          value={formData.company_address}
+                          onChange={(e) => setFormData({ ...formData, company_address: e.target.value })}
+                          placeholder="Rua, número, bairro"
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>Cidade</Label>
-                    <Input
-                      value={formData.company_city}
-                      onChange={(e) => setFormData({ ...formData, company_city: e.target.value })}
-                      placeholder="São Paulo"
-                    />
-                  </div>
+                      <div className="space-y-2">
+                        <Label>Cidade</Label>
+                        <Input
+                          value={formData.company_city}
+                          onChange={(e) => setFormData({ ...formData, company_city: e.target.value })}
+                          placeholder="São Paulo"
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>Estado</Label>
-                    <Input
-                      value={formData.company_state}
-                      onChange={(e) => setFormData({ ...formData, company_state: e.target.value })}
-                      placeholder="SP"
-                      maxLength={2}
-                    />
-                  </div>
+                      <div className="space-y-2">
+                        <Label>Estado</Label>
+                        <Input
+                          value={formData.company_state}
+                          onChange={(e) => setFormData({ ...formData, company_state: e.target.value.toUpperCase() })}
+                          placeholder="SP"
+                          maxLength={2}
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>CEP</Label>
-                    <Input
-                      value={formData.company_cep}
-                      onChange={(e) => setFormData({ ...formData, company_cep: e.target.value })}
-                      placeholder="00000-000"
-                    />
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+                      <div className="space-y-2">
+                        <Label>CEP</Label>
+                        <Input
+                          value={formData.company_cep}
+                          onChange={(e) => setFormData({ ...formData, company_cep: formatCEP(e.target.value) })}
+                          placeholder="00000-000"
+                          maxLength={9}
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </>
+            )}
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading || sendingLink || creatingClient}>
-                {(loading || creatingClient) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Criar Documento
-              </Button>
-              {(isSpecialDocument || isNewClient) && (
-                <Button 
-                  type="button" 
-                  variant="default"
-                  onClick={(e) => handleSubmit(e as any, true)}
-                  disabled={loading || sendingLink || creatingClient}
-                >
-                  {(sendingLink || creatingClient) ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
+              {isNewClient ? (
+                <>
+                  <Button type="submit" disabled={loading || creatingClient}>
+                    {(loading || creatingClient) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Criar Contrato
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="default"
+                    onClick={(e) => handleSubmit(e as any, true)}
+                    disabled={loading || sendingLink || creatingClient}
+                    className="bg-primary"
+                  >
+                    {(sendingLink || creatingClient) ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    Criar Cliente e Enviar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="submit" disabled={loading || sendingLink}>
+                    {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Criar Documento
+                  </Button>
+                  {isSpecialDocument && (
+                    <Button 
+                      type="button" 
+                      variant="default"
+                      onClick={(e) => handleSubmit(e as any, true)}
+                      disabled={loading || sendingLink}
+                    >
+                      {sendingLink ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4 mr-2" />
+                      )}
+                      Criar e Enviar Link
+                    </Button>
                   )}
-                  {isNewClient ? 'Criar Cliente e Enviar' : 'Criar e Enviar Link'}
-                </Button>
+                </>
               )}
             </div>
           </form>
