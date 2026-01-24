@@ -33,12 +33,12 @@ const Header = () => {
   }, []);
 
   const navItems = [
-    { label: t("nav.home"), href: "#home", external: false },
-    { label: t("nav.benefits"), href: "#beneficios", external: false },
-    { label: t("nav.howItWorks"), href: "#como-funciona", external: false },
-    { label: t("nav.pricing"), href: "#precos", external: false },
-    { label: t("nav.faq"), href: "#faq", external: false },
-    { label: t("nav.register"), href: "/registrar", external: true },
+    { label: t("nav.home"), href: "#home", external: false, isRoute: false },
+    { label: t("nav.benefits"), href: "#beneficios", external: false, isRoute: false },
+    { label: t("nav.howItWorks"), href: "#como-funciona", external: false, isRoute: false },
+    { label: t("nav.pricing"), href: "#precos", external: false, isRoute: false },
+    { label: t("nav.faq"), href: "#faq", external: false, isRoute: false },
+    { label: t("nav.register"), href: "/registrar", external: false, isRoute: true },
   ];
 
   const currentLang = languages.find((l) => l.code === language);
@@ -64,16 +64,14 @@ const Header = () => {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (
-              item.external ? (
-                <a
+              item.isRoute ? (
+                <Link
                   key={item.label}
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  to={item.href}
                   className="px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors rounded-lg hover:bg-primary/10"
                 >
                   {item.label}
-                </a>
+                </Link>
               ) : (
                 <a
                   key={item.label}
@@ -187,17 +185,15 @@ const Header = () => {
         <div className="md:hidden bg-background/95 backdrop-blur-xl border-b border-border animate-fade-in">
           <nav className="container mx-auto px-3 py-3 flex flex-col gap-1">
             {navItems.map((item) => (
-              item.external ? (
-                <a
+              item.isRoute ? (
+                <Link
                   key={item.label}
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  to={item.href}
                   className="px-4 py-3 font-medium text-primary hover:text-primary/80 transition-colors rounded-xl hover:bg-primary/10 touch-target"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {item.label}
-                </a>
+                </Link>
               ) : (
                 <a
                   key={item.label}
