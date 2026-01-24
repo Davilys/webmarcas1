@@ -128,6 +128,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     companyName: '',
   });
 
+  // Payment method - matching public form
+  const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x'>('avista');
+
   // Legacy form data for existing client flows
   const [formData, setFormData] = useState({
     user_id: '',
@@ -250,8 +253,28 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         cnpj: brandData.cnpj,
         companyName: brandData.companyName,
       },
-      paymentMethod: 'avista', // Default to PIX à vista
+      paymentMethod: paymentMethod,
     });
+  };
+
+  // Get contract value based on payment method
+  const getContractValue = () => {
+    switch (paymentMethod) {
+      case 'avista': return 699;
+      case 'cartao6x': return 1194;
+      case 'boleto3x': return 1197;
+      default: return 699;
+    }
+  };
+
+  // Get payment description for display
+  const getPaymentDescription = () => {
+    switch (paymentMethod) {
+      case 'avista': return 'PIX à vista - R$ 699,00';
+      case 'cartao6x': return 'Cartão 6x de R$ 199,00 = R$ 1.194,00';
+      case 'boleto3x': return 'Boleto 3x de R$ 399,00 = R$ 1.197,00';
+      default: return 'PIX à vista - R$ 699,00';
+    }
   };
 
   const generateDocumentHtml = () => {
@@ -409,7 +432,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         user_id: userId,
         contract_number: generateContractNumber(),
         subject: contractSubject,
-        contract_value: isNewClient ? 699 : (formData.contract_value ? parseFloat(formData.contract_value) : null),
+        contract_value: isNewClient ? getContractValue() : (formData.contract_value ? parseFloat(formData.contract_value) : null),
         start_date: formData.start_date,
         end_date: formData.end_date || null,
         template_id: selectedTemplate?.id || null,
@@ -560,6 +583,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setIsNewClient(false);
     setValidationErrors({});
     setCurrentTab('personal');
+    setPaymentMethod('avista');
   };
 
   const handleProfileChange = (userId: string) => {
@@ -661,9 +685,10 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                 </div>
 
                 <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="personal">Dados Pessoais</TabsTrigger>
                     <TabsTrigger value="brand">Dados da Marca</TabsTrigger>
+                    <TabsTrigger value="payment">Pagamento</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="personal" className="space-y-4 mt-4">
@@ -876,6 +901,120 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                           </div>
                         </>
                       )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="payment" className="space-y-4 mt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Selecione a forma de pagamento do cliente.
+                    </p>
+
+                    <div className="space-y-3">
+                      {/* PIX à vista */}
+                      <div
+                        onClick={() => setPaymentMethod('avista')}
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          paymentMethod === 'avista'
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              paymentMethod === 'avista' 
+                                ? 'border-primary bg-primary' 
+                                : 'border-muted-foreground'
+                            }`}>
+                              {paymentMethod === 'avista' && (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <div className="w-2 h-2 bg-white rounded-full" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium">PIX à Vista</p>
+                              <p className="text-sm text-muted-foreground">Pagamento instantâneo</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-primary">R$ 699,00</p>
+                            <p className="text-xs text-green-600 font-medium">43% OFF</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Cartão 6x */}
+                      <div
+                        onClick={() => setPaymentMethod('cartao6x')}
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          paymentMethod === 'cartao6x'
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              paymentMethod === 'cartao6x' 
+                                ? 'border-primary bg-primary' 
+                                : 'border-muted-foreground'
+                            }`}>
+                              {paymentMethod === 'cartao6x' && (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <div className="w-2 h-2 bg-white rounded-full" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium">Cartão de Crédito</p>
+                              <p className="text-sm text-muted-foreground">Parcelamento sem juros</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold">6x de R$ 199,00</p>
+                            <p className="text-xs text-muted-foreground">Total: R$ 1.194,00</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Boleto 3x */}
+                      <div
+                        onClick={() => setPaymentMethod('boleto3x')}
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          paymentMethod === 'boleto3x'
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              paymentMethod === 'boleto3x' 
+                                ? 'border-primary bg-primary' 
+                                : 'border-muted-foreground'
+                            }`}>
+                              {paymentMethod === 'boleto3x' && (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <div className="w-2 h-2 bg-white rounded-full" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium">Boleto Bancário</p>
+                              <p className="text-sm text-muted-foreground">Parcelamento em 3x</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold">3x de R$ 399,00</p>
+                            <p className="text-xs text-muted-foreground">Total: R$ 1.197,00</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                      <strong>Forma selecionada:</strong> {getPaymentDescription()}
                     </div>
                   </TabsContent>
                 </Tabs>
