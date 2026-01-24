@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Download, ExternalLink, FileText, Image, Video, Music, Loader2, CheckCircle, Shield, Printer } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF, getQRCodeBase64 } from '@/components/contracts/DocumentRenderer';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface DocumentPreviewProps {
@@ -125,6 +125,13 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
     try {
       const logoBase64 = await getLogoBase64ForPDF();
       const documentType = (contractData.document_type || 'contract') as 'contract' | 'distrato_multa' | 'distrato_sem_multa' | 'procuracao';
+      
+      // Generate verification URL and get QR Code as base64 for reliable printing
+      const verificationUrl = contractData.blockchain_hash 
+        ? `${window.location.origin}/verificar-contrato?hash=${contractData.blockchain_hash}`
+        : '';
+      const qrCodeBase64 = verificationUrl ? await getQRCodeBase64(verificationUrl) : undefined;
+      
       const printHtml = generateDocumentPrintHTML(
         documentType,
         contractData.contract_html,
@@ -141,7 +148,8 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
         contractData.signatory_cnpj || undefined,
         undefined,
         window.location.origin,
-        logoBase64
+        logoBase64,
+        qrCodeBase64
       );
       
       const newWindow = window.open('', '_blank');
