@@ -177,37 +177,37 @@ export function ClientLayout({ children }: ClientLayoutProps) {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background safe-area-top safe-area-bottom">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm">
         <NavContent />
       </aside>
 
       {/* Mobile Header */}
-      <header className="lg:hidden sticky top-0 z-50 flex items-center justify-between h-16 px-4 border-b border-border/50 bg-card/80 backdrop-blur-sm">
+      <header className="lg:hidden sticky top-0 z-50 flex items-center justify-between h-14 md:h-16 px-3 md:px-4 border-b border-border/50 bg-card/80 backdrop-blur-sm safe-area-top">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-xl">
-              <Menu className="h-6 w-6" />
+            <Button variant="ghost" size="icon" className="rounded-xl touch-target">
+              <Menu className="h-5 w-5 md:h-6 md:w-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-72">
+          <SheetContent side="left" className="p-0 w-[280px] sm:w-72">
             <NavContent />
           </SheetContent>
         </Sheet>
 
         <Link to="/">
-          <img src={logo} alt="WebMarcas" className="h-8" />
+          <img src={logo} alt="WebMarcas" className="h-7 md:h-8" />
         </Link>
 
-        <Button variant="ghost" size="icon" className="rounded-xl">
-          <Bell className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="rounded-xl touch-target">
+          <Bell className="h-4 w-4 md:h-5 md:w-5" />
         </Button>
       </header>
 
       {/* Main Content */}
       <main className="lg:pl-72">
-        <div className="p-6 lg:p-8 animate-page-enter">{children}</div>
+        <div className="p-4 sm:p-6 lg:p-8 animate-page-enter">{children}</div>
       </main>
     </div>
   );

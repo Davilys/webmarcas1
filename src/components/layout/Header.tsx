@@ -45,18 +45,18 @@ const Header = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 safe-area-top ${
         isScrolled
           ? "bg-background/80 backdrop-blur-xl border-b border-border"
           : "bg-transparent"
       }`}
     >
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16 md:h-20">
+      <div className="container mx-auto px-3 md:px-4">
+        <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
           {/* Logo */}
-          <a href="/" className="flex items-center gap-2">
-            <img src={webmarcasLogo} alt="WebMarcas" className="h-10 w-auto" />
-            <span className="font-display text-xl font-bold">
+          <a href="/" className="flex items-center gap-1.5 md:gap-2">
+            <img src={webmarcasLogo} alt="WebMarcas" className="h-8 md:h-10 w-auto" />
+            <span className="font-display text-lg md:text-xl font-bold hidden sm:inline">
               Web<span className="gradient-text">Marcas</span>
             </span>
           </a>
@@ -184,8 +184,8 @@ const Header = () => {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-background/95 backdrop-blur-xl border-b border-border">
-          <nav className="container mx-auto px-4 py-4 flex flex-col gap-2">
+        <div className="md:hidden bg-background/95 backdrop-blur-xl border-b border-border animate-fade-in">
+          <nav className="container mx-auto px-3 py-3 flex flex-col gap-1">
             {navItems.map((item) => (
               item.external ? (
                 <a
@@ -193,7 +193,7 @@ const Header = () => {
                   href={item.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-3 font-medium text-primary hover:text-primary/80 transition-colors rounded-lg hover:bg-primary/10"
+                  className="px-4 py-3 font-medium text-primary hover:text-primary/80 transition-colors rounded-xl hover:bg-primary/10 touch-target"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {item.label}
@@ -202,18 +202,18 @@ const Header = () => {
                 <a
                   key={item.label}
                   href={item.href}
-                  className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary"
+                  className="px-4 py-3 text-muted-foreground hover:text-foreground transition-colors rounded-xl hover:bg-secondary touch-target"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {item.label}
                 </a>
               )
             ))}
-            <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
-              <Button variant="ghost" asChild>
+            <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
+              <Button variant="ghost" className="justify-start touch-target" asChild>
                 <Link to="/cliente/login">{t("nav.clientArea")}</Link>
               </Button>
-              <Button variant="primary" className="btn-glow" asChild>
+              <Button variant="primary" className="btn-glow touch-target" asChild>
                 <a href="#consultar">{t("nav.checkBrand")}</a>
               </Button>
             </div>

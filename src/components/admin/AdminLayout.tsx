@@ -383,21 +383,21 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="min-h-screen flex w-full bg-background safe-area-top safe-area-bottom">
         <AdminSidebar />
         
         <SidebarInset className="flex-1">
-          <header className="sticky top-0 z-50 flex items-center gap-4 h-14 px-4 border-b border-border/50 bg-card/80 backdrop-blur-sm">
-            <SidebarTrigger className="-ml-1 hover:bg-accent/60 transition-colors" />
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10">
-                <Shield className="h-3.5 w-3.5 text-primary" />
+          <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 bg-card/80 backdrop-blur-sm">
+            <SidebarTrigger className="-ml-1 hover:bg-accent/60 transition-colors touch-target" />
+            <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
+              <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-md bg-primary/10">
+                <Shield className="h-3 w-3 md:h-3.5 md:w-3.5 text-primary" />
               </div>
-              <span className="font-medium">CRM WebMarcas</span>
+              <span className="font-medium hidden sm:inline">CRM WebMarcas</span>
             </div>
           </header>
           
-          <main className="p-6 lg:p-8 animate-page-enter">
+          <main className="p-4 sm:p-6 lg:p-8 animate-page-enter">
             {children}
           </main>
         </SidebarInset>

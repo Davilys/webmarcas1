@@ -355,25 +355,25 @@
 
   /* Badge styling */
   .badge-premium {
-    @apply inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium;
+    @apply inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-medium;
     background: hsla(210, 100%, 40%, 0.1);
     border: 1px solid hsla(210, 100%, 40%, 0.3);
     color: hsl(210, 100%, 35%);
   }
 
-  /* Section styling */
+  /* Section styling - Responsive */
   .section-padding {
-    @apply py-12 md:py-28 lg:py-32;
+    @apply py-12 md:py-20 lg:py-28;
   }
 
   /* Mobile compact spacing */
   .mobile-compact > section {
-    @apply py-10 md:py-20 lg:py-28;
+    @apply py-8 md:py-16 lg:py-24;
   }
 
   /* Feature card hover */
   .feature-card {
-    @apply glass-card p-6 transition-all duration-300;
+    @apply glass-card p-4 md:p-6 transition-all duration-300;
   }
 
   .feature-card:hover {
@@ -382,14 +382,22 @@
     box-shadow: var(--shadow-glow);
   }
 
-  /* Input styling */
+  /* Input styling - Mobile optimized */
   .input-styled {
-    @apply w-full px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
+    @apply w-full px-3 py-2.5 md:px-4 md:py-3 rounded-xl bg-secondary border border-border text-foreground text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
+    /* Prevent zoom on iOS */
+    font-size: 16px;
   }
 
-  /* Radio card */
+  @media (min-width: 768px) {
+    .input-styled {
+      font-size: 14px;
+    }
+  }
+
+  /* Radio card - Mobile optimized */
   .radio-card {
-    @apply glass-card p-5 cursor-pointer transition-all duration-300 border-2;
+    @apply glass-card p-4 md:p-5 cursor-pointer transition-all duration-300 border-2;
   }
 
   .radio-card:hover {
@@ -399,6 +407,54 @@
   .radio-card.selected {
     border-color: hsl(210, 100%, 40%);
     background: hsla(210, 100%, 40%, 0.08);
+  }
+
+  /* App-like container */
+  .app-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Safe area padding for mobile notches */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Touch-friendly buttons */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Mobile card */
+  .mobile-card {
+    @apply rounded-2xl bg-card border border-border/50 shadow-lg overflow-hidden;
+  }
+
+  /* Responsive text */
+  .text-display {
+    @apply text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold font-display;
+  }
+
+  .text-display-sm {
+    @apply text-xl sm:text-2xl md:text-3xl font-bold font-display;
+  }
+
+  /* Responsive spacing */
+  .gap-responsive {
+    @apply gap-3 sm:gap-4 md:gap-6;
+  }
+
+  .p-responsive {
+    @apply p-4 sm:p-6 md:p-8;
+  }
+
+  /* Bottom sheet styling for mobile */
+  .bottom-sheet {
+    @apply fixed inset-x-0 bottom-0 z-50 bg-card rounded-t-3xl shadow-2xl;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
   }
 
   /* Testimonials carousel animations */
