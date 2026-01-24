@@ -552,6 +552,7 @@ export type Database = {
           ip_address: string | null
           lead_id: string | null
           ots_file_url: string | null
+          payment_method: string | null
           penalty_value: number | null
           process_id: string | null
           signatory_cnpj: string | null
@@ -593,6 +594,7 @@ export type Database = {
           ip_address?: string | null
           lead_id?: string | null
           ots_file_url?: string | null
+          payment_method?: string | null
           penalty_value?: number | null
           process_id?: string | null
           signatory_cnpj?: string | null
@@ -634,6 +636,7 @@ export type Database = {
           ip_address?: string | null
           lead_id?: string | null
           ots_file_url?: string | null
+          payment_method?: string | null
           penalty_value?: number | null
           process_id?: string | null
           signatory_cnpj?: string | null
