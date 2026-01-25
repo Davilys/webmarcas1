@@ -691,6 +691,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
   const isSpecialDocument = formData.document_type !== 'contract';
   const isDistrato = formData.document_type === 'distrato_multa' || formData.document_type === 'distrato_sem_multa';
+  
+  // Show "Criar e Enviar Link" button for special documents OR standard contract templates
+  const isStandardContractTemplate = selectedTemplate?.name.toLowerCase().includes('registro de marca') ||
+                                      selectedTemplate?.name.toLowerCase().includes('padrão');
+  const showSendLinkButton = isSpecialDocument || isStandardContractTemplate;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1364,7 +1369,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                     {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Criar Documento
                   </Button>
-                  {isSpecialDocument && (
+                  {showSendLinkButton && (
                     <Button 
                       type="button" 
                       variant="default"
