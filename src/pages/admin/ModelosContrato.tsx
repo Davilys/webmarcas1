@@ -64,6 +64,7 @@ export default function ModelosContrato() {
   const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
+  const [previewDocumentType, setPreviewDocumentType] = useState<'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa'>('contract');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -197,7 +198,23 @@ export default function ModelosContrato() {
     }
   };
 
-  const handlePreview = (content: string) => {
+  const handlePreview = (content: string, templateName?: string) => {
+    // Determinar o tipo de documento baseado no nome do template
+    const nameToCheck = templateName || formData.name;
+    let docType: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' = 'contract';
+    
+    if (nameToCheck.toLowerCase().includes('procura')) {
+      docType = 'procuracao';
+    } else if (nameToCheck.toLowerCase().includes('distrato')) {
+      if (nameToCheck.toLowerCase().includes('multa')) {
+        docType = 'distrato_multa';
+      } else {
+        docType = 'distrato_sem_multa';
+      }
+    }
+    
+    setPreviewDocumentType(docType);
+    
     // Replace variables with sample data
     let preview = content
       .replace(/{{nome_cliente}}/g, 'João da Silva')
@@ -417,7 +434,7 @@ export default function ModelosContrato() {
                       variant="outline"
                       size="sm"
                       className="flex-1"
-                      onClick={() => handlePreview(template.content)}
+                      onClick={() => handlePreview(template.content, template.name)}
                     >
                       <Eye className="h-4 w-4 mr-1" />
                       Ver
@@ -457,7 +474,7 @@ export default function ModelosContrato() {
               <DialogTitle>Pré-visualização do Contrato</DialogTitle>
             </DialogHeader>
             <div className="border rounded-lg p-6 bg-white">
-              <ContractRenderer content={previewContent} showLetterhead={true} />
+              <ContractRenderer content={previewContent} showLetterhead={true} documentType={previewDocumentType} />
             </div>
           </DialogContent>
         </Dialog>
