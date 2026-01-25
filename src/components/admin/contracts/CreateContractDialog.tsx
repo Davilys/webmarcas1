@@ -493,6 +493,10 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       setCreatedContractId(contract.id);
       toast.success('Contrato criado com sucesso');
 
+      // Check if it's a standard contract template that needs automatic link generation
+      const isStandardContractTemplate = selectedTemplate?.name.toLowerCase().includes('registro de marca') ||
+                                          selectedTemplate?.name.toLowerCase().includes('padrão');
+
       if (sendLink) {
         // Pass new client contact info for sending
         await generateAndSendLink(contract.id, isNewClient ? {
@@ -500,6 +504,12 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
           phone: personalData.phone,
           name: personalData.fullName,
         } : undefined);
+      } else if (isStandardContractTemplate) {
+        // Auto-generate signature link for standard contracts (without sending)
+        await generateSignatureLinkOnly(contract.id);
+        onSuccess();
+        onOpenChange(false);
+        resetForm();
       } else {
         onSuccess();
         onOpenChange(false);
@@ -510,6 +520,37 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       toast.error('Erro ao criar contrato');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Generate signature link without sending notifications
+  const generateSignatureLinkOnly = async (contractId: string) => {
+    try {
+      const linkResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-signature-link`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({ contractId, expiresInDays: 7, baseUrl: window.location.origin }),
+        }
+      );
+
+      const linkResult = await linkResponse.json();
+      
+      if (!linkResponse.ok || linkResult.error) {
+        console.error('Error generating signature link:', linkResult.error);
+        toast.warning('Contrato criado, mas houve erro ao gerar link de assinatura');
+        return;
+      }
+
+      console.log('Signature link generated automatically:', linkResult.data.url);
+      toast.success('Link de assinatura gerado automaticamente');
+    } catch (error: any) {
+      console.error('Error generating signature link:', error);
+      toast.warning('Contrato criado, mas houve erro ao gerar link de assinatura');
     }
   };
 
