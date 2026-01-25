@@ -373,7 +373,8 @@ export function generateContractPrintHTML(
   clientName: string,
   clientCpf: string,
   blockchainSignature?: BlockchainSignature,
-  showCertificationSection: boolean = true
+  showCertificationSection: boolean = true,
+  documentType: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' = 'contract'
 ): string {
   // Convert plain text to HTML with proper formatting
   const htmlContent = content
@@ -672,6 +673,26 @@ export function generateContractPrintHTML(
   <!-- Orange/Yellow Gradient Bar -->
   <div class="gradient-bar"></div>
   
+  ${documentType === 'procuracao' ? `
+  <!-- Título da Procuração -->
+  <h1 class="main-title">PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI</h1>
+  <p style="text-align: center; color: #4B5563; font-size: 14px; font-style: italic; margin-bottom: 24px;">Instrumento Particular de Procuração para fins de Registro de Marca</p>
+  
+  <!-- Caixa Amarela - Aviso Legal de Procuração -->
+  <div class="highlight-box">
+    <p>Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.</p>
+  </div>
+  ` : documentType === 'distrato_multa' || documentType === 'distrato_sem_multa' ? `
+  <!-- Título do Distrato -->
+  <h1 class="main-title">ACORDO DE DISTRATO</h1>
+  <div class="contract-title-box">
+    <p>INSTRUMENTO PARTICULAR DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
+  </div>
+  
+  <div class="highlight-box">
+    <p>As partes abaixo qualificadas resolvem, de comum acordo, distratar o contrato de prestação de serviços firmado anteriormente, nos termos e condições a seguir estabelecidos.</p>
+  </div>
+  ` : `
   <!-- Blue Title -->
   <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
   
@@ -685,6 +706,7 @@ export function generateContractPrintHTML(
     <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
   </div>
+  `}
   
   <div class="content">
     ${htmlContent}

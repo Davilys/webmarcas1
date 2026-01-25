@@ -34,7 +34,7 @@ export function ContractStep({
   const [accepted, setAccepted] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   // Busca o template "Contrato Padrão - Registro de Marca INPI" do banco de dados
-  const { template, isLoading } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
+  const { template, isLoading, documentType } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
 
   const getProcessedContract = useCallback(() => {
     if (!template) return '';
@@ -50,7 +50,7 @@ export function ContractStep({
       const contractContent = getProcessedContract();
       await printUnifiedContract({
         content: contractContent,
-        documentType: 'contract',
+        documentType,
         subject: brandData.brandName,
         signatoryName: personalData.fullName,
         signatoryCpf: personalData.cpf,
@@ -67,7 +67,7 @@ export function ContractStep({
       const contractContent = getProcessedContract();
       await downloadUnifiedContractPDF({
         content: contractContent,
-        documentType: 'contract',
+        documentType,
         subject: brandData.brandName,
         signatoryName: personalData.fullName,
         signatoryCpf: personalData.cpf,
@@ -92,7 +92,10 @@ export function ContractStep({
       contractContent,
       brandData.brandName,
       personalData.fullName,
-      personalData.cpf
+      personalData.cpf,
+      undefined,
+      true,
+      documentType
     );
     onSubmit(fullContractHtml);
   };
@@ -183,6 +186,7 @@ export function ContractStep({
               content={getProcessedContract()} 
               showLetterhead={true}
               showCertificationSection={false}
+              documentType={documentType}
             />
           </div>
         </ScrollArea>
