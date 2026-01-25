@@ -341,7 +341,10 @@ const RegistrationFormSection = () => {
       contractContent,
       brandData.brandName,
       personalData.fullName,
-      personalData.cpf
+      personalData.cpf,
+      undefined,
+      false,
+      'contract'
     );
     printWindow.document.write(contractHTML);
     printWindow.document.close();
@@ -379,7 +382,10 @@ const RegistrationFormSection = () => {
       contractContent,
       brandData.brandName,
       personalData.fullName,
-      personalData.cpf
+      personalData.cpf,
+      undefined,
+      false,
+      'contract'
     );
   };
 

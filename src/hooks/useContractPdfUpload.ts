@@ -193,7 +193,8 @@ export function generateSignedContractHtml(
     txId?: string;
     network?: string;
     ipAddress?: string;
-  }
+  },
+  documentType: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' = 'contract'
 ): string {
   const htmlContent = content
     .split('\n')
@@ -322,11 +323,11 @@ export function generateSignedContractHtml(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=210mm, initial-scale=1.0">
-  <title>Contrato WebMarcas - ${brandName}</title>
+  <title>${documentType === 'procuracao' ? 'Procuração' : documentType.includes('distrato') ? 'Distrato' : 'Contrato'} WebMarcas - ${brandName}</title>
   <style>
     /* PDF/Print-specific settings - Fixed layout, no responsive */
     @page { 
-      size: A4; 
+      size: A4;
       margin: 20mm; 
     }
     
@@ -469,6 +470,24 @@ export function generateSignedContractHtml(
   
   <div class="gradient-bar"></div>
   
+  ${documentType === 'procuracao' ? `
+  <h1 class="main-title">PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI</h1>
+  <p style="text-align: center; color: #4B5563; font-size: 14px; font-style: italic; margin-bottom: 24px;">Instrumento Particular de Procuração para fins de Registro de Marca</p>
+  
+  <div class="highlight-box">
+    <p>Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.</p>
+  </div>
+  ` : documentType === 'distrato_multa' || documentType === 'distrato_sem_multa' ? `
+  <h1 class="main-title">ACORDO DE DISTRATO</h1>
+  
+  <div class="contract-title-box">
+    <p>INSTRUMENTO PARTICULAR DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
+  </div>
+  
+  <div class="highlight-box">
+    <p>As partes abaixo qualificadas resolvem, de comum acordo, distratar o contrato de prestação de serviços firmado anteriormente, nos termos e condições a seguir estabelecidos.</p>
+  </div>
+  ` : `
   <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
   
   <div class="contract-title-box">
@@ -479,6 +498,7 @@ export function generateSignedContractHtml(
     <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
   </div>
+  `}
   
   <div class="content-area">
     ${htmlContent}

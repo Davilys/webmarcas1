@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+export type DocumentType = 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
+
 interface ContractTemplate {
   id: string;
   name: string;
@@ -13,7 +15,26 @@ interface UseContractTemplateResult {
   template: ContractTemplate | null;
   isLoading: boolean;
   error: string | null;
+  documentType: DocumentType;
   refetch: () => Promise<void>;
+}
+
+/**
+ * Detects document type from template name
+ */
+export function getDocumentTypeFromTemplateName(templateName: string): DocumentType {
+  const lowerName = templateName.toLowerCase();
+  
+  if (lowerName.includes('procura')) {
+    return 'procuracao';
+  }
+  if (lowerName.includes('distrato') && lowerName.includes('multa')) {
+    return 'distrato_multa';
+  }
+  if (lowerName.includes('distrato')) {
+    return 'distrato_sem_multa';
+  }
+  return 'contract';
 }
 
 // Full default contract template with all 12 clauses
@@ -117,6 +138,7 @@ export function useContractTemplate(templateName: string = 'Contrato Padrão - R
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [documentType, setDocumentType] = useState<DocumentType>('contract');
 
   const fetchTemplate = async () => {
     setIsLoading(true);
@@ -137,10 +159,12 @@ export function useContractTemplate(templateName: string = 'Contrato Padrão - R
       }
 
       if (data && data.length > 0) {
-        setTemplate({
+        const foundTemplate = {
           ...data[0],
           variables: Array.isArray(data[0].variables) ? data[0].variables as string[] : []
-        });
+        };
+        setTemplate(foundTemplate);
+        setDocumentType(getDocumentTypeFromTemplateName(foundTemplate.name));
       } else {
         // Use default template if none found in database
         setTemplate({
@@ -155,6 +179,7 @@ export function useContractTemplate(templateName: string = 'Contrato Padrão - R
           ],
           is_active: true
         });
+        setDocumentType(getDocumentTypeFromTemplateName(templateName));
       }
     } catch (err) {
       console.error('Error fetching contract template:', err);
@@ -167,6 +192,7 @@ export function useContractTemplate(templateName: string = 'Contrato Padrão - R
         variables: [],
         is_active: true
       });
+      setDocumentType(getDocumentTypeFromTemplateName(templateName));
     } finally {
       setIsLoading(false);
     }
@@ -177,7 +203,7 @@ export function useContractTemplate(templateName: string = 'Contrato Padrão - R
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateName]);
 
-  return { template, isLoading, error, refetch: fetchTemplate };
+  return { template, isLoading, error, documentType, refetch: fetchTemplate };
 }
 
 // Helper function to replace template variables with actual data
