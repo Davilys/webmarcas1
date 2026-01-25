@@ -53,7 +53,8 @@ async function getLogoBase64(): Promise<string> {
 function generateContractHTML(
   content: string,
   logoBase64: string,
-  blockchainSignature?: BlockchainSignature
+  blockchainSignature?: BlockchainSignature,
+  documentType: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' = 'contract'
 ): string {
   // Format content with proper styling - matching ContractRenderer component exactly
   const formatContent = (text: string): string => {
@@ -456,6 +457,16 @@ function generateContractHTML(
   <!-- Orange/Yellow Gradient Bar -->
   <div class="pdf-gradient-bar"></div>
   
+  ${documentType === 'procuracao' ? `
+  <!-- Título da Procuração -->
+  <h1 class="pdf-main-title">PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI</h1>
+  <p style="text-align: center; color: #4B5563; font-size: 14px; font-style: italic; margin-bottom: 24px;">Instrumento Particular de Procuração</p>
+  
+  <!-- Caixa Amarela - Aviso Legal de Procuração -->
+  <div class="pdf-highlight-box">
+    <p>Este documento constitui exclusivamente um instrumento de PROCURAÇÃO, não possuindo natureza contratual, tendo como única finalidade a outorga de poderes para representação do outorgante junto ao Instituto Nacional da Propriedade Industrial – INPI.</p>
+  </div>
+  ` : `
   <!-- Main Title -->
   <h1 class="pdf-main-title">Acordo do Contrato - Anexo I</h1>
   
@@ -469,6 +480,7 @@ function generateContractHTML(
     <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
   </div>
+  `}
   
   <!-- Contract Content -->
   <div class="pdf-content">
@@ -488,12 +500,13 @@ function generateContractHTML(
 export async function downloadUnifiedContractPDF(options: UnifiedContractDownloadOptions): Promise<void> {
   const {
     content,
+    documentType,
     subject,
     blockchainSignature,
   } = options;
 
   const logoBase64 = await getLogoBase64();
-  let printHtml = generateContractHTML(content, logoBase64, blockchainSignature);
+  let printHtml = generateContractHTML(content, logoBase64, blockchainSignature, documentType);
   
   // Add print-specific styles and floating save button
   const printStyles = `
@@ -584,11 +597,12 @@ export async function downloadUnifiedContractPDF(options: UnifiedContractDownloa
 export async function printUnifiedContract(options: UnifiedContractDownloadOptions): Promise<void> {
   const {
     content,
+    documentType,
     blockchainSignature,
   } = options;
 
   const logoBase64 = await getLogoBase64();
-  let printHtml = generateContractHTML(content, logoBase64, blockchainSignature);
+  let printHtml = generateContractHTML(content, logoBase64, blockchainSignature, documentType);
   
   // Add print-specific styles and floating buttons
   const printStyles = `

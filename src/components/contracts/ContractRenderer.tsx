@@ -16,6 +16,7 @@ interface ContractRendererProps {
   className?: string;
   blockchainSignature?: BlockchainSignature;
   showCertificationSection?: boolean;
+  documentType?: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
 }
 
 export function ContractRenderer({ 
@@ -23,7 +24,8 @@ export function ContractRenderer({
   showLetterhead = true, 
   className = '',
   blockchainSignature,
-  showCertificationSection = false
+  showCertificationSection = false,
+  documentType = 'contract'
 }: ContractRendererProps) {
   const renderedContent = useMemo(() => {
     const lines = content.split('\n');
@@ -163,41 +165,72 @@ export function ContractRenderer({
             style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)' }}
           />
           
-          {/* Blue Title */}
-          <h1 
-            className="text-center text-xl font-bold mb-4"
-            style={{ color: '#0284c7' }}
-          >
-            Acordo do Contrato - Anexo I
-          </h1>
-          
-          {/* Dark Blue Box with Contract Title */}
-          <div 
-            className="text-center py-3 px-4 rounded mb-4"
-            style={{ backgroundColor: '#1e3a5f' }}
-          >
-            <p className="text-white font-semibold text-sm leading-tight">
-              CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br />
-              PARA REGISTRO DE MARCA JUNTO AO INPI
-            </p>
-          </div>
-          
-          {/* Yellow Highlight Section */}
-          <div 
-            className="p-4 rounded mb-6 text-sm"
-            style={{ 
-              backgroundColor: '#fef3c7', 
-              border: '1px solid #f59e0b',
-              color: '#92400e'
-            }}
-          >
-            <p className="mb-2">
-              Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
-            </p>
-            <p>
-              Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
-            </p>
-          </div>
+          {documentType === 'procuracao' ? (
+            <>
+              {/* Título da Procuração */}
+              <h1 
+                className="text-center text-xl font-bold mb-2"
+                style={{ color: '#0284c7' }}
+              >
+                PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI
+              </h1>
+              <p className="text-center text-sm text-gray-600 italic mb-4">
+                Instrumento Particular de Procuração
+              </p>
+              
+              {/* Caixa Amarela - Aviso Legal de Procuração */}
+              <div 
+                className="p-4 rounded mb-6 text-sm"
+                style={{ 
+                  backgroundColor: '#fef3c7', 
+                  border: '1px solid #f59e0b',
+                  color: '#92400e'
+                }}
+              >
+                <p>
+                  Este documento constitui exclusivamente um instrumento de PROCURAÇÃO, não possuindo natureza contratual, tendo como única finalidade a outorga de poderes para representação do outorgante junto ao Instituto Nacional da Propriedade Industrial – INPI.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Blue Title */}
+              <h1 
+                className="text-center text-xl font-bold mb-4"
+                style={{ color: '#0284c7' }}
+              >
+                Acordo do Contrato - Anexo I
+              </h1>
+              
+              {/* Dark Blue Box with Contract Title */}
+              <div 
+                className="text-center py-3 px-4 rounded mb-4"
+                style={{ backgroundColor: '#1e3a5f' }}
+              >
+                <p className="text-white font-semibold text-sm leading-tight">
+                  CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br />
+                  PARA REGISTRO DE MARCA JUNTO AO INPI
+                </p>
+              </div>
+              
+              {/* Yellow Highlight Section */}
+              <div 
+                className="p-4 rounded mb-6 text-sm"
+                style={{ 
+                  backgroundColor: '#fef3c7', 
+                  border: '1px solid #f59e0b',
+                  color: '#92400e'
+                }}
+              >
+                <p className="mb-2">
+                  Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
+                </p>
+                <p>
+                  Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.
+                </p>
+              </div>
+            </>
+          )}
         </>
       )}
       
