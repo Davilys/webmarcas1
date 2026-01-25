@@ -47,7 +47,7 @@ export function DocumentRenderer({
   const documentTitle = useMemo(() => {
     switch (documentType) {
       case 'procuracao':
-        return 'PROCURAÇÃO';
+        return 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI';
       case 'distrato_multa':
         return 'Acordo de Distrato de Parceria - Anexo I';
       case 'distrato_sem_multa':
@@ -57,6 +57,13 @@ export function DocumentRenderer({
       default:
         return 'DOCUMENTO';
     }
+  }, [documentType]);
+
+  const documentSubtitle = useMemo(() => {
+    if (documentType === 'procuracao') {
+      return 'Instrumento Particular de Procuração para fins de Registro de Marca';
+    }
+    return null;
   }, [documentType]);
 
   // Detectar se o conteúdo é HTML completo (já possui estrutura própria)
@@ -330,9 +337,14 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
 
       {/* Document Title */}
       <div className="px-8 py-6">
-        <h1 className="text-2xl font-bold text-blue-700 text-center mb-6">
+        <h1 className="text-2xl font-bold text-blue-700 text-center mb-2">
           {documentTitle}
         </h1>
+        {documentSubtitle && (
+          <p className="text-base text-gray-600 text-center mb-6 italic">
+            {documentSubtitle}
+          </p>
+        )}
 
         {/* Legal Notice Box */}
         {legalNotice && (
@@ -547,8 +559,10 @@ export function generateDocumentPrintHTML(
   logoBase64?: string
 ): string {
   let documentTitle = 'DOCUMENTO';
+  let documentSubtitle = '';
   if (documentType === 'procuracao') {
-    documentTitle = 'PROCURAÇÃO';
+    documentTitle = 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI';
+    documentSubtitle = 'Instrumento Particular de Procuração para fins de Registro de Marca';
   } else if (documentType === 'contract') {
     documentTitle = 'CONTRATO';
   } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
@@ -748,6 +762,14 @@ export function generateDocumentPrintHTML(
       color: #1E40AF !important;
       font-size: 22px;
       font-weight: bold;
+      margin-bottom: 8px;
+    }
+    
+    .document-subtitle {
+      text-align: center;
+      color: #4B5563 !important;
+      font-size: 14px;
+      font-style: italic;
       margin-bottom: 24px;
     }
     
@@ -990,6 +1012,7 @@ export function generateDocumentPrintHTML(
     
     <!-- Title -->
     <h1 class="document-title">${documentTitle}</h1>
+    ${documentSubtitle ? `<p class="document-subtitle">${documentSubtitle}</p>` : ''}
 
     ${legalNotice}
 

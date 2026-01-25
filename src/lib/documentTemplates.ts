@@ -25,11 +25,13 @@ const formatDateExtended = (date: Date): string => {
 export function generateProcuracaoContent(vars: DocumentVariables): string {
   const dataHoje = formatDateExtended(new Date());
   
-  return `${vars.nome_empresa}, empresa brasileira, inscrita e registrada conforme as leis vigentes do Brasil, com sede na ${vars.endereco}, na cidade de ${vars.cidade}, estado de ${vars.estado}, CEP ${vars.cep}.
+  return `OUTORGANTE:
 
-Devidamente inscrita no CNPJ sob Nº ${vars.cnpj}, neste ato representada por ${vars.nome_representante}, portador(a) do CPF Nº ${vars.cpf_representante}.
+${vars.nome_empresa}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${vars.cnpj}, com sede na ${vars.endereco}, ${vars.cidade} - ${vars.estado}, CEP ${vars.cep}, neste ato representada por ${vars.nome_representante}, portador(a) do CPF nº ${vars.cpf_representante}.
 
-Pelo presente instrumento particular de procuração, nomeia e constitui seu bastante Procurador o senhor Davilys Danques de Oliveira Cunha, brasileiro, casado, regularmente inscrito no RG: sob o Nº 50.688.779-0 e CPF sob o Nº 393.239.118-79, com sede na Capital do Estado de São Paulo, AV. Brigadeiro Luís Antônio, Nº 2696 - Centro São Paulo, SP - com poderes para representá-lo exclusivamente junto ao INPI (Instituto Nacional da Propriedade Industrial) em todas as formalidades legais e regulamentares.
+Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante acima identificado(a) nomeia e constitui como seu bastante PROCURADOR o Sr. Davilys Danques de Oliveira Cunha, brasileiro, casado, portador do RG nº 50.688.779-0 e CPF nº 393.239.118-79, com endereço profissional na Av. Brigadeiro Luís Antônio, nº 2696, Centro, São Paulo - SP, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.
+
+A presente procuração é válida pelo prazo indeterminado, podendo ser revogada a qualquer tempo mediante comunicação expressa ao procurador.
 
 São Paulo, ${dataHoje}.`;
 }
