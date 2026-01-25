@@ -438,7 +438,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         template_id: selectedTemplate?.id || null,
         description: isNewClient ? null : (formData.description || null),
         contract_html: contractHtml,
-        document_type: 'contract',
+        document_type: selectedTemplate ? getDocumentTypeFromTemplateName(selectedTemplate.name) : 'contract',
         signatory_name: isNewClient ? personalData.fullName : (formData.signatory_name || null),
         signatory_cpf: isNewClient ? personalData.cpf : (formData.signatory_cpf || null),
         signatory_cnpj: isNewClient && brandData.hasCNPJ ? brandData.cnpj : (formData.signatory_cnpj || null),
