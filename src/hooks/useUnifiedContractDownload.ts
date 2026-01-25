@@ -460,11 +460,11 @@ function generateContractHTML(
   ${documentType === 'procuracao' ? `
   <!-- Título da Procuração -->
   <h1 class="pdf-main-title">PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI</h1>
-  <p style="text-align: center; color: #4B5563; font-size: 14px; font-style: italic; margin-bottom: 24px;">Instrumento Particular de Procuração</p>
+  <p style="text-align: center; color: #4B5563; font-size: 14px; font-style: italic; margin-bottom: 24px;">Instrumento Particular de Procuração para fins de Registro de Marca</p>
   
   <!-- Caixa Amarela - Aviso Legal de Procuração -->
   <div class="pdf-highlight-box">
-    <p>Este documento constitui exclusivamente um instrumento de PROCURAÇÃO, não possuindo natureza contratual, tendo como única finalidade a outorga de poderes para representação do outorgante junto ao Instituto Nacional da Propriedade Industrial – INPI.</p>
+    <p>Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.</p>
   </div>
   ` : `
   <!-- Main Title -->

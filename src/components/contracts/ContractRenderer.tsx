@@ -175,7 +175,7 @@ export function ContractRenderer({
                 PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI
               </h1>
               <p className="text-center text-sm text-gray-600 italic mb-4">
-                Instrumento Particular de Procuração
+                Instrumento Particular de Procuração para fins de Registro de Marca
               </p>
               
               {/* Caixa Amarela - Aviso Legal de Procuração */}
@@ -188,7 +188,7 @@ export function ContractRenderer({
                 }}
               >
                 <p>
-                  Este documento constitui exclusivamente um instrumento de PROCURAÇÃO, não possuindo natureza contratual, tendo como única finalidade a outorga de poderes para representação do outorgante junto ao Instituto Nacional da Propriedade Industrial – INPI.
+                  Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.
                 </p>
               </div>
             </>
