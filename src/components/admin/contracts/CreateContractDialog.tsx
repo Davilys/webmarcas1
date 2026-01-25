@@ -283,11 +283,50 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       return generateNewClientContractHtml();
     }
 
-    // Legacy flow for existing clients
+    // For existing clients with a selected template - use the template content with profile data
+    if (selectedTemplate && selectedProfile) {
+      // Check if it's a standard contract template (Registro de Marca INPI)
+      const isStandardContract = selectedTemplate.name.toLowerCase().includes('registro de marca') ||
+                                  selectedTemplate.name.toLowerCase().includes('padrão');
+      
+      if (isStandardContract) {
+        // Use replaceContractVariables with profile data
+        return replaceContractVariables(selectedTemplate.content, {
+          personalData: {
+            fullName: selectedProfile.full_name || formData.signatory_name || '',
+            email: selectedProfile.email || '',
+            phone: selectedProfile.phone || '',
+            cpf: selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 
+              ? selectedProfile.cpf_cnpj : formData.signatory_cpf || '',
+            cep: selectedProfile.zip_code || formData.company_cep || '',
+            address: selectedProfile.address || formData.company_address || '',
+            neighborhood: '', // Will be parsed from address if needed
+            city: selectedProfile.city || formData.company_city || '',
+            state: selectedProfile.state || formData.company_state || '',
+          },
+          brandData: {
+            brandName: formData.brand_name || formData.subject || '',
+            businessArea: '', // Use default or get from form
+            hasCNPJ: (selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14) || !!formData.signatory_cnpj,
+            cnpj: selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 
+              ? selectedProfile.cpf_cnpj : formData.signatory_cnpj || '',
+            companyName: selectedProfile.company_name || '',
+          },
+          paymentMethod: 'avista', // Default for existing clients
+        });
+      }
+    }
+
+    // Legacy flow for contracts - use description if provided, or empty template
     if (formData.document_type === 'contract') {
+      // If we have a template selected, use its content as fallback
+      if (selectedTemplate?.content && !formData.description) {
+        return selectedTemplate.content;
+      }
       return formData.description || '';
     }
 
+    // For other document types (procuracao, distrato), use generateDocumentContent
     const vars = {
       nome_empresa: selectedProfile?.company_name || formData.signatory_name || '',
       cnpj: formData.signatory_cnpj || '',
