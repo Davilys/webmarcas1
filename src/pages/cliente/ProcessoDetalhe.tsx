@@ -18,11 +18,14 @@ import {
   AlertCircle,
   Newspaper,
   FolderOpen,
-  Activity
+  Activity,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { User } from '@supabase/supabase-js';
+import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
+import { toast } from 'sonner';
 
 interface BrandProcess {
   id: string;
@@ -61,6 +64,7 @@ interface Document {
   mime_type: string | null;
   file_size: number | null;
   created_at: string | null;
+  contract_id: string | null;
 }
 
 interface RpiEntry {
@@ -108,6 +112,7 @@ export default function ProcessoDetalhe() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [rpiEntries, setRpiEntries] = useState<RpiEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -195,26 +200,128 @@ export default function ProcessoDetalhe() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleDownload = async (fileUrl: string, fileName: string) => {
+  const handleDownload = async (doc: Document) => {
+    // Se for um documento de contrato, abrir com o padrão de visualização/impressão
+    if (doc.contract_id) {
+      setDownloadingId(doc.id);
+      try {
+        const { data: contractData, error } = await supabase
+          .from('contracts')
+          .select('*')
+          .eq('id', doc.contract_id)
+          .maybeSingle();
+
+        if (error || !contractData) {
+          toast.error('Erro ao carregar contrato');
+          setDownloadingId(null);
+          return;
+        }
+
+        if (!contractData.contract_html) {
+          // Fallback para download direto se não tiver HTML
+          window.open(doc.file_url, '_blank');
+          setDownloadingId(null);
+          return;
+        }
+
+        const logoBase64 = await getLogoBase64ForPDF();
+
+        const printHtml = generateDocumentPrintHTML(
+          (contractData.document_type as any) || 'contract',
+          contractData.contract_html,
+          contractData.client_signature_image || null,
+          contractData.blockchain_hash ? {
+            hash: contractData.blockchain_hash,
+            timestamp: contractData.blockchain_timestamp || '',
+            txId: contractData.blockchain_tx_id || '',
+            network: contractData.blockchain_network || '',
+            ipAddress: contractData.signature_ip || '',
+          } : undefined,
+          contractData.signatory_name || undefined,
+          contractData.signatory_cpf || undefined,
+          contractData.signatory_cnpj || undefined,
+          undefined,
+          window.location.origin,
+          logoBase64
+        );
+
+        // Injetar botões de ação (mesmo padrão do admin)
+        const enhancedHtml = printHtml.replace('</head>', `
+          <style>
+            @media print { .no-print { display: none !important; } }
+            .action-buttons {
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              z-index: 9999;
+              display: flex;
+              gap: 8px;
+            }
+            .action-buttons button {
+              padding: 10px 20px;
+              border-radius: 8px;
+              font-weight: 500;
+              cursor: pointer;
+              border: none;
+              font-size: 14px;
+            }
+            .btn-primary {
+              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+              color: white;
+            }
+            .btn-primary:hover {
+              background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+            }
+            .btn-secondary {
+              background: #f1f5f9;
+              color: #475569;
+              border: 1px solid #e2e8f0;
+            }
+            .btn-secondary:hover {
+              background: #e2e8f0;
+            }
+          </style>
+        </head>`).replace('<body', `<body><div class="action-buttons no-print">
+            <button class="btn-primary" onclick="window.print()">Salvar como PDF</button>
+            <button class="btn-secondary" onclick="window.close()">Fechar</button>
+          </div><body`);
+
+        const newWindow = window.open('', '_blank');
+        if (newWindow) {
+          newWindow.document.write(enhancedHtml);
+          newWindow.document.close();
+          newWindow.onload = () => {
+            setTimeout(() => newWindow.print(), 500);
+          };
+        }
+      } catch (error) {
+        console.error('Error downloading contract PDF:', error);
+        toast.error('Erro ao gerar PDF');
+      } finally {
+        setDownloadingId(null);
+      }
+      return;
+    }
+
+    // Download direto para outros tipos de documento
     try {
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(fileUrl.replace(/^.*\/documents\//, ''));
+        .download(doc.file_url.replace(/^.*\/documents\//, ''));
 
       if (error) throw error;
 
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = doc.name;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading file:', error);
-      // Fallback: open in new tab
-      window.open(fileUrl, '_blank');
+      window.open(doc.file_url, '_blank');
     }
   };
 
@@ -513,9 +620,14 @@ export default function ProcessoDetalhe() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => handleDownload(doc.file_url, doc.name)}
+                          onClick={() => handleDownload(doc)}
+                          disabled={downloadingId === doc.id}
                         >
-                          <Download className="h-4 w-4 mr-2" />
+                          {downloadingId === doc.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4 mr-2" />
+                          )}
                           Download
                         </Button>
                       </div>
