@@ -299,14 +299,48 @@ export default function AssinarDocumento() {
       signatureBase64
     );
 
+    // Inject floating action buttons (standard pattern)
+    const enhancedHtml = html
+      .replace('</head>', `
+        <style>
+          @media print { .no-print { display: none !important; } }
+          .action-buttons {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+          }
+          .action-buttons button {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          }
+          .btn-primary {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: white;
+          }
+          .btn-secondary {
+            background: #f1f5f9;
+            color: #334155;
+          }
+        </style>
+      </head>`)
+      .replace('<body', `<body><div class="action-buttons no-print">
+        <button class="btn-primary" onclick="window.print()">Salvar como PDF</button>
+        <button class="btn-secondary" onclick="window.close()">Fechar</button>
+      </div><body`.slice(0, -5));
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(html);
+      printWindow.document.write(enhancedHtml);
       printWindow.document.close();
-      
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
+      printWindow.onload = () => setTimeout(() => printWindow.print(), 500);
     }
   };
 
@@ -484,9 +518,9 @@ export default function AssinarDocumento() {
         <footer className="bg-white border-t mt-12 py-6">
           <div className="max-w-5xl mx-auto px-4 text-center text-sm text-gray-500">
             <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
-            <p className="mt-2">
-              Dúvidas? Entre em contato: (11) 4200-1656 | contato@webmarcas.com.br
-            </p>
+          <p className="mt-2">
+            Dúvidas? Entre em contato: (11) 91112-0225 | juridico@webmarcas.net
+          </p>
           </div>
         </footer>
       </div>
@@ -696,7 +730,7 @@ export default function AssinarDocumento() {
           <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
           <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP</p>
           <p className="mt-2">
-            Dúvidas? Entre em contato: (11) 4200-1656 | contato@webmarcas.com.br
+            Dúvidas? Entre em contato: (11) 91112-0225 | juridico@webmarcas.net
           </p>
         </div>
       </footer>

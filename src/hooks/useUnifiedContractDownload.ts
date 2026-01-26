@@ -125,7 +125,7 @@ function generateContractHTML(
       <!-- Footer before certification -->
       <div class="pdf-footer">
         <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
-        <p>www.webmarcas.net | contato@webmarcas.net</p>
+        <p>www.webmarcas.net | juridico@webmarcas.net</p>
         <p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>
       </div>
       

@@ -312,7 +312,7 @@ export default function VerificarContrato() {
                     Verifique se o hash foi digitado corretamente.
                   </p>
                   <p className="text-sm text-red-600 mt-4">
-                    Se você acredita que isso é um erro, entre em contato: contato@webmarcas.net
+                    Se você acredita que isso é um erro, entre em contato: juridico@webmarcas.net
                   </p>
                 </div>
               )}
@@ -326,7 +326,7 @@ export default function VerificarContrato() {
             Este sistema de verificação utiliza tecnologia blockchain para garantir a autenticidade dos contratos.
           </p>
           <p>
-            Dúvidas? Entre em contato: <a href="mailto:contato@webmarcas.net" className="text-sky-600 hover:underline">contato@webmarcas.net</a>
+            Dúvidas? Entre em contato: <a href="mailto:juridico@webmarcas.net" className="text-sky-600 hover:underline">juridico@webmarcas.net</a>
           </p>
         </div>
       </main>

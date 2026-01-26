@@ -244,7 +244,7 @@ export function ContractRenderer({
           {/* Footer text before certification */}
           <div className="text-center py-4 text-xs border-t" style={{ color: '#6b7280', borderColor: '#e5e7eb' }}>
             <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
-            <p>www.webmarcas.net | contato@webmarcas.net</p>
+            <p>www.webmarcas.net | juridico@webmarcas.net</p>
             <p>Data e hora da geração: {new Date().toLocaleString('pt-BR')}</p>
           </div>
           

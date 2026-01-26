@@ -118,7 +118,7 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
     }
   };
 
-  // Handle PDF print (same as admin)
+  // Handle PDF print (same as admin - with floating action buttons)
   const handlePrintPDF = async () => {
     if (!contractData?.contract_html) return;
     
@@ -144,9 +144,46 @@ export function DocumentPreview({ open, onOpenChange, document }: DocumentPrevie
         logoBase64
       );
       
+      // Inject floating action buttons (standard pattern)
+      const enhancedHtml = printHtml
+        .replace('</head>', `
+          <style>
+            @media print { .no-print { display: none !important; } }
+            .action-buttons {
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              z-index: 9999;
+              display: flex;
+              gap: 8px;
+            }
+            .action-buttons button {
+              padding: 12px 20px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              border: none;
+              font-size: 14px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            .btn-primary {
+              background: linear-gradient(135deg, #f97316, #ea580c);
+              color: white;
+            }
+            .btn-secondary {
+              background: #f1f5f9;
+              color: #334155;
+            }
+          </style>
+        </head>`)
+        .replace('<body', `<body><div class="action-buttons no-print">
+          <button class="btn-primary" onclick="window.print()">Salvar como PDF</button>
+          <button class="btn-secondary" onclick="window.close()">Fechar</button>
+        </div><body`.slice(0, -5));
+      
       const newWindow = window.open('', '_blank');
       if (newWindow) {
-        newWindow.document.write(printHtml);
+        newWindow.document.write(enhancedHtml);
         newWindow.document.close();
         newWindow.onload = () => setTimeout(() => newWindow.print(), 500);
       }

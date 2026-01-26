@@ -9,13 +9,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, Plus, RefreshCw, FileSignature, MoreHorizontal, 
-  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle 
+  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ContractDetailSheet } from '@/components/admin/contracts/ContractDetailSheet';
 import { CreateContractDialog } from '@/components/admin/contracts/CreateContractDialog';
+import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 
 interface Contract {
   id: string;
@@ -44,6 +45,99 @@ export default function AdminContratos() {
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadPDF = async (contractId: string) => {
+    setDownloadingId(contractId);
+    try {
+      const { data: contract, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('id', contractId)
+        .single();
+
+      if (error || !contract) {
+        toast.error('Erro ao buscar contrato');
+        return;
+      }
+
+      if (!contract.contract_html) {
+        toast.error('Contrato não possui conteúdo HTML');
+        return;
+      }
+
+      const logoBase64 = await getLogoBase64ForPDF();
+      const documentType = (contract.document_type || 'contract') as 'contract' | 'distrato_multa' | 'distrato_sem_multa' | 'procuracao';
+      
+      const printHtml = generateDocumentPrintHTML(
+        documentType,
+        contract.contract_html,
+        contract.client_signature_image || undefined,
+        contract.blockchain_hash ? {
+          hash: contract.blockchain_hash,
+          timestamp: contract.blockchain_timestamp || '',
+          txId: contract.blockchain_tx_id || '',
+          network: contract.blockchain_network || '',
+          ipAddress: contract.signature_ip || '',
+        } : undefined,
+        contract.signatory_name || undefined,
+        contract.signatory_cpf || undefined,
+        contract.signatory_cnpj || undefined,
+        undefined,
+        window.location.origin,
+        logoBase64
+      );
+
+      // Inject floating action buttons
+      const enhancedHtml = printHtml
+        .replace('</head>', `
+          <style>
+            @media print { .no-print { display: none !important; } }
+            .action-buttons {
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              z-index: 9999;
+              display: flex;
+              gap: 8px;
+            }
+            .action-buttons button {
+              padding: 12px 20px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              border: none;
+              font-size: 14px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            .btn-primary {
+              background: linear-gradient(135deg, #f97316, #ea580c);
+              color: white;
+            }
+            .btn-secondary {
+              background: #f1f5f9;
+              color: #334155;
+            }
+          </style>
+        </head>`)
+        .replace('<body', `<body><div class="action-buttons no-print">
+          <button class="btn-primary" onclick="window.print()">Salvar como PDF</button>
+          <button class="btn-secondary" onclick="window.close()">Fechar</button>
+        </div><body`.slice(0, -5));
+
+      const newWindow = window.open('', '_blank');
+      if (newWindow) {
+        newWindow.document.write(enhancedHtml);
+        newWindow.document.close();
+        newWindow.onload = () => setTimeout(() => newWindow.print(), 500);
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   useEffect(() => {
     fetchContracts();
@@ -316,8 +410,15 @@ export default function AdminContratos() {
                             <Send className="h-4 w-4 mr-2" />
                             Enviar para Assinatura
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Download className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem 
+                            onClick={() => handleDownloadPDF(contract.id)}
+                            disabled={downloadingId === contract.id}
+                          >
+                            {downloadingId === contract.id ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4 mr-2" />
+                            )}
                             Download PDF
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
