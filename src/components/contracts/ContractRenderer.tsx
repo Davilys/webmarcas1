@@ -194,18 +194,18 @@ export function ContractRenderer({
             </>
           ) : (
             <>
-              {/* Blue Title */}
+              {/* Blue Title - CONTRATO underlined */}
               <h1 
                 className="text-center text-xl font-bold mb-4"
-                style={{ color: '#0284c7' }}
+                style={{ color: '#0284c7', textDecoration: 'underline' }}
               >
-                Acordo do Contrato - Anexo I
+                CONTRATO
               </h1>
               
-              {/* Dark Blue Box with Contract Title */}
+              {/* Light Blue Box with Contract Title */}
               <div 
                 className="text-center py-3 px-4 rounded mb-4"
-                style={{ backgroundColor: '#1e3a5f' }}
+                style={{ backgroundColor: '#0EA5E9' }}
               >
                 <p className="text-white font-semibold text-sm leading-tight">
                   CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br />
@@ -213,16 +213,16 @@ export function ContractRenderer({
                 </p>
               </div>
               
-              {/* Yellow Highlight Section */}
+              {/* Yellow Highlight Section - LEFT BORDER ONLY */}
               <div 
-                className="p-4 rounded mb-6 text-sm"
+                className="p-4 mb-6 text-sm"
                 style={{ 
-                  backgroundColor: '#fef3c7', 
-                  border: '1px solid #f59e0b',
-                  color: '#92400e'
+                  backgroundColor: '#FEF9E7', 
+                  borderLeft: '4px solid #F59E0B',
+                  color: '#374151'
                 }}
               >
-                <p className="mb-2">
+                <p className="mb-3">
                   Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
                 </p>
                 <p>
@@ -502,7 +502,7 @@ export function generateContractPrintHTML(
       print-color-adjust: exact !important;
     }
     
-    /* Blue Main Title */
+    /* Blue Main Title - CONTRATO underlined */
     .main-title {
       text-align: center;
       color: #0284c7 !important;
@@ -510,11 +510,12 @@ export function generateContractPrintHTML(
       font-weight: bold;
       margin-bottom: 16px;
       letter-spacing: -0.5px;
+      text-decoration: underline;
     }
     
-    /* Dark Blue Box with Contract Title */
+    /* Light Blue Box with Contract Title */
     .contract-title-box {
-      background-color: #1e3a5f !important;
+      background-color: #0EA5E9 !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;
@@ -532,23 +533,22 @@ export function generateContractPrintHTML(
       color: white !important;
     }
     
-    /* Yellow Highlight Box */
+    /* Yellow Highlight Box - LEFT BORDER ONLY */
     .highlight-box {
-      background-color: #fef3c7 !important;
+      background-color: #FEF9E7 !important;
       padding: 16px 20px;
-      border-radius: 6px;
       margin-bottom: 24px;
-      border: 2px solid #f59e0b !important;
+      border-left: 4px solid #F59E0B !important;
       font-size: 12px;
       line-height: 1.6;
-      color: #92400e !important;
+      color: #374151 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     
     .highlight-box p {
       margin-bottom: 10px;
-      color: #92400e !important;
+      color: #374151 !important;
     }
     
     .highlight-box p:last-child {
@@ -628,14 +628,14 @@ export function generateContractPrintHTML(
       }
       
       .contract-title-box {
-        background-color: #1e3a5f !important;
+        background-color: #0EA5E9 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
       
       .highlight-box {
-        background-color: #fef3c7 !important;
-        border-color: #f59e0b !important;
+        background-color: #FEF9E7 !important;
+        border-left: 4px solid #F59E0B !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
@@ -693,15 +693,15 @@ export function generateContractPrintHTML(
     <p>As partes abaixo qualificadas resolvem, de comum acordo, distratar o contrato de prestação de serviços firmado anteriormente, nos termos e condições a seguir estabelecidos.</p>
   </div>
   ` : `
-  <!-- Blue Title -->
-  <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
+  <!-- Blue Title - CONTRATO underlined -->
+  <h1 class="main-title">CONTRATO</h1>
   
-  <!-- Dark Blue Box with Contract Title -->
+  <!-- Light Blue Box with Contract Title -->
   <div class="contract-title-box">
     <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
   </div>
   
-  <!-- Yellow Highlight Section -->
+  <!-- Yellow Highlight Section - LEFT BORDER ONLY -->
   <div class="highlight-box">
     <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
