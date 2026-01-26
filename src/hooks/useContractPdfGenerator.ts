@@ -70,7 +70,7 @@ export async function generateContractPDF(
   yPosition += 10;
 
   // Light Blue Box with Contract Title
-  pdf.setFillColor(14, 165, 233); // Light blue #0EA5E9
+  pdf.setFillColor(30, 58, 95); // Dark blue #1e3a5f
   pdf.rect(margin, yPosition, contentWidth, 16, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(10);

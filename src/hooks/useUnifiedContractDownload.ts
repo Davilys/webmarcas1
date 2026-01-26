@@ -276,9 +276,9 @@ function generateContractHTML(
       text-decoration: underline;
     }
     
-    /* Light Blue contract title box */
+    /* Dark Blue contract title box */
     .pdf-contract-title-box {
-      background-color: #0EA5E9 !important;
+      background-color: #1e3a5f !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;

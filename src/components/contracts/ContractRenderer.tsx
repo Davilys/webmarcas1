@@ -202,10 +202,10 @@ export function ContractRenderer({
                 CONTRATO
               </h1>
               
-              {/* Light Blue Box with Contract Title */}
+              {/* Dark Blue Box with Contract Title */}
               <div 
                 className="text-center py-3 px-4 rounded mb-4"
-                style={{ backgroundColor: '#0EA5E9' }}
+                style={{ backgroundColor: '#1e3a5f' }}
               >
                 <p className="text-white font-semibold text-sm leading-tight">
                   CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br />
