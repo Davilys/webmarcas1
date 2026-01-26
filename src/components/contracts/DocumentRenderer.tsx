@@ -597,15 +597,18 @@ export function generateDocumentPrintHTML(
     // Se for HTML, remover elementos de header que já existem
     if (html.includes('<') && html.includes('>')) {
       cleaned = cleaned
+        // Remove QUALQUER div que contenha texto de subtítulo de contrato
+        .replace(/<div[^>]*style="[^"]*background[^"]*"[^>]*>[^<]*(?:CONTRATO DE PRESTAÇÃO|Acordo do Contrato|Prestação de Serviços)[^<]*<\/div>/gi, '')
         // Remove elementos de header
         .replace(/<div[^>]*class="[^"]*(?:header|pdf-header)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Remove gradient bars
         .replace(/<div[^>]*class="[^"]*(?:gradient-bar|pdf-gradient-bar)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         .replace(/<div[^>]*style="[^"]*(?:linear-gradient|#f97316|#fbbf24)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove títulos duplicados
+        // Remove títulos duplicados - mais agressivo
         .replace(/<h1[^>]*class="[^"]*(?:document-title|main-title|pdf-main-title)[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
         .replace(/<h1[^>]*>\s*(?:CONTRATO|Acordo do Contrato[^<]*)\s*<\/h1>/gi, '')
         .replace(/<h2[^>]*>\s*(?:CONTRATO|Acordo do Contrato[^<]*)\s*<\/h2>/gi, '')
+        .replace(/<h1[^>]*style="[^"]*text-decoration[^"]*"[^>]*>[^<]*<\/h1>/gi, '')
         // Remove imagens de logo
         .replace(/<img[^>]*(?:header-logo|webmarcas|alt="WebMarcas")[^>]*\/?>/gi, '')
         // Remove spans/links com WebMarcas ou URL
@@ -615,13 +618,17 @@ export function generateDocumentPrintHTML(
         .replace(/<div[^>]*class="[^"]*header-url[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Remove divs de container que envolvem o header
         .replace(/<div[^>]*class="[^"]*document-container[^"]*"[^>]*>/gi, '')
-        // Remove highlight boxes azuis (tanto azul claro quanto azul escuro)
+        // Remove highlight boxes azuis (tanto azul claro quanto azul escuro) - regex mais amplo
         .replace(/<div[^>]*class="[^"]*highlight-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<div[^>]*style="[^"]*(?:background[^"]*#0EA5E9|background[^"]*#1e3a5f|background[^"]*rgb\(14,\s*165,\s*233\)|background[^"]*rgb\(30,\s*58,\s*95\))[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*style="[^"]*background[^"]*(?:#0EA5E9|#1e3a5f|#0ea5e9|rgb\s*\(\s*14|rgb\s*\(\s*30)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Remove contract-title-box
         .replace(/<div[^>]*class="[^"]*(?:contract-title-box|pdf-contract-title-box)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Remove legal-notice boxes que já existem
         .replace(/<div[^>]*class="[^"]*legal-notice[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove avisos legais amarelos já existentes
+        .replace(/<div[^>]*style="[^"]*(?:background[^"]*#FEF3C7|background[^"]*#fef3c7|border-left[^"]*#F59E0B)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove qualquer div com background azul escuro
+        .replace(/<div[^>]*style="[^"]*background[^"]*:\s*#1e3a5f[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Limpar divs vazios
         .replace(/<div[^>]*>\s*<\/div>/gi, '')
         .replace(/<div[^>]*>\s*<\/div>/gi, '');
