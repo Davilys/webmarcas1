@@ -285,7 +285,7 @@ export function DocumentRenderer({
         <div className="bg-gray-100 px-8 py-4 border-t text-center text-xs text-gray-500">
           <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
           <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
-          <p>Tel: (11) 4200-1656 | contato@webmarcas.net</p>
+        <p>Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
         </div>
       </div>
     );
@@ -334,7 +334,7 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
           />
           <div className="text-right text-sm text-gray-600">
             <p>www.webmarcas.net</p>
-            <p>contato@webmarcas.net</p>
+            <p>juridico@webmarcas.net</p>
           </div>
         </div>
         {/* Gradient Bar */}
@@ -508,7 +508,7 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
       <div className="bg-gray-100 px-8 py-4 border-t text-center text-xs text-gray-500">
         <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
         <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
-        <p>Tel: (11) 4200-1656 | contato@webmarcas.net</p>
+        <p>Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
       </div>
     </div>
   );

@@ -210,7 +210,7 @@ export async function generateContractPDF(
   pdf.setFontSize(8);
   pdf.text('Contrato gerado e assinado eletronicamente pelo sistema WebMarcas', pageWidth / 2, yPosition, { align: 'center' });
   yPosition += 4;
-  pdf.text('www.webmarcas.net | contato@webmarcas.net', pageWidth / 2, yPosition, { align: 'center' });
+  pdf.text('www.webmarcas.net | juridico@webmarcas.net', pageWidth / 2, yPosition, { align: 'center' });
   yPosition += 4;
   pdf.text(`Data e hora da geração: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, yPosition, { align: 'center' });
 
