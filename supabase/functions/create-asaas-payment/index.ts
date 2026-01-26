@@ -253,9 +253,9 @@ function generateContractHtml(content: string, documentType: 'contract' | 'procu
       text-decoration: underline;
     }
     
-    /* Light Blue Box with Contract Title */
+    /* Dark Blue Box with Contract Title */
     .contract-title-box {
-      background-color: #0EA5E9 !important;
+      background-color: #1e3a5f !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;
