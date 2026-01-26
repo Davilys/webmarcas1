@@ -571,16 +571,24 @@ export function generateDocumentPrintHTML(
     documentSubtitle = 'Instrumento Particular de Procuração para fins de Registro de Marca';
   } else if (documentType === 'contract') {
     documentTitle = 'CONTRATO';
+    documentSubtitle = 'CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI';
   } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
     documentTitle = 'Acordo de Distrato de Parceria - Anexo I';
   }
 
-  const legalNotice = (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa')
-    ? `<div class="legal-notice">
+  // Legal notice for contracts and distratos
+  let legalNotice = '';
+  if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
+    legalNotice = `<div class="legal-notice">
         <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
         <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
-      </div>`
-    : '';
+      </div>`;
+  } else if (documentType === 'contract') {
+    legalNotice = `<div class="legal-notice" style="background: #FFF7ED !important; border-color: #FB923C !important;">
+        <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+        <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
+      </div>`;
+  }
 
   // Limpar o conteúdo de headers duplicados antes de formatar
   const cleanContent = (html: string): string => {
@@ -1017,8 +1025,8 @@ export function generateDocumentPrintHTML(
     <div class="gradient-bar"></div>
     
     <!-- Title -->
-    <h1 class="document-title">${documentTitle}</h1>
-    ${documentSubtitle ? `<p class="document-subtitle">${documentSubtitle}</p>` : ''}
+    <h1 class="document-title" style="text-decoration: underline;">${documentTitle}</h1>
+    ${documentSubtitle ? `<div class="highlight-box" style="background: #0EA5E9 !important; color: white !important; padding: 16px; border-radius: 8px; margin: 16px 0 24px 0; text-align: center; font-weight: 600; font-size: 13px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${documentSubtitle}</div>` : ''}
 
     ${legalNotice}
 
@@ -1074,7 +1082,7 @@ export function generateDocumentPrintHTML(
     <div class="footer">
       <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
       <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
-      <p>Tel: (11) 4200-1656 | contato@webmarcas.net</p>
+      <p>Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
     </div>
   </div>
 </body>
