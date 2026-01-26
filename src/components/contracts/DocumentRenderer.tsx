@@ -615,6 +615,13 @@ export function generateDocumentPrintHTML(
         .replace(/<div[^>]*class="[^"]*header-url[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Remove divs de container que envolvem o header
         .replace(/<div[^>]*class="[^"]*document-container[^"]*"[^>]*>/gi, '')
+        // Remove highlight boxes azuis (tanto azul claro quanto azul escuro)
+        .replace(/<div[^>]*class="[^"]*highlight-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*style="[^"]*(?:background[^"]*#0EA5E9|background[^"]*#1e3a5f|background[^"]*rgb\(14,\s*165,\s*233\)|background[^"]*rgb\(30,\s*58,\s*95\))[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove contract-title-box
+        .replace(/<div[^>]*class="[^"]*(?:contract-title-box|pdf-contract-title-box)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+        // Remove legal-notice boxes que já existem
+        .replace(/<div[^>]*class="[^"]*legal-notice[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
         // Limpar divs vazios
         .replace(/<div[^>]*>\s*<\/div>/gi, '')
         .replace(/<div[^>]*>\s*<\/div>/gi, '');
@@ -1026,7 +1033,7 @@ export function generateDocumentPrintHTML(
     
     <!-- Title -->
     <h1 class="document-title" style="text-decoration: underline;">${documentTitle}</h1>
-    ${documentSubtitle ? `<div class="highlight-box" style="background: #0EA5E9 !important; color: white !important; padding: 16px; border-radius: 8px; margin: 16px 0 24px 0; text-align: center; font-weight: 600; font-size: 13px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${documentSubtitle}</div>` : ''}
+    ${documentSubtitle ? `<div class="highlight-box" style="background: #1e3a5f !important; color: white !important; padding: 16px; border-radius: 8px; margin: 16px 0 24px 0; text-align: center; font-weight: 600; font-size: 13px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${documentSubtitle}</div>` : ''}
 
     ${legalNotice}
 
