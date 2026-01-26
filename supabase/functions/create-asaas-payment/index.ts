@@ -242,7 +242,7 @@ function generateContractHtml(content: string, documentType: 'contract' | 'procu
       print-color-adjust: exact !important;
     }
     
-    /* Blue Main Title */
+    /* Blue Main Title - underlined */
     .main-title {
       text-align: center;
       color: #0284c7 !important;
@@ -250,11 +250,12 @@ function generateContractHtml(content: string, documentType: 'contract' | 'procu
       font-weight: bold;
       margin-bottom: 16px;
       letter-spacing: -0.5px;
+      text-decoration: underline;
     }
     
-    /* Dark Blue Box with Contract Title */
+    /* Light Blue Box with Contract Title */
     .contract-title-box {
-      background-color: #1e3a5f !important;
+      background-color: #0EA5E9 !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;
@@ -272,23 +273,22 @@ function generateContractHtml(content: string, documentType: 'contract' | 'procu
       color: white !important;
     }
     
-    /* Yellow Highlight Box */
+    /* Yellow Highlight Box - LEFT BORDER ONLY */
     .highlight-box {
-      background-color: #fef3c7 !important;
+      background-color: #FEF9E7 !important;
       padding: 16px 20px;
-      border-radius: 6px;
       margin-bottom: 24px;
-      border: 2px solid #f59e0b !important;
+      border-left: 4px solid #F59E0B !important;
       font-size: 12px;
       line-height: 1.6;
-      color: #92400e !important;
+      color: #374151 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     
     .highlight-box p {
       margin-bottom: 10px;
-      color: #92400e !important;
+      color: #374151 !important;
     }
     
     .highlight-box p:last-child {
@@ -358,14 +358,14 @@ function generateContractHtml(content: string, documentType: 'contract' | 'procu
       }
       
       .contract-title-box {
-        background-color: #1e3a5f !important;
+        background-color: #0EA5E9 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
       
       .highlight-box {
-        background-color: #fef3c7 !important;
-        border-color: #f59e0b !important;
+        background-color: #FEF9E7 !important;
+        border-left: 4px solid #F59E0B !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
@@ -418,15 +418,15 @@ function generateContractHtml(content: string, documentType: 'contract' | 'procu
     <p>As partes abaixo qualificadas resolvem, de comum acordo, distratar o contrato de prestação de serviços firmado anteriormente, nos termos e condições a seguir estabelecidos.</p>
   </div>
   ` : `
-  <!-- Blue Title -->
-  <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
+  <!-- Blue Title - CONTRATO underlined -->
+  <h1 class="main-title" style="text-decoration: underline;">CONTRATO</h1>
   
-  <!-- Dark Blue Box with Contract Title -->
+  <!-- Light Blue Box with Contract Title -->
   <div class="contract-title-box">
     <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
   </div>
   
-  <!-- Yellow Highlight Section -->
+  <!-- Yellow Highlight Section - LEFT BORDER ONLY -->
   <div class="highlight-box">
     <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>

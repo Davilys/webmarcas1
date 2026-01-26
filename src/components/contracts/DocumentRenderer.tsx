@@ -584,7 +584,7 @@ export function generateDocumentPrintHTML(
         <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
       </div>`;
   } else if (documentType === 'contract') {
-    legalNotice = `<div class="legal-notice" style="background: #FFF7ED !important; border-color: #FB923C !important;">
+    legalNotice = `<div class="legal-notice" style="background: #FEF9E7 !important; border: none !important; border-left: 4px solid #F59E0B !important; border-radius: 0 !important;">
         <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
         <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
       </div>`;

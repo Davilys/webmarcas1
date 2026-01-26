@@ -392,10 +392,11 @@ export function generateSignedContractHtml(
       font-size: 20px;
       font-weight: bold;
       margin-bottom: 16px;
+      text-decoration: underline;
     }
     
     .contract-title-box {
-      background-color: #1e3a5f !important;
+      background-color: #0EA5E9 !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;
@@ -413,18 +414,17 @@ export function generateSignedContractHtml(
     }
     
     .highlight-box { 
-      background-color: #fef3c7 !important; 
+      background-color: #FEF9E7 !important; 
       padding: 16px; 
-      border-radius: 6px; 
       margin-bottom: 24px; 
-      border: 1px solid #f59e0b !important;
-      color: #92400e !important;
+      border-left: 4px solid #F59E0B !important;
+      color: #374151 !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     
     .highlight-box p {
-      color: #92400e !important;
+      color: #374151 !important;
     }
     
     .content-area {
@@ -488,7 +488,7 @@ export function generateSignedContractHtml(
     <p>As partes abaixo qualificadas resolvem, de comum acordo, distratar o contrato de prestação de serviços firmado anteriormente, nos termos e condições a seguir estabelecidos.</p>
   </div>
   ` : `
-  <h1 class="main-title">Acordo do Contrato - Anexo I</h1>
+  <h1 class="main-title" style="text-decoration: underline;">CONTRATO</h1>
   
   <div class="contract-title-box">
     <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>

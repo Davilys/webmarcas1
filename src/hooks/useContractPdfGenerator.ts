@@ -59,15 +59,18 @@ export async function generateContractPDF(
   pdf.rect(margin, yPosition, contentWidth, 3, 'F');
   yPosition += 8;
 
-  // Main Title
+  // Main Title - CONTRATO underlined
   pdf.setFontSize(16);
   pdf.setTextColor(2, 132, 199); // Blue
   pdf.setFont('helvetica', 'bold');
-  pdf.text('Acordo do Contrato - Anexo I', pageWidth / 2, yPosition, { align: 'center' });
+  pdf.text('CONTRATO', pageWidth / 2, yPosition, { align: 'center' });
+  // Add underline
+  const titleWidth = pdf.getTextWidth('CONTRATO');
+  pdf.line((pageWidth - titleWidth) / 2, yPosition + 1, (pageWidth + titleWidth) / 2, yPosition + 1);
   yPosition += 10;
 
-  // Dark Blue Box with Contract Title
-  pdf.setFillColor(30, 58, 95); // Dark blue
+  // Light Blue Box with Contract Title
+  pdf.setFillColor(14, 165, 233); // Light blue #0EA5E9
   pdf.rect(margin, yPosition, contentWidth, 16, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(10);
@@ -76,12 +79,14 @@ export async function generateContractPDF(
   pdf.text('PARA REGISTRO DE MARCA JUNTO AO INPI', pageWidth / 2, yPosition + 12, { align: 'center' });
   yPosition += 22;
 
-  // Yellow Highlight Box
-  pdf.setFillColor(254, 243, 199); // Light yellow
-  pdf.setDrawColor(245, 158, 11); // Yellow border
-  pdf.setLineWidth(0.5);
-  pdf.rect(margin, yPosition, contentWidth, 24, 'FD');
-  pdf.setTextColor(146, 64, 14); // Brown text
+  // Yellow Highlight Box - LEFT BORDER ONLY
+  pdf.setFillColor(254, 249, 231); // Light yellow #FEF9E7
+  pdf.rect(margin, yPosition, contentWidth, 24, 'F');
+  // Draw left border only
+  pdf.setDrawColor(245, 158, 11); // Yellow border #F59E0B
+  pdf.setLineWidth(2);
+  pdf.line(margin, yPosition, margin, yPosition + 24);
+  pdf.setTextColor(55, 65, 81); // Gray text #374151
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'normal');
   const highlightText1 = 'Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.';

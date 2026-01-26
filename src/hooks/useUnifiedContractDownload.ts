@@ -273,11 +273,12 @@ function generateContractHTML(
       font-size: 20px;
       font-weight: bold;
       margin-bottom: 16px;
+      text-decoration: underline;
     }
     
-    /* Contract title box */
+    /* Light Blue contract title box */
     .pdf-contract-title-box {
-      background-color: #1e3a5f !important;
+      background-color: #0EA5E9 !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;
@@ -294,21 +295,20 @@ function generateContractHTML(
       color: white !important;
     }
     
-    /* Yellow highlight box */
+    /* Yellow highlight box - LEFT BORDER ONLY */
     .pdf-highlight-box {
-      background-color: #fef3c7 !important;
-      border: 1px solid #f59e0b !important;
-      border-radius: 6px;
+      background-color: #FEF9E7 !important;
+      border-left: 4px solid #F59E0B !important;
       padding: 16px;
       margin-bottom: 24px;
-      color: #92400e !important;
+      color: #374151 !important;
       font-size: 11px;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
     
     .pdf-highlight-box p {
-      color: #92400e !important;
+      color: #374151 !important;
     }
     
     /* Content area */
@@ -467,15 +467,15 @@ function generateContractHTML(
     <p>Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.</p>
   </div>
   ` : `
-  <!-- Main Title -->
-  <h1 class="pdf-main-title">Acordo do Contrato - Anexo I</h1>
+  <!-- Main Title - CONTRATO underlined -->
+  <h1 class="pdf-main-title" style="text-decoration: underline;">CONTRATO</h1>
   
-  <!-- Contract Title Box -->
+  <!-- Light Blue Contract Title Box -->
   <div class="pdf-contract-title-box">
     <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
   </div>
   
-  <!-- Yellow Highlight Box -->
+  <!-- Yellow Highlight Box - LEFT BORDER ONLY -->
   <div class="pdf-highlight-box">
     <p style="margin-bottom: 8px;">Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
     <p>Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
