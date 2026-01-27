@@ -1092,9 +1092,14 @@ export function generateDocumentPrintHTML(
           <div class="signature-line">
             ${clientSignature 
               ? `<img src="${clientSignature}" alt="Assinatura Cliente">`
-              : '<span class="awaiting-signature">Aguardando assinatura...</span>'
+              : blockchainSignature?.hash 
+                ? '<span style="color: #2563eb; font-weight: 500; font-size: 14px;">✓ Assinado Digitalmente</span>'
+                : '<span class="awaiting-signature">Aguardando assinatura...</span>'
             }
           </div>
+          <p style="font-size: 10px; color: #6b7280; margin-top: 8px;">
+            ${blockchainSignature?.hash ? 'Certificação Digital - Lei 14.063/2020' : ''}
+          </p>
         </div>
       </div>
     </div>
