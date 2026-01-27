@@ -432,12 +432,21 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
                     alt="Assinatura do Cliente"
                     className="h-16 mx-auto object-contain"
                   />
+                ) : blockchainSignature?.hash ? (
+                  <div className="flex items-center justify-center h-16">
+                    <span className="text-blue-600 font-medium text-sm">
+                      ✓ Assinado Digitalmente
+                    </span>
+                  </div>
                 ) : (
                   <p className="text-gray-400 italic text-sm py-4">
                     Aguardando assinatura...
                   </p>
                 )}
               </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {blockchainSignature?.hash ? 'Certificação Digital - Lei 14.063/2020' : ''}
+              </p>
             </div>
           </div>
         </div>
