@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ClientLayout } from "@/components/cliente/ClientLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Copy, Check, ExternalLink, QrCode, Clock, CreditCard } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Copy, Check, ExternalLink, QrCode, Clock, CreditCard, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
@@ -58,6 +59,14 @@ export default function ClienteStatusPedido() {
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
   const [showValueDetails, setShowValueDetails] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+
+  // Validate required payment data for credit card
+  const hasValidPaymentData = useMemo(() => {
+    if (!orderData) return false;
+    const customerId = orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId;
+    const invoiceId = orderData.invoiceId;
+    return Boolean(customerId && invoiceId);
+  }, [orderData]);
 
   useEffect(() => {
     const savedData = sessionStorage.getItem("orderData");
@@ -238,26 +247,43 @@ export default function ClienteStatusPedido() {
 
             {/* Credit Card Payment - Embedded Form */}
             {orderData.paymentMethod === 'cartao6x' && (
-              <CreditCardForm
-                value={orderData.paymentValue}
-                installmentCount={6}
-                installmentValue={Math.round((orderData.paymentValue / 6) * 100) / 100}
-                dueDate={orderData.asaas?.dueDate || new Date().toISOString().split('T')[0]}
-                customerId={orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId || ''}
-                invoiceId={orderData.invoiceId || ''}
-                contractId={orderData.contractId || ''}
-                holderName={orderData.personalData.fullName}
-                holderEmail={orderData.personalData.email}
-                holderCpfCnpj={orderData.personalData.cpf}
-                holderPostalCode={orderData.personalData.cep || ''}
-                holderPhone={orderData.personalData.phone}
-                onSuccess={async () => {
-                  await handlePaymentConfirmed();
-                }}
-                onError={(error) => {
-                  toast.error(error);
-                }}
-              />
+              hasValidPaymentData ? (
+                <CreditCardForm
+                  value={orderData.paymentValue}
+                  installmentCount={6}
+                  installmentValue={Math.round((orderData.paymentValue / 6) * 100) / 100}
+                  dueDate={orderData.asaas?.dueDate || new Date().toISOString().split('T')[0]}
+                  customerId={orderData.asaas?.asaasCustomerId || orderData.asaas?.customerId || ''}
+                  invoiceId={orderData.invoiceId || ''}
+                  contractId={orderData.contractId || ''}
+                  holderName={orderData.personalData.fullName}
+                  holderEmail={orderData.personalData.email}
+                  holderCpfCnpj={orderData.personalData.cpf}
+                  holderPostalCode={orderData.personalData.cep || ''}
+                  holderPhone={orderData.personalData.phone}
+                  holderAddressNumber={(orderData.personalData as any).addressNumber || 'S/N'}
+                  onSuccess={async () => {
+                    await handlePaymentConfirmed();
+                  }}
+                  onError={(error) => {
+                    toast.error(error);
+                  }}
+                />
+              ) : (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="flex flex-col gap-2">
+                    <span>Dados de pagamento incompletos. Por favor, reinicie o processo de cadastro.</span>
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto justify-start text-destructive-foreground underline"
+                      onClick={() => navigate('/cliente/registrar-marca')}
+                    >
+                      Reiniciar Cadastro
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )
             )}
 
             {/* Boleto Payment - Show Link to PDF */}

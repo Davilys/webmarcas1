@@ -20,6 +20,7 @@ interface CreditCardFormProps {
   holderCpfCnpj: string;
   holderPostalCode: string;
   holderPhone?: string;
+  holderAddressNumber?: string; // Address number for Asaas
   onSuccess: () => void;
   onError: (error: string) => void;
 }
@@ -37,6 +38,7 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
   holderCpfCnpj,
   holderPostalCode,
   holderPhone,
+  holderAddressNumber,
   onSuccess,
   onError,
 }) => {
@@ -143,7 +145,7 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
             cpfCnpj: holderCpfCnpj,
             postalCode: holderPostalCode,
             phone: holderPhone,
-            addressNumber: 'S/N',
+            addressNumber: holderAddressNumber || 'S/N',
           },
         },
       });

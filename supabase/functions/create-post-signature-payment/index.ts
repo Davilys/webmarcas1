@@ -8,6 +8,15 @@ const corsHeaders = {
 
 const ASAAS_API_URL = "https://api.asaas.com/v3";
 
+// Default pricing values (fallback if not configured in system_settings)
+const DEFAULT_PRICING = {
+  basePrice: 699,
+  cardInstallments: 6,
+  cardInstallmentValue: 199,
+  boletoInstallments: 3,
+  boletoInstallmentValue: 399,
+};
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -37,6 +46,16 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Fetch dynamic pricing from system_settings
+    const { data: pricingData } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'pricing')
+      .maybeSingle();
+
+    const pricing = pricingData?.value || DEFAULT_PRICING;
+    console.log('Using pricing config:', JSON.stringify(pricing));
 
     // Fetch contract with user profile
     const { data: contract, error: contractError } = await supabase
@@ -76,35 +95,40 @@ serve(async (req) => {
 
     const paymentMethod = contract.payment_method || 'avista';
     
-    // Determine payment configuration based on method
+    // Determine payment configuration based on method using dynamic pricing
     let billingType: string;
     let totalValue: number;
-    let installmentCount: number | undefined;
-    let installmentValue: number | undefined;
+    let installmentCount: number;
+    let installmentValue: number;
 
     switch (paymentMethod) {
       case 'cartao6x':
-        // For credit card, we don't create Asaas payment here
-        // The CreditCardForm will create it via process-credit-card-payment
         billingType = 'CREDIT_CARD';
-        totalValue = 1194;
-        installmentCount = 6;
-        installmentValue = 199;
+        installmentCount = pricing.cardInstallments || DEFAULT_PRICING.cardInstallments;
+        installmentValue = pricing.cardInstallmentValue || DEFAULT_PRICING.cardInstallmentValue;
+        totalValue = installmentCount * installmentValue;
         break;
       case 'boleto3x':
         billingType = 'BOLETO';
-        totalValue = 1197;
-        installmentCount = 3;
-        installmentValue = 399;
+        installmentCount = pricing.boletoInstallments || DEFAULT_PRICING.boletoInstallments;
+        installmentValue = pricing.boletoInstallmentValue || DEFAULT_PRICING.boletoInstallmentValue;
+        totalValue = installmentCount * installmentValue;
         break;
       case 'avista':
       default:
         billingType = 'PIX';
-        totalValue = 699;
+        totalValue = pricing.basePrice || DEFAULT_PRICING.basePrice;
+        installmentCount = 1;
+        installmentValue = totalValue;
         break;
     }
 
-    console.log(`Creating payment for contract ${contractId}, method: ${paymentMethod}, type: ${billingType}`);
+    console.log(`=== PAYMENT CONFIG ===`);
+    console.log(`Contract ID: ${contractId}`);
+    console.log(`Payment Method: ${paymentMethod}`);
+    console.log(`Billing Type: ${billingType}`);
+    console.log(`Total Value: ${totalValue}`);
+    console.log(`Installments: ${installmentCount || 1}x ${installmentValue || totalValue}`);
 
     // For credit card, return the data needed for the frontend form
     if (paymentMethod === 'cartao6x') {
@@ -178,6 +202,7 @@ serve(async (req) => {
           due_date: dueDate.toISOString().split('T')[0],
           description: `Registro de Marca - ${contract.subject || 'Contrato'}`,
           payment_method: 'CREDIT_CARD',
+          asaas_customer_id: customerId,
         })
         .select()
         .single();
@@ -189,6 +214,8 @@ serve(async (req) => {
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
+      console.log(`Created invoice: ${invoice.id} for customer: ${customerId}`);
 
       return new Response(
         JSON.stringify({
@@ -340,6 +367,7 @@ serve(async (req) => {
         invoice_url: paymentData.invoiceUrl,
         pix_code: pixPayload,
         payment_method: billingType,
+        asaas_customer_id: customerId,
       })
       .select()
       .single();

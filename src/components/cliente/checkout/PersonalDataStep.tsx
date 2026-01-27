@@ -31,6 +31,7 @@ export interface PersonalData {
   cpf: string;
   cep: string;
   address: string;
+  addressNumber: string;
   neighborhood: string;
   city: string;
   state: string;
@@ -166,15 +167,26 @@ export function PersonalDataStep({ initialData, onNext, onBack }: PersonalDataSt
           {errors.cep && <p className="text-destructive text-sm">{errors.cep}</p>}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="address">Endereço *</Label>
-          <Input
-            id="address"
-            value={data.address}
-            onChange={(e) => setData({ ...data, address: e.target.value })}
-            placeholder="Rua, número, complemento"
-          />
-          {errors.address && <p className="text-destructive text-sm">{errors.address}</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="sm:col-span-3 space-y-2">
+            <Label htmlFor="address">Endereço *</Label>
+            <Input
+              id="address"
+              value={data.address}
+              onChange={(e) => setData({ ...data, address: e.target.value })}
+              placeholder="Rua, Avenida..."
+            />
+            {errors.address && <p className="text-destructive text-sm">{errors.address}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="addressNumber">Número</Label>
+            <Input
+              id="addressNumber"
+              value={data.addressNumber || ''}
+              onChange={(e) => setData({ ...data, addressNumber: e.target.value })}
+              placeholder="Nº"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

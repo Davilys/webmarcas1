@@ -21,7 +21,7 @@ export default function RegistrarMarca() {
   const [viabilityResult, setViabilityResult] = useState<ViabilityResult | null>(null);
   const [personalData, setPersonalData] = useState<PersonalData>({
     fullName: "", email: "", phone: "", cpf: "",
-    cep: "", address: "", neighborhood: "", city: "", state: "",
+    cep: "", address: "", addressNumber: "", neighborhood: "", city: "", state: "",
   });
   const [brandData, setBrandData] = useState<BrandData>({
     brandName: "", businessArea: "", hasCNPJ: false, cnpj: "", companyName: "",
