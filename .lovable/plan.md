@@ -1,124 +1,218 @@
 
-# Plano: Corrigir Exibição de "Aguardando assinatura..." em Contratos Assinados
 
-## Problema Identificado
+# Plano: Correção Completa do Fluxo de Pagamento por Cartão de Crédito
 
-Na visualização de documentos, o lado do **Contratante** mostra "Aguardando assinatura..." mesmo quando o contrato já está **assinado digitalmente** (como mostrado na imagem do usuário).
+## Problemas Identificados
 
-### Causa Raiz
+### 1. IDs Ausentes (Risco Alto)
+- `invoiceId` e `customerId` podem estar vazios quando passados ao `CreditCardForm`
+- Causa erro "Dados de pagamento incompletos"
 
-O `DocumentRenderer.tsx` (linhas 429-438) usa a seguinte lógica:
+### 2. Preços Hardcoded no Backend (Risco Médio)
+- Edge Function usa valores fixos (`1194`, `199`) em vez de buscar do `system_settings`
+- Pode causar divergência entre frontend e backend
 
-```tsx
-{clientSignature ? (
-  <img src={clientSignature} ... />
-) : (
-  <p className="text-gray-400 italic text-sm py-4">
-    Aguardando assinatura...
-  </p>
-)}
-```
+### 3. Validação de CEP Inexistente (Risco Médio)
+- CEP não é validado antes de enviar ao Asaas
+- Causa rejeição com `invalid_creditCardHolderInfo`
 
-O problema é que:
-- Para **procurações**: requer rubrica manuscrita → `client_signature_image` é preenchido
-- Para **contratos**: apenas aceite digital → `client_signature_image` fica `null`
+### 4. Número do Endereço Hardcoded (Risco Baixo)
+- Sempre envia `addressNumber: 'S/N'`
+- Alguns gateways podem rejeitar
 
-Verificação no banco de dados confirmou que todos os contratos assinados têm:
-- `signature_status: 'signed'` 
-- `blockchain_hash` preenchido
-- `client_signature_image: null`
+---
 
 ## Solução Proposta
 
-### Modificar a lógica de exibição da assinatura do cliente
+### Etapa 1: Garantir IDs no StatusPedido.tsx
 
-No `DocumentRenderer.tsx`, a seção de assinatura do cliente (linhas 420-441) deve considerar:
+**Arquivo:** `src/pages/cliente/StatusPedido.tsx`
 
-1. Se tem `clientSignature` (imagem de rubrica) → mostrar imagem
-2. **SENÃO**, se tem `blockchainSignature?.hash` → mostrar "✓ Assinado Digitalmente"
-3. **SENÃO** → mostrar "Aguardando assinatura..."
+Adicionar validação antes de renderizar o `CreditCardForm`:
 
-### Código a ser alterado
-
-**Arquivo**: `src/components/contracts/DocumentRenderer.tsx`
-
-**De** (linhas 428-439):
 ```tsx
-<div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
-  {clientSignature ? (
-    <img 
-      src={clientSignature} 
-      alt="Assinatura do Cliente"
-      className="h-16 mx-auto object-contain"
-    />
-  ) : (
-    <p className="text-gray-400 italic text-sm py-4">
-      Aguardando assinatura...
-    </p>
-  )}
-</div>
+// Verificar se os IDs necessários estão presentes
+const hasValidPaymentData = useMemo(() => {
+  const customerId = orderData?.asaas?.asaasCustomerId || orderData?.asaas?.customerId;
+  const invoiceId = orderData?.invoiceId;
+  return Boolean(customerId && invoiceId);
+}, [orderData]);
+
+// No render, mostrar erro claro se faltar dados
+{!hasValidPaymentData && paymentMethod === 'cartao6x' && (
+  <Alert variant="destructive">
+    <AlertCircle className="h-4 w-4" />
+    <AlertDescription>
+      Dados de pagamento incompletos. Por favor, reinicie o processo de cadastro.
+      <Button variant="link" onClick={() => navigate('/registrar')}>
+        Reiniciar
+      </Button>
+    </AlertDescription>
+  </Alert>
+)}
 ```
 
-**Para**:
-```tsx
-<div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
-  {clientSignature ? (
-    <img 
-      src={clientSignature} 
-      alt="Assinatura do Cliente"
-      className="h-16 mx-auto object-contain"
-    />
-  ) : blockchainSignature?.hash ? (
-    <div className="flex items-center justify-center h-16">
-      <span className="text-blue-600 font-medium text-sm">
-        ✓ Assinado Digitalmente
-      </span>
-    </div>
-  ) : (
-    <p className="text-gray-400 italic text-sm py-4">
-      Aguardando assinatura...
-    </p>
-  )}
-</div>
+### Etapa 2: Sincronizar Pricing no Backend
+
+**Arquivo:** `supabase/functions/create-post-signature-payment/index.ts`
+
+Buscar preços dinamicamente do `system_settings`:
+
+```typescript
+// Buscar configuração de preços do banco
+const { data: pricingData } = await supabaseClient
+  .from('system_settings')
+  .select('value')
+  .eq('key', 'pricing')
+  .maybeSingle();
+
+// Usar valores dinâmicos ou fallback para defaults
+const pricing = pricingData?.value || {
+  basePrice: 699,
+  cardInstallments: 6,
+  cardInstallmentValue: 199,
+  boletoInstallments: 3,
+  boletoInstallmentValue: 398
+};
+
+// Calcular valores baseados no método de pagamento
+let totalValue: number;
+let installmentCount: number;
+let installmentValue: number;
+
+if (paymentMethod === 'cartao6x') {
+  installmentCount = pricing.cardInstallments || 6;
+  installmentValue = pricing.cardInstallmentValue || 199;
+  totalValue = installmentCount * installmentValue;
+} else if (paymentMethod === 'boleto3x') {
+  installmentCount = pricing.boletoInstallments || 3;
+  installmentValue = pricing.boletoInstallmentValue || 398;
+  totalValue = installmentCount * installmentValue;
+} else {
+  totalValue = pricing.basePrice || 699;
+  installmentCount = 1;
+  installmentValue = totalValue;
+}
 ```
 
-### Também adicionar texto de certificação para contratos assinados
+### Etapa 3: Validação de CEP Obrigatório
 
-Abaixo da caixa de assinatura do cliente, adicionar referência à Lei 14.063/2020 quando assinado digitalmente (similar ao lado da empresa):
+**Arquivo:** `src/components/cliente/checkout/PersonalDataStep.tsx`
+
+Adicionar validação rigorosa do CEP:
 
 ```tsx
-<p className="text-xs text-gray-500 mt-2">
-  {blockchainSignature?.hash 
-    ? 'Certificação Digital - Lei 14.063/2020'
-    : ''
+// Schema de validação com Zod
+const personalDataSchema = z.object({
+  // ... outros campos
+  cep: z.string()
+    .min(8, 'CEP deve ter 8 dígitos')
+    .max(9, 'CEP inválido')
+    .regex(/^\d{5}-?\d{3}$/, 'Formato de CEP inválido'),
+  addressNumber: z.string()
+    .min(1, 'Número do endereço é obrigatório')
+    .default('S/N'),
+});
+
+// Validar antes de avançar
+const handleNext = async () => {
+  const cleanCep = formData.cep?.replace(/\D/g, '');
+  if (!cleanCep || cleanCep.length !== 8) {
+    toast.error('Por favor, informe um CEP válido');
+    return;
   }
-</p>
+  // ... continuar
+};
 ```
+
+### Etapa 4: Capturar Número do Endereço
+
+**Arquivo:** `src/components/cliente/checkout/PersonalDataStep.tsx`
+
+Adicionar campo para número do endereço:
+
+```tsx
+<div className="grid grid-cols-3 gap-4">
+  <div className="col-span-2">
+    <Label>Endereço</Label>
+    <Input
+      value={formData.address}
+      onChange={(e) => updateFormData('address', e.target.value)}
+      placeholder="Rua, Avenida..."
+    />
+  </div>
+  <div>
+    <Label>Número</Label>
+    <Input
+      value={formData.addressNumber}
+      onChange={(e) => updateFormData('addressNumber', e.target.value)}
+      placeholder="Nº"
+    />
+  </div>
+</div>
+```
+
+**Arquivo:** `src/components/payment/CreditCardForm.tsx`
+
+Usar o número capturado em vez de hardcoded:
+
+```tsx
+creditCardHolderInfo: {
+  // ...
+  addressNumber: holderAddressNumber || 'S/N', // Usar prop em vez de hardcoded
+}
+```
+
+### Etapa 5: Melhorar Logs no Backend
+
+**Arquivo:** `supabase/functions/process-credit-card-payment/index.ts`
+
+Adicionar logs estruturados:
+
+```typescript
+console.log("=== CREDIT CARD PAYMENT START ===");
+console.log("Invoice ID:", invoiceId);
+console.log("Customer ID:", customerId);
+console.log("Value:", value);
+console.log("Installments:", installmentCount, "x", installmentValue);
+
+// Após resposta do Asaas
+console.log("=== ASAAS RESPONSE ===");
+console.log("Status:", paymentData.status);
+console.log("Payment ID:", paymentData.id);
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/cliente/StatusPedido.tsx` | Validação de IDs antes de renderizar formulário |
+| `src/components/cliente/checkout/PersonalDataStep.tsx` | Campo de número + validação CEP |
+| `src/components/payment/CreditCardForm.tsx` | Aceitar prop `addressNumber` |
+| `supabase/functions/create-post-signature-payment/index.ts` | Buscar pricing dinâmico |
+| `supabase/functions/process-credit-card-payment/index.ts` | Logs estruturados |
+
+---
 
 ## Resultado Esperado
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Contrato assinado (sem rubrica) | "Aguardando assinatura..." | "✓ Assinado Digitalmente" |
-| Procuração assinada (com rubrica) | Imagem da rubrica | Imagem da rubrica |
-| Documento não assinado | "Aguardando assinatura..." | "Aguardando assinatura..." |
+| IDs ausentes | Erro genérico ou spinner infinito | Mensagem clara + botão reiniciar |
+| Preço alterado no admin | Backend usa valor antigo | Backend sincronizado |
+| CEP inválido | Erro do Asaas | Validação no frontend |
+| Sem número endereço | Sempre "S/N" | Campo opcional preenchido |
+| Debug de erros | Sem logs | Logs estruturados |
 
-## Detalhamento Técnico
+---
 
-### Arquivo a modificar:
-- `src/components/contracts/DocumentRenderer.tsx`
+## Prioridade de Implementação
 
-### Linhas afetadas:
-- 428-441 (seção de assinatura do cliente)
+1. **Alta:** Validação de IDs (StatusPedido) - impede erros críticos
+2. **Alta:** Validação de CEP - causa mais rejeições
+3. **Média:** Pricing dinâmico - evita divergências
+4. **Baixa:** Número do endereço - melhoria incremental
+5. **Baixa:** Logs - facilita debug futuro
 
-### Impacto:
-A correção afetará automaticamente todas as visualizações que usam o `DocumentRenderer`:
-- ContractDetailSheet (Admin)
-- DocumentPreview (Cliente)
-- AssinarDocumento (Página de Assinatura)
-
-### Validação:
-1. Abrir contrato assinado no painel admin
-2. Verificar que agora mostra "✓ Assinado Digitalmente" em ambos os lados
-3. Verificar que procurações continuam mostrando a imagem da rubrica
-4. Verificar que documentos pendentes continuam mostrando "Aguardando assinatura..."
