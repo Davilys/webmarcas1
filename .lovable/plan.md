@@ -1,155 +1,124 @@
 
-# Plano: Corrigir Integração Asaas na Criação de Contratos pelo Admin
+# Plano: Corrigir Exibição de "Aguardando assinatura..." em Contratos Assinados
 
 ## Problema Identificado
 
-A integração com o Asaas **não funciona corretamente** quando o admin cria contratos para **clientes existentes** (não para novos clientes).
+Na visualização de documentos, o lado do **Contratante** mostra "Aguardando assinatura..." mesmo quando o contrato já está **assinado digitalmente** (como mostrado na imagem do usuário).
 
 ### Causa Raiz
 
-Na criação de contrato (`CreateContractDialog.tsx`, linha 485):
+O `DocumentRenderer.tsx` (linhas 429-438) usa a seguinte lógica:
 
-```typescript
-payment_method: isNewClient ? paymentMethod : null,
-```
-
-O `payment_method` **só é salvo quando o admin cria um novo cliente** (`isNewClient = true`).
-
-Para clientes existentes, o campo fica `null`, e na página de assinatura (`AssinarDocumento.tsx`, linha 249):
-
-```typescript
-if (contract.payment_method) {
-  await createPaymentAfterSignature();
-}
-```
-
-Como `payment_method` é `null`, o pagamento **nunca é criado** após a assinatura!
-
-### Evidência no Banco de Dados
-
-| Contrato | payment_method | Problema |
-|----------|---------------|----------|
-| TESTE 4 | `null` | Assinado, sem pagamento |
-| TESTE 3 | `null` | Sem pagamento |
-| CONTRTAO DE REGISTRO... | `null` | Assinado, sem pagamento |
-| CONTRATO (18:10) | `cartao6x` | Funcionando (novo cliente) |
-| CONTRATO (18:10) | `avista` | Funcionando (novo cliente) |
-
----
-
-## Solução Proposta
-
-### 1. Adicionar Seleção de Forma de Pagamento para Clientes Existentes
-
-**Arquivo**: `src/components/admin/contracts/CreateContractDialog.tsx`
-
-Quando o admin seleciona um **cliente existente** com template de contrato padrão (Registro de Marca), deve aparecer a opção de escolher a forma de pagamento.
-
-#### Alterações:
-
-**a) Adicionar estado para controle de pagamento no fluxo existente:**
-
-Atualmente, `paymentMethod` só é usado no fluxo de novo cliente. Precisamos usá-lo também para clientes existentes quando o template é o contrato padrão.
-
-**b) Modificar a lógica de salvamento do contrato (linha 485):**
-
-De:
-```typescript
-payment_method: isNewClient ? paymentMethod : null,
-```
-
-Para:
-```typescript
-payment_method: (isNewClient || isStandardContractTemplate) ? paymentMethod : null,
-```
-
-**c) Adicionar UI de seleção de pagamento para clientes existentes:**
-
-No formulário de cliente existente (após linha 1140), quando o template selecionado é "Registro de Marca" ou "Padrão", exibir as opções de pagamento (PIX, Cartão 6x, Boleto 3x).
-
-### 2. Atualizar Valor do Contrato Baseado no Método de Pagamento
-
-Atualmente, o campo `contract_value` é manual. Para clientes existentes com template padrão, o valor deve ser calculado automaticamente baseado no `paymentMethod`:
-
-| Método | Valor |
-|--------|-------|
-| avista | R$ 699 |
-| cartao6x | R$ 1.194 |
-| boleto3x | R$ 1.197 |
-
----
-
-## Detalhamento Técnico
-
-### Alterações no `CreateContractDialog.tsx`
-
-#### 1. Identificar template padrão fora do bloco de submit
-
-Mover a verificação `isStandardContractTemplate` para o início do componente:
-
-```typescript
-const isStandardContractTemplate = selectedTemplate?.name.toLowerCase().includes('registro de marca') ||
-                                    selectedTemplate?.name.toLowerCase().includes('padrão');
-```
-
-#### 2. Adicionar seção de pagamento no formulário de cliente existente
-
-Entre as tabs "Informações Básicas" e o botão de submit, quando `isStandardContractTemplate` é `true`, exibir as mesmas opções de pagamento do fluxo de novo cliente.
-
-```typescript
-{/* Payment selection for standard contracts with existing clients */}
-{!isNewClient && isStandardContractTemplate && (
-  <div className="space-y-4 mt-4 p-4 bg-muted/30 rounded-lg border">
-    <Label className="font-medium">Forma de Pagamento *</Label>
-    <p className="text-sm text-muted-foreground">
-      Selecione a forma de pagamento para este contrato.
-    </p>
-    {/* Reutilizar os mesmos cards de pagamento */}
-    ...
-  </div>
+```tsx
+{clientSignature ? (
+  <img src={clientSignature} ... />
+) : (
+  <p className="text-gray-400 italic text-sm py-4">
+    Aguardando assinatura...
+  </p>
 )}
 ```
 
-#### 3. Atualizar lógica de valor do contrato
+O problema é que:
+- Para **procurações**: requer rubrica manuscrita → `client_signature_image` é preenchido
+- Para **contratos**: apenas aceite digital → `client_signature_image` fica `null`
 
-Quando `isStandardContractTemplate` é `true`, sobrescrever o valor manual pelo valor calculado:
+Verificação no banco de dados confirmou que todos os contratos assinados têm:
+- `signature_status: 'signed'` 
+- `blockchain_hash` preenchido
+- `client_signature_image: null`
 
-```typescript
-contract_value: isNewClient 
-  ? getContractValue() 
-  : (isStandardContractTemplate ? getContractValue() : parseFloat(formData.contract_value)),
+## Solução Proposta
+
+### Modificar a lógica de exibição da assinatura do cliente
+
+No `DocumentRenderer.tsx`, a seção de assinatura do cliente (linhas 420-441) deve considerar:
+
+1. Se tem `clientSignature` (imagem de rubrica) → mostrar imagem
+2. **SENÃO**, se tem `blockchainSignature?.hash` → mostrar "✓ Assinado Digitalmente"
+3. **SENÃO** → mostrar "Aguardando assinatura..."
+
+### Código a ser alterado
+
+**Arquivo**: `src/components/contracts/DocumentRenderer.tsx`
+
+**De** (linhas 428-439):
+```tsx
+<div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
+  {clientSignature ? (
+    <img 
+      src={clientSignature} 
+      alt="Assinatura do Cliente"
+      className="h-16 mx-auto object-contain"
+    />
+  ) : (
+    <p className="text-gray-400 italic text-sm py-4">
+      Aguardando assinatura...
+    </p>
+  )}
+</div>
 ```
 
-#### 4. Atualizar salvamento do payment_method
-
-```typescript
-payment_method: (isNewClient || isStandardContractTemplate) ? paymentMethod : null,
+**Para**:
+```tsx
+<div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
+  {clientSignature ? (
+    <img 
+      src={clientSignature} 
+      alt="Assinatura do Cliente"
+      className="h-16 mx-auto object-contain"
+    />
+  ) : blockchainSignature?.hash ? (
+    <div className="flex items-center justify-center h-16">
+      <span className="text-blue-600 font-medium text-sm">
+        ✓ Assinado Digitalmente
+      </span>
+    </div>
+  ) : (
+    <p className="text-gray-400 italic text-sm py-4">
+      Aguardando assinatura...
+    </p>
+  )}
+</div>
 ```
 
----
+### Também adicionar texto de certificação para contratos assinados
+
+Abaixo da caixa de assinatura do cliente, adicionar referência à Lei 14.063/2020 quando assinado digitalmente (similar ao lado da empresa):
+
+```tsx
+<p className="text-xs text-gray-500 mt-2">
+  {blockchainSignature?.hash 
+    ? 'Certificação Digital - Lei 14.063/2020'
+    : ''
+  }
+</p>
+```
 
 ## Resultado Esperado
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Admin cria contrato para **novo cliente** | payment_method salvo ✅ | payment_method salvo ✅ |
-| Admin cria contrato para **cliente existente** com template padrão | payment_method `null` ❌ | payment_method salvo ✅ |
-| Admin cria contrato para cliente existente com template personalizado | payment_method `null` | payment_method `null` (comportamento mantido) |
-| Após assinatura | Pagamento criado apenas para novos clientes | Pagamento criado para todos com template padrão |
+| Contrato assinado (sem rubrica) | "Aguardando assinatura..." | "✓ Assinado Digitalmente" |
+| Procuração assinada (com rubrica) | Imagem da rubrica | Imagem da rubrica |
+| Documento não assinado | "Aguardando assinatura..." | "Aguardando assinatura..." |
 
----
+## Detalhamento Técnico
 
-## Arquivos a Modificar
+### Arquivo a modificar:
+- `src/components/contracts/DocumentRenderer.tsx`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/admin/contracts/CreateContractDialog.tsx` | Adicionar seleção de pagamento para clientes existentes + corrigir lógica de salvamento |
+### Linhas afetadas:
+- 428-441 (seção de assinatura do cliente)
 
----
+### Impacto:
+A correção afetará automaticamente todas as visualizações que usam o `DocumentRenderer`:
+- ContractDetailSheet (Admin)
+- DocumentPreview (Cliente)
+- AssinarDocumento (Página de Assinatura)
 
-## Validação Pós-Implementação
-
-1. Criar contrato para cliente **existente** usando template padrão
-2. Verificar no banco se `payment_method` foi salvo
-3. Assinar o contrato
-4. Verificar se a cobrança Asaas foi criada automaticamente
+### Validação:
+1. Abrir contrato assinado no painel admin
+2. Verificar que agora mostra "✓ Assinado Digitalmente" em ambos os lados
+3. Verificar que procurações continuam mostrando a imagem da rubrica
+4. Verificar que documentos pendentes continuam mostrando "Aguardando assinatura..."
