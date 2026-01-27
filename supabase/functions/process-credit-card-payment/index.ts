@@ -32,7 +32,15 @@ serve(async (req) => {
       contractId, // For updating contract with payment ID
     } = await req.json();
 
-    console.log("Processing credit card payment:", { invoiceId, customerId, value, installmentCount });
+    console.log("=== CREDIT CARD PAYMENT START ===");
+    console.log("Invoice ID:", invoiceId);
+    console.log("Customer ID:", customerId);
+    console.log("Value:", value);
+    console.log("Installments:", installmentCount, "x", installmentValue);
+    console.log("Contract ID:", contractId);
+    console.log("Holder:", creditCardHolderInfo?.name);
+    console.log("CEP:", creditCardHolderInfo?.postalCode);
+    console.log("Address Number:", creditCardHolderInfo?.addressNumber);
 
     // Get client IP for fraud prevention
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
@@ -89,7 +97,10 @@ serve(async (req) => {
     });
 
     const paymentData = await paymentResponse.json();
-    console.log("Asaas payment response:", JSON.stringify(paymentData, null, 2));
+    console.log("=== ASAAS RESPONSE ===");
+    console.log("Status:", paymentData.status);
+    console.log("Payment ID:", paymentData.id);
+    console.log("Full response:", JSON.stringify(paymentData, null, 2));
 
     if (!paymentResponse.ok) {
       console.error("Asaas payment error:", paymentData);
