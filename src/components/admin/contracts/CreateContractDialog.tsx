@@ -316,11 +316,19 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
     const addressParts = parseAddressForNeighborhood(selectedProfile?.address || formData.company_address || '');
 
+    // Helper function to replace template variables with flexible spacing and case-insensitive
+    const replaceVar = (template: string, key: string, value: string): string => {
+      const regex = new RegExp('\\{\\{\\s*' + key + '\\s*\\}\\}', 'gi');
+      return template.replace(regex, value);
+    };
+
     // For existing clients with a selected template - use the template content with profile data
     if (selectedTemplate && selectedProfile) {
       // Check if it's a standard contract template (Registro de Marca INPI)
-      const isStandardContract = selectedTemplate.name.toLowerCase().includes('registro de marca') ||
-                                  selectedTemplate.name.toLowerCase().includes('padrão');
+      // IMPORTANT: Only "Registro de Marca" templates should use replaceContractVariables
+      // Templates with "padrão" in the name but are procuração/distrato should NOT use this flow
+      const isStandardContract = effectiveDocumentType === 'contract' && 
+        selectedTemplate.name.toLowerCase().includes('registro de marca');
       
       if (isStandardContract) {
         // Use replaceContractVariables with profile data
@@ -368,30 +376,40 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         year: 'numeric'
       });
       
-      const fullAddress = `${addressParts.mainAddress}${addressParts.neighborhood ? ', ' + addressParts.neighborhood : ''}`;
+      const fullAddress = `${addressParts.mainAddress}${addressParts.neighborhood ? ', ' + addressParts.neighborhood : ''}, ${selectedProfile?.city || formData.company_city || ''} - ${selectedProfile?.state || formData.company_state || ''}, CEP ${selectedProfile?.zip_code || formData.company_cep || ''}`;
       
-      // Replace all template variables with client data
-      let result = selectedTemplate.content
-        // Company/Personal data
-        .replace(/\{\{nome_empresa\}\}/g, selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '')
-        .replace(/\{\{endereco_empresa\}\}/g, fullAddress)
-        .replace(/\{\{endereco\}\}/g, fullAddress)
-        .replace(/\{\{cidade\}\}/g, selectedProfile?.city || formData.company_city || '')
-        .replace(/\{\{estado\}\}/g, selectedProfile?.state || formData.company_state || '')
-        .replace(/\{\{cep\}\}/g, selectedProfile?.zip_code || formData.company_cep || '')
-        .replace(/\{\{cnpj\}\}/g, formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '')
-        // Representative data
-        .replace(/\{\{nome_representante\}\}/g, formData.signatory_name || selectedProfile?.full_name || '')
-        .replace(/\{\{cpf_representante\}\}/g, formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '')
-        // Contact info
-        .replace(/\{\{email\}\}/g, selectedProfile?.email || '')
-        .replace(/\{\{telefone\}\}/g, selectedProfile?.phone || '')
-        // Brand and distrato specifics
-        .replace(/\{\{marca\}\}/g, effectiveBrandName)
-        .replace(/\{\{data_procuracao\}\}/g, currentDate)
-        .replace(/\{\{data_distrato\}\}/g, currentDate)
-        .replace(/\{\{valor_multa\}\}/g, formData.penalty_value || '0,00')
-        .replace(/\{\{numero_parcelas\}\}/g, formData.penalty_installments || '1');
+      // Prepare variable values
+      const nomeEmpresa = selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '';
+      const cnpjValue = formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '';
+      const nomeRepresentante = formData.signatory_name || selectedProfile?.full_name || '';
+      const cpfRepresentante = formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '';
+      
+      // Replace all template variables with client data using robust replaceVar helper
+      let result = selectedTemplate.content;
+      
+      // Company/Personal data
+      result = replaceVar(result, 'nome_empresa', nomeEmpresa);
+      result = replaceVar(result, 'endereco_empresa', fullAddress);
+      result = replaceVar(result, 'endereco', fullAddress);
+      result = replaceVar(result, 'cidade', selectedProfile?.city || formData.company_city || '');
+      result = replaceVar(result, 'estado', selectedProfile?.state || formData.company_state || '');
+      result = replaceVar(result, 'cep', selectedProfile?.zip_code || formData.company_cep || '');
+      result = replaceVar(result, 'cnpj', cnpjValue);
+      
+      // Representative data - support both variable names
+      result = replaceVar(result, 'nome_representante', nomeRepresentante);
+      result = replaceVar(result, 'cpf_representante', cpfRepresentante);
+      
+      // Contact info
+      result = replaceVar(result, 'email', selectedProfile?.email || '');
+      result = replaceVar(result, 'telefone', selectedProfile?.phone || '');
+      
+      // Brand and distrato specifics
+      result = replaceVar(result, 'marca', effectiveBrandName);
+      result = replaceVar(result, 'data_procuracao', currentDate);
+      result = replaceVar(result, 'data_distrato', currentDate);
+      result = replaceVar(result, 'valor_multa', formData.penalty_value || '0,00');
+      result = replaceVar(result, 'numero_parcelas', formData.penalty_installments || '1');
       
       return result;
     }
