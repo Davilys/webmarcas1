@@ -13,6 +13,9 @@ import { ptBR } from 'date-fns/locale';
 import { CreateAdminDialog } from './CreateAdminDialog';
 import { EditPermissionsDialog } from './EditPermissionsDialog';
 
+// Master admin that cannot be deleted or have permissions revoked
+export const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
+
 export function SecuritySettings() {
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -93,7 +96,12 @@ export function SecuritySettings() {
   });
 
   const removeAdminMutation = useMutation({
-    mutationFn: async ({ roleId, userId }: { roleId: string; userId: string }) => {
+    mutationFn: async ({ roleId, userId, email }: { roleId: string; userId: string; email?: string }) => {
+      // Protect master admin
+      if (email === MASTER_ADMIN_EMAIL) {
+        throw new Error('O administrador master não pode ser removido.');
+      }
+      
       // Delete permissions first
       await supabase
         .from('admin_permissions')
@@ -162,54 +170,70 @@ export function SecuritySettings() {
             </div>
           ) : adminUsers && adminUsers.length > 0 ? (
             <div className="space-y-3">
-              {adminUsers.map((admin) => (
-                <div
-                  key={admin.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
-                      <User className="h-5 w-5 text-primary" />
+              {adminUsers.map((admin) => {
+                const isMasterAdmin = admin.profile?.email === MASTER_ADMIN_EMAIL;
+                
+                return (
+                  <div
+                    key={admin.id}
+                    className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors ${isMasterAdmin ? 'border-primary/50 bg-primary/5' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`flex items-center justify-center w-10 h-10 rounded-full ${isMasterAdmin ? 'bg-primary/20' : 'bg-primary/10'}`}>
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{admin.profile?.full_name || 'Sem nome'}</p>
+                          {isMasterAdmin && (
+                            <Badge variant="default" className="bg-primary text-primary-foreground">
+                              <Shield className="h-3 w-3 mr-1" />
+                              Master
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{admin.profile?.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{admin.profile?.full_name || 'Sem nome'}</p>
-                      <p className="text-sm text-muted-foreground">{admin.profile?.email}</p>
+                    <div className="flex items-center gap-3">
+                      {admin.hasCustomPermissions ? (
+                        <Badge variant="secondary">Permissões Personalizadas</Badge>
+                      ) : (
+                        <Badge>Acesso Total</Badge>
+                      )}
+                      {!isMasterAdmin && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditingUser({
+                              id: admin.user_id,
+                              email: admin.profile?.email || '',
+                              fullName: admin.profile?.full_name || '',
+                            })}
+                            title="Editar Permissões"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              if (confirm('Remover acesso de administrador deste usuário? As permissões também serão removidas.')) {
+                                removeAdminMutation.mutate({ roleId: admin.id, userId: admin.user_id });
+                              }
+                            }}
+                            disabled={removeAdminMutation.isPending}
+                            title="Remover Admin"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    {admin.hasCustomPermissions ? (
-                      <Badge variant="secondary">Permissões Personalizadas</Badge>
-                    ) : (
-                      <Badge>Acesso Total</Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setEditingUser({
-                        id: admin.user_id,
-                        email: admin.profile?.email || '',
-                        fullName: admin.profile?.full_name || '',
-                      })}
-                      title="Editar Permissões"
-                    >
-                      <Settings2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm('Remover acesso de administrador deste usuário? As permissões também serão removidas.')) {
-                          removeAdminMutation.mutate({ roleId: admin.id, userId: admin.user_id });
-                        }
-                      }}
-                      disabled={removeAdminMutation.isPending}
-                      title="Remover Admin"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
