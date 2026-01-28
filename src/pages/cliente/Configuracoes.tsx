@@ -23,12 +23,20 @@ interface Profile {
   full_name: string | null;
   phone: string | null;
   cpf_cnpj: string | null;
+  cpf: string | null;
+  cnpj: string | null;
   company_name: string | null;
   address: string | null;
+  address_number: string | null;
   neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
+}
+
+interface BrandProcess {
+  brand_name: string | null;
+  business_area: string | null;
 }
 
 interface ValidationState {
@@ -43,19 +51,30 @@ export default function Configuracoes() {
     full_name: '',
     phone: '',
     cpf_cnpj: '',
+    cpf: '',
+    cnpj: '',
     company_name: '',
     address: '',
+    address_number: '',
     neighborhood: '',
     city: '',
     state: '',
     zip_code: '',
   });
   
+  // Brand data from brand_processes
+  const [brandData, setBrandData] = useState<BrandProcess>({
+    brand_name: '',
+    business_area: '',
+  });
+  const [brandProcessId, setBrandProcessId] = useState<string | null>(null);
+  
   // Separate fields for CPF and CNPJ
   const [cpf, setCpf] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [razaoSocial, setRazaoSocial] = useState('');
   const [nomeFantasia, setNomeFantasia] = useState('');
+  const [savingBrand, setSavingBrand] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +113,7 @@ export default function Configuracoes() {
   }, [navigate]);
 
   const fetchProfile = async (userId: string) => {
+    // Fetch profile data
     const { data } = await supabase
       .from('profiles')
       .select('*')
@@ -101,37 +121,88 @@ export default function Configuracoes() {
       .maybeSingle();
 
     if (data) {
+      // Extract address number if embedded in address (e.g., "Rua X, 123")
+      let addressValue = data.address || '';
+      let addressNumber = '';
+      
+      // Try to extract number from address if it contains comma
+      if (addressValue.includes(',')) {
+        const parts = addressValue.split(',');
+        addressValue = parts[0].trim();
+        addressNumber = parts.slice(1).join(',').trim();
+      }
+      
       setProfile({
         full_name: data.full_name || '',
         phone: data.phone ? formatPhone(data.phone) : '',
         cpf_cnpj: data.cpf_cnpj || '',
+        cpf: data.cpf || '',
+        cnpj: data.cnpj || '',
         company_name: data.company_name || '',
-        address: data.address || '',
+        address: addressValue,
+        address_number: addressNumber,
         neighborhood: data.neighborhood || '',
         city: data.city || '',
         state: data.state || '',
         zip_code: data.zip_code ? formatCEP(data.zip_code) : '',
       });
       
-      // Parse cpf_cnpj to separate CPF and CNPJ
-      const cleanDoc = (data.cpf_cnpj || '').replace(/\D/g, '');
-      if (cleanDoc.length === 11) {
-        setCpf(formatCPF(cleanDoc));
-        setValidation(prev => ({ ...prev, cpf: validateCPF(cleanDoc) }));
-      } else if (cleanDoc.length === 14) {
-        // If it's a CNPJ stored, we need to check if there's a CPF elsewhere
-        // For now, just show CNPJ in company section
-        setCnpj(formatCNPJ(cleanDoc));
-        setValidation(prev => ({ ...prev, cnpj: validateCNPJ(cleanDoc) }));
+      // Set CPF from specific field or fallback to cpf_cnpj
+      const cpfValue = data.cpf || '';
+      if (cpfValue) {
+        setCpf(formatCPF(cpfValue));
+        const cleanCpf = cpfValue.replace(/\D/g, '');
+        if (cleanCpf.length === 11) {
+          setValidation(prev => ({ ...prev, cpf: validateCPF(cleanCpf) }));
+        }
+      } else {
+        // Fallback to cpf_cnpj if it's a CPF
+        const cleanDoc = (data.cpf_cnpj || '').replace(/\D/g, '');
+        if (cleanDoc.length === 11) {
+          setCpf(formatCPF(cleanDoc));
+          setValidation(prev => ({ ...prev, cpf: validateCPF(cleanDoc) }));
+        }
       }
       
-      // Company name might contain "razão social | nome fantasia" format
+      // Set CNPJ from specific field
+      const cnpjValue = data.cnpj || '';
+      if (cnpjValue) {
+        setCnpj(formatCNPJ(cnpjValue));
+        const cleanCnpj = cnpjValue.replace(/\D/g, '');
+        if (cleanCnpj.length === 14) {
+          setValidation(prev => ({ ...prev, cnpj: validateCNPJ(cleanCnpj) }));
+        }
+      }
+      
+      // Set company name (razão social)
       if (data.company_name) {
-        const parts = data.company_name.split('|').map((s: string) => s.trim());
+        // Remove CNPJ from company name if embedded
+        let companyName = data.company_name;
+        if (companyName.includes('| CNPJ:')) {
+          companyName = companyName.split('| CNPJ:')[0].trim();
+        }
+        const parts = companyName.split('|').map((s: string) => s.trim());
         setRazaoSocial(parts[0] || '');
         setNomeFantasia(parts[1] || '');
       }
     }
+    
+    // Fetch brand process data
+    const { data: processData } = await supabase
+      .from('brand_processes')
+      .select('id, brand_name, business_area')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle();
+    
+    if (processData) {
+      setBrandProcessId(processData.id);
+      setBrandData({
+        brand_name: processData.brand_name || '',
+        business_area: processData.business_area || '',
+      });
+    }
+    
     setLoading(false);
   };
 
@@ -212,11 +283,17 @@ export default function Configuracoes() {
     
     setSaving(true);
 
+    // Combine address with number
+    const fullAddress = profile.address_number 
+      ? `${profile.address}, ${profile.address_number}`
+      : profile.address;
+
     const updateData = {
       full_name: profile.full_name,
       phone: profile.phone?.replace(/\D/g, '') || null,
+      cpf: cleanCPF || null,
       cpf_cnpj: cleanCPF || null,
-      address: profile.address,
+      address: fullAddress,
       neighborhood: profile.neighborhood,
       city: profile.city,
       state: profile.state,
@@ -229,6 +306,7 @@ export default function Configuracoes() {
       .eq('id', user.id);
 
     if (error) {
+      console.error('Error saving profile:', error);
       toast.error('Erro ao salvar perfil');
     } else {
       toast.success('Dados pessoais atualizados com sucesso!');
@@ -252,30 +330,73 @@ export default function Configuracoes() {
     
     setSavingCompany(true);
 
-    // Store company info - razão social, nome fantasia, and CNPJ
-    // Format: "razão social | nome fantasia | cnpj"
+    // Store company info - razão social and nome fantasia in company_name
     let companyName = razaoSocial;
     if (nomeFantasia) {
       companyName = `${razaoSocial} | ${nomeFantasia}`;
-    }
-    if (cleanCNPJ) {
-      companyName = `${companyName} | CNPJ: ${formatCNPJ(cleanCNPJ)}`;
     }
 
     const { error } = await supabase
       .from('profiles')
       .update({
         company_name: companyName || null,
-        // DO NOT overwrite cpf_cnpj with CNPJ - keep personal CPF separate
+        cnpj: cleanCNPJ || null,
       })
       .eq('id', user.id);
 
     if (error) {
+      console.error('Error saving company:', error);
       toast.error('Erro ao salvar dados da empresa');
     } else {
       toast.success('Dados da empresa atualizados com sucesso!');
     }
     setSavingCompany(false);
+  };
+
+  const handleSaveBrand = async () => {
+    if (!user) return;
+    
+    setSavingBrand(true);
+
+    try {
+      if (brandProcessId) {
+        // Update existing process
+        const { error } = await supabase
+          .from('brand_processes')
+          .update({
+            brand_name: brandData.brand_name || null,
+            business_area: brandData.business_area || null,
+          })
+          .eq('id', brandProcessId);
+
+        if (error) throw error;
+      } else {
+        // Create new process for this user
+        const { data: newProcess, error } = await supabase
+          .from('brand_processes')
+          .insert({
+            user_id: user.id,
+            brand_name: brandData.brand_name || 'Marca não definida',
+            business_area: brandData.business_area || null,
+            status: 'em_andamento',
+            pipeline_stage: 'protocolado',
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        if (newProcess) {
+          setBrandProcessId(newProcess.id);
+        }
+      }
+      
+      toast.success('Dados da marca atualizados com sucesso!');
+    } catch (error: any) {
+      console.error('Error saving brand:', error);
+      toast.error('Erro ao salvar dados da marca');
+    }
+    
+    setSavingBrand(false);
   };
 
   const handleChangePassword = async () => {
@@ -403,12 +524,21 @@ export default function Configuracoes() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Endereço</Label>
+                <Label htmlFor="address">Endereço (Rua/Avenida)</Label>
                 <Input
                   id="address"
                   value={profile.address || ''}
                   onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                  placeholder="Rua, número"
+                  placeholder="Rua, Avenida..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="address_number">Número</Label>
+                <Input
+                  id="address_number"
+                  value={profile.address_number || ''}
+                  onChange={(e) => setProfile({ ...profile, address_number: e.target.value })}
+                  placeholder="123"
                 />
               </div>
               <div className="space-y-2">
@@ -449,6 +579,52 @@ export default function Configuracoes() {
                 </>
               ) : (
                 'Salvar Dados Pessoais'
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Brand Data Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Dados da Marca
+            </CardTitle>
+            <CardDescription>
+              Informações sobre a marca que está sendo registrada
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="brand_name">Nome da Marca</Label>
+                <Input
+                  id="brand_name"
+                  value={brandData.brand_name || ''}
+                  onChange={(e) => setBrandData({ ...brandData, brand_name: e.target.value })}
+                  placeholder="Nome da marca a ser registrada"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="business_area">Ramo de Atividade</Label>
+                <Input
+                  id="business_area"
+                  value={brandData.business_area || ''}
+                  onChange={(e) => setBrandData({ ...brandData, business_area: e.target.value })}
+                  placeholder="Ex: Alimentação, Tecnologia..."
+                />
+              </div>
+            </div>
+
+            <Button onClick={handleSaveBrand} disabled={savingBrand}>
+              {savingBrand ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                'Salvar Dados da Marca'
               )}
             </Button>
           </CardContent>
