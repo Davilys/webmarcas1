@@ -11,10 +11,17 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { X, Send, Paperclip, Loader2, Search, Scale, Check, ChevronsUpDown, User } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { X, Send, Paperclip, Loader2, Search, Scale, Check, ChevronsUpDown, User, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Email } from '@/pages/admin/Emails';
+
+interface Attachment {
+  name: string;
+  url: string;
+  size: number;
+}
 
 interface EmailComposeProps {
   onClose: () => void;
@@ -280,6 +287,11 @@ export function EmailCompose({ onClose, replyTo }: EmailComposeProps) {
   const [clientSearchOpen, setClientSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Attachments state
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isAttachmentDialogOpen, setIsAttachmentDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
   // Fetch clients with their processes
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ['clients-with-processes', searchQuery],
@@ -441,6 +453,63 @@ export function EmailCompose({ onClose, replyTo }: EmailComposeProps) {
       return;
     }
     sendEmail.mutate();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `email-attachments/${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(fileName, 3600);
+
+      if (signedError || !signedData?.signedUrl) {
+        throw new Error('Erro ao gerar URL do arquivo');
+      }
+
+      setAttachments(prev => [...prev, {
+        name: file.name,
+        url: signedData.signedUrl,
+        size: file.size
+      }]);
+
+      toast.success('Arquivo anexado com sucesso!');
+      setIsAttachmentDialogOpen(false);
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Erro ao anexar arquivo');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
@@ -670,11 +739,66 @@ export function EmailCompose({ onClose, replyTo }: EmailComposeProps) {
 
       <Separator />
 
+      {/* Attachments Section */}
+      {attachments.length > 0 && (
+        <>
+          <Separator />
+          <div className="px-4 py-2 space-y-2">
+            <Label className="text-xs text-muted-foreground">Anexos ({attachments.length})</Label>
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((attachment, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm"
+                >
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="truncate max-w-[150px]">{attachment.name}</span>
+                  <span className="text-xs text-muted-foreground">({formatFileSize(attachment.size)})</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-5 w-5 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => removeAttachment(index)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <Separator />
+
       <div className="p-4 flex items-center justify-between flex-shrink-0">
-        <Button variant="outline" size="sm" className="gap-2">
-          <Paperclip className="h-4 w-4" />
-          Anexar arquivo
-        </Button>
+        <div className="relative">
+          <input
+            type="file"
+            id="file-upload"
+            className="sr-only"
+            onChange={handleFileSelect}
+            disabled={isUploading}
+          />
+          <label htmlFor="file-upload">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2 cursor-pointer" 
+              asChild
+              disabled={isUploading}
+            >
+              <span>
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4" />
+                )}
+                {isUploading ? 'Enviando...' : 'Anexar arquivo'}
+              </span>
+            </Button>
+          </label>
+        </div>
 
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={onClose}>
