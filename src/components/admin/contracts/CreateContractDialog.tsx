@@ -677,9 +677,35 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   };
 
   const handleProfileChange = (userId: string) => {
-    setFormData({ ...formData, user_id: userId });
     const profile = profiles.find(p => p.id === userId);
     setSelectedProfile(profile || null);
+    
+    // Auto-populate form fields with profile data for document generation
+    if (profile) {
+      const cpfCnpj = profile.cpf_cnpj?.replace(/[^\d]/g, '') || '';
+      const isCNPJ = cpfCnpj.length === 14;
+      
+      // Parse address to extract neighborhood if format is "address, neighborhood"
+      const addressParts = (profile.address || '').split(',').map(s => s.trim());
+      const mainAddress = addressParts[0] || '';
+      const neighborhood = addressParts[1] || '';
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        user_id: userId,
+        signatory_name: profile.full_name || '',
+        signatory_cpf: !isCNPJ ? (profile.cpf_cnpj || '') : '',
+        signatory_cnpj: isCNPJ ? (profile.cpf_cnpj || '') : '',
+        company_address: mainAddress,
+        company_city: profile.city || '',
+        company_state: profile.state || '',
+        company_cep: profile.zip_code || '',
+        // Auto-generate subject if empty
+        subject: prev.subject || `Documento - ${profile.full_name || profile.email}`,
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, user_id: userId }));
+    }
   };
 
   const handleNewClientToggle = (checked: boolean) => {
