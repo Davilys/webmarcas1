@@ -128,8 +128,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     companyName: '',
   });
 
-  // Payment method - matching public form
-  const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x'>('avista');
+  // Payment method - matching public form (null = no charge)
+  const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x' | null>(null);
 
   // Legacy form data for existing client flows
   const [formData, setFormData] = useState({
@@ -258,22 +258,24 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   };
 
   // Get contract value based on payment method
-  const getContractValue = () => {
+  const getContractValue = (): number | null => {
+    if (!paymentMethod) return null;
     switch (paymentMethod) {
       case 'avista': return 699;
       case 'cartao6x': return 1194;
       case 'boleto3x': return 1197;
-      default: return 699;
+      default: return null;
     }
   };
 
   // Get payment description for display
   const getPaymentDescription = () => {
+    if (!paymentMethod) return 'Nenhuma (sem cobrança)';
     switch (paymentMethod) {
       case 'avista': return 'PIX à vista - R$ 699,00';
       case 'cartao6x': return 'Cartão 6x de R$ 199,00 = R$ 1.194,00';
       case 'boleto3x': return 'Boleto 3x de R$ 399,00 = R$ 1.197,00';
-      default: return 'PIX à vista - R$ 699,00';
+      default: return 'Nenhuma (sem cobrança)';
     }
   };
 
@@ -581,7 +583,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         signatory_cpf: isNewClient ? personalData.cpf : (formData.signatory_cpf || null),
         signatory_cnpj: isNewClient && brandData.hasCNPJ ? brandData.cnpj : (formData.signatory_cnpj || null),
         penalty_value: formData.penalty_value ? parseFloat(formData.penalty_value) : null,
-        payment_method: (isNewClient || isStandardTemplate) ? paymentMethod : null,
+        payment_method: (isNewClient || isStandardTemplate) && paymentMethod ? paymentMethod : null,
         signature_status: 'not_signed',
         visible_to_client: true,
         lead_id: leadId || null,
@@ -763,7 +765,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setIsNewClient(false);
     setValidationErrors({});
     setCurrentTab('personal');
-    setPaymentMethod('avista');
+    setPaymentMethod(null);
   };
 
   const handleProfileChange = async (userId: string) => {
