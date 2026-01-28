@@ -236,6 +236,20 @@ const RegistrationFormSection = () => {
     scrollToForm();
   };
 
+  // Build initial personal data with empty values
+  const getInitialPersonalData = (): PersonalData => ({
+    fullName: "",
+    email: "",
+    phone: "",
+    cpf: "",
+    cep: "",
+    address: "",
+    addressNumber: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+  });
+
   // Build initial brand data from viability step
   const getInitialBrandData = (): BrandData => ({
     brandName: viabilityData?.brandName || "",
@@ -279,7 +293,7 @@ const RegistrationFormSection = () => {
             {/* Step 2: Personal Data */}
             {step === 2 && (
               <PersonalDataStep
-                initialData={personalData || undefined}
+                initialData={personalData || getInitialPersonalData()}
                 onNext={handlePersonalDataNext}
                 onBack={() => handleBack(1)}
               />
