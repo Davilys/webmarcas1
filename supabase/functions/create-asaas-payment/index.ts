@@ -587,6 +587,9 @@ serve(async (req) => {
         .update({
           full_name: personalData.fullName,
           phone: personalData.phone,
+          cpf: personalData.cpf,
+          cnpj: brandData.hasCNPJ ? brandData.cnpj : null,
+          cpf_cnpj: personalData.cpf, // Keep legacy field with CPF
           address: personalData.address,
           neighborhood: personalData.neighborhood,
           city: personalData.city,

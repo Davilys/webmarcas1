@@ -188,7 +188,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     full_name: '',
     email: '',
     phone: '',
-    cpf_cnpj: '',
+    cpf: '',
+    cnpj: '',
     company_name: '',
     address: '',
     neighborhood: '',
@@ -238,7 +239,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         full_name: client.full_name || '',
         email: client.email || '',
         phone: client.phone || '',
-        cpf_cnpj: client.cpf_cnpj || '',
+        cpf: (client as any).cpf || client.cpf_cnpj || '',
+        cnpj: (client as any).cnpj || '',
         company_name: client.company_name || '',
         address: '',
         neighborhood: '',
@@ -460,7 +462,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         full_name: editFormData.full_name,
         email: editFormData.email,
         phone: editFormData.phone,
-        cpf_cnpj: editFormData.cpf_cnpj,
+        cpf: editFormData.cpf || null,
+        cnpj: editFormData.cnpj || null,
+        cpf_cnpj: editFormData.cpf || editFormData.cnpj || null, // Keep legacy field updated
         company_name: editFormData.company_name,
         address: editFormData.address,
         neighborhood: editFormData.neighborhood,
@@ -985,8 +989,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                       <p className="font-medium">{client.full_name || 'N/A'}</p>
                     </div>
                     <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">CPF/CNPJ</p>
-                      <p className="font-medium font-mono">{client.cpf_cnpj || 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">CPF</p>
+                      <p className="font-medium font-mono">{(client as any).cpf || client.cpf_cnpj || 'N/A'}</p>
                     </div>
                     <div className="p-3 border rounded-lg">
                       <p className="text-xs text-muted-foreground">E-MAIL</p>
@@ -1046,9 +1050,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                     <div className="p-3 border rounded-lg">
                       <p className="text-xs text-muted-foreground">CNPJ</p>
                       <p className="font-medium font-mono">
-                        {client.cpf_cnpj && client.cpf_cnpj.length >= 14 
-                          ? client.cpf_cnpj 
-                          : 'N/A'}
+                        {(client as any).cnpj || 'N/A'}
                       </p>
                     </div>
                   </div>
@@ -1678,11 +1680,19 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
               />
             </div>
             <div>
-              <Label>CPF/CNPJ</Label>
+              <Label>CPF</Label>
               <Input 
-                value={editFormData.cpf_cnpj}
-                onChange={(e) => setEditFormData({...editFormData, cpf_cnpj: e.target.value})}
+                value={editFormData.cpf}
+                onChange={(e) => setEditFormData({...editFormData, cpf: e.target.value})}
                 placeholder="000.000.000-00"
+              />
+            </div>
+            <div>
+              <Label>CNPJ</Label>
+              <Input 
+                value={editFormData.cnpj}
+                onChange={(e) => setEditFormData({...editFormData, cnpj: e.target.value})}
+                placeholder="00.000.000/0001-00"
               />
             </div>
             <div>
