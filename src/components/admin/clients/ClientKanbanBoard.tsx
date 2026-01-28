@@ -535,8 +535,8 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
                                           className="w-full h-7 text-xs"
                                           onClick={() => onClientClick(client)}
                                         >
-                                          <ArrowRight className="h-3 w-3 mr-1" />
-                                          Novo
+                                          <Eye className="h-3 w-3 mr-1" />
+                                          Visualizar
                                         </Button>
                                       </motion.div>
                                     )}
