@@ -58,7 +58,7 @@ export default function Registrar() {
     return () => clearInterval(interval);
   }, []);
 
-  // Pre-fill personal data if user is logged in
+  // Pre-fill personal data if user is logged in and check for viability data
   useEffect(() => {
     const fetchUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -86,6 +86,36 @@ export default function Registrar() {
       }
     };
     fetchUserData();
+
+    // Check for pre-filled viability data from ViabilitySearchSection (Index page)
+    const storedData = sessionStorage.getItem('viabilityData');
+    if (storedData) {
+      try {
+        const parsed = JSON.parse(storedData);
+        if (parsed.brandName && parsed.businessArea && parsed.level) {
+          // Create a viability result from stored data
+          const viabilityResult: ViabilityResult = {
+            success: true,
+            level: parsed.level,
+            title: parsed.level === 'high' ? 'Alta Viabilidade' : 
+                   parsed.level === 'medium' ? 'Viabilidade Média' : 
+                   parsed.level === 'low' ? 'Baixa Viabilidade' : 'Marca Bloqueada',
+            description: 'Viabilidade já verificada anteriormente.',
+          };
+          setViabilityData({
+            brandName: parsed.brandName,
+            businessArea: parsed.businessArea,
+            result: viabilityResult,
+          });
+          // Skip to step 2 (personal data)
+          setStep(2);
+          // Clear the stored data to prevent re-use
+          sessionStorage.removeItem('viabilityData');
+        }
+      } catch (e) {
+        console.error('Error parsing viability data:', e);
+      }
+    }
   }, []);
 
   const handleViabilityNext = (brandName: string, businessArea: string, result: ViabilityResult) => {
