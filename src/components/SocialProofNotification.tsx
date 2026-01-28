@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { CheckCircle, TrendingUp, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -34,6 +34,8 @@ interface RealSearch {
   business_area: string;
 }
 
+type NotificationKey = string;
+
 const SocialProofNotification = () => {
   const { t } = useLanguage();
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -41,6 +43,53 @@ const SocialProofNotification = () => {
   const [lastNameIndex, setLastNameIndex] = useState(-1);
   const [notificationCount, setNotificationCount] = useState(0);
   const [realSearches, setRealSearches] = useState<RealSearch[]>([]);
+
+  // Prevent repetitive notifications (especially when there are few items)
+  const recentlyShownRef = useRef<Map<NotificationKey, number>>(new Map());
+  const RECENT_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+  const RECENT_MAX = 12;
+
+  const makeKey = useCallback((brand: string, area: string) => {
+    return `${brand.trim().toLowerCase()}|${area.trim().toLowerCase()}`;
+  }, []);
+
+  const recordShown = useCallback((key: NotificationKey) => {
+    const now = Date.now();
+    const map = recentlyShownRef.current;
+
+    // purge expired
+    for (const [k, ts] of map.entries()) {
+      if (now - ts > RECENT_COOLDOWN_MS) map.delete(k);
+    }
+
+    map.set(key, now);
+
+    // cap size
+    if (map.size > RECENT_MAX) {
+      const oldest = [...map.entries()].sort((a, b) => a[1] - b[1])[0];
+      if (oldest) map.delete(oldest[0]);
+    }
+  }, []);
+
+  const isRecentlyShown = useCallback((key: NotificationKey) => {
+    const ts = recentlyShownRef.current.get(key);
+    if (!ts) return false;
+    return Date.now() - ts <= RECENT_COOLDOWN_MS;
+  }, []);
+
+  const uniqueRealSearches = useMemo(() => {
+    // Deduplicate by brand+area to reduce repeats coming from multiple equal searches
+    const seen = new Set<string>();
+    const out: RealSearch[] = [];
+    for (const s of realSearches) {
+      if (!s?.brand_name || !s?.business_area) continue;
+      const key = makeKey(s.brand_name, s.business_area);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
+    }
+    return out;
+  }, [realSearches, makeKey]);
 
   // Fetch real searches from database
   useEffect(() => {
@@ -123,8 +172,13 @@ const SocialProofNotification = () => {
     }
 
     // If we have real searches, use them (priority)
-    if (realSearches.length > 0) {
-      const search = realSearches[Math.floor(Math.random() * realSearches.length)];
+    if (uniqueRealSearches.length > 0) {
+      // Prefer items that were not shown recently
+      const eligible = uniqueRealSearches.filter(
+        (s) => !isRecentlyShown(makeKey(s.brand_name, s.business_area))
+      );
+      const pool = eligible.length > 0 ? eligible : uniqueRealSearches;
+      const search = pool[Math.floor(Math.random() * pool.length)];
       const genericName = genericNames[Math.floor(Math.random() * genericNames.length)];
       
       const actionTemplates = [
@@ -135,6 +189,9 @@ const SocialProofNotification = () => {
       ];
       
       const action = actionTemplates[Math.floor(Math.random() * actionTemplates.length)];
+
+      // Record the chosen brand+area to avoid immediate repetition
+      recordShown(makeKey(search.brand_name, search.business_area));
       
       return {
         id: Date.now(),
@@ -158,6 +215,9 @@ const SocialProofNotification = () => {
     const name = simulatedNames[nameIndex];
     const brand = simulatedBrands[Math.floor(Math.random() * simulatedBrands.length)];
     const action = actionTemplates[Math.floor(Math.random() * actionTemplates.length)];
+
+    // Avoid repeating the same simulated brand back-to-back (best effort)
+    recordShown(makeKey(brand, "simulado"));
     
     const message = action.template
       .replace("{name}", name)
@@ -168,7 +228,7 @@ const SocialProofNotification = () => {
       message,
       icon: action.icon,
     };
-  }, [getRandomIndex, lastNameIndex, notificationCount, t, realSearches]);
+  }, [getRandomIndex, isRecentlyShown, lastNameIndex, makeKey, notificationCount, recordShown, t, uniqueRealSearches]);
 
   useEffect(() => {
     // Initial delay of 1 second before first notification
