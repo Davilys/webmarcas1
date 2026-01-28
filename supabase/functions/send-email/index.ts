@@ -18,6 +18,38 @@ interface EmailRequest {
   from?: string;
 }
 
+// Retry helper with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      lastError = error as Error;
+      const errorMsg = (error as Error)?.message || "";
+      
+      // Don't retry on permanent errors (authentication, blocked, etc.)
+      if (errorMsg.includes("550") || errorMsg.includes("553") || errorMsg.includes("554")) {
+        console.log(`Permanent error detected (attempt ${attempt + 1}): ${errorMsg}`);
+        throw error;
+      }
+      
+      if (attempt < maxRetries - 1) {
+        const delay = initialDelay * Math.pow(2, attempt);
+        console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
