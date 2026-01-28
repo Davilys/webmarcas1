@@ -145,21 +145,17 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
   
   console.log(`Parsing XML content, size: ${xmlContent.length} bytes`);
   
-  // Quick check - use simple lowercase includes (NO full normalization to save memory)
-  // The XML is 45MB+ so we cannot normalize it all at once
-  const lowerContent = xmlContent.toLowerCase();
+  // Use case-insensitive regex - does NOT create a copy of the 45MB string
+  // This is critical for memory efficiency
   const searchTerm = ATTORNEY_SEARCH_TERM.toLowerCase();
+  const searchRegex = new RegExp(searchTerm, 'i');
   
-  console.log(`Searching for attorney term: "${searchTerm}" (lowercase only for memory efficiency)`);
+  console.log(`Searching for attorney term: "${searchTerm}" (case-insensitive regex - zero memory copy)`);
   
-  if (!lowerContent.includes(searchTerm)) {
-    console.log('Attorney name not found in XML content (quick lowercase check)');
+  if (!searchRegex.test(xmlContent)) {
+    console.log('Attorney name not found in XML content (regex check)');
     return [];
   }
-  
-  // Free reference immediately to help GC
-  // @ts-ignore - intentional reassignment for memory management
-  lowerContent = null;
   
   console.log('Attorney name found! Starting memory-efficient batch extraction...');
   
@@ -216,9 +212,8 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
       const chunk = chunks[i];
       if (!chunk || chunk.length < 50) continue;
       
-      // Quick attorney check - use lowercase only (saves memory vs full normalization)
-      const lowerChunk = chunk.toLowerCase();
-      if (!lowerChunk.includes(searchTerm)) continue;
+      // Use regex for case-insensitive check (more efficient than toLowerCase on each chunk)
+      if (!searchRegex.test(chunk)) continue;
       
       // Find the start of this processo block
       const processoStart = chunk.lastIndexOf('<processo');
