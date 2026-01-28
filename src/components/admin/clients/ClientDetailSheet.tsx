@@ -29,6 +29,9 @@ import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
 import { usePricing } from '@/hooks/usePricing';
 
+// Master admin that cannot be deleted
+const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
+
 interface ClientDetailSheetProps {
   client: ClientWithProcess | null;
   open: boolean;
@@ -523,6 +526,12 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const handleDeleteClient = async () => {
     if (!client || !client.id) {
       toast.error('Cliente não identificado');
+      return;
+    }
+    
+    // Protect master admin from deletion
+    if (client.email === MASTER_ADMIN_EMAIL) {
+      toast.error('Este usuário é o administrador master e não pode ser excluído.');
       return;
     }
     
