@@ -62,6 +62,7 @@ const RegistrationFormSection = () => {
         console.error('Error parsing viability data:', e);
       }
     }
+  }, []);
 
   // Handlers
   const handleViabilityNext = useCallback((brandName: string, businessArea: string, result: ViabilityResult) => {
