@@ -283,6 +283,33 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       return generateNewClientContractHtml();
     }
 
+    // Extract brand name from subject if brand_name is empty
+    // Subject format is usually "CONTRATO REGISTRO DE MARCA - BRAND NAME" or "Procuração INPI - Brand Name"
+    const extractBrandFromSubject = (subject: string): string => {
+      if (!subject) return '';
+      // Try to extract after " - " separator
+      const parts = subject.split(' - ');
+      if (parts.length > 1) {
+        return parts.slice(1).join(' - ').trim();
+      }
+      // Otherwise return the full subject as brand name
+      return subject;
+    };
+
+    const effectiveBrandName = formData.brand_name || extractBrandFromSubject(formData.subject) || '';
+
+    // Parse address to extract neighborhood if available
+    const parseAddressForNeighborhood = (address: string): { mainAddress: string; neighborhood: string } => {
+      if (!address) return { mainAddress: '', neighborhood: '' };
+      const parts = address.split(',').map(s => s.trim());
+      return {
+        mainAddress: parts[0] || '',
+        neighborhood: parts[1] || '',
+      };
+    };
+
+    const addressParts = parseAddressForNeighborhood(selectedProfile?.address || formData.company_address || '');
+
     // For existing clients with a selected template - use the template content with profile data
     if (selectedTemplate && selectedProfile) {
       // Check if it's a standard contract template (Registro de Marca INPI)
@@ -299,13 +326,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             cpf: selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 
               ? selectedProfile.cpf_cnpj : formData.signatory_cpf || '',
             cep: selectedProfile.zip_code || formData.company_cep || '',
-            address: selectedProfile.address || formData.company_address || '',
-            neighborhood: '', // Will be parsed from address if needed
+            address: addressParts.mainAddress || selectedProfile.address || formData.company_address || '',
+            neighborhood: addressParts.neighborhood,
             city: selectedProfile.city || formData.company_city || '',
             state: selectedProfile.state || formData.company_state || '',
           },
           brandData: {
-            brandName: formData.brand_name || formData.subject || '',
+            brandName: effectiveBrandName,
             businessArea: '', // Use default or get from form
             hasCNPJ: (selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14) || !!formData.signatory_cnpj,
             cnpj: selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 
@@ -326,19 +353,19 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       return formData.description || '';
     }
 
-    // For other document types (procuracao, distrato), use generateDocumentContent
+    // For other document types (procuracao, distrato), use generateDocumentContent with all client data
     const vars = {
-      nome_empresa: selectedProfile?.company_name || formData.signatory_name || '',
-      cnpj: formData.signatory_cnpj || '',
-      endereco: formData.company_address || '',
-      cidade: formData.company_city || '',
-      estado: formData.company_state || '',
-      cep: formData.company_cep || '',
-      nome_representante: formData.signatory_name || '',
-      cpf_representante: formData.signatory_cpf || '',
+      nome_empresa: selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '',
+      cnpj: formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '',
+      endereco: addressParts.mainAddress || selectedProfile?.address || formData.company_address || '',
+      cidade: selectedProfile?.city || formData.company_city || '',
+      estado: selectedProfile?.state || formData.company_state || '',
+      cep: selectedProfile?.zip_code || formData.company_cep || '',
+      nome_representante: formData.signatory_name || selectedProfile?.full_name || '',
+      cpf_representante: formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '',
       email: selectedProfile?.email || '',
       telefone: selectedProfile?.phone || '',
-      marca: formData.brand_name || '',
+      marca: effectiveBrandName,
       valor_multa: formData.penalty_value || '',
       numero_parcela: formData.penalty_installments || '1',
     };
@@ -676,7 +703,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setPaymentMethod('avista');
   };
 
-  const handleProfileChange = (userId: string) => {
+  const handleProfileChange = async (userId: string) => {
     const profile = profiles.find(p => p.id === userId);
     setSelectedProfile(profile || null);
     
@@ -688,7 +715,23 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       // Parse address to extract neighborhood if format is "address, neighborhood"
       const addressParts = (profile.address || '').split(',').map(s => s.trim());
       const mainAddress = addressParts[0] || '';
-      const neighborhood = addressParts[1] || '';
+      
+      // Try to fetch brand name from client's processes
+      let brandName = '';
+      try {
+        const { data: processes } = await supabase
+          .from('brand_processes')
+          .select('brand_name')
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle();
+        
+        if (processes?.brand_name) {
+          brandName = processes.brand_name;
+        }
+      } catch (error) {
+        console.log('Could not fetch brand name:', error);
+      }
       
       setFormData(prev => ({ 
         ...prev, 
@@ -700,6 +743,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         company_city: profile.city || '',
         company_state: profile.state || '',
         company_cep: profile.zip_code || '',
+        brand_name: brandName || prev.brand_name || '',
         // Auto-generate subject if empty
         subject: prev.subject || `Documento - ${profile.full_name || profile.email}`,
       }));
@@ -1215,13 +1259,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                         />
                       </div>
 
-                      {isDistrato && (
+                      {(isDistrato || isSpecialDocument) && (
                         <div className="space-y-2 col-span-2">
-                          <Label>Nome da Marca</Label>
+                          <Label>Nome da Marca {isSpecialDocument && '*'}</Label>
                           <Input
                             value={formData.brand_name}
                             onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
-                            placeholder="Nome da marca relacionada ao distrato"
+                            placeholder={isDistrato ? "Nome da marca relacionada ao distrato" : "Nome da marca para o documento"}
                           />
                         </div>
                       )}
