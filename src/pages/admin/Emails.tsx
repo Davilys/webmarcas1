@@ -29,6 +29,14 @@ export default function Emails() {
   const [isComposing, setIsComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<Email | null>(null);
 
+  const handleFolderChange = (folder: EmailFolder) => {
+    // Reset states when changing folders to prevent UI glitches
+    setSelectedEmail(null);
+    setIsComposing(false);
+    setReplyTo(null);
+    setCurrentFolder(folder);
+  };
+
   const handleCompose = () => {
     setIsComposing(true);
     setSelectedEmail(null);
@@ -91,7 +99,7 @@ export default function Emails() {
         {/* Sidebar */}
         <EmailSidebar
           currentFolder={currentFolder}
-          onFolderChange={setCurrentFolder}
+          onFolderChange={handleFolderChange}
           onCompose={handleCompose}
         />
 
