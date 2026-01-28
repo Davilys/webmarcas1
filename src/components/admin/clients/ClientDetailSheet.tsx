@@ -116,23 +116,24 @@ const useServicePricingOptions = () => {
 };
 
 const SERVICE_TYPES = [
-  { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI' },
-  { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI' },
-  { id: 'oposicao', label: 'Manifestação de Oposição', description: 'Defesa contra oposição de terceiros' },
-  { id: 'recurso', label: 'Recurso Administrativo', description: 'Recurso contra indeferimento do INPI' },
-  { id: 'renovacao', label: 'Renovação de Marca', description: 'Renovação do registro decenal' },
-  { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido por terceiros' },
+  { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI', stage: 'protocolado' },
+  { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI', stage: '003' },
+  { id: 'oposicao', label: 'Manifestação de Oposição', description: 'Defesa contra oposição de terceiros', stage: 'oposicao' },
+  { id: 'recurso', label: 'Recurso Administrativo', description: 'Recurso contra indeferimento do INPI', stage: 'indeferimento' },
+  { id: 'renovacao', label: 'Renovação de Marca', description: 'Renovação do registro decenal', stage: 'renovacao' },
+  { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido por terceiros', stage: 'notificacao' },
+  { id: 'deferimento', label: 'Deferimento', description: 'Pedido aprovado, aguardando taxa de concessão', stage: 'deferimento' },
+  { id: 'certificado', label: 'Certificado', description: 'Marca registrada e certificado emitido', stage: 'certificados' },
+  { id: 'distrato', label: 'Distrato', description: 'Cliente encerrou contrato ou serviço cancelado', stage: 'distrato' },
 ];
 
-// Mapeamento Tipo de Serviço → Pipeline Stage
-const SERVICE_TYPE_TO_STAGE: Record<string, string> = {
-  'pedido_registro': 'protocolado',
-  'cumprimento_exigencia': '003',
-  'oposicao': 'oposicao',
-  'recurso': 'indeferimento',
-  'renovacao': 'renovacao',
-  'notificacao': 'notificacao'
-};
+// Mapeamento Tipo de Serviço → Pipeline Stage (bidirecional)
+const SERVICE_TYPE_TO_STAGE: Record<string, string> = {};
+const STAGE_TO_SERVICE_TYPE: Record<string, string> = {};
+SERVICE_TYPES.forEach(s => {
+  SERVICE_TYPE_TO_STAGE[s.id] = s.stage;
+  STAGE_TO_SERVICE_TYPE[s.stage] = s.id;
+});
 
 const QUICK_ACTIONS = [
   { id: 'chat', label: 'Chats', icon: MessageCircle, color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
@@ -227,12 +228,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       });
       // Initialize selected service type based on pipeline stage (reverse mapping)
       const clientStage = client.pipeline_stage || 'protocolado';
-      const matchingService = Object.entries(SERVICE_TYPE_TO_STAGE).find(([_, stage]) => stage === clientStage);
-      if (matchingService) {
-        setSelectedServiceType(matchingService[0]);
-      } else {
-        setSelectedServiceType('pedido_registro');
-      }
+      const matchingServiceType = STAGE_TO_SERVICE_TYPE[clientStage];
+      setSelectedServiceType(matchingServiceType || 'pedido_registro');
       // Initialize edit form data
       setEditFormData({
         full_name: client.full_name || '',
@@ -1054,10 +1051,10 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                       value={editData.pipeline_stage} 
                       onValueChange={async (v) => {
                         setEditData({ ...editData, pipeline_stage: v });
-                        // Also update selectedServiceType based on reverse mapping
-                        const matchingService = Object.entries(SERVICE_TYPE_TO_STAGE).find(([_, stage]) => stage === v);
-                        if (matchingService) {
-                          setSelectedServiceType(matchingService[0]);
+                        // Update selectedServiceType using the reverse mapping
+                        const matchingServiceType = STAGE_TO_SERVICE_TYPE[v];
+                        if (matchingServiceType) {
+                          setSelectedServiceType(matchingServiceType);
                         }
                         if (client?.process_id) {
                           await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
@@ -1126,14 +1123,13 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                               whileTap={{ scale: 0.98 }}
                               onClick={async () => {
                                 setSelectedServiceType(service.id);
-                                // Update pipeline stage based on service type
-                                const suggestedStage = SERVICE_TYPE_TO_STAGE[service.id];
-                                if (suggestedStage && client?.process_id) {
-                                  setEditData(prev => ({ ...prev, pipeline_stage: suggestedStage }));
+                                // Update pipeline stage based on service type's stage property
+                                if (service.stage && client?.process_id) {
+                                  setEditData(prev => ({ ...prev, pipeline_stage: service.stage }));
                                   await supabase.from('brand_processes')
-                                    .update({ pipeline_stage: suggestedStage })
+                                    .update({ pipeline_stage: service.stage })
                                     .eq('id', client.process_id);
-                                  toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === suggestedStage)?.label}`);
+                                  toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === service.stage)?.label}`);
                                   onUpdate();
                                 }
                               }}
