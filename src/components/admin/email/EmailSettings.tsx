@@ -19,6 +19,10 @@ interface EmailAccount {
   provider: string;
   smtp_host: string | null;
   smtp_port: number | null;
+  smtp_user: string | null;
+  smtp_password: string | null;
+  imap_host: string | null;
+  imap_port: number | null;
   is_default: boolean;
 }
 
@@ -32,6 +36,8 @@ export function EmailSettings() {
     smtp_port: 587,
     smtp_user: '',
     smtp_password: '',
+    imap_host: 'imap.gmail.com',
+    imap_port: 993,
   });
 
   const { data: accounts, isLoading } = useQuery({
@@ -61,6 +67,8 @@ export function EmailSettings() {
         smtp_port: form.smtp_port,
         smtp_user: form.smtp_user,
         smtp_password: form.smtp_password,
+        imap_host: form.imap_host || null,
+        imap_port: form.imap_port || 993,
         is_default: !accounts || accounts.length === 0,
       });
 
@@ -77,6 +85,8 @@ export function EmailSettings() {
         smtp_port: 587,
         smtp_user: '',
         smtp_password: '',
+        imap_host: 'imap.gmail.com',
+        imap_port: 993,
       });
     },
     onError: () => {
@@ -238,6 +248,30 @@ export function EmailSettings() {
                   </div>
                 </div>
 
+                <Separator />
+                
+                <p className="text-sm font-medium text-muted-foreground">Configurações IMAP (Recebimento)</p>
+                
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Servidor IMAP</Label>
+                    <Input
+                      placeholder="imap.gmail.com"
+                      value={form.imap_host}
+                      onChange={(e) => setForm(f => ({ ...f, imap_host: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Porta IMAP</Label>
+                    <Input
+                      type="number"
+                      placeholder="993"
+                      value={form.imap_port}
+                      onChange={(e) => setForm(f => ({ ...f, imap_port: parseInt(e.target.value) || 993 }))}
+                    />
+                  </div>
+                </div>
+
                 <div className="flex justify-end">
                   <Button onClick={() => addAccount.mutate()} disabled={addAccount.isPending}>
                     {addAccount.isPending ? (
@@ -273,10 +307,16 @@ export function EmailSettings() {
                             <Badge variant="secondary">Padrão</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Server className="h-3 w-3" />
-                          {account.smtp_host}:{account.smtp_port}
-                        </p>
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Server className="h-3 w-3" />
+                            SMTP: {account.smtp_host}:{account.smtp_port}
+                          </p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            IMAP: {account.imap_host ? `${account.imap_host}:${account.imap_port}` : <span className="text-destructive">Não configurado</span>}
+                          </p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
