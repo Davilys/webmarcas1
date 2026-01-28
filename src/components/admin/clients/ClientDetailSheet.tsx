@@ -211,6 +211,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   
   // NEW: Profile data for contacts tab
   const [profileData, setProfileData] = useState<{
+    cpf?: string;
+    cnpj?: string;
+    company_name?: string;
     address?: string;
     neighborhood?: string;
     city?: string;
@@ -234,13 +237,13 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       const clientStage = client.pipeline_stage || 'protocolado';
       const matchingServiceType = STAGE_TO_SERVICE_TYPE[clientStage];
       setSelectedServiceType(matchingServiceType || 'pedido_registro');
-      // Initialize edit form data
+      // Initialize edit form data - cpf/cnpj will be populated from profileData
       setEditFormData({
         full_name: client.full_name || '',
         email: client.email || '',
         phone: client.phone || '',
-        cpf: (client as any).cpf || client.cpf_cnpj || '',
-        cnpj: (client as any).cnpj || '',
+        cpf: '',
+        cnpj: '',
         company_name: client.company_name || '',
         address: '',
         neighborhood: '',
@@ -271,7 +274,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         supabase.from('client_appointments').select('*').eq('user_id', client.id).order('scheduled_at', { ascending: true }),
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false }),
-        supabase.from('profiles').select('address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
+        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
       ]);
 
       setNotes(notesRes.data || []);
@@ -280,10 +283,13 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       setInvoices(invoicesRes.data || []);
       setProfileData(profileRes.data);
       
-      // Update edit form with profile data
+      // Update edit form with profile data including cpf, cnpj, company_name
       if (profileRes.data) {
         setEditFormData(prev => ({
           ...prev,
+          cpf: profileRes.data.cpf || '',
+          cnpj: profileRes.data.cnpj || '',
+          company_name: profileRes.data.company_name || prev.company_name || '',
           address: profileRes.data.address || '',
           neighborhood: profileRes.data.neighborhood || '',
           city: profileRes.data.city || '',
@@ -990,7 +996,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                     </div>
                     <div className="p-3 border rounded-lg">
                       <p className="text-xs text-muted-foreground">CPF</p>
-                      <p className="font-medium font-mono">{(client as any).cpf || client.cpf_cnpj || 'N/A'}</p>
+                      <p className="font-medium font-mono">{profileData?.cpf || client.cpf_cnpj || 'N/A'}</p>
                     </div>
                     <div className="p-3 border rounded-lg">
                       <p className="text-xs text-muted-foreground">E-MAIL</p>
@@ -1045,12 +1051,12 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 border rounded-lg">
                       <p className="text-xs text-muted-foreground">RAZÃO SOCIAL</p>
-                      <p className="font-medium">{client.company_name || 'N/A'}</p>
+                      <p className="font-medium">{profileData?.company_name || client.company_name || 'N/A'}</p>
                     </div>
                     <div className="p-3 border rounded-lg">
                       <p className="text-xs text-muted-foreground">CNPJ</p>
                       <p className="font-medium font-mono">
-                        {(client as any).cnpj || 'N/A'}
+                        {profileData?.cnpj || 'N/A'}
                       </p>
                     </div>
                   </div>
