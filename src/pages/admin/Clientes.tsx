@@ -108,7 +108,8 @@ export default function AdminClientes() {
               pipeline_stage: process.pipeline_stage || 'protocolado',
               process_status: process.status,
               created_at: profile.created_at || undefined,
-              cpf_cnpj: profile.cpf_cnpj || undefined
+              cpf_cnpj: profile.cpf_cnpj || undefined,
+              process_number: process.process_number || undefined
             });
           }
         }

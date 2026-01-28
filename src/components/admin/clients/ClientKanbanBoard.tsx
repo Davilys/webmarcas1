@@ -32,6 +32,7 @@ export interface ClientWithProcess {
   created_at?: string;
   last_contact?: string;
   cpf_cnpj?: string;
+  process_number?: string;
 }
 
 export interface KanbanFilters {
@@ -443,7 +444,7 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
                                     </motion.div>
                                   </div>
 
-                                  {/* Client Name & Company */}
+                                  {/* Client Name & Brand */}
                                   <div 
                                     className="cursor-pointer mb-3"
                                     onClick={() => onClientClick(client)}
@@ -451,9 +452,23 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
                                     <p className="font-bold text-sm mb-0.5 line-clamp-1">
                                       {client.full_name || 'Sem nome'}
                                     </p>
-                                    <p className="text-xs text-muted-foreground line-clamp-1">
-                                      {client.brand_name || client.company_name || 'Empresa não informada'}
-                                    </p>
+                                    {client.brand_name ? (
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <p className="font-bold text-sm text-primary line-clamp-1">
+                                          {client.brand_name}
+                                        </p>
+                                        {client.process_number && (
+                                          <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-4">
+                                            <Hash className="h-2.5 w-2.5 mr-0.5" />
+                                            {client.process_number}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground line-clamp-1">
+                                        {client.company_name || 'Empresa não informada'}
+                                      </p>
+                                    )}
                                   </div>
 
                                   {/* Info Grid */}
