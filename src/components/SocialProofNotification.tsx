@@ -4,19 +4,87 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 
-// Fallback simulated data (used if no real data available)
-const simulatedNames = [
-  "Andreia", "Carlos", "Juliana", "Rafael", "Mariana", "Lucas", "Fernanda", 
-  "Bruno", "Patricia", "Ricardo", "Amanda", "Felipe", "Camila", "Gustavo",
-  "Beatriz", "Thiago", "Larissa", "Diego", "Vanessa", "Eduardo"
+// Lista de clientes reais que já registraram marcas (dados públicos, sem duplicações)
+const realClientBrands = [
+  { name: "Elias Antonio", brand: "BLUE FITNESS MANUTENÇÃO" },
+  { name: "Jonatan Santana Costa", brand: "ACQUA LIFE NATAÇÃO" },
+  { name: "Isaque Lopes de Oliveira", brand: "Altilar Encartelados" },
+  { name: "Leosmar Martins da Fonseca", brand: "Amada Pizza Artesanal" },
+  { name: "Luciane Barbosa Becker", brand: "Angelo Alves" },
+  { name: "Angelo Alves", brand: "Apito Lito" },
+  { name: "Bruno Miranda Alcântara", brand: "Barbearia Charlotte" },
+  { name: "Johny do Carmo Ferreira", brand: "BH Polimento" },
+  { name: "Julio Duamel Omar Fuertes", brand: "Bomba Atômica H2" },
+  { name: "Raimundo Borges Campos", brand: "Borges Ind. Embalagens" },
+  { name: "Fabiana Julio Pereira", brand: "Boutique do Luxo" },
+  { name: "Alexsandra Pereira da Silva", brand: "Brinquedos Carijó" },
+  { name: "Edivaldo Maués Carvalho Filho", brand: "Canapura da Amazônia" },
+  { name: "Eduardo Albuquerque dos Santos", brand: "Carioca's King" },
+  { name: "Cássio Marques Marchesini", brand: "Carro de Playboy" },
+  { name: "Renan Racanicchi Tura", brand: "Casa Touro" },
+  { name: "Cláudio Henrique Pinto Gonçalves", brand: "Cláudio Henrique Advogados" },
+  { name: "Cleberson Cardoso", brand: "Col-6" },
+  { name: "João Paulo Gomes Bastos", brand: "Crepes Macaquito" },
+  { name: "Cristian Omar Yahari Franco", brand: "Yahari Consultoria" },
+  { name: "Daniella Santos", brand: "Daniella Santos Estética" },
+  { name: "Diogo Luiz Zago", brand: "Zago Engenharia" },
+  { name: "Danilo Queiroz Fernandes", brand: "Drogaria Dr. Farma" },
+  { name: "Isamara Corrêa Lemos", brand: "E'Leve Saúde Integrada" },
+  { name: "Ediana Andrade da Paixão", brand: "Ediana Moda" },
+  { name: "Ederson Pivetta", brand: "Edinho Som" },
+  { name: "Maria de Fátima dos Santos", brand: "Empório da Limpeza QTudo" },
+  { name: "Francisco Eugênio Lourenço", brand: "Espaia Forró" },
+  { name: "Felipe Melo Nascimento", brand: "Felipe Melo Advocacia" },
+  { name: "Dieny Bárbara Sales Batista Souza", brand: "Fênix Suplementos" },
+  { name: "Moises Rocha Guedes", brand: "Fio Bronzeado" },
+  { name: "Luciano Grilo Almendro", brand: "Galera da Pizza" },
+  { name: "Gilson Pereira da Silva", brand: "Guerreiros Rota 070" },
+  { name: "Ivanildo Gomes Peixoto", brand: "Help Info e Segurança" },
+  { name: "Albanir Antônio", brand: "Holos Cristais" },
+  { name: "Jean Lima dos Santos", brand: "Igreja Plenitude" },
+  { name: "Mariana Valiongo da Silva", brand: "Império Pizzaria" },
+  { name: "Tiago Silva Dias", brand: "Infinity Plastic" },
+  { name: "Juracy Sousa Vieira", brand: "JS Glasses" },
+  { name: "Karine de Campos Monteiro", brand: "Karine Estética" },
+  { name: "Wiliam José Macharutto", brand: "Koraly Imobiliária" },
+  { name: "Sérgio Paulo Silvestre", brand: "LabRetail" },
+  { name: "Elessandro da Silva Canedo", brand: "Le Modas" },
+  { name: "Elton Vieira da Silva", brand: "LIVETEC Telecom" },
+  { name: "Luan Lucas Cuochinski Daniel", brand: "Luan Consultoria" },
+  { name: "Maiara Rodrigues Manso Cardoso", brand: "Maiara Moda Feminina" },
+  { name: "Manoel Luiz Alves da Silva", brand: "Manoel Luiz Advocacia" },
+  { name: "Newton Xisto de Oliveira", brand: "Newton Xisto e Gxe" },
+  { name: "Marcelo José Dietrich", brand: "Dietrich Arquitetura" },
+  { name: "Maria das Graças Bernardino", brand: "Graças Artesanato" },
+  { name: "Mariany Gabrielle Araújo", brand: "Mariany Design" },
+  { name: "Gilson Ribeiro", brand: "Menino Bao" },
+  { name: "Osvaldo Welhington Nogueira", brand: "Meta Gestão Empresarial" },
+  { name: "Michel Luiz de Freitas Proença", brand: "Michel Proença Coaching" },
+  { name: "William Mourabito Pereira", brand: "MW Elétrica e Manutenção" },
+  { name: "Marcos Henrique dos Santos", brand: "My Heels" },
+  { name: "José Jacinto de Souza", brand: "Playce FM" },
+  { name: "Adriana Glória Soares", brand: "Pousada Odoyá Beach" },
+  { name: "Rodrigo Xavier de Paula", brand: "Projeção Legado" },
+  { name: "Hourivaldo Andrade Alves", brand: "Projeto Gospel" },
+  { name: "Leandro Farias Ferreira", brand: "Prospere Farma" },
+  { name: "Rafael Bettini", brand: "Rafael Bettini Fitness" },
+  { name: "Jorge Luis Dantas", brand: "Restaurante Mineiro Lenhador" },
+  { name: "Airton Pagnussat", brand: "Ritual Ink" },
+  { name: "Marileide Martins de Brito", brand: "SilkSync Profissional" },
+  { name: "Sayoneri Lucena de Sena", brand: "Sirius Solar" },
+  { name: "Renato Araujo Leite", brand: "SK8 Only" },
+  { name: "Wanderlei Antônio de Oliveira", brand: "Sorvete Encantado" },
+  { name: "Lais Emanuele Zaboenco Coimbra", brand: "Sr. Batata" },
+  { name: "Susana Almeida Coelho do Carmo", brand: "Susana Almeida Moda" },
+  { name: "Graziela Vitor de Souza", brand: "TL Tok Limp" },
+  { name: "Lucas Silvestre da Rosa", brand: "Veross" },
+  { name: "Wagner Lopes da Costa", brand: "Wagner Lopes Advocacia" },
+  { name: "Felipe Smith", brand: "YHWH" },
 ];
 
-const simulatedBrands = [
-  "Bella Fit", "Nova Prime", "Doce Encanto", "TechMais", "Arte Viva",
-  "Sabor Brasil", "Luz Digital", "Moda Única", "Café Premium", "Studio Pro",
-  "Green Life", "Smart Home", "Beleza Natural", "Fast Delivery", "Urban Style",
-  "Gourmet Express", "Fit & Health", "Digital Agency", "Pet Love", "Clean House"
-];
+// Extract names and brands for fallback simulated notifications
+const simulatedNames = realClientBrands.map(c => c.name.split(' ')[0]);
+const simulatedBrands = realClientBrands.map(c => c.brand);
 
 // Generic names to use with real brand data (privacy)
 const genericNames = [
