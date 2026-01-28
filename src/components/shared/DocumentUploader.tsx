@@ -144,7 +144,7 @@ export function DocumentUploader({
             type="file"
             accept={accept}
             onChange={handleFileSelect}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer"
           />
           <div className={cn(
             "flex flex-col items-center gap-2 transition-transform duration-200",
