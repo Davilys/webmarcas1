@@ -197,7 +197,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     state: '',
     zip_code: '',
     priority: 'medium',
-    origin: 'site'
+    origin: 'site',
+    brand_name: '',
+    business_area: ''
   });
   
   // NEW: Add process dialog
@@ -251,7 +253,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         state: '',
         zip_code: '',
         priority: client.priority || 'medium',
-        origin: client.origin || 'site'
+        origin: client.origin || 'site',
+        brand_name: client.brand_name || '',
+        business_area: client.business_area || ''
       });
       // Try to match existing value with a pricing option
       const matchedOption = SERVICE_PRICING_OPTIONS.find(opt => opt.value === client.contract_value);
@@ -464,7 +468,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     if (!client) return;
 
     try {
-      const { error } = await supabase.from('profiles').update({
+      // Update profile
+      const { error: profileError } = await supabase.from('profiles').update({
         full_name: editFormData.full_name,
         email: editFormData.email,
         phone: editFormData.phone,
@@ -481,7 +486,17 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         origin: editFormData.origin
       }).eq('id', client.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Update brand process if exists and has brand data
+      if (client.process_id && (editFormData.brand_name || editFormData.business_area)) {
+        const { error: processError } = await supabase.from('brand_processes').update({
+          brand_name: editFormData.brand_name,
+          business_area: editFormData.business_area || null
+        }).eq('id', client.process_id);
+
+        if (processError) throw processError;
+      }
 
       toast.success('Dados do cliente atualizados!');
       setShowEditDialog(false);
@@ -1039,6 +1054,29 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                   )}
                 </CardContent>
               </Card>
+
+              {/* Dados da Marca */}
+              {client.brand_name && (
+                <Card className="border-0 shadow-md">
+                  <CardContent className="pt-4">
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-orange-500" />
+                      Dados da Marca
+                    </h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 border rounded-lg">
+                        <p className="text-xs text-muted-foreground">NOME DA MARCA</p>
+                        <p className="font-medium">{client.brand_name}</p>
+                      </div>
+                      <div className="p-3 border rounded-lg">
+                        <p className="text-xs text-muted-foreground">RAMO DE ATIVIDADE</p>
+                        <p className="font-medium">{client.business_area || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Dados da Empresa */}
               <Card className="border-0 shadow-md">
@@ -1755,6 +1793,27 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                 placeholder="00000-000"
               />
             </div>
+            {/* Brand fields - only show if client has a process */}
+            {client?.process_id && (
+              <>
+                <div>
+                  <Label>Nome da Marca</Label>
+                  <Input 
+                    value={editFormData.brand_name}
+                    onChange={(e) => setEditFormData({...editFormData, brand_name: e.target.value})}
+                    placeholder="Nome da marca registrada"
+                  />
+                </div>
+                <div>
+                  <Label>Ramo de Atividade</Label>
+                  <Input 
+                    value={editFormData.business_area}
+                    onChange={(e) => setEditFormData({...editFormData, business_area: e.target.value})}
+                    placeholder="Ex: Tecnologia, Alimentação..."
+                  />
+                </div>
+              </>
+            )}
             <div>
               <Label>Prioridade</Label>
               <Select 

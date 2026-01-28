@@ -27,6 +27,7 @@ export interface ClientWithProcess {
   contract_value: number | null;
   process_id: string | null;
   brand_name: string | null;
+  business_area: string | null;
   pipeline_stage: string | null;
   process_status: string | null;
   created_at?: string;
