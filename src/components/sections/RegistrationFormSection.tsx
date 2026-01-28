@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +31,37 @@ const RegistrationFormSection = () => {
 
   // Track if form_started email was already triggered
   const [formStartedTriggered, setFormStartedTriggered] = useState(false);
+
+  // Check for pre-filled viability data from ViabilitySearchSection
+  useEffect(() => {
+    const storedData = sessionStorage.getItem('viabilityData');
+    if (storedData) {
+      try {
+        const parsed = JSON.parse(storedData);
+        if (parsed.brandName && parsed.businessArea && parsed.level) {
+          // Create a viability result from stored data
+          const viabilityResult: ViabilityResult = {
+            success: true,
+            level: parsed.level,
+            title: parsed.level === 'high' ? 'Alta Viabilidade' : 
+                   parsed.level === 'medium' ? 'Viabilidade Média' : 
+                   parsed.level === 'low' ? 'Baixa Viabilidade' : 'Marca Bloqueada',
+            description: 'Viabilidade já verificada anteriormente.',
+          };
+          setViabilityData({
+            brandName: parsed.brandName,
+            businessArea: parsed.businessArea,
+            result: viabilityResult,
+          });
+          // Skip to step 2 (personal data)
+          setStep(2);
+          // Clear the stored data to prevent re-use
+          sessionStorage.removeItem('viabilityData');
+        }
+      } catch (e) {
+        console.error('Error parsing viability data:', e);
+      }
+    }
 
   // Handlers
   const handleViabilityNext = useCallback((brandName: string, businessArea: string, result: ViabilityResult) => {
