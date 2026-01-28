@@ -298,6 +298,12 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
     const effectiveBrandName = formData.brand_name || extractBrandFromSubject(formData.subject) || '';
 
+    // Derive the document type from the selected template to avoid race conditions
+    // (e.g., user changes template and immediately clicks "Gerar link" before setFormData applies).
+    const effectiveDocumentType: DocumentType = selectedTemplate
+      ? getDocumentTypeFromTemplateName(selectedTemplate.name)
+      : formData.document_type;
+
     // Parse address to extract neighborhood if available
     const parseAddressForNeighborhood = (address: string): { mainAddress: string; neighborhood: string } => {
       if (!address) return { mainAddress: '', neighborhood: '' };
@@ -345,7 +351,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     }
 
     // Legacy flow for contracts - use description if provided, or empty template
-    if (formData.document_type === 'contract') {
+    if (effectiveDocumentType === 'contract') {
       // If we have a template selected, use its content as fallback
       if (selectedTemplate?.content && !formData.description) {
         return selectedTemplate.content;
@@ -407,7 +413,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       numero_parcela: formData.penalty_installments || '1',
     };
 
-    return generateDocumentContent(formData.document_type, vars);
+    // At this point, effectiveDocumentType is guaranteed NOT to be 'contract'
+    const nonContractType = effectiveDocumentType as Exclude<DocumentType, 'contract'>;
+    return generateDocumentContent(nonContractType, vars);
   };
 
   const createNewClient = async (): Promise<string | null> => {
