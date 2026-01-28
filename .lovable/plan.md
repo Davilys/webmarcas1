@@ -1,224 +1,146 @@
 
 
-## Correção: Adicionar Nome da Marca e Ramo de Atividade na Aba Contatos e Formulário de Edição
+## Correção: Sincronização de Dados do Signatário no Novo Documento
 
 ### Problema Identificado
-Na aba **Contatos** do painel de detalhes do cliente e no formulário de edição faltam:
-1. **Nome da Marca** (`brand_name`) - visível e editável
-2. **Ramo de Atividade** (`business_area`) - visível e editável
 
-Esses campos vêm da tabela `brand_processes`, não de `profiles`.
+Na aba **Contratos** > **Novo Documento** > **Dados do Signatário**, quando um cliente é selecionado:
+- **Nome do Representante Legal** mostra corretamente
+- **CPF do Representante** NÃO sincroniza (ou fica incorreto)
+- **CNPJ da Empresa** NÃO sincroniza (ou fica incorreto)
+- **Endereço** sincroniza parcialmente (sem bairro)
+- **Cidade/Estado** sincronizam corretamente
 
 ### Causa Raiz
 
-| Local | Problema |
-|-------|----------|
-| `ClientKanbanBoard.tsx` (linha 19-36) | Interface `ClientWithProcess` não inclui `business_area` |
-| `Clientes.tsx` (linhas 96-113) | `business_area` não é copiado do processo para o objeto cliente |
-| `ClientDetailSheet.tsx` (aba Contatos) | Não exibe Nome da Marca nem Ramo de Atividade |
-| `ClientDetailSheet.tsx` (formulário edição) | Não tem campos para editar `brand_name` e `business_area` |
-| `handleSaveFullEdit()` | Não atualiza `brand_processes` |
+A tabela `profiles` possui colunas **separadas** para:
+- `cpf` (ex: "231.437.378-24")
+- `cnpj` (ex: "25.201.774/0001-01")
+- `neighborhood` (ex: "Jardim Sílvia Maria")
 
----
+Mas o código atual:
+1. A interface `Profile` (linha 33-44) NÃO inclui os campos `cpf`, `cnpj` e `neighborhood`
+2. A função `handleProfileChange` (linha 773-820) usa `profile.cpf_cnpj` ao invés de `profile.cpf` e `profile.cnpj`
+3. O useEffect de sincronização (linha 164-180) também usa a lógica incorreta com `cpf_cnpj`
 
 ### Solução Proposta (Isolada e Segura)
 
-#### 1. Adicionar `business_area` à Interface `ClientWithProcess`
-**Arquivo:** `src/components/admin/clients/ClientKanbanBoard.tsx` (linhas 19-36)
+#### 1. Atualizar a Interface `Profile`
+**Arquivo:** `src/components/admin/contracts/CreateContractDialog.tsx` (linhas 33-44)
 
 ```typescript
-export interface ClientWithProcess {
+interface Profile {
   id: string;
   full_name: string | null;
   email: string;
   phone: string | null;
   company_name: string | null;
-  priority: string | null;
-  origin: string | null;
-  contract_value: number | null;
-  process_id: string | null;
-  brand_name: string | null;
-  business_area: string | null;  // NOVO CAMPO
-  pipeline_stage: string | null;
-  process_status: string | null;
-  created_at?: string;
-  last_contact?: string;
-  cpf_cnpj?: string;
-  process_number?: string;
+  cpf_cnpj: string | null;   // Legado - manter para compatibilidade
+  cpf: string | null;        // NOVO: CPF separado
+  cnpj: string | null;       // NOVO: CNPJ separado
+  address: string | null;
+  neighborhood: string | null; // NOVO: Bairro separado
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
 }
 ```
 
-#### 2. Copiar `business_area` ao criar objeto cliente
-**Arquivo:** `src/pages/admin/Clientes.tsx` (linhas 96-113)
+#### 2. Atualizar `handleProfileChange` para usar campos separados
+**Arquivo:** `src/components/admin/contracts/CreateContractDialog.tsx` (linhas 773-820)
 
 ```typescript
-// Cliente SEM processo
-clientsWithProcesses.push({
-  // ... campos existentes
-  brand_name: null,
-  business_area: null,  // ADICIONAR
-  pipeline_stage: 'protocolado',
-  // ...
-});
-
-// Cliente COM processo
-for (const process of userProcesses) {
-  clientsWithProcesses.push({
-    // ... campos existentes
-    brand_name: process.brand_name,
-    business_area: process.business_area || null,  // ADICIONAR
-    pipeline_stage: process.pipeline_stage || 'protocolado',
-    // ...
-  });
-}
-```
-
-#### 3. Adicionar seção "Dados da Marca" na aba Contatos
-**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx`
-
-Entre "Dados Pessoais" e "Dados da Empresa", inserir:
-
-```tsx
-{/* Dados da Marca */}
-{client.brand_name && (
-  <Card className="border-0 shadow-md">
-    <CardContent className="pt-4">
-      <h4 className="font-semibold mb-4 flex items-center gap-2">
-        <FileText className="h-4 w-4 text-orange-500" />
-        Dados da Marca
-      </h4>
+const handleProfileChange = async (userId: string) => {
+  const profile = profiles.find(p => p.id === userId);
+  setSelectedProfile(profile || null);
+  
+  if (profile) {
+    // Priorizar campos separados cpf/cnpj, fallback para cpf_cnpj legado
+    const cpfValue = profile.cpf || 
+      (profile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? profile.cpf_cnpj : '') || '';
+    const cnpjValue = profile.cnpj || 
+      (profile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? profile.cpf_cnpj : '') || '';
+    
+    // Construir endereço completo incluindo bairro
+    const fullAddress = profile.neighborhood 
+      ? `${profile.address || ''}, ${profile.neighborhood}`.replace(/^, /, '')
+      : profile.address || '';
+    
+    // Buscar nome da marca dos processos do cliente
+    let brandName = '';
+    try {
+      const { data: processes } = await supabase
+        .from('brand_processes')
+        .select('brand_name')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
       
-      <div className="grid grid-cols-2 gap-4">
-        <div className="p-3 border rounded-lg">
-          <p className="text-xs text-muted-foreground">NOME DA MARCA</p>
-          <p className="font-medium">{client.brand_name}</p>
-        </div>
-        <div className="p-3 border rounded-lg">
-          <p className="text-xs text-muted-foreground">RAMO DE ATIVIDADE</p>
-          <p className="font-medium">{client.business_area || 'N/A'}</p>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-)}
-```
-
-#### 4. Adicionar campos de marca ao formulário de edição
-**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx`
-
-4.1. Expandir `editFormData` state (linha 187-201):
-```typescript
-const [editFormData, setEditFormData] = useState({
-  full_name: '',
-  email: '',
-  phone: '',
-  cpf: '',
-  cnpj: '',
-  company_name: '',
-  address: '',
-  neighborhood: '',
-  city: '',
-  state: '',
-  zip_code: '',
-  priority: 'medium',
-  origin: 'site',
-  brand_name: '',       // NOVO
-  business_area: ''     // NOVO
-});
-```
-
-4.2. Inicializar com dados do cliente (linha 241-255):
-```typescript
-setEditFormData({
-  // ... campos existentes
-  brand_name: client.brand_name || '',
-  business_area: client.business_area || ''
-});
-```
-
-4.3. Adicionar inputs no dialog de edição (antes de Prioridade):
-```tsx
-{/* Mostrar campos de marca apenas se cliente tem processo */}
-{client?.process_id && (
-  <>
-    <div>
-      <Label>Nome da Marca</Label>
-      <Input 
-        value={editFormData.brand_name}
-        onChange={(e) => setEditFormData({...editFormData, brand_name: e.target.value})}
-        placeholder="Nome da marca registrada"
-      />
-    </div>
-    <div>
-      <Label>Ramo de Atividade</Label>
-      <Input 
-        value={editFormData.business_area}
-        onChange={(e) => setEditFormData({...editFormData, business_area: e.target.value})}
-        placeholder="Ex: Tecnologia, Alimentação..."
-      />
-    </div>
-  </>
-)}
-```
-
-#### 5. Atualizar `handleSaveFullEdit()` para salvar dados do processo
-**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx` (linha 463-494)
-
-```typescript
-const handleSaveFullEdit = async () => {
-  if (!client) return;
-
-  try {
-    // Atualizar profile
-    const { error: profileError } = await supabase.from('profiles').update({
-      full_name: editFormData.full_name,
-      email: editFormData.email,
-      phone: editFormData.phone,
-      cpf: editFormData.cpf || null,
-      cnpj: editFormData.cnpj || null,
-      cpf_cnpj: editFormData.cpf || editFormData.cnpj || null,
-      company_name: editFormData.company_name,
-      address: editFormData.address,
-      neighborhood: editFormData.neighborhood,
-      city: editFormData.city,
-      state: editFormData.state,
-      zip_code: editFormData.zip_code,
-      priority: editFormData.priority,
-      origin: editFormData.origin
-    }).eq('id', client.id);
-
-    if (profileError) throw profileError;
-
-    // Atualizar processo (se existir)
-    if (client.process_id && (editFormData.brand_name || editFormData.business_area)) {
-      const { error: processError } = await supabase.from('brand_processes').update({
-        brand_name: editFormData.brand_name,
-        business_area: editFormData.business_area || null
-      }).eq('id', client.process_id);
-
-      if (processError) throw processError;
+      if (processes?.brand_name) {
+        brandName = processes.brand_name;
+      }
+    } catch (error) {
+      console.log('Could not fetch brand name:', error);
     }
-
-    toast.success('Dados do cliente atualizados!');
-    setShowEditDialog(false);
-    onUpdate();
-    fetchClientData();
-  } catch (error: any) {
-    console.error('Error updating client:', error);
-    toast.error(`Erro ao atualizar: ${error?.message || 'Tente novamente'}`);
+    
+    setFormData(prev => ({ 
+      ...prev, 
+      user_id: userId,
+      signatory_name: profile.full_name || '',
+      signatory_cpf: cpfValue,
+      signatory_cnpj: cnpjValue,
+      company_address: fullAddress,
+      company_city: profile.city || '',
+      company_state: profile.state || '',
+      company_cep: profile.zip_code || '',
+      brand_name: brandName || prev.brand_name || '',
+      subject: prev.subject || `Documento - ${profile.full_name || profile.email}`,
+    }));
+  } else {
+    setFormData(prev => ({ ...prev, user_id: userId }));
   }
 };
 ```
 
+#### 3. Atualizar o useEffect de sincronização
+**Arquivo:** `src/components/admin/contracts/CreateContractDialog.tsx` (linhas 164-180)
+
+```typescript
+useEffect(() => {
+  // Auto-fill fields when profile is selected
+  if (selectedProfile) {
+    // Priorizar campos separados cpf/cnpj, fallback para cpf_cnpj legado
+    const cpfValue = selectedProfile.cpf || 
+      (selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '';
+    const cnpjValue = selectedProfile.cnpj || 
+      (selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '';
+    
+    // Construir endereço completo incluindo bairro
+    const fullAddress = selectedProfile.neighborhood 
+      ? `${selectedProfile.address || ''}, ${selectedProfile.neighborhood}`.replace(/^, /, '')
+      : selectedProfile.address || '';
+    
+    setFormData(prev => ({
+      ...prev,
+      signatory_name: selectedProfile.full_name || '',
+      signatory_cpf: cpfValue,
+      signatory_cnpj: cnpjValue,
+      company_address: fullAddress,
+      company_city: selectedProfile.city || '',
+      company_state: selectedProfile.state || '',
+      company_cep: selectedProfile.zip_code || '',
+    }));
+  }
+}, [selectedProfile]);
+```
+
 ---
 
-### Arquivos Modificados
+### Arquivo Modificado
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/admin/clients/ClientKanbanBoard.tsx` | Interface `ClientWithProcess` + `business_area` |
-| `src/pages/admin/Clientes.tsx` | Incluir `business_area` na criação do objeto cliente |
-| `src/components/admin/clients/ClientDetailSheet.tsx` | Exibição na aba Contatos, campos no formulário de edição, lógica de salvamento |
+| `src/components/admin/contracts/CreateContractDialog.tsx` | Interface Profile expandida, lógica de sincronização atualizada |
 
 ---
 
@@ -226,34 +148,36 @@ const handleSaveFullEdit = async () => {
 
 | Risco | Mitigação |
 |-------|-----------|
-| Quebrar TypeScript em outros arquivos | Interface é apenas ampliada (campo opcional com `null`) |
-| Cliente sem processo não ter marca | Exibição condicional com `{client.brand_name && ...}` |
-| Falha ao salvar processo | Try/catch separado com mensagem de erro clara |
-| Regressão no Kanban | `business_area` é opcional e não afeta renderização existente |
+| Quebrar TypeScript | Interface apenas expande campos (opcionais com null) |
+| Dados legados sem campos separados | Fallback para `cpf_cnpj` mantido |
+| Sobrescrever edições manuais | Sincronização só ocorre ao selecionar cliente |
+| Regressão em fluxo de novo cliente | Fluxo usa estados separados (`personalData`), não afetado |
 
 ---
 
 ### Comportamento Esperado Após Correção
 
-1. **Aba Contatos**
-   - Seção "Dados da Marca" visível com Nome da Marca e Ramo de Atividade
-   - Seção só aparece se cliente tem processo vinculado
+1. **Ao selecionar um cliente existente:**
+   - Nome do Representante Legal: preenchido com `full_name`
+   - CPF do Representante: preenchido com `cpf` (ou fallback `cpf_cnpj` se length=11)
+   - CNPJ da Empresa: preenchido com `cnpj` (ou fallback `cpf_cnpj` se length=14)
+   - Endereço: preenchido com `address, neighborhood` (endereço completo)
+   - Cidade: preenchido com `city`
+   - Estado: preenchido com `state`
+   - CEP: preenchido com `zip_code`
 
-2. **Formulário de Edição**
-   - Campos "Nome da Marca" e "Ramo de Atividade" aparecem se cliente tem processo
-   - Pré-preenchidos com dados atuais
-   - Ao salvar, atualiza tanto `profiles` quanto `brand_processes`
+2. **Edição manual:**
+   - Admin pode ajustar qualquer campo após sincronização
+   - Dados são salvos conforme preenchimento final
 
-3. **Pessoa Física que adiciona marca**
-   - Cliente pode ter processo criado via botão "Novo Processo"
-   - Após criar processo, campos de marca aparecem no formulário de edição
+3. **Compatibilidade:**
+   - Clientes antigos sem campos separados continuam funcionando via fallback
 
 ---
 
 ### Testes Recomendados
-1. Abrir cliente COM processo no Kanban → verificar seção "Dados da Marca" na aba Contatos
-2. Abrir cliente SEM processo → verificar que seção "Dados da Marca" NÃO aparece
-3. Editar cliente COM processo → verificar campos Nome da Marca e Ramo preenchidos
-4. Alterar Ramo de Atividade → Salvar → Verificar persistência
-5. Criar novo processo para cliente → verificar que campos aparecem no formulário
+1. Criar Novo Documento > Selecionar cliente com CPF e CNPJ separados > Verificar sincronização
+2. Criar Novo Documento > Selecionar cliente com apenas cpf_cnpj legado > Verificar fallback
+3. Editar dados manualmente após sincronização > Gerar documento > Verificar valores
+4. Verificar que fluxo "Criar novo cliente" continua funcionando
 
