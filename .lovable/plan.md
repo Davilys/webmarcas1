@@ -1,150 +1,127 @@
 
-# Plano: Corrigir Substituição de Variáveis nos Documentos (Procuração, Distrato)
-
-## Diagnóstico do Problema
-
-Ao criar um novo documento (Procuração, Distrato com Multa, Distrato sem Multa) para um cliente existente no CRM, as variáveis como `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}` **não estão sendo substituídas** pelos dados reais do cliente.
-
-### Causa Raiz
-
-O código em `generateDocumentHtml()` (linhas 356-373 em `CreateContractDialog.tsx`) está:
-1. **Ignorando o template do banco de dados** (`selectedTemplate?.content`)
-2. Usando a função `generateDocumentContent()` que gera um template hardcoded em JavaScript (arquivo `documentTemplates.ts`), que **não corresponde ao template salvo no banco**
-
-### Variáveis nos Templates do Banco
-
-| Tipo Documento | Variáveis no Template do Banco |
-|----------------|--------------------------------|
-| Procuração | `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cidade}}`, `{{estado}}`, `{{cep}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}`, `{{data_procuracao}}` |
-| Distrato | `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cidade}}`, `{{estado}}`, `{{cep}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}`, `{{marca}}`, `{{data_distrato}}`, `{{numero_parcelas}}`, `{{valor_multa}}` |
-
-### Código Problemático Atual
-
-```javascript
-// Linha 356-373 - CreateContractDialog.tsx
-const vars = {
-  nome_empresa: selectedProfile?.company_name || ...,
-  cnpj: ...,
-  endereco: ...,  // ❌ Template usa "endereco_empresa", não "endereco"
-  ...
-};
-return generateDocumentContent(formData.document_type, vars);
-// ❌ Ignora selectedTemplate?.content e usa template hardcoded
-```
+## Objetivo
+Corrigir com urgência o problema em que, ao gerar o link de assinatura de documentos (principalmente **“Procuração INPI - Padrão”**), os placeholders como `{{nome_empresa}}`, `{{cnpj}}`, `{{endereco_empresa}}` etc. **não são substituídos** pelos dados do cliente selecionado — garantindo que a correção seja **isolada**, com **baixo risco** e **sem afetar** outras partes do projeto.
 
 ---
 
-## Solução Proposta
+## Diagnóstico (causa raiz confirmada)
+Ao analisar `src/components/admin/contracts/CreateContractDialog.tsx`, identifiquei que o sistema está classificando incorretamente alguns templates como “Contrato padrão” por causa do trecho:
 
-### Criar Função para Substituir Variáveis no Template do Banco
+- `isStandardContract` / `isStandardTemplate` / `isStandardContractTemplate` usam:
+  - `selectedTemplate.name.toLowerCase().includes('padrão')`
 
-Modificar `generateDocumentHtml()` para substituir as variáveis diretamente no `selectedTemplate?.content`, sem usar `generateDocumentContent()`.
+Isso faz com que **“Procuração INPI - Padrão”** caia no fluxo de “Contrato padrão” (Registro de Marca) e use `replaceContractVariables(...)`, que **não substitui** `{{nome_empresa}}`, `{{cnpj}}`, etc.
 
-### Arquivo a Modificar
+Evidência direta:
+- No banco, o template **Procuração INPI - Padrão** contém placeholders do tipo:
+  - `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cidade}}`, `{{estado}}`, `{{cep}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}`
+- Além disso, esse template usa `{{nome_representante}}` (não `{{nome_representante}}`), o que exige substituição compatível.
 
-`src/components/admin/contracts/CreateContractDialog.tsx`
-
-### Alterações no Código
-
-**Substituir linhas 356-373 por:**
-
-```javascript
-// For other document types (procuracao, distrato) using database templates
-if (selectedTemplate?.content) {
-  const currentDate = new Date().toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
-  
-  const addressParts = parseAddressForNeighborhood(selectedProfile?.address || formData.company_address || '');
-  const fullAddress = `${addressParts.mainAddress}${addressParts.neighborhood ? ', ' + addressParts.neighborhood : ''}`;
-  
-  // Replace all template variables with client data
-  let result = selectedTemplate.content
-    // Company/Personal data
-    .replace(/\{\{nome_empresa\}\}/g, selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '')
-    .replace(/\{\{endereco_empresa\}\}/g, fullAddress)
-    .replace(/\{\{endereco\}\}/g, fullAddress)
-    .replace(/\{\{cidade\}\}/g, selectedProfile?.city || formData.company_city || '')
-    .replace(/\{\{estado\}\}/g, selectedProfile?.state || formData.company_state || '')
-    .replace(/\{\{cep\}\}/g, selectedProfile?.zip_code || formData.company_cep || '')
-    .replace(/\{\{cnpj\}\}/g, formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '')
-    // Representative data
-    .replace(/\{\{nome_representante\}\}/g, formData.signatory_name || selectedProfile?.full_name || '')
-    .replace(/\{\{cpf_representante\}\}/g, formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '')
-    // Contact info
-    .replace(/\{\{email\}\}/g, selectedProfile?.email || '')
-    .replace(/\{\{telefone\}\}/g, selectedProfile?.phone || '')
-    // Brand and distrato specifics
-    .replace(/\{\{marca\}\}/g, effectiveBrandName)
-    .replace(/\{\{data_procuracao\}\}/g, currentDate)
-    .replace(/\{\{data_distrato\}\}/g, currentDate)
-    .replace(/\{\{valor_multa\}\}/g, formData.penalty_value || '0,00')
-    .replace(/\{\{numero_parcelas\}\}/g, formData.penalty_installments || '1');
-  
-  return result;
-}
-
-// Fallback to generateDocumentContent only if no template selected
-const vars = {
-  nome_empresa: selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '',
-  cnpj: formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '',
-  endereco: addressParts.mainAddress || selectedProfile?.address || formData.company_address || '',
-  cidade: selectedProfile?.city || formData.company_city || '',
-  estado: selectedProfile?.state || formData.company_state || '',
-  cep: selectedProfile?.zip_code || formData.company_cep || '',
-  nome_representante: formData.signatory_name || selectedProfile?.full_name || '',
-  cpf_representante: formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '',
-  email: selectedProfile?.email || '',
-  telefone: selectedProfile?.phone || '',
-  marca: effectiveBrandName,
-  valor_multa: formData.penalty_value || '',
-  numero_parcela: formData.penalty_installments || '1',
-};
-
-return generateDocumentContent(formData.document_type, vars);
-```
+Resultado: o HTML do documento é salvo no `contracts.contract_html` **sem substituição**, e a tela de assinatura exibe os placeholders (como na imagem que você enviou).
 
 ---
 
-## Análise de Risco
+## Estratégia de correção (mínima, segura e sem regressões)
+### A) Corrigir a detecção de “Contrato padrão” (Registro de Marca) para não depender de “padrão”
+**Arquivo:** `src/components/admin/contracts/CreateContractDialog.tsx`
 
-| Risco | Mitigação |
-|-------|-----------|
-| Alteração pode afetar contratos padrão (Registro de Marca) | A lógica para contratos "registro de marca" permanece intacta (linhas 314-345) |
-| Variáveis diferentes entre templates | Código substitui todas as variáveis conhecidas, ignorando as não encontradas |
-| Fallback para templates inexistentes | Mantém `generateDocumentContent()` como fallback caso `selectedTemplate?.content` esteja vazio |
+1) Criar uma variável única e consistente para o tipo do template selecionado:
+- `templateDocumentType = selectedTemplate ? getDocumentTypeFromTemplateName(selectedTemplate.name) : formData.document_type`
 
----
+2) Reescrever as flags que hoje usam `includes('padrão')` para serem verdadeiras **apenas** quando:
+- `templateDocumentType === 'contract'`
+- e o template for realmente “Registro de Marca” (por nome)
 
-## Arquivos Afetados
+Exemplo do que será ajustado (conceito):
+- Antes: `includes('registro de marca') || includes('padrão')`
+- Depois: `templateDocumentType === 'contract' && includes('registro de marca')`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/admin/contracts/CreateContractDialog.tsx` | Modificar função `generateDocumentHtml()` (linhas 346-373) |
+Isso deve ser aplicado nos 3 pontos do arquivo:
+- no `generateDocumentHtml()` (detecção do “standard contract”)
+- no cálculo de `contractValue` e `payment_method`
+- no auto-gerar link quando `sendLink === false` (regra “standard contract template”)
 
----
-
-## Resultado Esperado
-
-**Antes:**
-```
-{{nome_empresa}}, empresa brasileira... sede na {{endereco_empresa}}...
-Devidamente inscrito no CNPJ sob Nº {{cnpj}}...
-```
-
-**Depois:**
-```
-Laudemir Rodrigues Valente, empresa brasileira... sede na Rua Exemplo, 123 - Centro...
-Devidamente inscrito no CNPJ sob Nº 12.345.678/0001-90...
-```
+**Impacto esperado:**  
+- “Procuração INPI - Padrão” e “Distratos - Padrão” deixam de entrar no fluxo de “Contrato padrão”, passando a usar o fluxo correto de substituição.
 
 ---
 
-## Estimativa
+### B) Tornar a substituição de variáveis mais robusta (especialmente Procuração)
+Ainda em `generateDocumentHtml()`:
+1) Manter o fluxo atual “não-contrato” que usa `selectedTemplate.content` e faz `.replace(...)`, mas:
+2) Corrigir o placeholder do representante para suportar os dois nomes:
+- `{{nome_representante}}` (que aparece na Procuração)
+- `{{nome_representante}}` (que aparece nos Distratos)
 
-- **Complexidade**: Baixa
-- **Arquivos alterados**: 1
-- **Linhas modificadas**: ~40
-- **Risco de regressão**: Baixo (alteração isolada na função `generateDocumentHtml()`)
+3) Melhorar os regex para suportar espaços dentro do placeholder (evita falhas se alguém editar templates no futuro):
+- Ex: `{{ nome_empresa }}` também deve funcionar.
+
+Implementação recomendada:
+- Criar helper local `replaceVar(template, key, value)` com regex case-insensitive e tolerante a espaços:
+  - `new RegExp('\\{\\{\\s*' + key + '\\s*\\}\\}', 'gi')`
+
+Aplicar para:
+- `nome_empresa`, `endereco_empresa`, `cidade`, `estado`, `cep`, `cnpj`, `email`, `telefone`
+- `nome_representante` **e** `nome_representante`
+- `cpf_representante`
+- `marca`, `data_procuracao`, `data_distrato`, `valor_multa`, `numero_parcelas`
+
+**Impacto esperado:**
+- Procuração passa a preencher todos os dados do cliente corretamente.
+- Distratos continuam funcionando e ficam mais resistentes.
+- Não mexe no template de “Registro de Marca” (contrato) nem na lógica de `replaceContractVariables` usada pelo fluxo padrão.
+
+---
+
+## Testes obrigatórios antes de publicar (end-to-end)
+### 1) Teste por tipo de documento (Admin → gerar link → página de assinatura)
+Na rota `/admin/contratos`, para um cliente que tenha:
+- `company_name`, `cpf_cnpj`, `address`, `city`, `state`, `zip_code`, `email`, `phone`
+
+Gerar link para:
+1. **Procuração INPI - Padrão**
+   - Confirmar na página `/assinar/:token` que não existe nenhum `{{...}}` visível
+   - Confirmar que `nome_empresa`, `cnpj`, `endereco_empresa`, `nome_representante`, `cpf_representante` foram preenchidos
+2. **Distrato com Multa - Padrão**
+   - Confirmar substituição de `{{marca}}`, `{{valor_multa}}`, `{{numero_parcelas}}`, etc.
+3. **Distrato sem Multa - Padrão**
+4. **Contrato Registro de Marca**
+   - Confirmar que continua usando o fluxo padrão (sem regressão)
+   - Confirmar valor e método de pagamento continuam coerentes
+
+### 2) Teste de regressão do “auto-gerar link”
+- Verificar que o auto-gerar link **só acontece** para o contrato de Registro de Marca (document_type=contract), e não para procuração/distrato.
+
+### 3) Teste rápido de “race condition”
+- Trocar rapidamente o template e clicar “Gerar link”
+- Confirmar que o documento gerado corresponde ao template selecionado e com dados preenchidos
+
+---
+
+## Análise de risco (antes de publicar)
+### Risco principal
+- Alterar detecção de “template padrão” poderia impactar a automação de pagamento/link do “Registro de Marca”.
+
+### Mitigação
+- Restringir “standard contract” por `templateDocumentType === 'contract'` + “registro de marca”.
+- Não alterar `replaceContractVariables`.
+- Mudança isolada em **um arquivo** (`CreateContractDialog.tsx`) e apenas em regras condicionais + substituição de placeholders.
+
+### Risco residual
+- Baixo. A correção alinha a lógica ao comportamento esperado e evita que Procuração/Distrato entrem no fluxo errado.
+
+---
+
+## Entrega (o que será modificado)
+**Arquivo único:**
+- `src/components/admin/contracts/CreateContractDialog.tsx`
+
+**Mudanças:**
+1) Ajustar flags de “padrão” para não capturar Procuração/Distrato
+2) Robustecer substituição de variáveis e incluir suporte a `{{nome_representante}}`
+
+---
+
+## Resultado esperado
+- Ao gerar link de **Procuração INPI - Padrão**, a página de assinatura mostrará o documento já preenchido com os dados do cliente, sem placeholders `{{...}}`.
+- Os demais modelos (Contrato Registro de Marca, Distratos) permanecem funcionando e/ou ficam mais consistentes.
