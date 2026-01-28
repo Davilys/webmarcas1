@@ -1,192 +1,150 @@
 
-# Plano: Corrigir Sincronização do Pipeline Stage na Aba Serviços
+# Plano: Corrigir Substituição de Variáveis nos Documentos (Procuração, Distrato)
 
-## Problema Identificado
+## Diagnóstico do Problema
 
-Ao visualizar um cliente na aba "Serviços", quando o admin seleciona uma fase diferente no dropdown (ex: "Indeferimento"), a alteração é salva no banco de dados, mas a visualização não atualiza imediatamente e o card no Kanban pode não refletir a mudança corretamente.
+Ao criar um novo documento (Procuração, Distrato com Multa, Distrato sem Multa) para um cliente existente no CRM, as variáveis como `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}` **não estão sendo substituídas** pelos dados reais do cliente.
 
-Além disso, o dropdown só aparece quando o modo de edição está ativado, o que confunde o usuário.
+### Causa Raiz
 
-### Diagnóstico Técnico
+O código em `generateDocumentHtml()` (linhas 356-373 em `CreateContractDialog.tsx`) está:
+1. **Ignorando o template do banco de dados** (`selectedTemplate?.content`)
+2. Usando a função `generateDocumentContent()` que gera um template hardcoded em JavaScript (arquivo `documentTemplates.ts`), que **não corresponde ao template salvo no banco**
 
-| Problema | Localização | Causa |
-|----------|-------------|-------|
-| Dropdown só aparece em modo edição | Linha 1031 | `{editMode && (...)}` |
-| `currentStage` não atualiza após mudança | Linha 596 | Usa `client.pipeline_stage` direto sem considerar `editData.pipeline_stage` |
-| "Tipo de Serviço" não é interativo | Linhas 1096-1110 | Cards sem `onClick`, sempre "pedido_registro" selecionado |
-| Sem mapeamento Tipo de Serviço → Pipeline Stage | N/A | Lógica não implementada |
+### Variáveis nos Templates do Banco
+
+| Tipo Documento | Variáveis no Template do Banco |
+|----------------|--------------------------------|
+| Procuração | `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cidade}}`, `{{estado}}`, `{{cep}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}`, `{{data_procuracao}}` |
+| Distrato | `{{nome_empresa}}`, `{{endereco_empresa}}`, `{{cidade}}`, `{{estado}}`, `{{cep}}`, `{{cnpj}}`, `{{nome_representante}}`, `{{cpf_representante}}`, `{{marca}}`, `{{data_distrato}}`, `{{numero_parcelas}}`, `{{valor_multa}}` |
+
+### Código Problemático Atual
+
+```javascript
+// Linha 356-373 - CreateContractDialog.tsx
+const vars = {
+  nome_empresa: selectedProfile?.company_name || ...,
+  cnpj: ...,
+  endereco: ...,  // ❌ Template usa "endereco_empresa", não "endereco"
+  ...
+};
+return generateDocumentContent(formData.document_type, vars);
+// ❌ Ignora selectedTemplate?.content e usa template hardcoded
+```
 
 ---
 
 ## Solução Proposta
 
-### 1. Tornar o Dropdown Sempre Visível (Não Apenas em EditMode)
+### Criar Função para Substituir Variáveis no Template do Banco
 
-**Arquivo:** `ClientDetailSheet.tsx` (linhas 1031-1050)
+Modificar `generateDocumentHtml()` para substituir as variáveis diretamente no `selectedTemplate?.content`, sem usar `generateDocumentContent()`.
 
-```tsx
-// ANTES: Dropdown só aparece em editMode
-{editMode && (
-  <Select ...>
-)}
+### Arquivo a Modificar
 
-// DEPOIS: Dropdown sempre visível, funcional imediatamente
-<Select 
-  value={editData.pipeline_stage} 
-  onValueChange={async (v) => {
-    setEditData({ ...editData, pipeline_stage: v });
-    if (client?.process_id) {
-      await supabase.from('brand_processes')
-        .update({ pipeline_stage: v })
-        .eq('id', client.process_id);
-      toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
-      onUpdate();
-    }
-  }}
->
-  <SelectTrigger className="w-48">
-    <SelectValue placeholder="Fase do processo" />
-  </SelectTrigger>
-  <SelectContent>
-    {PIPELINE_STAGES.map(s => (
-      <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-```
+`src/components/admin/contracts/CreateContractDialog.tsx`
 
-### 2. Usar `editData.pipeline_stage` para Exibir Fase Atual
+### Alterações no Código
 
-**Arquivo:** `ClientDetailSheet.tsx` (linha 596)
+**Substituir linhas 356-373 por:**
 
-```tsx
-// ANTES: Usa client.pipeline_stage (não atualiza em tempo real)
-const currentStage = PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'));
-
-// DEPOIS: Usa editData.pipeline_stage (atualiza imediatamente)
-const currentStage = PIPELINE_STAGES.find(s => s.id === (editData.pipeline_stage || client.pipeline_stage || 'protocolado'));
-```
-
-Isso garante que ao selecionar uma nova fase no dropdown, a visualização ("Fase Atual: PROTOCOLADO") atualize imediatamente para a nova fase selecionada.
-
-### 3. Tornar "Tipo de Serviço" Interativo e Conectado ao Pipeline
-
-Adicionar estado para o tipo de serviço selecionado e lógica para mapear tipos de serviço para fases do pipeline:
-
-```tsx
-// Novo estado
-const [selectedServiceType, setSelectedServiceType] = useState<string>('pedido_registro');
-
-// Mapeamento Tipo de Serviço → Pipeline Stage sugerido
-const SERVICE_TYPE_TO_STAGE: Record<string, string> = {
-  'pedido_registro': 'protocolado',
-  'cumprimento_exigencia': '003',
-  'oposicao': 'oposicao',
-  'recurso': 'indeferimento',
-  'renovacao': 'renovacao',
-  'notificacao': 'notificacao'
-};
-
-// Handler para seleção de tipo de serviço
-const handleServiceTypeSelect = async (serviceId: string) => {
-  setSelectedServiceType(serviceId);
+```javascript
+// For other document types (procuracao, distrato) using database templates
+if (selectedTemplate?.content) {
+  const currentDate = new Date().toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  });
   
-  // Atualizar pipeline stage baseado no tipo de serviço
-  const suggestedStage = SERVICE_TYPE_TO_STAGE[serviceId];
-  if (suggestedStage && client?.process_id) {
-    setEditData(prev => ({ ...prev, pipeline_stage: suggestedStage }));
-    await supabase.from('brand_processes')
-      .update({ pipeline_stage: suggestedStage })
-      .eq('id', client.process_id);
-    toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === suggestedStage)?.label}`);
-    onUpdate();
-  }
+  const addressParts = parseAddressForNeighborhood(selectedProfile?.address || formData.company_address || '');
+  const fullAddress = `${addressParts.mainAddress}${addressParts.neighborhood ? ', ' + addressParts.neighborhood : ''}`;
+  
+  // Replace all template variables with client data
+  let result = selectedTemplate.content
+    // Company/Personal data
+    .replace(/\{\{nome_empresa\}\}/g, selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '')
+    .replace(/\{\{endereco_empresa\}\}/g, fullAddress)
+    .replace(/\{\{endereco\}\}/g, fullAddress)
+    .replace(/\{\{cidade\}\}/g, selectedProfile?.city || formData.company_city || '')
+    .replace(/\{\{estado\}\}/g, selectedProfile?.state || formData.company_state || '')
+    .replace(/\{\{cep\}\}/g, selectedProfile?.zip_code || formData.company_cep || '')
+    .replace(/\{\{cnpj\}\}/g, formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '')
+    // Representative data
+    .replace(/\{\{nome_representante\}\}/g, formData.signatory_name || selectedProfile?.full_name || '')
+    .replace(/\{\{cpf_representante\}\}/g, formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '')
+    // Contact info
+    .replace(/\{\{email\}\}/g, selectedProfile?.email || '')
+    .replace(/\{\{telefone\}\}/g, selectedProfile?.phone || '')
+    // Brand and distrato specifics
+    .replace(/\{\{marca\}\}/g, effectiveBrandName)
+    .replace(/\{\{data_procuracao\}\}/g, currentDate)
+    .replace(/\{\{data_distrato\}\}/g, currentDate)
+    .replace(/\{\{valor_multa\}\}/g, formData.penalty_value || '0,00')
+    .replace(/\{\{numero_parcelas\}\}/g, formData.penalty_installments || '1');
+  
+  return result;
+}
+
+// Fallback to generateDocumentContent only if no template selected
+const vars = {
+  nome_empresa: selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '',
+  cnpj: formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '',
+  endereco: addressParts.mainAddress || selectedProfile?.address || formData.company_address || '',
+  cidade: selectedProfile?.city || formData.company_city || '',
+  estado: selectedProfile?.state || formData.company_state || '',
+  cep: selectedProfile?.zip_code || formData.company_cep || '',
+  nome_representante: formData.signatory_name || selectedProfile?.full_name || '',
+  cpf_representante: formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '',
+  email: selectedProfile?.email || '',
+  telefone: selectedProfile?.phone || '',
+  marca: effectiveBrandName,
+  valor_multa: formData.penalty_value || '',
+  numero_parcela: formData.penalty_installments || '1',
 };
-```
 
-**Atualizar UI dos Cards de Tipo de Serviço:**
-
-```tsx
-{SERVICE_TYPES.map(service => (
-  <motion.div
-    key={service.id}
-    whileHover={{ scale: 1.02 }}
-    onClick={() => handleServiceTypeSelect(service.id)}
-    className={cn(
-      "p-3 rounded-lg border cursor-pointer transition-all",
-      selectedServiceType === service.id 
-        ? "border-primary bg-primary/5 ring-2 ring-primary/30" 
-        : "border-border hover:border-primary/50"
-    )}
-  >
-    <p className="font-medium text-sm">{service.label}</p>
-    <p className="text-xs text-muted-foreground">{service.description}</p>
-  </motion.div>
-))}
+return generateDocumentContent(formData.document_type, vars);
 ```
 
 ---
 
-## Fluxo Visual Após Correção
+## Análise de Risco
 
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│  📋 Serviços Contratados              [Indeferimento ▼]           │
-├────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │ 📄 Registro de Marca                           em_andamento  │ │
-│  │    Davilys                                                   │ │
-│  │  ┌──────────────────────────────────────────────────────┐   │ │
-│  │  │ Fase Atual                                           │   │ │
-│  │  │ INDEFERIMENTO  ← Atualiza imediatamente              │   │ │
-│  │  │ Pedido indeferido. Recurso pode ser interposto.      │   │ │
-│  │  └──────────────────────────────────────────────────────┘   │ │
-│  └──────────────────────────────────────────────────────────────┘ │
-│                                                                    │
-│  Tipo de Serviço                                                   │
-│  ┌─────────────────────┐  ┌─────────────────────────┐             │
-│  │ Pedido de Registro  │  │ Cumprimento de Exigência│             │
-│  └─────────────────────┘  └─────────────────────────┘             │
-│  ┌─────────────────────┐  ┌─────────────────────────┐             │
-│  │ Manifestação de     │  │ ██ Recurso ██████████   │ ← Selecionado│
-│  │ Oposição            │  │ Administrativo         │             │
-│  └─────────────────────┘  └─────────────────────────┘             │
-└────────────────────────────────────────────────────────────────────┘
-
-         ↓ Sincroniza automaticamente
-         
-┌─────────────────────────────────────────────────────────────────────┐
-│  KANBAN: Coluna "Indeferimento"                                     │
-│  ┌──────────────────────────────────┐                               │
-│  │ DAVILYS DANQUES                  │                               │
-│  │ Davilys  #928374651              │                               │
-│  └──────────────────────────────────┘                               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+| Risco | Mitigação |
+|-------|-----------|
+| Alteração pode afetar contratos padrão (Registro de Marca) | A lógica para contratos "registro de marca" permanece intacta (linhas 314-345) |
+| Variáveis diferentes entre templates | Código substitui todas as variáveis conhecidas, ignorando as não encontradas |
+| Fallback para templates inexistentes | Mantém `generateDocumentContent()` como fallback caso `selectedTemplate?.content` esteja vazio |
 
 ---
 
-## Arquivos a Modificar
+## Arquivos Afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/admin/clients/ClientDetailSheet.tsx` | Dropdown sempre visível, `currentStage` usa `editData`, Tipo de Serviço interativo |
+| `src/components/admin/contracts/CreateContractDialog.tsx` | Modificar função `generateDocumentHtml()` (linhas 346-373) |
 
 ---
 
-## Resumo das Mudanças
+## Resultado Esperado
 
-1. **Dropdown de Fase sempre visível** - Não precisa entrar em modo de edição
-2. **Fase Atual atualiza imediatamente** - Usa `editData.pipeline_stage` em vez de `client.pipeline_stage`
-3. **Tipo de Serviço é clicável** - Ao clicar, seleciona o tipo e atualiza a fase correspondente
-4. **Mapeamento automático** - Recurso Administrativo → Indeferimento, etc.
-5. **Sincronização com Kanban** - `onUpdate()` garante que o Kanban reflita a mudança
+**Antes:**
+```
+{{nome_empresa}}, empresa brasileira... sede na {{endereco_empresa}}...
+Devidamente inscrito no CNPJ sob Nº {{cnpj}}...
+```
+
+**Depois:**
+```
+Laudemir Rodrigues Valente, empresa brasileira... sede na Rua Exemplo, 123 - Centro...
+Devidamente inscrito no CNPJ sob Nº 12.345.678/0001-90...
+```
 
 ---
 
 ## Estimativa
 
-- **Complexidade**: Baixa-Média
+- **Complexidade**: Baixa
 - **Arquivos alterados**: 1
-- **Linhas modificadas**: ~30
-- **Risco**: Baixo (apenas adiciona funcionalidade, não remove)
+- **Linhas modificadas**: ~40
+- **Risco de regressão**: Baixo (alteração isolada na função `generateDocumentHtml()`)
