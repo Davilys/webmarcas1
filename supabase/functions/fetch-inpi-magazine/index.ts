@@ -145,16 +145,21 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
   
   console.log(`Parsing XML content, size: ${xmlContent.length} bytes`);
   
-  // Quick check - normalize completely (lowercase + remove accents) for accurate search
-  const normalizedContent = normalizeText(xmlContent);
-  const searchTerm = normalizeText(ATTORNEY_SEARCH_TERM);
+  // Quick check - use simple lowercase includes (NO full normalization to save memory)
+  // The XML is 45MB+ so we cannot normalize it all at once
+  const lowerContent = xmlContent.toLowerCase();
+  const searchTerm = ATTORNEY_SEARCH_TERM.toLowerCase();
   
-  console.log(`Searching for attorney term: "${searchTerm}" (normalized)`);
+  console.log(`Searching for attorney term: "${searchTerm}" (lowercase only for memory efficiency)`);
   
-  if (!normalizedContent.includes(searchTerm)) {
-    console.log('Attorney name not found in XML content (quick check with full normalization)');
+  if (!lowerContent.includes(searchTerm)) {
+    console.log('Attorney name not found in XML content (quick lowercase check)');
     return [];
   }
+  
+  // Free reference immediately to help GC
+  // @ts-ignore - intentional reassignment for memory management
+  lowerContent = null;
   
   console.log('Attorney name found! Starting memory-efficient batch extraction...');
   
@@ -211,9 +216,9 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
       const chunk = chunks[i];
       if (!chunk || chunk.length < 50) continue;
       
-      // Quick attorney check using normalized text (handles accents and case)
-      const normalizedChunk = normalizeText(chunk);
-      if (!normalizedChunk.includes(searchTerm)) continue;
+      // Quick attorney check - use lowercase only (saves memory vs full normalization)
+      const lowerChunk = chunk.toLowerCase();
+      if (!lowerChunk.includes(searchTerm)) continue;
       
       // Find the start of this processo block
       const processoStart = chunk.lastIndexOf('<processo');
