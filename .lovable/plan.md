@@ -1,122 +1,172 @@
 
-# Plano: Remover Pré-Seleção de Forma de Pagamento
+## Correção: Exibir e Editar Dados Completos do Cliente na Aba Contatos
 
-## Problema
-Na aba "Contratos" do CRM, ao criar um novo documento, a opção "PIX à Vista - R$ 699,00" vem **pré-selecionada por padrão**. O usuário precisa que a seleção seja **opcional** - documentos que não requerem cobrança não devem ter forma de pagamento selecionada.
+### Problema Identificado
+Na aba **Contatos** do painel de detalhes do cliente:
+1. O **CPF** exibe `client.cpf` ou `client.cpf_cnpj`, mas a interface `ClientWithProcess` não inclui o campo `cpf` separadamente
+2. O **CNPJ** exibe `(client as any).cnpj` que também não está na interface
+3. O endereço só é exibido **se existir no profileData**, mas o profileData não busca cpf/cnpj
+4. No formulário de edição, os campos são inicializados com dados incompletos da interface `ClientWithProcess`
 
-## Causa Raiz
-No arquivo `CreateContractDialog.tsx`:
-- **Linha 132**: `paymentMethod` é inicializado com `'avista'`
-- **Linha 766**: No reset do formulário, volta para `'avista'`
-- **Linha 584**: O valor é sempre salvo no banco, mesmo quando não desejado
+### Causa Raiz
+A tabela `profiles` possui colunas `cpf`, `cnpj`, `address`, `neighborhood`, `city`, `state`, `zip_code`, mas:
+- A query em `fetchClientData()` (linha 274) só busca: `address, neighborhood, city, state, zip_code`
+- A interface `ClientWithProcess` não contém `cpf` ou `cnpj` como campos separados
+- O `editFormData` é inicializado com dados parciais
 
-## Solução Proposta
+### Solução Proposta (Isolada e Segura)
 
-### 1. Alterar o Tipo e Valor Inicial de `paymentMethod`
-**Antes:**
+#### 1. Ampliar a Query do `profileData` para incluir CPF e CNPJ
+**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx`
+
+**Alteração na linha ~274:**
 ```typescript
-const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x'>('avista');
+// Antes:
+supabase.from('profiles').select('address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
+
+// Depois:
+supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
 ```
 
-**Depois:**
+#### 2. Atualizar a Interface `profileData` State
+**Linha ~212-220:**
 ```typescript
-const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x' | null>(null);
+// Antes:
+const [profileData, setProfileData] = useState<{
+  address?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+} | null>(null);
+
+// Depois:
+const [profileData, setProfileData] = useState<{
+  cpf?: string;
+  cnpj?: string;
+  company_name?: string;
+  address?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+} | null>(null);
 ```
 
-### 2. Atualizar a Função `resetForm()`
-**Antes:**
+#### 3. Usar `profileData` na Aba Contatos (ao invés de `client`)
+**Linhas ~992-993 (CPF):**
 ```typescript
-setPaymentMethod('avista');
+// Antes:
+<p className="font-medium font-mono">{(client as any).cpf || client.cpf_cnpj || 'N/A'}</p>
+
+// Depois:
+<p className="font-medium font-mono">{profileData?.cpf || client.cpf_cnpj || 'N/A'}</p>
 ```
 
-**Depois:**
+**Linhas ~1052-1054 (CNPJ):**
 ```typescript
-setPaymentMethod(null);
+// Antes:
+<p className="font-medium font-mono">
+  {(client as any).cnpj || 'N/A'}
+</p>
+
+// Depois:
+<p className="font-medium font-mono">
+  {profileData?.cnpj || 'N/A'}
+</p>
 ```
 
-### 3. Atualizar a Lógica de Salvamento no Banco
-**Antes (linha 584):**
+**Linha ~1048 (Razão Social):**
 ```typescript
-payment_method: (isNewClient || isStandardTemplate) ? paymentMethod : null,
+// Antes:
+<p className="font-medium">{client.company_name || 'N/A'}</p>
+
+// Depois:
+<p className="font-medium">{profileData?.company_name || client.company_name || 'N/A'}</p>
 ```
 
-**Depois:**
+#### 4. Inicializar `editFormData` corretamente com dados do `profileData`
+**Linhas ~283-293:**
 ```typescript
-payment_method: (isNewClient || isStandardTemplate) && paymentMethod ? paymentMethod : null,
+// Atualizar para incluir cpf, cnpj e company_name
+if (profileRes.data) {
+  setEditFormData(prev => ({
+    ...prev,
+    cpf: profileRes.data.cpf || '',
+    cnpj: profileRes.data.cnpj || '',
+    company_name: profileRes.data.company_name || client.company_name || '',
+    address: profileRes.data.address || '',
+    neighborhood: profileRes.data.neighborhood || '',
+    city: profileRes.data.city || '',
+    state: profileRes.data.state || '',
+    zip_code: profileRes.data.zip_code || ''
+  }));
+}
 ```
 
-### 4. Atualizar a UI para Mostrar "Nenhum Selecionado"
-Ajustar o texto de "Forma selecionada:" para mostrar quando nenhuma opção está selecionada:
-
-**Antes:**
+#### 5. Remover inicialização incorreta de `cpf/cnpj` no useEffect
+**Linhas ~241-252:**
 ```typescript
-<strong>Forma selecionada:</strong> {getPaymentDescription()}
-```
-
-**Depois:**
-```typescript
-<strong>Forma selecionada:</strong> {paymentMethod ? getPaymentDescription() : 'Nenhuma (sem cobrança)'}
-```
-
-### 5. Atualizar `getPaymentDescription()` e `getContractValue()`
-Adicionar tratamento para `null`:
-
-```typescript
-const getContractValue = () => {
-  if (!paymentMethod) return null;
-  switch (paymentMethod) {
-    case 'avista': return 699;
-    case 'cartao6x': return 1194;
-    case 'boleto3x': return 1197;
-    default: return null;
-  }
-};
-
-const getPaymentDescription = () => {
-  if (!paymentMethod) return 'Nenhuma forma selecionada';
-  switch (paymentMethod) {
-    // ... existing cases
-  }
-};
+// Remover a inicialização incorreta que usa (client as any).cpf
+// Deixar a inicialização completa ser feita no callback do fetchClientData
+setEditFormData({
+  full_name: client.full_name || '',
+  email: client.email || '',
+  phone: client.phone || '',
+  cpf: '',      // Será preenchido pelo profileData
+  cnpj: '',     // Será preenchido pelo profileData
+  company_name: client.company_name || '',
+  address: '',
+  neighborhood: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  priority: client.priority || 'medium',
+  origin: client.origin || 'site'
+});
 ```
 
 ---
 
-## Análise de Risco
-
-| Risco | Mitigação |
-|-------|-----------|
-| Quebrar fluxo de novo cliente | O fluxo de novo cliente requer pagamento; validar que `paymentMethod` é obrigatório para `isNewClient` |
-| Valor do contrato como `null` | Permitido - contratos sem cobrança terão `contract_value: null` |
-| Edge Function de pagamento | Só é chamada se `payment_method` estiver definido no banco |
-
----
-
-## Comportamento Esperado
-
-### Cenário 1: Documento SEM cobrança
-1. Admin seleciona cliente e modelo "Procuração INPI"
-2. **Nenhuma forma de pagamento selecionada** (campo não aparece para procuração)
-3. Documento criado sem `payment_method` → **sem cobrança Asaas**
-
-### Cenário 2: Documento COM cobrança (Registro de Marca)
-1. Admin seleciona cliente e modelo "Contrato Registro de Marca"
-2. **Forma de Pagamento aparece SEM seleção padrão**
-3. Admin clica em "PIX à Vista"
-4. Documento criado com `payment_method: 'avista'` → **cobrança Asaas gerada**
-
----
-
-## Arquivo a Modificar
+### Arquivos Modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/admin/contracts/CreateContractDialog.tsx` | Tipo de estado, valor inicial, reset, lógica de salvamento, UI |
+| `src/components/admin/clients/ClientDetailSheet.tsx` | Query ampliada, interface state, exibição na aba Contatos, inicialização do formulário de edição |
 
 ---
 
-## Estimativa
+### Análise de Risco
 
-- **Complexidade**: Baixa
-- **Linhas modificadas**: ~10
-- **Risco de regressão**: Baixo (alteração isolada no estado de seleção)
+| Risco | Mitigação |
+|-------|-----------|
+| Quebrar exibição se profileData for null | Usar fallback para `client.cpf_cnpj` e 'N/A' |
+| Sobrescrever dados do cliente durante edição | A função `handleSaveFullEdit()` já está correta, atualizando cpf, cnpj, company_name separadamente |
+| Regressão em outros componentes | Alteração isolada apenas no `ClientDetailSheet`, não afeta `ClientKanbanBoard` ou `Clientes.tsx` |
+
+---
+
+### Comportamento Esperado Após Correção
+
+1. **Aba Contatos**
+   - CPF exibe valor correto do banco (`profileData.cpf`)
+   - CNPJ exibe valor correto do banco (`profileData.cnpj`)
+   - Razão Social exibe `company_name` do banco
+   - Endereço completo exibe todos os campos
+
+2. **Formulário de Edição**
+   - Todos os campos são pré-preenchidos com dados atuais do banco
+   - Admin pode editar CPF, CNPJ, Empresa, Endereço, etc.
+   - Ao salvar, todos os campos são persistidos corretamente
+
+3. **Pessoa Física → Pessoa Jurídica**
+   - Cliente que começou como PF pode ter CNPJ e Razão Social adicionados via edição
+   - Dados são salvos e exibidos corretamente
+
+---
+
+### Testes Recomendados
+1. Abrir cliente no Kanban → aba Contatos → verificar CPF, CNPJ, Razão Social
+2. Clicar em "Editar" → verificar campos pré-preenchidos
+3. Editar CNPJ e Razão Social de cliente PF → Salvar → Verificar exibição
+4. Verificar que nenhum outro cliente foi afetado
