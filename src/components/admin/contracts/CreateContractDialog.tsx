@@ -353,7 +353,44 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       return formData.description || '';
     }
 
-    // For other document types (procuracao, distrato), use generateDocumentContent with all client data
+    // For other document types (procuracao, distrato) using database templates
+    // Priority: Use selectedTemplate?.content from database and replace variables directly
+    if (selectedTemplate?.content) {
+      const currentDate = new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      });
+      
+      const fullAddress = `${addressParts.mainAddress}${addressParts.neighborhood ? ', ' + addressParts.neighborhood : ''}`;
+      
+      // Replace all template variables with client data
+      let result = selectedTemplate.content
+        // Company/Personal data
+        .replace(/\{\{nome_empresa\}\}/g, selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '')
+        .replace(/\{\{endereco_empresa\}\}/g, fullAddress)
+        .replace(/\{\{endereco\}\}/g, fullAddress)
+        .replace(/\{\{cidade\}\}/g, selectedProfile?.city || formData.company_city || '')
+        .replace(/\{\{estado\}\}/g, selectedProfile?.state || formData.company_state || '')
+        .replace(/\{\{cep\}\}/g, selectedProfile?.zip_code || formData.company_cep || '')
+        .replace(/\{\{cnpj\}\}/g, formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '')
+        // Representative data
+        .replace(/\{\{nome_representante\}\}/g, formData.signatory_name || selectedProfile?.full_name || '')
+        .replace(/\{\{cpf_representante\}\}/g, formData.signatory_cpf || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '')
+        // Contact info
+        .replace(/\{\{email\}\}/g, selectedProfile?.email || '')
+        .replace(/\{\{telefone\}\}/g, selectedProfile?.phone || '')
+        // Brand and distrato specifics
+        .replace(/\{\{marca\}\}/g, effectiveBrandName)
+        .replace(/\{\{data_procuracao\}\}/g, currentDate)
+        .replace(/\{\{data_distrato\}\}/g, currentDate)
+        .replace(/\{\{valor_multa\}\}/g, formData.penalty_value || '0,00')
+        .replace(/\{\{numero_parcelas\}\}/g, formData.penalty_installments || '1');
+      
+      return result;
+    }
+
+    // Fallback to generateDocumentContent only if no template selected
     const vars = {
       nome_empresa: selectedProfile?.company_name || formData.signatory_name || selectedProfile?.full_name || '',
       cnpj: formData.signatory_cnpj || (selectedProfile?.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '',
