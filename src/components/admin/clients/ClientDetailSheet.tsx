@@ -162,6 +162,46 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     contract_value: 0,
     pipeline_stage: ''
   });
+  
+  // NEW: Tags functionality
+  const [showTagsDialog, setShowTagsDialog] = useState(false);
+  const [clientTags, setClientTags] = useState<string[]>([]);
+  const AVAILABLE_TAGS = ['VIP', 'Urgente', 'Novo', 'Renovação', 'Em Risco', 'Inativo', 'Prioritário', 'Pendente'];
+  
+  // NEW: Edit dialog state
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    cpf_cnpj: '',
+    company_name: '',
+    address: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    priority: 'medium',
+    origin: 'site'
+  });
+  
+  // NEW: Add process dialog
+  const [showAddProcessDialog, setShowAddProcessDialog] = useState(false);
+  const [newProcess, setNewProcess] = useState({
+    brand_name: '',
+    process_number: '',
+    pipeline_stage: 'protocolado',
+    business_area: ''
+  });
+  
+  // NEW: Profile data for contacts tab
+  const [profileData, setProfileData] = useState<{
+    address?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (client && open) {
@@ -171,6 +211,21 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         origin: client.origin || 'site',
         contract_value: client.contract_value || 0,
         pipeline_stage: client.pipeline_stage || 'protocolado'
+      });
+      // Initialize edit form data
+      setEditFormData({
+        full_name: client.full_name || '',
+        email: client.email || '',
+        phone: client.phone || '',
+        cpf_cnpj: client.cpf_cnpj || '',
+        company_name: client.company_name || '',
+        address: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        priority: client.priority || 'medium',
+        origin: client.origin || 'site'
       });
       // Try to match existing value with a pricing option
       const matchedOption = SERVICE_PRICING_OPTIONS.find(opt => opt.value === client.contract_value);
@@ -188,17 +243,31 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     setLoading(true);
 
     try {
-      const [notesRes, appointmentsRes, docsRes, invoicesRes] = await Promise.all([
+      const [notesRes, appointmentsRes, docsRes, invoicesRes, profileRes] = await Promise.all([
         supabase.from('client_notes').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('client_appointments').select('*').eq('user_id', client.id).order('scheduled_at', { ascending: true }),
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
-        supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false })
+        supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false }),
+        supabase.from('profiles').select('address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
       ]);
 
       setNotes(notesRes.data || []);
       setAppointments(appointmentsRes.data || []);
       setDocuments(docsRes.data || []);
       setInvoices(invoicesRes.data || []);
+      setProfileData(profileRes.data);
+      
+      // Update edit form with profile data
+      if (profileRes.data) {
+        setEditFormData(prev => ({
+          ...prev,
+          address: profileRes.data.address || '',
+          neighborhood: profileRes.data.neighborhood || '',
+          city: profileRes.data.city || '',
+          state: profileRes.data.state || '',
+          zip_code: profileRes.data.zip_code || ''
+        }));
+      }
     } catch (error) {
       console.error('Error fetching client data:', error);
     } finally {
@@ -358,6 +427,78 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       onUpdate();
     } catch (error) {
       toast.error('Erro ao salvar');
+    }
+  };
+
+  // NEW: Handle full profile edit
+  const handleSaveFullEdit = async () => {
+    if (!client) return;
+
+    try {
+      const { error } = await supabase.from('profiles').update({
+        full_name: editFormData.full_name,
+        email: editFormData.email,
+        phone: editFormData.phone,
+        cpf_cnpj: editFormData.cpf_cnpj,
+        company_name: editFormData.company_name,
+        address: editFormData.address,
+        neighborhood: editFormData.neighborhood,
+        city: editFormData.city,
+        state: editFormData.state,
+        zip_code: editFormData.zip_code,
+        priority: editFormData.priority,
+        origin: editFormData.origin
+      }).eq('id', client.id);
+
+      if (error) throw error;
+
+      toast.success('Dados do cliente atualizados!');
+      setShowEditDialog(false);
+      onUpdate();
+      fetchClientData();
+    } catch (error: any) {
+      console.error('Error updating client:', error);
+      toast.error(`Erro ao atualizar: ${error?.message || 'Tente novamente'}`);
+    }
+  };
+
+  // NEW: Handle tag toggle
+  const handleToggleTag = (tag: string) => {
+    setClientTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+    // Note: Tags could be persisted to a new column in profiles table
+    // For now, we keep them in local state for the session
+  };
+
+  // NEW: Handle create process
+  const handleCreateProcess = async () => {
+    if (!client || !newProcess.brand_name.trim()) {
+      toast.error('Nome da marca é obrigatório');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('brand_processes').insert({
+        user_id: client.id,
+        brand_name: newProcess.brand_name,
+        process_number: newProcess.process_number || null,
+        pipeline_stage: newProcess.pipeline_stage,
+        business_area: newProcess.business_area || null,
+        status: 'em_andamento'
+      });
+
+      if (error) throw error;
+
+      toast.success('Processo criado com sucesso!');
+      setShowAddProcessDialog(false);
+      setNewProcess({ brand_name: '', process_number: '', pipeline_stage: 'protocolado', business_area: '' });
+      onUpdate();
+    } catch (error: any) {
+      console.error('Error creating process:', error);
+      toast.error(`Erro ao criar processo: ${error?.message || 'Tente novamente'}`);
     }
   };
 
@@ -698,14 +839,61 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                         <Tag className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">Tags</span>
                       </div>
-                      <Button variant="outline" size="sm" className="h-7 text-xs">
-                        <Plus className="h-3 w-3 mr-1" />
-                        Gerenciar
-                      </Button>
+                      <Dialog open={showTagsDialog} onOpenChange={setShowTagsDialog}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-7 text-xs">
+                            <Plus className="h-3 w-3 mr-1" />
+                            Gerenciar
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                              <Tag className="h-5 w-5" />
+                              Gerenciar Tags
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="py-4">
+                            <p className="text-sm text-muted-foreground mb-4">
+                              Selecione as tags para este cliente:
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {AVAILABLE_TAGS.map(tag => (
+                                <Button
+                                  key={tag}
+                                  variant={clientTags.includes(tag) ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => handleToggleTag(tag)}
+                                  className="justify-start"
+                                >
+                                  {clientTags.includes(tag) && <Check className="h-3 w-3 mr-1" />}
+                                  {tag}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={() => setShowTagsDialog(false)}>
+                              Concluído
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Nenhuma tag atribuída. Clique em "Gerenciar" para adicionar tags.
-                    </p>
+                    {clientTags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {clientTags.map(tag => (
+                          <Badge key={tag} variant="secondary" className="cursor-pointer" onClick={() => handleToggleTag(tag)}>
+                            {tag}
+                            <X className="h-3 w-3 ml-1" />
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma tag atribuída. Clique em "Gerenciar" para adicionar tags.
+                      </p>
+                    )}
                   </div>
 
                   {/* Notes Section */}
@@ -746,68 +934,87 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
 
             {/* Contacts Tab */}
             <TabsContent value="contacts" className="space-y-4 mt-0">
+              {/* Dados Pessoais */}
               <Card className="border-0 shadow-md">
-                <CardContent className="pt-4 space-y-4">
-                  <motion.div 
-                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl"
-                    whileHover={{ x: 5 }}
-                  >
-                    <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
-                      {client.full_name?.charAt(0) || 'C'}
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">NOME COMPLETO</p>
-                      <p className="font-semibold">{client.full_name || 'Contato'}</p>
-                    </div>
-                  </motion.div>
-
+                <CardContent className="pt-4">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <User className="h-4 w-4 text-blue-500" />
+                    Dados Pessoais
+                  </h4>
+                  
                   <div className="grid grid-cols-2 gap-4">
-                    <motion.div 
-                      className="flex items-center gap-3 p-4 border rounded-xl"
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <Mail className="h-5 w-5 text-blue-500" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">EMAIL</p>
-                        <p className="font-medium text-sm">{client.email || 'N/A'}</p>
-                      </div>
-                    </motion.div>
-                    <motion.div 
-                      className="flex items-center gap-3 p-4 border rounded-xl"
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <Building2 className="h-5 w-5 text-purple-500" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">EMPRESA</p>
-                        <p className="font-medium text-sm">{client.company_name || 'N/A'}</p>
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  <motion.div 
-                    className="flex items-center gap-3 p-4 border rounded-xl"
-                    whileHover={{ scale: 1.01 }}
-                  >
-                    <Phone className="h-5 w-5 text-green-500" />
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground">TELEFONE</p>
-                      <p className="font-medium">{client.phone || 'N/A'}</p>
+                    <div className="p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground">NOME COMPLETO</p>
+                      <p className="font-medium">{client.full_name || 'N/A'}</p>
                     </div>
-                    {client.phone && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                        onClick={() => {
-                          const cleanPhone = client.phone!.replace(/\D/g, '');
-                          window.open(`https://wa.me/55${cleanPhone}`, '_blank');
-                        }}
-                      >
-                        <MessageCircle className="h-4 w-4 mr-1" />
-                        WhatsApp
-                      </Button>
-                    )}
-                  </motion.div>
+                    <div className="p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground">CPF/CNPJ</p>
+                      <p className="font-medium font-mono">{client.cpf_cnpj || 'N/A'}</p>
+                    </div>
+                    <div className="p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground">E-MAIL</p>
+                      <p className="font-medium text-sm truncate">{client.email || 'N/A'}</p>
+                    </div>
+                    <div className="p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground">TELEFONE</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{client.phone || 'N/A'}</p>
+                        {client.phone && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="h-6 w-6 text-green-600"
+                            onClick={() => {
+                              const cleanPhone = client.phone!.replace(/\D/g, '');
+                              window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+                            }}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Endereço */}
+                  {(profileData?.address || profileData?.city) && (
+                    <div className="mt-4 p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">ENDEREÇO COMPLETO</p>
+                      <p className="font-medium">
+                        {profileData.address || 'Endereço não informado'}
+                        {profileData.neighborhood && ` - ${profileData.neighborhood}`}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {profileData.city}{profileData.state && ` - ${profileData.state}`}
+                        {profileData.zip_code && ` - CEP: ${profileData.zip_code}`}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Dados da Empresa */}
+              <Card className="border-0 shadow-md">
+                <CardContent className="pt-4">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-purple-500" />
+                    Dados da Empresa
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground">RAZÃO SOCIAL</p>
+                      <p className="font-medium">{client.company_name || 'N/A'}</p>
+                    </div>
+                    <div className="p-3 border rounded-lg">
+                      <p className="text-xs text-muted-foreground">CNPJ</p>
+                      <p className="font-medium font-mono">
+                        {client.cpf_cnpj && client.cpf_cnpj.length >= 14 
+                          ? client.cpf_cnpj 
+                          : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -904,10 +1111,71 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="text-center py-8">
                       <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Nenhum serviço registrado</p>
-                      <p className="text-sm">Adicione um processo de marca para este cliente</p>
+                      <p className="text-muted-foreground mb-2">Nenhum processo registrado</p>
+                      <p className="text-sm text-muted-foreground mb-4">Adicione um processo de marca para este cliente</p>
+                      
+                      <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
+                        <DialogTrigger asChild>
+                          <Button className="bg-primary">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Adicionar Marca/Processo
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                              <FileText className="h-5 w-5" />
+                              Adicionar Processo de Marca
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div>
+                              <Label>Nome da Marca *</Label>
+                              <Input 
+                                placeholder="Ex: WebMarcas"
+                                value={newProcess.brand_name}
+                                onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})}
+                              />
+                            </div>
+                            <div>
+                              <Label>Número do Processo (INPI)</Label>
+                              <Input 
+                                placeholder="Ex: 928374651"
+                                value={newProcess.process_number}
+                                onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})}
+                              />
+                            </div>
+                            <div>
+                              <Label>Fase do Pipeline</Label>
+                              <Select 
+                                value={newProcess.pipeline_stage} 
+                                onValueChange={(v) => setNewProcess({...newProcess, pipeline_stage: v})}
+                              >
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {PIPELINE_STAGES.map(s => (
+                                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Área de Atuação</Label>
+                              <Input 
+                                placeholder="Ex: Tecnologia, Alimentação..."
+                                value={newProcess.business_area}
+                                onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})}
+                              />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
+                            <Button onClick={handleCreateProcess}>Criar Processo</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   )}
                 </CardContent>
@@ -1202,7 +1470,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
               <ExternalLink className="h-4 w-4" />
               Ver Completo
             </Button>
-            <Button onClick={() => setEditMode(true)}>
+            <Button onClick={() => setShowEditDialog(true)}>
               <Edit className="h-4 w-4 mr-2" />
               Editar
             </Button>
@@ -1314,6 +1582,145 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
             >
               <Check className="h-4 w-4 mr-2" />
               Confirmar Valor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Editar Cliente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="col-span-2">
+              <Label>Nome Completo</Label>
+              <Input 
+                value={editFormData.full_name}
+                onChange={(e) => setEditFormData({...editFormData, full_name: e.target.value})}
+                placeholder="Nome completo do cliente"
+              />
+            </div>
+            <div>
+              <Label>E-mail</Label>
+              <Input 
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+            <div>
+              <Label>Telefone</Label>
+              <Input 
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+            <div>
+              <Label>CPF/CNPJ</Label>
+              <Input 
+                value={editFormData.cpf_cnpj}
+                onChange={(e) => setEditFormData({...editFormData, cpf_cnpj: e.target.value})}
+                placeholder="000.000.000-00"
+              />
+            </div>
+            <div>
+              <Label>Empresa</Label>
+              <Input 
+                value={editFormData.company_name}
+                onChange={(e) => setEditFormData({...editFormData, company_name: e.target.value})}
+                placeholder="Nome da empresa"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Endereço</Label>
+              <Input 
+                value={editFormData.address}
+                onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
+                placeholder="Rua, número"
+              />
+            </div>
+            <div>
+              <Label>Bairro</Label>
+              <Input 
+                value={editFormData.neighborhood}
+                onChange={(e) => setEditFormData({...editFormData, neighborhood: e.target.value})}
+                placeholder="Bairro"
+              />
+            </div>
+            <div>
+              <Label>Cidade</Label>
+              <Input 
+                value={editFormData.city}
+                onChange={(e) => setEditFormData({...editFormData, city: e.target.value})}
+                placeholder="Cidade"
+              />
+            </div>
+            <div>
+              <Label>Estado</Label>
+              <Select 
+                value={editFormData.state} 
+                onValueChange={(v) => setEditFormData({...editFormData, state: v})}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                    <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>CEP</Label>
+              <Input 
+                value={editFormData.zip_code}
+                onChange={(e) => setEditFormData({...editFormData, zip_code: e.target.value})}
+                placeholder="00000-000"
+              />
+            </div>
+            <div>
+              <Label>Prioridade</Label>
+              <Select 
+                value={editFormData.priority} 
+                onValueChange={(v) => setEditFormData({...editFormData, priority: v})}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Baixa</SelectItem>
+                  <SelectItem value="medium">Média</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Origem</Label>
+              <Select 
+                value={editFormData.origin} 
+                onValueChange={(v) => setEditFormData({...editFormData, origin: v})}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="site">Site</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="indicacao">Indicação</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveFullEdit}>
+              <Check className="h-4 w-4 mr-2" />
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>
