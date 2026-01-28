@@ -36,8 +36,11 @@ interface Profile {
   email: string;
   phone: string | null;
   company_name: string | null;
-  cpf_cnpj: string | null;
+  cpf_cnpj: string | null;   // Legacy field - keep for backwards compatibility
+  cpf: string | null;        // Specific CPF field
+  cnpj: string | null;       // Specific CNPJ field
   address: string | null;
+  neighborhood: string | null; // Specific neighborhood field
   city: string | null;
   state: string | null;
   zip_code: string | null;
@@ -164,14 +167,23 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   useEffect(() => {
     // Auto-fill fields when profile is selected
     if (selectedProfile) {
+      // Prioritize specific cpf/cnpj fields, fallback to legacy cpf_cnpj
+      const cpfValue = selectedProfile.cpf || 
+        (selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? selectedProfile.cpf_cnpj : '') || '';
+      const cnpjValue = selectedProfile.cnpj || 
+        (selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? selectedProfile.cpf_cnpj : '') || '';
+      
+      // Build full address including neighborhood
+      const fullAddress = selectedProfile.neighborhood 
+        ? `${selectedProfile.address || ''}, ${selectedProfile.neighborhood}`.replace(/^, /, '')
+        : selectedProfile.address || '';
+      
       setFormData(prev => ({
         ...prev,
         signatory_name: selectedProfile.full_name || '',
-        signatory_cpf: selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 
-          ? selectedProfile.cpf_cnpj : '',
-        signatory_cnpj: selectedProfile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 
-          ? selectedProfile.cpf_cnpj : '',
-        company_address: selectedProfile.address || '',
+        signatory_cpf: cpfValue,
+        signatory_cnpj: cnpjValue,
+        company_address: fullAddress,
         company_city: selectedProfile.city || '',
         company_state: selectedProfile.state || '',
         company_cep: selectedProfile.zip_code || '',
@@ -776,12 +788,16 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     
     // Auto-populate form fields with profile data for document generation
     if (profile) {
-      const cpfCnpj = profile.cpf_cnpj?.replace(/[^\d]/g, '') || '';
-      const isCNPJ = cpfCnpj.length === 14;
+      // Prioritize specific cpf/cnpj fields, fallback to legacy cpf_cnpj
+      const cpfValue = profile.cpf || 
+        (profile.cpf_cnpj?.replace(/[^\d]/g, '').length === 11 ? profile.cpf_cnpj : '') || '';
+      const cnpjValue = profile.cnpj || 
+        (profile.cpf_cnpj?.replace(/[^\d]/g, '').length === 14 ? profile.cpf_cnpj : '') || '';
       
-      // Parse address to extract neighborhood if format is "address, neighborhood"
-      const addressParts = (profile.address || '').split(',').map(s => s.trim());
-      const mainAddress = addressParts[0] || '';
+      // Build full address including neighborhood from specific field
+      const fullAddress = profile.neighborhood 
+        ? `${profile.address || ''}, ${profile.neighborhood}`.replace(/^, /, '')
+        : profile.address || '';
       
       // Try to fetch brand name from client's processes
       let brandName = '';
@@ -804,9 +820,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         ...prev, 
         user_id: userId,
         signatory_name: profile.full_name || '',
-        signatory_cpf: !isCNPJ ? (profile.cpf_cnpj || '') : '',
-        signatory_cnpj: isCNPJ ? (profile.cpf_cnpj || '') : '',
-        company_address: mainAddress,
+        signatory_cpf: cpfValue,
+        signatory_cnpj: cnpjValue,
+        company_address: fullAddress,
         company_city: profile.city || '',
         company_state: profile.state || '',
         company_cep: profile.zip_code || '',
