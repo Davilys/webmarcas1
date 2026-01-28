@@ -37,7 +37,7 @@ const CTASection = () => {
             </Button>
             <Button variant="hero-outline" size="xl" asChild>
               <a
-                href="https://wa.me/5511999999999?text=Olá! Gostaria de falar com um especialista sobre registro de marca."
+                href="https://wa.me/5511911120225?text=Olá! Gostaria de falar com um especialista sobre registro de marca."
                 target="_blank"
                 rel="noopener noreferrer"
               >
