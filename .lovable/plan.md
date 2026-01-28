@@ -1,316 +1,412 @@
 
-# Plano: Filtros de Período na Aba Clientes (Admin)
+# Plano: Melhorias na Aba Clientes (Admin)
 
-## Objetivo
+## Problemas Identificados
 
-Adicionar filtros de período (Hoje, Semana, Mês) e navegação por mês/ano na área de busca de clientes do admin, conforme a referência visual fornecida. Isso permitirá localizar rapidamente clientes adicionados em períodos específicos, facilitando a gestão quando houver milhares de registros.
+Analisei os componentes `ClientDetailSheet.tsx`, `ClientKanbanBoard.tsx` e `Clientes.tsx`. Identifiquei 6 problemas principais:
 
----
-
-## Estrutura Visual Proposta
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│  🔍 Buscar clientes por nome, empresa, email, CPF/CNPJ, marca ou telefone...         │
-└──────────────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  📅 Hoje   📅 Semana   📅 Mês  │  <  📅 Jan de 2026  >  │   [Kanban] [Lista]        │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Comportamento dos Filtros
-
-| Filtro | Descrição |
-|--------|-----------|
-| **Hoje** | Mostra clientes criados hoje (data atual) |
-| **Semana** | Mostra clientes criados nos últimos 7 dias |
-| **Mês** | Mostra clientes do mês selecionado no navegador |
-| **Navegador de Mês** | Setas `<` e `>` para navegar entre meses. Exibe "Jan de 2026", "Fev de 2026", etc. |
+| Problema | Arquivo | Linha | Status |
+|----------|---------|-------|--------|
+| Nome da marca pequeno no card | `ClientKanbanBoard.tsx` | 454-456 | `text-xs text-muted-foreground` |
+| Número do processo não exibido | `ClientKanbanBoard.tsx` | N/A | Campo `process_number` não é buscado |
+| Botão "Gerenciar" Tags sem função | `ClientDetailSheet.tsx` | 701-703 | Botão sem onClick |
+| Aba Contatos incompleta | `ClientDetailSheet.tsx` | 747-813 | Faltam CPF, endereço, dados empresa |
+| Botão "Editar" não abre modal | `ClientDetailSheet.tsx` | 550-566 | Apenas alterna editMode |
+| Sem opção de adicionar marca/processo | `ClientDetailSheet.tsx` | 906-911 | Apenas mensagem informativa |
 
 ---
 
-## Implementação Técnica
+## Implementação
 
-### Etapa 1: Adicionar Estados para Filtro de Período
+### 1. Exibir Nome da Marca em Destaque + Número do Processo
 
-**Arquivo:** `src/pages/admin/Clientes.tsx`
+**Arquivo:** `ClientKanbanBoard.tsx` (linhas 450-457)
 
+**Antes:**
 ```tsx
-// Novos estados
-type DateFilterType = 'all' | 'today' | 'week' | 'month';
-
-const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
-const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+<p className="font-bold text-sm mb-0.5 line-clamp-1">
+  {client.full_name || 'Sem nome'}
+</p>
+<p className="text-xs text-muted-foreground line-clamp-1">
+  {client.brand_name || client.company_name || 'Empresa não informada'}
+</p>
 ```
 
-### Etapa 2: Incluir `created_at` nos Dados
-
-O campo `created_at` já existe na tabela `profiles` e já está sendo buscado. Precisamos apenas garantir que seja passado para o `ClientWithProcess`:
-
+**Depois:**
 ```tsx
-// No fetchClients - já existe, apenas confirmar que created_at está sendo capturado
+<p className="font-bold text-sm mb-0.5 line-clamp-1">
+  {client.full_name || 'Sem nome'}
+</p>
+{client.brand_name && (
+  <div className="flex items-center gap-1.5">
+    <p className="font-bold text-sm text-primary line-clamp-1">
+      {client.brand_name}
+    </p>
+    {client.process_number && (
+      <Badge variant="outline" className="text-xs font-mono px-1.5">
+        #{client.process_number}
+      </Badge>
+    )}
+  </div>
+)}
+{!client.brand_name && client.company_name && (
+  <p className="text-xs text-muted-foreground line-clamp-1">
+    {client.company_name}
+  </p>
+)}
+```
+
+**Atualizar interface `ClientWithProcess`:**
+```tsx
+export interface ClientWithProcess {
+  // ... campos existentes
+  process_number?: string;  // ADICIONAR
+}
+```
+
+**Atualizar fetch em `Clientes.tsx`:**
+```tsx
+// Na query de brand_processes, incluir process_number
 clientsWithProcesses.push({
   ...
-  created_at: profile.created_at, // ← Garantir que está sendo passado
-  ...
+  process_number: process.process_number || undefined, // ADICIONAR
 });
 ```
 
-### Etapa 3: Criar Componente de Filtro de Período
+---
 
-Criar um novo componente reutilizável para os filtros de período:
+### 2. Funcionalidade do Botão "Gerenciar" Tags
 
-**Arquivo:** `src/components/admin/clients/DatePeriodFilter.tsx`
+**Arquivo:** `ClientDetailSheet.tsx`
 
-```tsx
-import { Button } from '@/components/ui/button';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, subMonths, addMonths } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-
-type DateFilterType = 'all' | 'today' | 'week' | 'month';
-
-interface DatePeriodFilterProps {
-  dateFilter: DateFilterType;
-  onDateFilterChange: (filter: DateFilterType) => void;
-  selectedMonth: Date;
-  onMonthChange: (date: Date) => void;
-}
-
-export function DatePeriodFilter({
-  dateFilter,
-  onDateFilterChange,
-  selectedMonth,
-  onMonthChange
-}: DatePeriodFilterProps) {
-  const monthLabel = format(selectedMonth, "MMM 'de' yyyy", { locale: ptBR });
-  
-  return (
-    <div className="flex items-center gap-2">
-      {/* Filtros rápidos */}
-      <div className="flex items-center border rounded-lg bg-background">
-        <Button
-          variant={dateFilter === 'today' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => onDateFilterChange(dateFilter === 'today' ? 'all' : 'today')}
-        >
-          <Calendar className="h-4 w-4 mr-1" />
-          Hoje
-        </Button>
-        <Button
-          variant={dateFilter === 'week' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => onDateFilterChange(dateFilter === 'week' ? 'all' : 'week')}
-        >
-          <Calendar className="h-4 w-4 mr-1" />
-          Semana
-        </Button>
-        <Button
-          variant={dateFilter === 'month' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => onDateFilterChange(dateFilter === 'month' ? 'all' : 'month')}
-        >
-          <Calendar className="h-4 w-4 mr-1" />
-          Mês
-        </Button>
-      </div>
-      
-      {/* Navegador de mês */}
-      <div className="flex items-center border rounded-lg bg-background">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onMonthChange(subMonths(selectedMonth, 1))}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="px-3 text-sm font-medium capitalize">
-          <Calendar className="h-4 w-4 inline mr-1" />
-          {monthLabel}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onMonthChange(addMonths(selectedMonth, 1))}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-```
-
-### Etapa 4: Lógica de Filtragem por Data
-
-**Arquivo:** `src/pages/admin/Clientes.tsx`
+Criar sistema de tags com dialog:
 
 ```tsx
-import { startOfDay, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+// Novos estados
+const [showTagsDialog, setShowTagsDialog] = useState(false);
+const [clientTags, setClientTags] = useState<string[]>([]);
+const [availableTags] = useState(['VIP', 'Urgente', 'Novo', 'Renovação', 'Em Risco', 'Inativo']);
 
-// Função para filtrar por período
-const filterByDate = (clients: ClientWithProcess[]) => {
-  if (dateFilter === 'all') return clients;
-  
-  const now = new Date();
-  
-  return clients.filter(client => {
-    if (!client.created_at) return true; // Sem data = não filtra
-    
-    const createdAt = parseISO(client.created_at);
-    
-    switch (dateFilter) {
-      case 'today':
-        return isWithinInterval(createdAt, {
-          start: startOfDay(now),
-          end: now
-        });
-      case 'week':
-        return isWithinInterval(createdAt, {
-          start: startOfWeek(now, { weekStartsOn: 1 }),
-          end: now
-        });
-      case 'month':
-        return isWithinInterval(createdAt, {
-          start: startOfMonth(selectedMonth),
-          end: endOfMonth(selectedMonth)
-        });
-      default:
-        return true;
-    }
-  });
+// Handler
+const handleToggleTag = async (tag: string) => {
+  const newTags = clientTags.includes(tag) 
+    ? clientTags.filter(t => t !== tag)
+    : [...clientTags, tag];
+  setClientTags(newTags);
+  // Salvar no banco (campo tags na profiles ou nova tabela)
 };
 
-// Aplicar filtro de data ANTES do filtro de busca
-const dateFilteredClients = filterByDate(clients);
-
-const filteredClients = dateFilteredClients.filter(client =>
-  client.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-  client.email.toLowerCase().includes(search.toLowerCase()) ||
-  client.company_name?.toLowerCase().includes(search.toLowerCase()) ||
-  client.brand_name?.toLowerCase().includes(search.toLowerCase()) ||
-  client.phone?.includes(search) ||
-  client.cpf_cnpj?.includes(search) // ← Adicionar busca por CPF/CNPJ
-);
-```
-
-### Etapa 5: Atualizar Interface do Usuário
-
-**Arquivo:** `src/pages/admin/Clientes.tsx`
-
-Reorganizar a área de busca para incluir os filtros de período:
-
-```tsx
-{/* Search and Filters Row */}
-<div className="flex flex-col gap-4">
-  {/* Search Input - Full Width */}
-  <div className="relative flex-1">
-    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-    <Input
-      placeholder="Buscar clientes por nome, empresa, email, CPF/CNPJ, marca ou telefone..."
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      className="pl-10"
-    />
-  </div>
-  
-  {/* Period Filters + View Toggle */}
-  <div className="flex flex-wrap items-center justify-between gap-4">
-    <DatePeriodFilter
-      dateFilter={dateFilter}
-      onDateFilterChange={setDateFilter}
-      selectedMonth={selectedMonth}
-      onMonthChange={setSelectedMonth}
-    />
-    
-    <div className="flex items-center gap-2">
-      {/* Badges de filtros ativos */}
-      {dateFilter !== 'all' && (
-        <Badge 
-          variant="secondary"
-          className="cursor-pointer"
-          onClick={() => setDateFilter('all')}
+// UI do botão Gerenciar
+<Dialog open={showTagsDialog} onOpenChange={setShowTagsDialog}>
+  <DialogTrigger asChild>
+    <Button variant="outline" size="sm" className="h-7 text-xs">
+      <Plus className="h-3 w-3 mr-1" />
+      Gerenciar
+    </Button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Gerenciar Tags</DialogTitle>
+    </DialogHeader>
+    <div className="grid grid-cols-3 gap-2 py-4">
+      {availableTags.map(tag => (
+        <Button
+          key={tag}
+          variant={clientTags.includes(tag) ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => handleToggleTag(tag)}
         >
-          {dateFilter === 'today' ? 'Hoje' : 
-           dateFilter === 'week' ? 'Semana' : 
-           format(selectedMonth, "MMM/yyyy", { locale: ptBR })}
-          <X className="h-3 w-3 ml-1" />
-        </Badge>
-      )}
-      
-      {/* Toggle Kanban/Lista */}
-      <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
-        <ToggleGroupItem value="kanban">
-          <LayoutGrid className="h-4 w-4 mr-2" />
-          Kanban
-        </ToggleGroupItem>
-        <ToggleGroupItem value="list">
-          <List className="h-4 w-4 mr-2" />
-          Lista
-        </ToggleGroupItem>
-      </ToggleGroup>
+          {tag}
+        </Button>
+      ))}
     </div>
+  </DialogContent>
+</Dialog>
+
+// Exibir tags atribuídas
+{clientTags.length > 0 ? (
+  <div className="flex flex-wrap gap-1.5 mt-2">
+    {clientTags.map(tag => (
+      <Badge key={tag} variant="secondary">{tag}</Badge>
+    ))}
   </div>
-</div>
+) : (
+  <p className="text-sm text-muted-foreground">
+    Nenhuma tag atribuída. Clique em "Gerenciar" para adicionar.
+  </p>
+)}
 ```
 
-### Etapa 6: Atualizar Interface `ClientWithProcess`
+---
 
-**Arquivo:** `src/components/admin/clients/ClientKanbanBoard.tsx`
+### 3. Aba Contatos Completa (Dados do Cliente e Empresa)
 
-Garantir que o campo `cpf_cnpj` está na interface para permitir busca:
+**Arquivo:** `ClientDetailSheet.tsx` (aba contacts)
+
+Expandir a aba para exibir todos os dados disponíveis:
 
 ```tsx
-export interface ClientWithProcess {
-  id: string;
-  full_name: string | null;
-  email: string;
-  phone: string | null;
-  company_name: string | null;
-  priority: string | null;
-  origin: string | null;
-  contract_value: number | null;
-  process_id: string | null;
-  brand_name: string | null;
-  pipeline_stage: string | null;
-  process_status: string | null;
-  created_at?: string;    // ← Já existe
-  last_contact?: string;
-  cpf_cnpj?: string;      // ← Adicionar para busca
-}
+<TabsContent value="contacts" className="space-y-4 mt-0">
+  {/* DADOS PESSOAIS */}
+  <Card className="border-0 shadow-md">
+    <CardContent className="pt-4">
+      <h4 className="font-semibold mb-4 flex items-center gap-2">
+        <User className="h-4 w-4 text-blue-500" />
+        Dados Pessoais
+      </h4>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">NOME COMPLETO</p>
+          <p className="font-medium">{client.full_name || 'N/A'}</p>
+        </div>
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">CPF/CNPJ</p>
+          <p className="font-medium">{client.cpf_cnpj || 'N/A'}</p>
+        </div>
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">E-MAIL</p>
+          <p className="font-medium">{client.email || 'N/A'}</p>
+        </div>
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">TELEFONE</p>
+          <p className="font-medium">{client.phone || 'N/A'}</p>
+        </div>
+      </div>
+      
+      {/* ENDEREÇO */}
+      {(profileData?.address || profileData?.city) && (
+        <div className="mt-4 p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground mb-1">ENDEREÇO COMPLETO</p>
+          <p className="font-medium">
+            {profileData.address}
+            {profileData.address_number && `, ${profileData.address_number}`}
+            {profileData.neighborhood && ` - ${profileData.neighborhood}`}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {profileData.city}{profileData.state && ` - ${profileData.state}`}
+            {profileData.zip_code && ` - CEP: ${profileData.zip_code}`}
+          </p>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+
+  {/* DADOS DA EMPRESA */}
+  <Card className="border-0 shadow-md">
+    <CardContent className="pt-4">
+      <h4 className="font-semibold mb-4 flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-purple-500" />
+        Dados da Empresa
+      </h4>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">RAZÃO SOCIAL</p>
+          <p className="font-medium">{client.company_name || 'N/A'}</p>
+        </div>
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">CNPJ</p>
+          <p className="font-medium">
+            {client.cpf_cnpj?.length === 14 ? client.cpf_cnpj : 'N/A'}
+          </p>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
+```
+
+Nota: Precisaremos buscar dados completos do perfil (`address`, `city`, `state`, `zip_code`, `neighborhood`) na função `fetchClientData`.
+
+---
+
+### 4. Botão "Editar" Abre Modal Completo
+
+**Arquivo:** `ClientDetailSheet.tsx`
+
+Criar dialog para edição completa:
+
+```tsx
+// Novo estado
+const [showEditDialog, setShowEditDialog] = useState(false);
+const [editFormData, setEditFormData] = useState({
+  full_name: '',
+  email: '',
+  phone: '',
+  cpf_cnpj: '',
+  company_name: '',
+  address: '',
+  address_number: '',
+  neighborhood: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  priority: 'medium',
+  origin: 'site'
+});
+
+// Abrir modal ao clicar em Editar
+<Button onClick={() => setShowEditDialog(true)}>
+  <Edit className="h-4 w-4 mr-2" />
+  Editar
+</Button>
+
+// Dialog de edição
+<Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Editar Cliente</DialogTitle>
+    </DialogHeader>
+    <div className="grid grid-cols-2 gap-4 py-4">
+      <div className="col-span-2">
+        <Label>Nome Completo</Label>
+        <Input value={editFormData.full_name} onChange={...} />
+      </div>
+      <div>
+        <Label>E-mail</Label>
+        <Input value={editFormData.email} onChange={...} />
+      </div>
+      <div>
+        <Label>Telefone</Label>
+        <Input value={editFormData.phone} onChange={...} />
+      </div>
+      <div>
+        <Label>CPF/CNPJ</Label>
+        <Input value={editFormData.cpf_cnpj} onChange={...} />
+      </div>
+      <div>
+        <Label>Empresa</Label>
+        <Input value={editFormData.company_name} onChange={...} />
+      </div>
+      {/* ... demais campos de endereço */}
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancelar</Button>
+      <Button onClick={handleSaveFullEdit}>Salvar Alterações</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
+
+---
+
+### 5. Adicionar Marca/Processo pelo Admin
+
+**Arquivo:** `ClientDetailSheet.tsx` (aba Services)
+
+Quando não há processo, mostrar botão para adicionar:
+
+```tsx
+{!client.brand_name ? (
+  <div className="text-center py-8">
+    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+    <p className="text-muted-foreground mb-4">Nenhum processo registrado</p>
+    
+    <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
+      <DialogTrigger asChild>
+        <Button className="bg-primary">
+          <Plus className="h-4 w-4 mr-2" />
+          Adicionar Marca/Processo
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Adicionar Processo de Marca</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div>
+            <Label>Nome da Marca *</Label>
+            <Input 
+              placeholder="Ex: WebMarcas"
+              value={newProcess.brand_name}
+              onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})}
+            />
+          </div>
+          <div>
+            <Label>Número do Processo (INPI)</Label>
+            <Input 
+              placeholder="Ex: 928374651"
+              value={newProcess.process_number}
+              onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})}
+            />
+          </div>
+          <div>
+            <Label>Fase do Pipeline</Label>
+            <Select value={newProcess.pipeline_stage} onValueChange={...}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PIPELINE_STAGES.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Área de Atuação</Label>
+            <Input 
+              placeholder="Ex: Tecnologia, Alimentação..."
+              value={newProcess.business_area}
+              onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
+          <Button onClick={handleCreateProcess}>Criar Processo</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>
+) : (
+  // ... exibição do processo existente
+)}
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/admin/Clientes.tsx` | Adicionar estados, lógica de filtro por data, atualizar UI |
-| `src/components/admin/clients/ClientKanbanBoard.tsx` | Adicionar `cpf_cnpj` na interface |
-| **Novo** `src/components/admin/clients/DatePeriodFilter.tsx` | Componente de filtro de período |
+| Arquivo | Alterações |
+|---------|------------|
+| `src/components/admin/clients/ClientKanbanBoard.tsx` | Interface + exibição nome marca em negrito + número processo |
+| `src/pages/admin/Clientes.tsx` | Buscar `process_number` do banco |
+| `src/components/admin/clients/ClientDetailSheet.tsx` | Tags, Contatos completos, Modal edição, Adicionar processo |
 
 ---
 
-## Resultado Esperado
+## Resumo Visual das Mudanças
 
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Buscar clientes de hoje | Não possível | Clique em "Hoje" |
-| Buscar clientes da semana | Não possível | Clique em "Semana" |
-| Buscar clientes de Jan/2026 | Não possível | Clique em "Mês" + navegar |
-| Buscar por CPF/CNPJ | Não possível | Digitar no campo de busca |
-| Milhares de clientes | Lista completa sempre | Filtrado por período |
+```text
+CARD DO KANBAN (Antes)
+┌─────────────────────────┐
+│ DAVILYS DANQUES DE...   │  ← Nome cliente (bold)
+│ webmarcas               │  ← Nome marca (pequeno, cinza)
+└─────────────────────────┘
+
+CARD DO KANBAN (Depois)
+┌─────────────────────────┐
+│ DAVILYS DANQUES DE...   │  ← Nome cliente (bold)
+│ WebMarcas  #928374651   │  ← Nome marca (bold, azul) + Processo
+└─────────────────────────┘
+
+ABA CONTATOS (Depois)
+┌─────────────────────────────────────────┐
+│ 👤 DADOS PESSOAIS                       │
+│ Nome: João Silva    CPF: 123.456.789-00 │
+│ Email: j@email.com  Telefone: (11) 9... │
+│ Endereço: Rua X, 123 - Bairro Y         │
+├─────────────────────────────────────────┤
+│ 🏢 DADOS DA EMPRESA                     │
+│ Razão Social: Empresa ABC LTDA          │
+│ CNPJ: 12.345.678/0001-90                │
+└─────────────────────────────────────────┘
+```
 
 ---
 
-## Considerações
+## Estimativa
 
-1. **Performance**: O filtro é aplicado client-side sobre os dados já carregados. Para bases muito grandes (10k+), considerar filtro server-side.
-
-2. **Persistência**: Os filtros são resetados ao recarregar a página. Pode-se adicionar `localStorage` para persistir preferências.
-
-3. **UX**: O filtro "Mês" trabalha em conjunto com o navegador de mês. Ao clicar em "Mês", usa o mês selecionado no navegador.
-
-4. **Busca expandida**: Adicionado suporte para buscar por CPF/CNPJ além dos campos existentes.
+- **Complexidade**: Média-Alta
+- **Arquivos alterados**: 3
+- **Funcionalidades novas**: 4 (Tags, Edição completa, Contatos, Add processo)
