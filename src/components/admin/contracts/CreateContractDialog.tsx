@@ -453,7 +453,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             email: personalData.email,
             full_name: personalData.fullName,
             phone: personalData.phone,
-            cpf_cnpj: brandData.hasCNPJ ? brandData.cnpj : personalData.cpf,
+            cpf: personalData.cpf,
+            cnpj: brandData.hasCNPJ ? brandData.cnpj : null,
+            cpf_cnpj: personalData.cpf, // Legacy field - keep CPF for compatibility
             company_name: brandData.hasCNPJ ? brandData.companyName : null,
             address: `${personalData.address}, ${personalData.neighborhood}`,
             city: personalData.city,

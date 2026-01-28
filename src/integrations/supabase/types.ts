@@ -1436,8 +1436,10 @@ export type Database = {
           address: string | null
           asaas_customer_id: string | null
           city: string | null
+          cnpj: string | null
           company_name: string | null
           contract_value: number | null
+          cpf: string | null
           cpf_cnpj: string | null
           created_at: string | null
           email: string
@@ -1456,8 +1458,10 @@ export type Database = {
           address?: string | null
           asaas_customer_id?: string | null
           city?: string | null
+          cnpj?: string | null
           company_name?: string | null
           contract_value?: number | null
+          cpf?: string | null
           cpf_cnpj?: string | null
           created_at?: string | null
           email: string
@@ -1476,8 +1480,10 @@ export type Database = {
           address?: string | null
           asaas_customer_id?: string | null
           city?: string | null
+          cnpj?: string | null
           company_name?: string | null
           contract_value?: number | null
+          cpf?: string | null
           cpf_cnpj?: string | null
           created_at?: string | null
           email?: string
