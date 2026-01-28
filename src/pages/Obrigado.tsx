@@ -31,7 +31,7 @@ const Obrigado = () => {
     const message = encodeURIComponent(
       `Olá! Acabei de finalizar meu pedido de registro da marca "${registrationData?.brandData?.brandName}". Gostaria de falar com um especialista.`
     );
-    window.open(`https://wa.me/5511999999999?text=${message}`, "_blank");
+    window.open(`https://wa.me/5511911120225?text=${message}`, "_blank");
   };
 
   if (!registrationData) {
