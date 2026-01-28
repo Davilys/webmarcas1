@@ -1,129 +1,213 @@
 
-## Correção: Exibir e Editar Dados Completos do Cliente na Aba Contatos
+
+## Correção: Adicionar Nome da Marca e Ramo de Atividade na Aba Contatos e Formulário de Edição
 
 ### Problema Identificado
-Na aba **Contatos** do painel de detalhes do cliente:
-1. O **CPF** exibe `client.cpf` ou `client.cpf_cnpj`, mas a interface `ClientWithProcess` não inclui o campo `cpf` separadamente
-2. O **CNPJ** exibe `(client as any).cnpj` que também não está na interface
-3. O endereço só é exibido **se existir no profileData**, mas o profileData não busca cpf/cnpj
-4. No formulário de edição, os campos são inicializados com dados incompletos da interface `ClientWithProcess`
+Na aba **Contatos** do painel de detalhes do cliente e no formulário de edição faltam:
+1. **Nome da Marca** (`brand_name`) - visível e editável
+2. **Ramo de Atividade** (`business_area`) - visível e editável
+
+Esses campos vêm da tabela `brand_processes`, não de `profiles`.
 
 ### Causa Raiz
-A tabela `profiles` possui colunas `cpf`, `cnpj`, `address`, `neighborhood`, `city`, `state`, `zip_code`, mas:
-- A query em `fetchClientData()` (linha 274) só busca: `address, neighborhood, city, state, zip_code`
-- A interface `ClientWithProcess` não contém `cpf` ou `cnpj` como campos separados
-- O `editFormData` é inicializado com dados parciais
+
+| Local | Problema |
+|-------|----------|
+| `ClientKanbanBoard.tsx` (linha 19-36) | Interface `ClientWithProcess` não inclui `business_area` |
+| `Clientes.tsx` (linhas 96-113) | `business_area` não é copiado do processo para o objeto cliente |
+| `ClientDetailSheet.tsx` (aba Contatos) | Não exibe Nome da Marca nem Ramo de Atividade |
+| `ClientDetailSheet.tsx` (formulário edição) | Não tem campos para editar `brand_name` e `business_area` |
+| `handleSaveFullEdit()` | Não atualiza `brand_processes` |
+
+---
 
 ### Solução Proposta (Isolada e Segura)
 
-#### 1. Ampliar a Query do `profileData` para incluir CPF e CNPJ
-**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx`
+#### 1. Adicionar `business_area` à Interface `ClientWithProcess`
+**Arquivo:** `src/components/admin/clients/ClientKanbanBoard.tsx` (linhas 19-36)
 
-**Alteração na linha ~274:**
 ```typescript
-// Antes:
-supabase.from('profiles').select('address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
-
-// Depois:
-supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
-```
-
-#### 2. Atualizar a Interface `profileData` State
-**Linha ~212-220:**
-```typescript
-// Antes:
-const [profileData, setProfileData] = useState<{
-  address?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-} | null>(null);
-
-// Depois:
-const [profileData, setProfileData] = useState<{
-  cpf?: string;
-  cnpj?: string;
-  company_name?: string;
-  address?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-} | null>(null);
-```
-
-#### 3. Usar `profileData` na Aba Contatos (ao invés de `client`)
-**Linhas ~992-993 (CPF):**
-```typescript
-// Antes:
-<p className="font-medium font-mono">{(client as any).cpf || client.cpf_cnpj || 'N/A'}</p>
-
-// Depois:
-<p className="font-medium font-mono">{profileData?.cpf || client.cpf_cnpj || 'N/A'}</p>
-```
-
-**Linhas ~1052-1054 (CNPJ):**
-```typescript
-// Antes:
-<p className="font-medium font-mono">
-  {(client as any).cnpj || 'N/A'}
-</p>
-
-// Depois:
-<p className="font-medium font-mono">
-  {profileData?.cnpj || 'N/A'}
-</p>
-```
-
-**Linha ~1048 (Razão Social):**
-```typescript
-// Antes:
-<p className="font-medium">{client.company_name || 'N/A'}</p>
-
-// Depois:
-<p className="font-medium">{profileData?.company_name || client.company_name || 'N/A'}</p>
-```
-
-#### 4. Inicializar `editFormData` corretamente com dados do `profileData`
-**Linhas ~283-293:**
-```typescript
-// Atualizar para incluir cpf, cnpj e company_name
-if (profileRes.data) {
-  setEditFormData(prev => ({
-    ...prev,
-    cpf: profileRes.data.cpf || '',
-    cnpj: profileRes.data.cnpj || '',
-    company_name: profileRes.data.company_name || client.company_name || '',
-    address: profileRes.data.address || '',
-    neighborhood: profileRes.data.neighborhood || '',
-    city: profileRes.data.city || '',
-    state: profileRes.data.state || '',
-    zip_code: profileRes.data.zip_code || ''
-  }));
+export interface ClientWithProcess {
+  id: string;
+  full_name: string | null;
+  email: string;
+  phone: string | null;
+  company_name: string | null;
+  priority: string | null;
+  origin: string | null;
+  contract_value: number | null;
+  process_id: string | null;
+  brand_name: string | null;
+  business_area: string | null;  // NOVO CAMPO
+  pipeline_stage: string | null;
+  process_status: string | null;
+  created_at?: string;
+  last_contact?: string;
+  cpf_cnpj?: string;
+  process_number?: string;
 }
 ```
 
-#### 5. Remover inicialização incorreta de `cpf/cnpj` no useEffect
-**Linhas ~241-252:**
+#### 2. Copiar `business_area` ao criar objeto cliente
+**Arquivo:** `src/pages/admin/Clientes.tsx` (linhas 96-113)
+
 ```typescript
-// Remover a inicialização incorreta que usa (client as any).cpf
-// Deixar a inicialização completa ser feita no callback do fetchClientData
-setEditFormData({
-  full_name: client.full_name || '',
-  email: client.email || '',
-  phone: client.phone || '',
-  cpf: '',      // Será preenchido pelo profileData
-  cnpj: '',     // Será preenchido pelo profileData
-  company_name: client.company_name || '',
+// Cliente SEM processo
+clientsWithProcesses.push({
+  // ... campos existentes
+  brand_name: null,
+  business_area: null,  // ADICIONAR
+  pipeline_stage: 'protocolado',
+  // ...
+});
+
+// Cliente COM processo
+for (const process of userProcesses) {
+  clientsWithProcesses.push({
+    // ... campos existentes
+    brand_name: process.brand_name,
+    business_area: process.business_area || null,  // ADICIONAR
+    pipeline_stage: process.pipeline_stage || 'protocolado',
+    // ...
+  });
+}
+```
+
+#### 3. Adicionar seção "Dados da Marca" na aba Contatos
+**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx`
+
+Entre "Dados Pessoais" e "Dados da Empresa", inserir:
+
+```tsx
+{/* Dados da Marca */}
+{client.brand_name && (
+  <Card className="border-0 shadow-md">
+    <CardContent className="pt-4">
+      <h4 className="font-semibold mb-4 flex items-center gap-2">
+        <FileText className="h-4 w-4 text-orange-500" />
+        Dados da Marca
+      </h4>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">NOME DA MARCA</p>
+          <p className="font-medium">{client.brand_name}</p>
+        </div>
+        <div className="p-3 border rounded-lg">
+          <p className="text-xs text-muted-foreground">RAMO DE ATIVIDADE</p>
+          <p className="font-medium">{client.business_area || 'N/A'}</p>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+#### 4. Adicionar campos de marca ao formulário de edição
+**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx`
+
+4.1. Expandir `editFormData` state (linha 187-201):
+```typescript
+const [editFormData, setEditFormData] = useState({
+  full_name: '',
+  email: '',
+  phone: '',
+  cpf: '',
+  cnpj: '',
+  company_name: '',
   address: '',
   neighborhood: '',
   city: '',
   state: '',
   zip_code: '',
-  priority: client.priority || 'medium',
-  origin: client.origin || 'site'
+  priority: 'medium',
+  origin: 'site',
+  brand_name: '',       // NOVO
+  business_area: ''     // NOVO
 });
+```
+
+4.2. Inicializar com dados do cliente (linha 241-255):
+```typescript
+setEditFormData({
+  // ... campos existentes
+  brand_name: client.brand_name || '',
+  business_area: client.business_area || ''
+});
+```
+
+4.3. Adicionar inputs no dialog de edição (antes de Prioridade):
+```tsx
+{/* Mostrar campos de marca apenas se cliente tem processo */}
+{client?.process_id && (
+  <>
+    <div>
+      <Label>Nome da Marca</Label>
+      <Input 
+        value={editFormData.brand_name}
+        onChange={(e) => setEditFormData({...editFormData, brand_name: e.target.value})}
+        placeholder="Nome da marca registrada"
+      />
+    </div>
+    <div>
+      <Label>Ramo de Atividade</Label>
+      <Input 
+        value={editFormData.business_area}
+        onChange={(e) => setEditFormData({...editFormData, business_area: e.target.value})}
+        placeholder="Ex: Tecnologia, Alimentação..."
+      />
+    </div>
+  </>
+)}
+```
+
+#### 5. Atualizar `handleSaveFullEdit()` para salvar dados do processo
+**Arquivo:** `src/components/admin/clients/ClientDetailSheet.tsx` (linha 463-494)
+
+```typescript
+const handleSaveFullEdit = async () => {
+  if (!client) return;
+
+  try {
+    // Atualizar profile
+    const { error: profileError } = await supabase.from('profiles').update({
+      full_name: editFormData.full_name,
+      email: editFormData.email,
+      phone: editFormData.phone,
+      cpf: editFormData.cpf || null,
+      cnpj: editFormData.cnpj || null,
+      cpf_cnpj: editFormData.cpf || editFormData.cnpj || null,
+      company_name: editFormData.company_name,
+      address: editFormData.address,
+      neighborhood: editFormData.neighborhood,
+      city: editFormData.city,
+      state: editFormData.state,
+      zip_code: editFormData.zip_code,
+      priority: editFormData.priority,
+      origin: editFormData.origin
+    }).eq('id', client.id);
+
+    if (profileError) throw profileError;
+
+    // Atualizar processo (se existir)
+    if (client.process_id && (editFormData.brand_name || editFormData.business_area)) {
+      const { error: processError } = await supabase.from('brand_processes').update({
+        brand_name: editFormData.brand_name,
+        business_area: editFormData.business_area || null
+      }).eq('id', client.process_id);
+
+      if (processError) throw processError;
+    }
+
+    toast.success('Dados do cliente atualizados!');
+    setShowEditDialog(false);
+    onUpdate();
+    fetchClientData();
+  } catch (error: any) {
+    console.error('Error updating client:', error);
+    toast.error(`Erro ao atualizar: ${error?.message || 'Tente novamente'}`);
+  }
+};
 ```
 
 ---
@@ -132,7 +216,9 @@ setEditFormData({
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/admin/clients/ClientDetailSheet.tsx` | Query ampliada, interface state, exibição na aba Contatos, inicialização do formulário de edição |
+| `src/components/admin/clients/ClientKanbanBoard.tsx` | Interface `ClientWithProcess` + `business_area` |
+| `src/pages/admin/Clientes.tsx` | Incluir `business_area` na criação do objeto cliente |
+| `src/components/admin/clients/ClientDetailSheet.tsx` | Exibição na aba Contatos, campos no formulário de edição, lógica de salvamento |
 
 ---
 
@@ -140,33 +226,34 @@ setEditFormData({
 
 | Risco | Mitigação |
 |-------|-----------|
-| Quebrar exibição se profileData for null | Usar fallback para `client.cpf_cnpj` e 'N/A' |
-| Sobrescrever dados do cliente durante edição | A função `handleSaveFullEdit()` já está correta, atualizando cpf, cnpj, company_name separadamente |
-| Regressão em outros componentes | Alteração isolada apenas no `ClientDetailSheet`, não afeta `ClientKanbanBoard` ou `Clientes.tsx` |
+| Quebrar TypeScript em outros arquivos | Interface é apenas ampliada (campo opcional com `null`) |
+| Cliente sem processo não ter marca | Exibição condicional com `{client.brand_name && ...}` |
+| Falha ao salvar processo | Try/catch separado com mensagem de erro clara |
+| Regressão no Kanban | `business_area` é opcional e não afeta renderização existente |
 
 ---
 
 ### Comportamento Esperado Após Correção
 
 1. **Aba Contatos**
-   - CPF exibe valor correto do banco (`profileData.cpf`)
-   - CNPJ exibe valor correto do banco (`profileData.cnpj`)
-   - Razão Social exibe `company_name` do banco
-   - Endereço completo exibe todos os campos
+   - Seção "Dados da Marca" visível com Nome da Marca e Ramo de Atividade
+   - Seção só aparece se cliente tem processo vinculado
 
 2. **Formulário de Edição**
-   - Todos os campos são pré-preenchidos com dados atuais do banco
-   - Admin pode editar CPF, CNPJ, Empresa, Endereço, etc.
-   - Ao salvar, todos os campos são persistidos corretamente
+   - Campos "Nome da Marca" e "Ramo de Atividade" aparecem se cliente tem processo
+   - Pré-preenchidos com dados atuais
+   - Ao salvar, atualiza tanto `profiles` quanto `brand_processes`
 
-3. **Pessoa Física → Pessoa Jurídica**
-   - Cliente que começou como PF pode ter CNPJ e Razão Social adicionados via edição
-   - Dados são salvos e exibidos corretamente
+3. **Pessoa Física que adiciona marca**
+   - Cliente pode ter processo criado via botão "Novo Processo"
+   - Após criar processo, campos de marca aparecem no formulário de edição
 
 ---
 
 ### Testes Recomendados
-1. Abrir cliente no Kanban → aba Contatos → verificar CPF, CNPJ, Razão Social
-2. Clicar em "Editar" → verificar campos pré-preenchidos
-3. Editar CNPJ e Razão Social de cliente PF → Salvar → Verificar exibição
-4. Verificar que nenhum outro cliente foi afetado
+1. Abrir cliente COM processo no Kanban → verificar seção "Dados da Marca" na aba Contatos
+2. Abrir cliente SEM processo → verificar que seção "Dados da Marca" NÃO aparece
+3. Editar cliente COM processo → verificar campos Nome da Marca e Ramo preenchidos
+4. Alterar Ramo de Atividade → Salvar → Verificar persistência
+5. Criar novo processo para cliente → verificar que campos aparecem no formulário
+
