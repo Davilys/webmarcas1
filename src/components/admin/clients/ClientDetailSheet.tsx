@@ -521,49 +521,58 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   };
 
   const handleDeleteClient = async () => {
-    if (!client) return;
+    if (!client || !client.id) {
+      toast.error('Cliente não identificado');
+      return;
+    }
+    
+    const clientId = client.id;
+    console.log('Deleting client with ID:', clientId);
     
     setDeleting(true);
     try {
       // Delete related data first (in order to avoid FK constraints)
-      // Delete client notes
-      await supabase.from('client_notes').delete().eq('user_id', client.id);
+      // IMPORTANT: Each delete must use the specific client.id
       
-      // Delete client activities
-      await supabase.from('client_activities').delete().eq('user_id', client.id);
+      // Delete client notes for THIS client only
+      await supabase.from('client_notes').delete().eq('user_id', clientId);
       
-      // Delete client appointments
-      await supabase.from('client_appointments').delete().eq('user_id', client.id);
+      // Delete client activities for THIS client only
+      await supabase.from('client_activities').delete().eq('user_id', clientId);
       
-      // Delete notifications
-      await supabase.from('notifications').delete().eq('user_id', client.id);
+      // Delete client appointments for THIS client only
+      await supabase.from('client_appointments').delete().eq('user_id', clientId);
       
-      // Delete chat messages
-      await supabase.from('chat_messages').delete().eq('user_id', client.id);
+      // Delete notifications for THIS client only
+      await supabase.from('notifications').delete().eq('user_id', clientId);
       
-      // Delete documents
-      await supabase.from('documents').delete().eq('user_id', client.id);
+      // Delete chat messages for THIS client only
+      await supabase.from('chat_messages').delete().eq('user_id', clientId);
       
-      // Delete invoices
-      await supabase.from('invoices').delete().eq('user_id', client.id);
+      // Delete documents for THIS client only
+      await supabase.from('documents').delete().eq('user_id', clientId);
       
-      // Delete contracts
-      await supabase.from('contracts').delete().eq('user_id', client.id);
+      // Delete invoices for THIS client only
+      await supabase.from('invoices').delete().eq('user_id', clientId);
       
-      // Delete brand processes
-      await supabase.from('brand_processes').delete().eq('user_id', client.id);
+      // Delete contracts for THIS client only
+      await supabase.from('contracts').delete().eq('user_id', clientId);
       
-      // Delete login history
-      await supabase.from('login_history').delete().eq('user_id', client.id);
+      // Delete brand processes for THIS client only
+      await supabase.from('brand_processes').delete().eq('user_id', clientId);
       
-      // Delete user roles
-      await supabase.from('user_roles').delete().eq('user_id', client.id);
+      // Delete login history for THIS client only
+      await supabase.from('login_history').delete().eq('user_id', clientId);
       
-      // Finally delete the profile
-      const { error } = await supabase.from('profiles').delete().eq('id', client.id);
+      // Delete user roles for THIS client only
+      await supabase.from('user_roles').delete().eq('user_id', clientId);
+      
+      // Finally delete the profile for THIS client only
+      const { error } = await supabase.from('profiles').delete().eq('id', clientId);
       
       if (error) throw error;
       
+      console.log('Client deleted successfully:', clientId);
       toast.success('Cliente excluído com sucesso');
       setShowDeleteConfirm(false);
       onOpenChange(false);
