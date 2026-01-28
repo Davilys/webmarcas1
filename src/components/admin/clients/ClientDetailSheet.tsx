@@ -124,6 +124,16 @@ const SERVICE_TYPES = [
   { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido por terceiros' },
 ];
 
+// Mapeamento Tipo de Serviço → Pipeline Stage
+const SERVICE_TYPE_TO_STAGE: Record<string, string> = {
+  'pedido_registro': 'protocolado',
+  'cumprimento_exigencia': '003',
+  'oposicao': 'oposicao',
+  'recurso': 'indeferimento',
+  'renovacao': 'renovacao',
+  'notificacao': 'notificacao'
+};
+
 const QUICK_ACTIONS = [
   { id: 'chat', label: 'Chats', icon: MessageCircle, color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
   { id: 'move', label: 'Mover', icon: ArrowUpRight, color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
@@ -202,6 +212,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     state?: string;
     zip_code?: string;
   } | null>(null);
+  
+  // State for selected service type
+  const [selectedServiceType, setSelectedServiceType] = useState<string>('pedido_registro');
 
   useEffect(() => {
     if (client && open) {
@@ -212,6 +225,14 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         contract_value: client.contract_value || 0,
         pipeline_stage: client.pipeline_stage || 'protocolado'
       });
+      // Initialize selected service type based on pipeline stage (reverse mapping)
+      const clientStage = client.pipeline_stage || 'protocolado';
+      const matchingService = Object.entries(SERVICE_TYPE_TO_STAGE).find(([_, stage]) => stage === clientStage);
+      if (matchingService) {
+        setSelectedServiceType(matchingService[0]);
+      } else {
+        setSelectedServiceType('pedido_registro');
+      }
       // Initialize edit form data
       setEditFormData({
         full_name: client.full_name || '',
@@ -593,7 +614,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
 
   if (!client) return null;
 
-  const currentStage = PIPELINE_STAGES.find(s => s.id === (client.pipeline_stage || 'protocolado'));
+  // Use editData.pipeline_stage for immediate UI updates
+  const currentStage = PIPELINE_STAGES.find(s => s.id === (editData.pipeline_stage || client.pipeline_stage || 'protocolado'));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1028,26 +1050,29 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                       <FileText className="h-4 w-4" />
                       Serviços Contratados
                     </h4>
-                    {editMode && (
-                      <Select 
-                        value={editData.pipeline_stage} 
-                        onValueChange={async (v) => {
-                          setEditData({ ...editData, pipeline_stage: v });
-                          if (client?.process_id) {
-                            await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
-                            toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
-                            onUpdate();
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="w-48"><SelectValue placeholder="Fase do processo" /></SelectTrigger>
-                        <SelectContent>
-                          {PIPELINE_STAGES.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <Select 
+                      value={editData.pipeline_stage} 
+                      onValueChange={async (v) => {
+                        setEditData({ ...editData, pipeline_stage: v });
+                        // Also update selectedServiceType based on reverse mapping
+                        const matchingService = Object.entries(SERVICE_TYPE_TO_STAGE).find(([_, stage]) => stage === v);
+                        if (matchingService) {
+                          setSelectedServiceType(matchingService[0]);
+                        }
+                        if (client?.process_id) {
+                          await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
+                          toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
+                          onUpdate();
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-48"><SelectValue placeholder="Fase do processo" /></SelectTrigger>
+                      <SelectContent>
+                        {PIPELINE_STAGES.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {client.brand_name ? (
@@ -1098,9 +1123,25 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                             <motion.div
                               key={service.id}
                               whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={async () => {
+                                setSelectedServiceType(service.id);
+                                // Update pipeline stage based on service type
+                                const suggestedStage = SERVICE_TYPE_TO_STAGE[service.id];
+                                if (suggestedStage && client?.process_id) {
+                                  setEditData(prev => ({ ...prev, pipeline_stage: suggestedStage }));
+                                  await supabase.from('brand_processes')
+                                    .update({ pipeline_stage: suggestedStage })
+                                    .eq('id', client.process_id);
+                                  toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === suggestedStage)?.label}`);
+                                  onUpdate();
+                                }
+                              }}
                               className={cn(
                                 "p-3 rounded-lg border cursor-pointer transition-all",
-                                service.id === 'pedido_registro' ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                                selectedServiceType === service.id 
+                                  ? "border-primary bg-primary/5 ring-2 ring-primary/30" 
+                                  : "border-border hover:border-primary/50"
                               )}
                             >
                               <p className="font-medium text-sm">{service.label}</p>
