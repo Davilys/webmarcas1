@@ -145,10 +145,14 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
   
   console.log(`Parsing XML content, size: ${xmlContent.length} bytes`);
   
-  // Quick check - use simple indexOf which is much faster than regex
-  const lowerContent = xmlContent.toLowerCase();
-  if (!lowerContent.includes('davilys')) {
-    console.log('Attorney name not found in XML content (quick check)');
+  // Quick check - normalize completely (lowercase + remove accents) for accurate search
+  const normalizedContent = normalizeText(xmlContent);
+  const searchTerm = normalizeText(ATTORNEY_SEARCH_TERM);
+  
+  console.log(`Searching for attorney term: "${searchTerm}" (normalized)`);
+  
+  if (!normalizedContent.includes(searchTerm)) {
+    console.log('Attorney name not found in XML content (quick check with full normalization)');
     return [];
   }
   
@@ -207,9 +211,9 @@ function parseRpiXml(xmlContent: string, rpiNumber: number): ExtractedProcess[] 
       const chunk = chunks[i];
       if (!chunk || chunk.length < 50) continue;
       
-      // Quick attorney check using simple includes (much faster)
-      const lowerChunk = chunk.toLowerCase();
-      if (!lowerChunk.includes('davilys')) continue;
+      // Quick attorney check using normalized text (handles accents and case)
+      const normalizedChunk = normalizeText(chunk);
+      if (!normalizedChunk.includes(searchTerm)) continue;
       
       // Find the start of this processo block
       const processoStart = chunk.lastIndexOf('<processo');
