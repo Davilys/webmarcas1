@@ -31,6 +31,7 @@ export interface ClientWithProcess {
   process_status: string | null;
   created_at?: string;
   last_contact?: string;
+  cpf_cnpj?: string;
 }
 
 export interface KanbanFilters {

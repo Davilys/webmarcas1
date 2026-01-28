@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,9 @@ import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet'
 import { ClientImportExportDialog } from '@/components/admin/clients/ClientImportExportDialog';
 import { DuplicateClientsDialog } from '@/components/admin/clients/DuplicateClientsDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { DatePeriodFilter, type DateFilterType } from '@/components/admin/clients/DatePeriodFilter';
+import { startOfDay, startOfWeek, startOfMonth, endOfMonth, endOfDay, isWithinInterval, parseISO, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 type ViewMode = 'kanban' | 'list';
 
@@ -39,6 +42,8 @@ export default function AdminClientes() {
   const [filters, setFilters] = useState<KanbanFilters>({ priority: [], origin: [] });
   const [filterOpen, setFilterOpen] = useState(false);
   const [importExportOpen, setImportExportOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
 
   useEffect(() => {
     fetchClients();
@@ -82,7 +87,9 @@ export default function AdminClientes() {
             process_id: null,
             brand_name: null,
             pipeline_stage: 'protocolado',
-            process_status: null
+            process_status: null,
+            created_at: profile.created_at || undefined,
+            cpf_cnpj: profile.cpf_cnpj || undefined
           });
         } else {
           // One entry per process
@@ -99,7 +106,9 @@ export default function AdminClientes() {
               process_id: process.id,
               brand_name: process.brand_name,
               pipeline_stage: process.pipeline_stage || 'protocolado',
-              process_status: process.status
+              process_status: process.status,
+              created_at: profile.created_at || undefined,
+              cpf_cnpj: profile.cpf_cnpj || undefined
             });
           }
         }
@@ -119,12 +128,47 @@ export default function AdminClientes() {
     setDetailOpen(true);
   };
 
-  const filteredClients = clients.filter(client =>
+  // Filter by date period
+  const dateFilteredClients = useMemo(() => {
+    if (dateFilter === 'all') return clients;
+    
+    const now = new Date();
+    
+    return clients.filter(client => {
+      if (!client.created_at) return true;
+      
+      const createdAt = parseISO(client.created_at);
+      
+      switch (dateFilter) {
+        case 'today':
+          return isWithinInterval(createdAt, {
+            start: startOfDay(now),
+            end: endOfDay(now)
+          });
+        case 'week':
+          return isWithinInterval(createdAt, {
+            start: startOfWeek(now, { weekStartsOn: 1 }),
+            end: now
+          });
+        case 'month':
+          return isWithinInterval(createdAt, {
+            start: startOfMonth(selectedMonth),
+            end: endOfMonth(selectedMonth)
+          });
+        default:
+          return true;
+      }
+    });
+  }, [clients, dateFilter, selectedMonth]);
+
+  // Filter by search (name, email, cpf/cnpj, phone, brand, company)
+  const filteredClients = dateFilteredClients.filter(client =>
     client.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     client.email.toLowerCase().includes(search.toLowerCase()) ||
     client.company_name?.toLowerCase().includes(search.toLowerCase()) ||
     client.brand_name?.toLowerCase().includes(search.toLowerCase()) ||
-    client.phone?.includes(search)
+    client.phone?.includes(search) ||
+    client.cpf_cnpj?.includes(search)
   );
 
   return (
@@ -256,64 +300,83 @@ export default function AdminClientes() {
             </div>
           </div>
 
-          {/* Search and View Toggle */}
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 max-w-xl">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar clientes por nome, empresa, email ou telefone..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              {/* Active Filters */}
-              {(filters.priority.length > 0 || filters.origin.length > 0) && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {filters.priority.map(p => (
-                    <Badge 
-                      key={p} 
-                      variant="secondary"
-                      className="cursor-pointer"
-                      onClick={() => setFilters(prev => ({ 
-                        ...prev, 
-                        priority: prev.priority.filter(x => x !== p) 
-                      }))}
-                    >
-                      {PRIORITY_OPTIONS.find(o => o.value === p)?.label}
-                      <X className="h-3 w-3 ml-1" />
-                    </Badge>
-                  ))}
-                  {filters.origin.map(o => (
-                    <Badge 
-                      key={o} 
-                      variant="secondary"
-                      className="cursor-pointer"
-                      onClick={() => setFilters(prev => ({ 
-                        ...prev, 
-                        origin: prev.origin.filter(x => x !== o) 
-                      }))}
-                    >
-                      {ORIGIN_OPTIONS.find(opt => opt.value === o)?.label}
-                      <X className="h-3 w-3 ml-1" />
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, empresa, email, CPF/CNPJ, marca ou telefone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
 
-            <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
-              <ToggleGroupItem value="kanban" aria-label="Visualização Kanban">
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                Kanban
-              </ToggleGroupItem>
-              <ToggleGroupItem value="list" aria-label="Visualização Lista">
-                <List className="h-4 w-4 mr-2" />
-                Lista
-              </ToggleGroupItem>
-            </ToggleGroup>
+          {/* Period Filters + Active Filters + View Toggle */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <DatePeriodFilter
+              dateFilter={dateFilter}
+              onDateFilterChange={setDateFilter}
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
+            />
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Active Date Filter Badge */}
+              {dateFilter !== 'all' && (
+                <Badge 
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() => setDateFilter('all')}
+                >
+                  {dateFilter === 'today' ? 'Hoje' : 
+                   dateFilter === 'week' ? 'Semana' : 
+                   format(selectedMonth, "MMM/yyyy", { locale: ptBR })}
+                  <X className="h-3 w-3 ml-1" />
+                </Badge>
+              )}
+              
+              {/* Active Priority/Origin Filters */}
+              {filters.priority.map(p => (
+                <Badge 
+                  key={p} 
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() => setFilters(prev => ({ 
+                    ...prev, 
+                    priority: prev.priority.filter(x => x !== p) 
+                  }))}
+                >
+                  {PRIORITY_OPTIONS.find(o => o.value === p)?.label}
+                  <X className="h-3 w-3 ml-1" />
+                </Badge>
+              ))}
+              {filters.origin.map(o => (
+                <Badge 
+                  key={o} 
+                  variant="secondary"
+                  className="cursor-pointer"
+                  onClick={() => setFilters(prev => ({ 
+                    ...prev, 
+                    origin: prev.origin.filter(x => x !== o) 
+                  }))}
+                >
+                  {ORIGIN_OPTIONS.find(opt => opt.value === o)?.label}
+                  <X className="h-3 w-3 ml-1" />
+                </Badge>
+              ))}
+
+              {/* View Toggle */}
+              <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
+                <ToggleGroupItem value="kanban" aria-label="Visualização Kanban">
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Kanban
+                </ToggleGroupItem>
+                <ToggleGroupItem value="list" aria-label="Visualização Lista">
+                  <List className="h-4 w-4 mr-2" />
+                  Lista
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
         </div>
 
