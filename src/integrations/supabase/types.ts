@@ -544,6 +544,7 @@ export type Database = {
           contract_value: number | null
           contractor_signature_image: string | null
           created_at: string | null
+          custom_due_date: string | null
           description: string | null
           device_info: Json | null
           document_type: string | null
@@ -586,6 +587,7 @@ export type Database = {
           contract_value?: number | null
           contractor_signature_image?: string | null
           created_at?: string | null
+          custom_due_date?: string | null
           description?: string | null
           device_info?: Json | null
           document_type?: string | null
@@ -628,6 +630,7 @@ export type Database = {
           contract_value?: number | null
           contractor_signature_image?: string | null
           created_at?: string | null
+          custom_due_date?: string | null
           description?: string | null
           device_info?: Json | null
           document_type?: string | null
