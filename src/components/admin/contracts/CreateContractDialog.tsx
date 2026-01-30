@@ -9,7 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, FileText, Send, Copy, Link, UserPlus, Search } from 'lucide-react';
+import { Loader2, FileText, Send, Copy, Link, UserPlus, Search, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { generateDocumentContent } from '@/lib/documentTemplates';
 import { replaceContractVariables } from '@/hooks/useContractTemplate';
 import { 
@@ -133,6 +138,10 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
   // Payment method - matching public form (null = no charge)
   const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x' | null>(null);
+  
+  // Optional payment dates for PIX and Boleto (Admin can customize)
+  const [pixPaymentDate, setPixPaymentDate] = useState<Date | undefined>(undefined);
+  const [boletoVencimentoDate, setBoletoVencimentoDate] = useState<Date | undefined>(undefined);
 
   // Legacy form data for existing client flows
   const [formData, setFormData] = useState({
@@ -782,6 +791,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setValidationErrors({});
     setCurrentTab('personal');
     setPaymentMethod(null);
+    setPixPaymentDate(undefined);
+    setBoletoVencimentoDate(undefined);
   };
 
   const handleProfileChange = async (userId: string) => {
@@ -1161,40 +1172,80 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
                     <div className="space-y-3">
                       {/* PIX à vista */}
-                      <div
-                        onClick={() => setPaymentMethod('avista')}
-                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                          paymentMethod === 'avista'
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-4 h-4 rounded-full border-2 ${
-                              paymentMethod === 'avista' 
-                                ? 'border-primary bg-primary' 
-                                : 'border-muted-foreground'
-                            }`}>
-                              {paymentMethod === 'avista' && (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <div className="w-2 h-2 bg-white rounded-full" />
-                                </div>
-                              )}
+                      <div className="space-y-2">
+                        <div
+                          onClick={() => setPaymentMethod('avista')}
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                            paymentMethod === 'avista'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full border-2 ${
+                                paymentMethod === 'avista' 
+                                  ? 'border-primary bg-primary' 
+                                  : 'border-muted-foreground'
+                              }`}>
+                                {paymentMethod === 'avista' && (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">PIX à Vista</p>
+                                <p className="text-sm text-muted-foreground">Pagamento instantâneo</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium">PIX à Vista</p>
-                              <p className="text-sm text-muted-foreground">Pagamento instantâneo</p>
+                            <div className="text-right">
+                              <p className="text-2xl font-bold text-primary">R$ 699,00</p>
+                              <p className="text-xs text-green-600 font-medium">43% OFF</p>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-primary">R$ 699,00</p>
-                            <p className="text-xs text-green-600 font-medium">43% OFF</p>
                           </div>
                         </div>
+                        
+                        {/* Date picker for PIX - only shows when PIX is selected */}
+                        {paymentMethod === 'avista' && (
+                          <div className="ml-7 p-3 bg-muted/30 rounded-lg border border-border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                              <Label className="text-sm font-medium">Data de pagamento (opcional)</Label>
+                            </div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !pixPaymentDate && "text-muted-foreground"
+                                  )}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {pixPaymentDate ? format(pixPaymentDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={pixPaymentDate}
+                                  onSelect={setPixPaymentDate}
+                                  disabled={(date) => date < new Date()}
+                                  initialFocus
+                                  className={cn("p-3 pointer-events-auto")}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Se não selecionar, será usado pagamento imediato.
+                            </p>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Cartão 6x */}
+                      {/* Cartão 6x - NO date picker for credit card */}
                       <div
                         onClick={() => setPaymentMethod('cartao6x')}
                         className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
@@ -1229,37 +1280,77 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       {/* Boleto 3x */}
-                      <div
-                        onClick={() => setPaymentMethod('boleto3x')}
-                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                          paymentMethod === 'boleto3x'
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-4 h-4 rounded-full border-2 ${
-                              paymentMethod === 'boleto3x' 
-                                ? 'border-primary bg-primary' 
-                                : 'border-muted-foreground'
-                            }`}>
-                              {paymentMethod === 'boleto3x' && (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <div className="w-2 h-2 bg-white rounded-full" />
-                                </div>
-                              )}
+                      <div className="space-y-2">
+                        <div
+                          onClick={() => setPaymentMethod('boleto3x')}
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                            paymentMethod === 'boleto3x'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-4 h-4 rounded-full border-2 ${
+                                paymentMethod === 'boleto3x' 
+                                  ? 'border-primary bg-primary' 
+                                  : 'border-muted-foreground'
+                              }`}>
+                                {paymentMethod === 'boleto3x' && (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">Boleto Bancário</p>
+                                <p className="text-sm text-muted-foreground">Parcelamento em 3x</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium">Boleto Bancário</p>
-                              <p className="text-sm text-muted-foreground">Parcelamento em 3x</p>
+                            <div className="text-right">
+                              <p className="text-lg font-bold">3x de R$ 399,00</p>
+                              <p className="text-xs text-muted-foreground">Total: R$ 1.197,00</p>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold">3x de R$ 399,00</p>
-                            <p className="text-xs text-muted-foreground">Total: R$ 1.197,00</p>
                           </div>
                         </div>
+                        
+                        {/* Date picker for Boleto - only shows when Boleto is selected */}
+                        {paymentMethod === 'boleto3x' && (
+                          <div className="ml-7 p-3 bg-muted/30 rounded-lg border border-border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                              <Label className="text-sm font-medium">Data de vencimento do boleto (opcional)</Label>
+                            </div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !boletoVencimentoDate && "text-muted-foreground"
+                                  )}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {boletoVencimentoDate ? format(boletoVencimentoDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={boletoVencimentoDate}
+                                  onSelect={setBoletoVencimentoDate}
+                                  disabled={(date) => date < new Date()}
+                                  initialFocus
+                                  className={cn("p-3 pointer-events-auto")}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Se não selecionar, será usado vencimento automático.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
