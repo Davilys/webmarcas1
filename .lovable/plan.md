@@ -1,73 +1,93 @@
 
-## Correção de Bug: Clientes do Funil Comercial não aparecem no Kanban
+## Correção: Botão "Mover" deve exigir APENAS assinatura (sem pagamento)
 
 ### Problema Identificado
 
-Clientes criados via **Novo Contrato → Criar novo cliente** não aparecem no Kanban "CLIENTES COMERCIAL" na etapa "ASSINOU CONTRATO", mesmo após assinatura do contrato.
+No `ClientDetailSheet.tsx`, a função `handleMoveToLegalFunnel` (linhas 650-722) atualmente valida **duas condições**:
 
-### Causa Raiz
+1. ✅ Contrato assinado (`signature_status = 'signed'`)
+2. ❌ Pagamento confirmado (`status = 'paid'`) → **DEVE SER REMOVIDO**
 
-Na Edge Function `create-client-user/index.ts`, quando um processo `brand_processes` é criado, o campo `pipeline_stage` é **sempre** definido como `'protocolado'` (linhas 139 e 240).
+Código atual (linhas 675-683):
+```typescript
+if (!hasSignedContract) {
+  toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
+  return;
+}
 
-**Porém:**
-- `'protocolado'` é um estágio do funil **JURÍDICO**
-- O funil **COMERCIAL** tem os estágios: `assinou_contrato`, `pagamento_ok`, `pagou_taxa`
-- Quando o Kanban filtra por `client_funnel_type = 'comercial'`, procura por esses estágios
-- Como o processo tem `pipeline_stage = 'protocolado'`, ele não aparece em nenhuma coluna
+if (!hasPaidInvoice) {
+  toast.error('Cliente precisa ter um pagamento confirmado para ser movido ao funil jurídico');
+  return;  // ← ESTA VALIDAÇÃO SERÁ REMOVIDA
+}
+```
+
+### Solicitação do Usuário
+
+> "ASSINOU AUTOMATICAMENTE VIRA CLIENTE SEM PRECISAR CONFIRMAR PAGAMENTO"
+> "Contrato está ASSINADO, NAO PRECISA ESTAR PAGO APENAS ASSINADO CONTRATO"
 
 ### Solução Proposta
 
-#### Arquivo: `supabase/functions/create-client-user/index.ts`
+#### Arquivo: `src/components/admin/clients/ClientDetailSheet.tsx`
 
-**Linha 139 - Para clientes existentes:**
+**Remover a validação de pagamento** - manter apenas verificação de assinatura:
+
 ```typescript
-// ANTES:
-pipeline_stage: 'protocolado',
+const handleMoveToLegalFunnel = async () => {
+  if (!client) return;
 
-// DEPOIS:
-pipeline_stage: client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado',
+  try {
+    // Check if client has a signed contract
+    const { data: contracts } = await supabase
+      .from('contracts')
+      .select('id, signature_status')
+      .eq('user_id', client.id)
+      .eq('signature_status', 'signed')
+      .limit(1);
+
+    const hasSignedContract = contracts && contracts.length > 0;
+
+    // VALIDAÇÃO ÚNICA: apenas contrato assinado
+    if (!hasSignedContract) {
+      toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
+      return;
+    }
+
+    // REMOVIDO: verificação de pagamento
+    // O cliente pode ser movido apenas com contrato assinado
+
+    // Move client to legal funnel
+    // ... resto do código permanece igual
+  }
+};
 ```
 
-**Linha 240 - Para novos clientes:**
+**Atualizar mensagem do log:**
 ```typescript
-// ANTES:
-pipeline_stage: 'protocolado',
-
-// DEPOIS:
-pipeline_stage: client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado',
+description: 'Cliente movido do funil Comercial para Jurídico após assinatura do contrato.'
 ```
 
 ---
 
 ### Análise de Impacto
 
-| Risco | Mitigação |
-|-------|-----------|
-| Clientes antigos | Sem impacto - apenas novos clientes criados |
-| Funil jurídico | Sem alteração - continua usando `'protocolado'` como padrão |
-| APIs existentes | Sem quebra - lógica é aditiva |
-| Contratos existentes | Sem alteração |
-
----
-
-### Correção de Dados Existentes (Opcional)
-
-Se desejar corrigir o cliente "Yasmin" que já foi criado com o bug, executar no banco:
-
-```sql
-UPDATE brand_processes 
-SET pipeline_stage = 'assinou_contrato'
-WHERE user_id IN (
-  SELECT id FROM profiles WHERE client_funnel_type = 'comercial'
-) 
-AND pipeline_stage = 'protocolado';
-```
+| Aspecto | Status |
+|---------|--------|
+| Banco de dados | ✅ Nenhuma alteração |
+| Tabelas existentes | ✅ Preservadas |
+| Funil jurídico | ✅ Sem alteração na estrutura |
+| Funil comercial | ✅ Sem alteração na estrutura |
+| Contratos antigos | ✅ Sem impacto |
+| APIs/Integrações | ✅ Sem impacto |
+| Área do cliente | ✅ Sem impacto |
 
 ---
 
 ### Teste Esperado
 
-1. **Novo Contrato → Criar novo cliente** 
-2. Cliente assina contrato
+1. **Criar contrato** via Admin → Contratos → Novo Contrato
+2. **Cliente assina o contrato**
 3. Ir em **Clientes** → **Comercial**
-4. Cliente deve aparecer na coluna **"ASSINOU CONTRATO"**
+4. Abrir detalhes do cliente → Clicar **"Mover"**
+5. ✅ Cliente deve ser movido para **Jurídico** na etapa **PROTOCOLADO**
+6. ❌ **SEM exigir pagamento confirmado**
