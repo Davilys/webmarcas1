@@ -593,6 +593,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         ? getContractValue() 
         : (isStandardTemplate ? getContractValue() : (formData.contract_value ? parseFloat(formData.contract_value) : null));
 
+      // Calculate custom due date based on payment method
+      const customDueDate = paymentMethod === 'avista' && pixPaymentDate 
+        ? pixPaymentDate.toISOString().split('T')[0]
+        : paymentMethod === 'boleto3x' && boletoVencimentoDate
+          ? boletoVencimentoDate.toISOString().split('T')[0]
+          : null;
+
       const { data: contract, error } = await supabase.from('contracts').insert({
         user_id: userId,
         contract_number: generateContractNumber(),
@@ -609,6 +616,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         signatory_cnpj: isNewClient && brandData.hasCNPJ ? brandData.cnpj : (formData.signatory_cnpj || null),
         penalty_value: formData.penalty_value ? parseFloat(formData.penalty_value) : null,
         payment_method: (isNewClient || isStandardTemplate) && paymentMethod ? paymentMethod : null,
+        custom_due_date: customDueDate, // Save admin-specified custom date for PIX/Boleto
         signature_status: 'not_signed',
         visible_to_client: true,
         lead_id: leadId || null,

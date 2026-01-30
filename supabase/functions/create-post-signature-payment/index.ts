@@ -57,7 +57,7 @@ serve(async (req) => {
     const pricing = pricingData?.value || DEFAULT_PRICING;
     console.log('Using pricing config:', JSON.stringify(pricing));
 
-    // Fetch contract with user profile
+    // Fetch contract with user profile (including custom_due_date)
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
       .select(`
@@ -293,14 +293,25 @@ serve(async (req) => {
     }
 
     // Create payment in Asaas
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 3);
+    // Use custom_due_date from contract if admin specified one, otherwise default to 3 days
+    let dueDateString: string;
+    if (contract.custom_due_date) {
+      // Admin specified a custom due date for PIX/Boleto
+      dueDateString = contract.custom_due_date;
+      console.log(`Using admin-specified custom due date: ${dueDateString}`);
+    } else {
+      // Default: 3 days from now
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 3);
+      dueDateString = dueDate.toISOString().split('T')[0];
+      console.log(`Using default due date (3 days): ${dueDateString}`);
+    }
 
     const paymentPayload: Record<string, any> = {
       customer: customerId,
       billingType,
       value: paymentMethod === 'boleto3x' ? installmentValue : totalValue,
-      dueDate: dueDate.toISOString().split('T')[0],
+      dueDate: dueDateString,
       description: `Registro de Marca - ${contract.subject || 'Contrato'}`,
       externalReference: contractId,
     };
@@ -361,7 +372,7 @@ serve(async (req) => {
         process_id: contract.process_id || null,
         amount: totalValue,
         status: 'pending',
-        due_date: dueDate.toISOString().split('T')[0],
+        due_date: dueDateString,
         description: `Registro de Marca - ${contract.subject || 'Contrato'}`,
         asaas_invoice_id: paymentData.id,
         invoice_url: paymentData.invoiceUrl,
@@ -389,7 +400,7 @@ serve(async (req) => {
           pixQrCode,
           pixPayload,
           value: totalValue,
-          dueDate: dueDate.toISOString().split('T')[0],
+          dueDate: dueDateString,
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
