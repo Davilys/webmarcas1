@@ -652,7 +652,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     if (!client) return;
 
     try {
-      // Check if client has a signed contract
+      // Check if client has a signed contract (ONLY requirement)
       const { data: contracts } = await supabase
         .from('contracts')
         .select('id, signature_status')
@@ -662,23 +662,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
 
       const hasSignedContract = contracts && contracts.length > 0;
 
-      // Check if client has a paid invoice
-      const { data: paidInvoices } = await supabase
-        .from('invoices')
-        .select('id, status')
-        .eq('user_id', client.id)
-        .eq('status', 'paid')
-        .limit(1);
-
-      const hasPaidInvoice = paidInvoices && paidInvoices.length > 0;
-
+      // VALIDAÇÃO ÚNICA: apenas contrato assinado
       if (!hasSignedContract) {
         toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
-        return;
-      }
-
-      if (!hasPaidInvoice) {
-        toast.error('Cliente precisa ter um pagamento confirmado para ser movido ao funil jurídico');
         return;
       }
 
@@ -709,7 +695,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         user_id: client.id,
         admin_id: user?.id,
         activity_type: 'funnel_move',
-        description: 'Cliente movido do funil Comercial para Jurídico após assinatura e pagamento confirmados.'
+        description: 'Cliente movido do funil Comercial para Jurídico após assinatura do contrato.'
       });
 
       toast.success('✅ Cliente movido para o funil jurídico com sucesso!');
