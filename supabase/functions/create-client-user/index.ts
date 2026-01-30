@@ -135,8 +135,8 @@ serve(async (req) => {
             user_id: existingProfile.id,
             brand_name,
             business_area: business_area || null,
-            status: 'em_andamento',
-            pipeline_stage: 'protocolado',
+          status: 'em_andamento',
+          pipeline_stage: client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado',
           })
           .select('id')
           .single();
@@ -236,8 +236,8 @@ serve(async (req) => {
           user_id: userId,
           brand_name,
           business_area: business_area || null,
-          status: 'em_andamento',
-          pipeline_stage: 'protocolado',
+        status: 'em_andamento',
+        pipeline_stage: client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado',
         })
         .select('id')
         .single();
