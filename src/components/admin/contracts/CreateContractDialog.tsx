@@ -470,11 +470,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             cpf_cnpj: personalData.cpf, // Legacy field - keep CPF for compatibility
             company_name: brandData.hasCNPJ ? brandData.companyName : null,
             address: `${personalData.address}, ${personalData.neighborhood}`,
+            neighborhood: personalData.neighborhood,
             city: personalData.city,
             state: personalData.state,
             zip_code: personalData.cep,
             brand_name: brandData.brandName,
             business_area: brandData.businessArea,
+            client_funnel_type: 'comercial', // NEW: Clients created via contract go to commercial funnel
           }),
         }
       );
@@ -488,7 +490,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       if (result.isExisting) {
         toast.info('Cliente já existente - contrato será vinculado');
       } else {
-        toast.success('Novo cliente criado com sucesso');
+        toast.success('Novo cliente criado no funil comercial');
       }
 
       return result.userId;

@@ -45,6 +45,7 @@ serve(async (req) => {
       zip_code,
       brand_name,
       business_area,
+      client_funnel_type, // NEW: 'comercial' or 'juridico'
     } = await req.json();
 
     // Validate required fields
@@ -200,6 +201,7 @@ serve(async (req) => {
         state: state || null,
         zip_code: zip_code || null,
         origin: 'form_checkout',
+        client_funnel_type: client_funnel_type || 'juridico', // NEW: default to juridico
       });
 
     if (profileError) {
@@ -220,6 +222,7 @@ serve(async (req) => {
           state: state || null,
           zip_code: zip_code || null,
           origin: 'form_checkout',
+          client_funnel_type: client_funnel_type || 'juridico', // NEW: default to juridico
         })
         .eq('id', userId);
     }

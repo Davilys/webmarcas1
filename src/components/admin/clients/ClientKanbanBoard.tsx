@@ -34,6 +34,7 @@ export interface ClientWithProcess {
   last_contact?: string;
   cpf_cnpj?: string;
   process_number?: string;
+  client_funnel_type?: string; // NEW: 'comercial' or 'juridico'
 }
 
 export interface KanbanFilters {
@@ -41,13 +42,24 @@ export interface KanbanFilters {
   origin: string[];
 }
 
+export type FunnelType = 'comercial' | 'juridico';
+
 interface ClientKanbanBoardProps {
   clients: ClientWithProcess[];
   onClientClick: (client: ClientWithProcess) => void;
   onRefresh: () => void;
   filters?: KanbanFilters;
+  funnelType?: FunnelType; // NEW: which funnel to display
 }
 
+// COMMERCIAL FUNNEL STAGES (for sales pipeline)
+export const COMMERCIAL_PIPELINE_STAGES = [
+  { id: 'assinou_contrato', label: 'ASSINOU CONTRATO', color: 'from-blue-500 to-blue-600', borderColor: 'border-blue-500', bgColor: 'bg-blue-50 dark:bg-blue-950/30', textColor: 'text-blue-700 dark:text-blue-300', description: 'Cliente assinou o contrato. Aguardando confirmação de pagamento.' },
+  { id: 'pagamento_ok', label: 'PAGAMENTO OKAY', color: 'from-emerald-500 to-emerald-600', borderColor: 'border-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/30', textColor: 'text-emerald-700 dark:text-emerald-300', description: 'Pagamento do serviço confirmado. Pronto para pagar taxa INPI.' },
+  { id: 'pagou_taxa', label: 'PAGOU TAXA', color: 'from-teal-500 to-teal-600', borderColor: 'border-teal-500', bgColor: 'bg-teal-50 dark:bg-teal-950/30', textColor: 'text-teal-700 dark:text-teal-300', description: 'Taxa INPI paga. Pronto para mover ao funil jurídico.' },
+];
+
+// LEGAL FUNNEL STAGES (INPI processes - existing)
 export const PIPELINE_STAGES = [
   { id: 'protocolado', label: 'PROTOCOLADO', color: 'from-blue-500 to-blue-600', borderColor: 'border-blue-500', bgColor: 'bg-blue-50 dark:bg-blue-950/30', textColor: 'text-blue-700 dark:text-blue-300', description: 'Pedido de registro enviado ao INPI. Aguardando análise inicial.' },
   { id: '003', label: '003', color: 'from-yellow-500 to-amber-500', borderColor: 'border-yellow-500', bgColor: 'bg-yellow-50 dark:bg-yellow-950/30', textColor: 'text-yellow-700 dark:text-yellow-300', description: 'Cumprimento de exigência formal. Documentos adicionais solicitados.' },
@@ -67,11 +79,15 @@ const ORIGIN_CONFIG: Record<string, { icon: typeof MessageCircle; color: string;
   'indicacao': { icon: UserPlus, color: 'text-purple-600', bg: 'bg-purple-100', label: 'Ind' },
 };
 
-export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }: ClientKanbanBoardProps) {
+export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, funnelType = 'juridico' }: ClientKanbanBoardProps) {
   const [draggedClient, setDraggedClient] = useState<ClientWithProcess | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
+  // Select stages based on funnel type
+  const activePipelineStages = funnelType === 'comercial' ? COMMERCIAL_PIPELINE_STAGES : PIPELINE_STAGES;
+  const defaultStage = funnelType === 'comercial' ? 'assinou_contrato' : 'protocolado';
 
   // Apply filters
   const filteredClients = useMemo(() => {
@@ -143,7 +159,8 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
         if (error) throw error;
       }
       
-      const stageName = PIPELINE_STAGES.find(s => s.id === stageId)?.label;
+      const stageName = activePipelineStages.find(s => s.id === stageId)?.label || 
+                        PIPELINE_STAGES.find(s => s.id === stageId)?.label;
       toast.success(`✅ Cliente movido para ${stageName}`);
       onRefresh();
     } catch (error) {
@@ -154,7 +171,7 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
   };
 
   const getClientsForStage = (stageId: string) => {
-    return filteredClients.filter(c => (c.pipeline_stage || 'protocolado') === stageId);
+    return filteredClients.filter(c => (c.pipeline_stage || defaultStage) === stageId);
   };
 
   const getStageValue = (stageId: string) => {
@@ -231,7 +248,7 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters }
 
       {/* Kanban Board */}
       <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
-        {PIPELINE_STAGES.map((stage, stageIndex) => {
+        {activePipelineStages.map((stage, stageIndex) => {
           const stageClients = getClientsForStage(stage.id);
           const stageValue = getStageValue(stage.id);
           const isCollapsed = collapsedStages.has(stage.id);

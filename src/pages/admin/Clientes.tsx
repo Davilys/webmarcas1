@@ -7,9 +7,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload } from 'lucide-react';
+import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale } from 'lucide-react';
 import { toast } from 'sonner';
-import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters } from '@/components/admin/clients/ClientKanbanBoard';
+import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters, type FunnelType } from '@/components/admin/clients/ClientKanbanBoard';
 import { ClientListView } from '@/components/admin/clients/ClientListView';
 import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
 import { ClientImportExportDialog } from '@/components/admin/clients/ClientImportExportDialog';
@@ -44,6 +44,9 @@ export default function AdminClientes() {
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  
+  // NEW: Funnel type toggle - default to commercial
+  const [funnelType, setFunnelType] = useState<FunnelType>('comercial');
 
   useEffect(() => {
     fetchClients();
@@ -52,10 +55,10 @@ export default function AdminClientes() {
   const fetchClients = async () => {
     setLoading(true);
     try {
-      // Fetch profiles with their processes
+      // Fetch profiles with their processes (including client_funnel_type)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, client_funnel_type')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -87,10 +90,11 @@ export default function AdminClientes() {
             process_id: null,
             brand_name: null,
             business_area: null,
-            pipeline_stage: 'protocolado',
+            pipeline_stage: (profile as any).client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado',
             process_status: null,
             created_at: profile.created_at || undefined,
-            cpf_cnpj: profile.cpf_cnpj || undefined
+            cpf_cnpj: profile.cpf_cnpj || undefined,
+            client_funnel_type: (profile as any).client_funnel_type || 'juridico'
           });
         } else {
           // One entry per process
@@ -107,11 +111,12 @@ export default function AdminClientes() {
               process_id: process.id,
               brand_name: process.brand_name,
               business_area: process.business_area || null,
-              pipeline_stage: process.pipeline_stage || 'protocolado',
+              pipeline_stage: process.pipeline_stage || ((profile as any).client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado'),
               process_status: process.status,
               created_at: profile.created_at || undefined,
               cpf_cnpj: profile.cpf_cnpj || undefined,
-              process_number: process.process_number || undefined
+              process_number: process.process_number || undefined,
+              client_funnel_type: (profile as any).client_funnel_type || 'juridico'
             });
           }
         }
@@ -164,8 +169,15 @@ export default function AdminClientes() {
     });
   }, [clients, dateFilter, selectedMonth]);
 
+  // Filter by funnel type
+  const funnelFilteredClients = useMemo(() => {
+    return dateFilteredClients.filter(client => 
+      (client.client_funnel_type || 'juridico') === funnelType
+    );
+  }, [dateFilteredClients, funnelType]);
+
   // Filter by search (name, email, cpf/cnpj, phone, brand, company)
-  const filteredClients = dateFilteredClients.filter(client =>
+  const filteredClients = funnelFilteredClients.filter(client =>
     client.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     client.email.toLowerCase().includes(search.toLowerCase()) ||
     client.company_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -182,12 +194,38 @@ export default function AdminClientes() {
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-lg">
-                <Users className="h-6 w-6 text-primary" />
+                {funnelType === 'comercial' ? (
+                  <Briefcase className="h-6 w-6 text-primary" />
+                ) : (
+                  <Scale className="h-6 w-6 text-primary" />
+                )}
               </div>
               <div>
-                <h1 className="text-2xl font-bold">CLIENTES JURÍDICO</h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold">
+                    {funnelType === 'comercial' ? 'CLIENTES COMERCIAL' : 'CLIENTES JURÍDICO'}
+                  </h1>
+                  {/* Funnel Toggle */}
+                  <ToggleGroup 
+                    type="single" 
+                    value={funnelType} 
+                    onValueChange={(v) => v && setFunnelType(v as FunnelType)}
+                    className="border rounded-lg p-1"
+                  >
+                    <ToggleGroupItem value="comercial" aria-label="Funil Comercial" className="text-xs px-3">
+                      <Briefcase className="h-3 w-3 mr-1" />
+                      Comercial
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="juridico" aria-label="Funil Jurídico" className="text-xs px-3">
+                      <Scale className="h-3 w-3 mr-1" />
+                      Jurídico
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  Pipeline padrão para gerenciamento do relacionamento com clientes
+                  {funnelType === 'comercial' 
+                    ? 'Pipeline de vendas: assinatura, pagamento e taxa' 
+                    : 'Pipeline jurídico: processos INPI'}
                 </p>
               </div>
             </div>
@@ -390,6 +428,7 @@ export default function AdminClientes() {
             onClientClick={handleClientClick}
             onRefresh={fetchClients}
             filters={filters}
+            funnelType={funnelType}
           />
         ) : (
           <ClientListView

@@ -619,7 +619,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     }
   };
 
-  const handleQuickAction = (actionId: string) => {
+  const handleQuickAction = async (actionId: string) => {
     switch (actionId) {
       case 'chat':
         if (client?.phone) {
@@ -628,6 +628,10 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         } else {
           toast.error('Cliente sem telefone');
         }
+        break;
+      case 'move':
+        // NEW: Move client from commercial to legal funnel
+        await handleMoveToLegalFunnel();
         break;
       case 'won':
         toast.success('Cliente marcado como GANHO! 🎉');
@@ -640,6 +644,80 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         break;
       default:
         toast.info(`Ação: ${actionId}`);
+    }
+  };
+
+  // NEW: Handle moving client from commercial to legal funnel
+  const handleMoveToLegalFunnel = async () => {
+    if (!client) return;
+
+    try {
+      // Check if client has a signed contract
+      const { data: contracts } = await supabase
+        .from('contracts')
+        .select('id, signature_status')
+        .eq('user_id', client.id)
+        .eq('signature_status', 'signed')
+        .limit(1);
+
+      const hasSignedContract = contracts && contracts.length > 0;
+
+      // Check if client has a paid invoice
+      const { data: paidInvoices } = await supabase
+        .from('invoices')
+        .select('id, status')
+        .eq('user_id', client.id)
+        .eq('status', 'paid')
+        .limit(1);
+
+      const hasPaidInvoice = paidInvoices && paidInvoices.length > 0;
+
+      if (!hasSignedContract) {
+        toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
+        return;
+      }
+
+      if (!hasPaidInvoice) {
+        toast.error('Cliente precisa ter um pagamento confirmado para ser movido ao funil jurídico');
+        return;
+      }
+
+      // Move client to legal funnel
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          client_funnel_type: 'juridico',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', client.id);
+
+      if (profileError) throw profileError;
+
+      // Update process pipeline stage to 'protocolado' (entry point of legal funnel)
+      if (client.process_id) {
+        const { error: processError } = await supabase
+          .from('brand_processes')
+          .update({ pipeline_stage: 'protocolado' })
+          .eq('id', client.process_id);
+
+        if (processError) throw processError;
+      }
+
+      // Log the action
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('client_activities').insert({
+        user_id: client.id,
+        admin_id: user?.id,
+        activity_type: 'funnel_move',
+        description: 'Cliente movido do funil Comercial para Jurídico após assinatura e pagamento confirmados.'
+      });
+
+      toast.success('✅ Cliente movido para o funil jurídico com sucesso!');
+      onUpdate();
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error('Error moving client to legal funnel:', error);
+      toast.error(`Erro ao mover cliente: ${error?.message || 'Tente novamente'}`);
     }
   };
 
