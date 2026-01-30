@@ -353,6 +353,30 @@ serve(async (req) => {
             ots_file_url: otsFileUrl
           }
         });
+
+      // ========================================
+      // UPDATE PIPELINE STAGE FOR COMMERCIAL CLIENTS
+      // ========================================
+      // Check if client is in commercial funnel and update their process stage
+      const { data: clientProfile } = await supabase
+        .from('profiles')
+        .select('client_funnel_type')
+        .eq('id', userId)
+        .single();
+
+      if (clientProfile?.client_funnel_type === 'comercial') {
+        // Update all processes for this client to 'assinou_contrato' stage
+        const { error: stageError } = await supabase
+          .from('brand_processes')
+          .update({ pipeline_stage: 'assinou_contrato' })
+          .eq('user_id', userId);
+
+        if (stageError) {
+          console.error('Error updating pipeline stage:', stageError);
+        } else {
+          console.log('Updated pipeline stage to assinou_contrato for commercial client');
+        }
+      }
     }
 
     const verificationUrl = `${verificationBaseUrl}/verificar-contrato?hash=${contractHash}`;
