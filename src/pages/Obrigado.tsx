@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckCircle, MessageCircle, FileText, Clock, Shield, PartyPopper } from "lucide-react";
+import { trackPurchase } from "@/lib/metaPixel";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -10,12 +11,20 @@ const Obrigado = () => {
   const navigate = useNavigate();
   const [registrationData, setRegistrationData] = useState<any>(null);
   const [showConfetti, setShowConfetti] = useState(true);
+  const purchaseTracked = useRef(false);
 
   useEffect(() => {
     const data = sessionStorage.getItem("registrationComplete");
     if (data) {
       try {
-        setRegistrationData(JSON.parse(data));
+        const parsedData = JSON.parse(data);
+        setRegistrationData(parsedData);
+        
+        // Track Purchase event only once
+        if (!purchaseTracked.current) {
+          trackPurchase(parsedData.paymentValue || 698.97, 'BRL');
+          purchaseTracked.current = true;
+        }
       } catch {
         navigate("/registro");
       }
