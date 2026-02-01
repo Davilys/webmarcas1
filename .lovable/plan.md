@@ -1,93 +1,107 @@
 
-## Correção: Botão "Mover" deve exigir APENAS assinatura (sem pagamento)
+
+## Adicionar Evento Purchase na Página /obrigado
 
 ### Problema Identificado
 
-No `ClientDetailSheet.tsx`, a função `handleMoveToLegalFunnel` (linhas 650-722) atualmente valida **duas condições**:
+A página `/obrigado` (fluxo público de registro de marca) **não rastreia** o evento `Purchase` do Meta Pixel, enquanto a página `/cliente/pedido-confirmado` (área logada) já possui esse rastreamento.
 
-1. ✅ Contrato assinado (`signature_status = 'signed'`)
-2. ❌ Pagamento confirmado (`status = 'paid'`) → **DEVE SER REMOVIDO**
+### Arquivos Atuais
 
-Código atual (linhas 675-683):
-```typescript
-if (!hasSignedContract) {
-  toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
-  return;
-}
+| Arquivo | Status Purchase |
+|---------|-----------------|
+| `src/pages/cliente/PedidoConfirmado.tsx` | ✅ Implementado |
+| `src/pages/Obrigado.tsx` | ❌ **FALTANDO** |
 
-if (!hasPaidInvoice) {
-  toast.error('Cliente precisa ter um pagamento confirmado para ser movido ao funil jurídico');
-  return;  // ← ESTA VALIDAÇÃO SERÁ REMOVIDA
-}
-```
-
-### Solicitação do Usuário
-
-> "ASSINOU AUTOMATICAMENTE VIRA CLIENTE SEM PRECISAR CONFIRMAR PAGAMENTO"
-> "Contrato está ASSINADO, NAO PRECISA ESTAR PAGO APENAS ASSINADO CONTRATO"
+---
 
 ### Solução Proposta
 
-#### Arquivo: `src/components/admin/clients/ClientDetailSheet.tsx`
+#### Arquivo: `src/pages/Obrigado.tsx`
 
-**Remover a validação de pagamento** - manter apenas verificação de assinatura:
-
+**1. Importar a função de tracking:**
 ```typescript
-const handleMoveToLegalFunnel = async () => {
-  if (!client) return;
+import { trackPurchase } from "@/lib/metaPixel";
+import { useRef } from "react";
+```
 
-  try {
-    // Check if client has a signed contract
-    const { data: contracts } = await supabase
-      .from('contracts')
-      .select('id, signature_status')
-      .eq('user_id', client.id)
-      .eq('signature_status', 'signed')
-      .limit(1);
+**2. Adicionar ref para evitar disparo duplicado:**
+```typescript
+const purchaseTracked = useRef(false);
+```
 
-    const hasSignedContract = contracts && contracts.length > 0;
-
-    // VALIDAÇÃO ÚNICA: apenas contrato assinado
-    if (!hasSignedContract) {
-      toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
-      return;
+**3. Disparar evento Purchase quando dados são carregados:**
+```typescript
+useEffect(() => {
+  const data = sessionStorage.getItem("registrationComplete");
+  if (data) {
+    try {
+      const parsedData = JSON.parse(data);
+      setRegistrationData(parsedData);
+      
+      // Track Purchase event (apenas uma vez)
+      if (!purchaseTracked.current) {
+        trackPurchase(parsedData.paymentValue || 698.97, 'BRL');
+        purchaseTracked.current = true;
+      }
+    } catch {
+      navigate("/registro");
     }
-
-    // REMOVIDO: verificação de pagamento
-    // O cliente pode ser movido apenas com contrato assinado
-
-    // Move client to legal funnel
-    // ... resto do código permanece igual
+  } else {
+    navigate("/registro");
   }
-};
-```
-
-**Atualizar mensagem do log:**
-```typescript
-description: 'Cliente movido do funil Comercial para Jurídico após assinatura do contrato.'
+  
+  setTimeout(() => setShowConfetti(false), 3000);
+}, [navigate]);
 ```
 
 ---
 
-### Análise de Impacto
+### Fluxo de Eventos Completo
 
-| Aspecto | Status |
-|---------|--------|
-| Banco de dados | ✅ Nenhuma alteração |
-| Tabelas existentes | ✅ Preservadas |
-| Funil jurídico | ✅ Sem alteração na estrutura |
-| Funil comercial | ✅ Sem alteração na estrutura |
-| Contratos antigos | ✅ Sem impacto |
-| APIs/Integrações | ✅ Sem impacto |
-| Área do cliente | ✅ Sem impacto |
+```text
+┌─────────────────────────────────────────────────────────┐
+│                    FLUXO META PIXEL                      │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Visitante acessa site → PageView ✅                     │
+│           ↓                                              │
+│  Preenche dados pessoais → Lead ✅                       │
+│           ↓                                              │
+│  Entra na tela de pagamento → InitiateCheckout ✅        │
+│           ↓                                              │
+│  Finaliza pedido → Vai para /obrigado                    │
+│           ↓                                              │
+│  Página /obrigado carrega → Purchase ✅ (SERÁ ADICIONADO)│
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Teste Esperado
+### Detalhes Técnicos
 
-1. **Criar contrato** via Admin → Contratos → Novo Contrato
-2. **Cliente assina o contrato**
-3. Ir em **Clientes** → **Comercial**
-4. Abrir detalhes do cliente → Clicar **"Mover"**
-5. ✅ Cliente deve ser movido para **Jurídico** na etapa **PROTOCOLADO**
-6. ❌ **SEM exigir pagamento confirmado**
+| Aspecto | Implementação |
+|---------|---------------|
+| Valor rastreado | `paymentValue` dos dados ou `R$ 698,97` (padrão) |
+| Moeda | `BRL` |
+| Prevenção de duplicatas | `useRef` para garantir 1 disparo por sessão |
+| Dependências | Nenhuma nova (usa `metaPixel.ts` existente) |
+| Impacto na performance | Zero (apenas 1 linha de código) |
+
+---
+
+### O que NÃO será alterado
+
+- ❌ Nenhuma tabela do banco de dados
+- ❌ Nenhuma Edge Function
+- ❌ Nenhuma lógica de pagamento
+- ❌ Nenhuma integração existente
+- ❌ Nenhum formulário
+
+### Arquivos Modificados
+
+| Arquivo | Tipo de Alteração |
+|---------|-------------------|
+| `src/pages/Obrigado.tsx` | Adicionar import + tracking no useEffect |
+
