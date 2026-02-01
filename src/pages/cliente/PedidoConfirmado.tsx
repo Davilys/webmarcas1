@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ClientLayout } from "@/components/cliente/ClientLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, FileText, CreditCard, ArrowRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { trackPurchase } from "@/lib/metaPixel";
 
 interface ConfirmationData {
   personalData: {
@@ -24,11 +25,20 @@ interface ConfirmationData {
 export default function ClientePedidoConfirmado() {
   const navigate = useNavigate();
   const [confirmationData, setConfirmationData] = useState<ConfirmationData | null>(null);
+  const purchaseTracked = useRef(false);
 
   useEffect(() => {
     const savedData = sessionStorage.getItem("confirmationData");
     if (savedData) {
-      setConfirmationData(JSON.parse(savedData));
+      const parsedData = JSON.parse(savedData) as ConfirmationData;
+      setConfirmationData(parsedData);
+      
+      // Track Purchase event only once when payment is confirmed
+      if (!purchaseTracked.current) {
+        trackPurchase(parsedData.paymentValue || 699.00, 'BRL');
+        purchaseTracked.current = true;
+      }
+      
       // Clean up session storage
       sessionStorage.removeItem("orderData");
       sessionStorage.removeItem("confirmationData");

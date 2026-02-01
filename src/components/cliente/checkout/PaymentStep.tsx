@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { ArrowLeft, ArrowRight, Check, CreditCard, QrCode, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,11 @@ export function PaymentStep({ selectedMethod, onNext, onBack }: PaymentStepProps
   const [selected, setSelected] = useState(selectedMethod || "");
   const [error, setError] = useState("");
   const { pricing, isLoading } = usePricing();
+
+  // Track InitiateCheckout when payment step is shown
+  useEffect(() => {
+    trackInitiateCheckout();
+  }, []);
 
   const paymentOptions: PaymentOption[] = useMemo(() => [
     {

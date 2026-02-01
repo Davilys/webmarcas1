@@ -11,6 +11,7 @@ import {
   formatCEP,
   formatPhone,
 } from "@/lib/validators";
+import { trackLead } from "@/lib/metaPixel";
 
 const personalDataSchema = z.object({
   fullName: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").max(100),
@@ -88,6 +89,9 @@ export function PersonalDataStep({ initialData, onNext, onBack }: PersonalDataSt
       setErrors(newErrors);
       return;
     }
+
+    // Track Lead event when personal data is submitted successfully
+    trackLead();
 
     onNext(data);
   };
