@@ -17,6 +17,7 @@ import {
   Bell,
   ChevronRight,
   PlusCircle,
+  Shield,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
@@ -158,7 +159,21 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         </nav>
       </ScrollArea>
 
-      <div className="p-3 border-t border-border/50">
+      <div className="p-3 border-t border-border/50 space-y-1.5">
+        <Link
+          to="/admin/dashboard"
+          onClick={() => setMobileOpen(false)}
+          className="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 hover:bg-muted/50 hover:shadow-sm"
+        >
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 transition-all duration-200 group-hover:scale-105">
+            <Shield className="h-5 w-5 text-blue-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-foreground">Painel Admin</span>
+            <span className="block text-xs text-muted-foreground truncate">Acessar CRM</span>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
+        </Link>
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl"
