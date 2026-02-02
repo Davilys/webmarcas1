@@ -54,12 +54,15 @@ export function ContractRenderer({
         return;
       }
 
-      // Sub-items (like 1.1, 2.1, etc.)
+      // Sub-items (like 1.1, 2.1, etc.) - support HTML for bold brand names
       if (/^\d+\.\d+\s/.test(trimmedLine)) {
         elements.push(
-          <p key={index} className="text-sm mb-2 pl-4" style={{ color: '#1f2937' }}>
-            {trimmedLine}
-          </p>
+          <p 
+            key={index} 
+            className="text-sm mb-2 pl-4" 
+            style={{ color: '#1f2937' }}
+            dangerouslySetInnerHTML={{ __html: trimmedLine }}
+          />
         );
         return;
       }
@@ -74,12 +77,15 @@ export function ContractRenderer({
         return;
       }
 
-      // Bullet points
+      // Bullet points - support HTML for total value
       if (trimmedLine.startsWith('•')) {
         elements.push(
-          <p key={index} className="text-sm mb-2 pl-4" style={{ color: '#1f2937' }}>
-            {trimmedLine}
-          </p>
+          <p 
+            key={index} 
+            className="text-sm mb-2 pl-4" 
+            style={{ color: '#1f2937' }}
+            dangerouslySetInnerHTML={{ __html: trimmedLine }}
+          />
         );
         return;
       }
