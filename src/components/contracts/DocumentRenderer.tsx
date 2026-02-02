@@ -652,12 +652,91 @@ export function generateDocumentPrintHTML(
   const isHtmlContent = cleanedContent.includes('<') && cleanedContent.includes('>') && 
                         (cleanedContent.includes('<p') || cleanedContent.includes('<div') || cleanedContent.includes('<span'));
   
-  const formattedContent = isHtmlContent 
-    ? cleanedContent
-    : cleanedContent
-        .split('\n\n')
-        .map(p => `<p class="content-paragraph">${p}</p>`)
-        .join('');
+  // Função para extrair texto puro do HTML
+  const extractTextFromHtml = (html: string): string => {
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+  };
+
+  // Função para formatar o conteúdo do contrato igual ao ContractRenderer (React)
+  const formatContractContent = (textContent: string): string => {
+    const lines = textContent.split('\n');
+    const formattedLines = lines.map(line => {
+      const trimmed = line.trim();
+      
+      if (!trimmed) return '<div style="height: 8px;"></div>';
+      
+      // Skip the main contract title (already in header)
+      if (trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS')) {
+        return '';
+      }
+      
+      // 1. Clause titles - BLUE BOLD (matching ContractRenderer exactly)
+      if (/^\d+\.\s*CLÁUSULA/.test(trimmed)) {
+        return `<h2 style="font-weight: bold; font-size: 12px; color: #0284c7 !important; margin-top: 20px; margin-bottom: 8px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${trimmed}</h2>`;
+      }
+      
+      // 2. Sub-items (10.1, 5.1, etc.)
+      if (/^\d+\.\d+\s/.test(trimmed)) {
+        return `<p style="font-size: 11px; margin-bottom: 8px; padding-left: 16px; color: #374151 !important;">${trimmed}</p>`;
+      }
+      
+      // 3. Letter items (a), b), etc.)
+      if (/^[a-z]\)/.test(trimmed)) {
+        return `<p style="font-size: 11px; margin-bottom: 4px; padding-left: 32px; color: #374151 !important;">${trimmed}</p>`;
+      }
+      
+      // 4. Bullet points
+      if (trimmed.startsWith('•')) {
+        return `<p style="font-size: 11px; margin-bottom: 8px; padding-left: 16px; color: #374151 !important;">${trimmed}</p>`;
+      }
+      
+      // 5. Roman numerals
+      if (/^I+\)/.test(trimmed)) {
+        return `<p style="font-size: 11px; margin-bottom: 12px; font-weight: 500; color: #374151 !important;">${trimmed}</p>`;
+      }
+      
+      // 6. SKIP signature underscores (electronic contracts don't use them)
+      if (trimmed.match(/^_+$/)) {
+        return ''; // Don't render _____ lines
+      }
+      
+      // 7. Party identification headers
+      if (trimmed === 'CONTRATADA:' || trimmed === 'CONTRATANTE:') {
+        return `<p style="font-size: 11px; font-weight: bold; text-align: center; margin-top: 24px; margin-bottom: 4px; color: #1F2937 !important;">${trimmed}</p>`;
+      }
+      
+      // 8. Company name and CPF/CNPJ
+      if (trimmed.includes('WEB MARCAS PATENTES EIRELI') || 
+          trimmed.startsWith('CNPJ:') || 
+          trimmed.startsWith('CPF:') ||
+          trimmed.startsWith('CPF/CNPJ:')) {
+        return `<p style="font-size: 10px; text-align: center; color: #6b7280 !important; margin-bottom: 4px;">${trimmed}</p>`;
+      }
+      
+      // 9. Date line
+      if (trimmed.startsWith('São Paulo,')) {
+        return `<p style="font-size: 11px; margin-top: 24px; margin-bottom: 24px; color: #374151 !important;">${trimmed}</p>`;
+      }
+      
+      // 10. Regular paragraphs
+      return `<p style="font-size: 11px; margin-bottom: 12px; line-height: 1.6; text-align: justify; color: #374151 !important;">${trimmed}</p>`;
+    });
+    
+    return formattedLines.filter(line => line !== '').join('\n');
+  };
+
+  // Extrair texto do HTML e aplicar formatação igual ao ContractRenderer
+  const textContent = isHtmlContent ? extractTextFromHtml(cleanedContent) : cleanedContent;
+  const formattedContent = formatContractContent(textContent);
 
   // URL de verificação dinâmica
   const verificationBaseUrl = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.lovable.app');
