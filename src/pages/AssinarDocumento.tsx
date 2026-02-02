@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { SignaturePad } from '@/components/signature/SignaturePad';
-import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64 } from '@/components/contracts/DocumentRenderer';
+import { DocumentRenderer, generateDocumentPrintHTML, getSignatureBase64, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 import { generateAndUploadContractPdf, generateSignedContractHtml } from '@/hooks/useContractPdfUpload';
 import CreditCardForm from '@/components/payment/CreditCardForm';
 import { toast } from 'sonner';
@@ -282,6 +282,9 @@ export default function AssinarDocumento() {
       signatureBase64 = await getSignatureBase64();
     }
 
+    // CORREÇÃO: Carregar logo em base64 ANTES de gerar o HTML
+    const logoBase64 = await getLogoBase64ForPDF();
+
     const html = generateDocumentPrintHTML(
       (contract.document_type as any) || 'procuracao',
       contract.contract_html || '',
@@ -296,7 +299,9 @@ export default function AssinarDocumento() {
       contract.signatory_name || undefined,
       contract.signatory_cpf || undefined,
       contract.signatory_cnpj || undefined,
-      signatureBase64
+      signatureBase64,
+      window.location.origin, // CORREÇÃO: Adicionar baseUrl
+      logoBase64              // CORREÇÃO: Adicionar logoBase64
     );
 
     // Inject floating action buttons (standard pattern)
