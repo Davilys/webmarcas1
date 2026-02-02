@@ -555,14 +555,37 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       });
     }
 
-    // Validate brand data
-    const brandResult = brandDataSchema.safeParse(brandData);
-    if (!brandResult.success) {
-      brandResult.error.errors.forEach(err => {
-        if (err.path[0]) {
-          errors[`brand_${err.path[0]}`] = err.message;
+    // Validate brand data - handle single and multiple brands
+    if (brandQuantity > 1) {
+      // Validate multiple brands array
+      for (let i = 0; i < brandQuantity; i++) {
+        const brand = brandsArray[i];
+        if (!brand?.brandName || brand.brandName.trim().length < 2) {
+          errors[`brand_${i}_name`] = 'Nome da marca obrigatório (mín. 2 caracteres)';
         }
-      });
+        if (!brand?.businessArea || brand.businessArea.trim().length < 3) {
+          errors[`brand_${i}_area`] = 'Ramo de atividade obrigatório (mín. 3 caracteres)';
+        }
+      }
+      // Also validate CNPJ if selected
+      if (brandData.hasCNPJ) {
+        if (!brandData.cnpj || !validateCNPJ(brandData.cnpj)) {
+          errors['brand_cnpj'] = 'CNPJ inválido';
+        }
+        if (!brandData.companyName || brandData.companyName.length < 3) {
+          errors['brand_companyName'] = 'Razão Social obrigatória';
+        }
+      }
+    } else {
+      // Validate single brand
+      const brandResult = brandDataSchema.safeParse(brandData);
+      if (!brandResult.success) {
+        brandResult.error.errors.forEach(err => {
+          if (err.path[0]) {
+            errors[`brand_${err.path[0]}`] = err.message;
+          }
+        });
+      }
     }
 
     if (Object.keys(errors).length > 0) {
@@ -999,12 +1022,20 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="fullName">Nome Completo *</Label>
+                        <Label htmlFor="fullName" className={cn(validationErrors.personal_fullName && "text-destructive")}>
+                          Nome Completo *
+                        </Label>
                         <Input
                           id="fullName"
                           value={personalData.fullName}
-                          onChange={(e) => setPersonalData({ ...personalData, fullName: e.target.value })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, fullName: e.target.value });
+                            if (validationErrors.personal_fullName) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_fullName; return u; });
+                            }
+                          }}
                           placeholder="Seu nome completo"
+                          className={cn(validationErrors.personal_fullName && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_fullName && (
                           <p className="text-destructive text-xs">{validationErrors.personal_fullName}</p>
@@ -1012,13 +1043,21 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email">E-mail *</Label>
+                        <Label htmlFor="email" className={cn(validationErrors.personal_email && "text-destructive")}>
+                          E-mail *
+                        </Label>
                         <Input
                           id="email"
                           type="email"
                           value={personalData.email}
-                          onChange={(e) => setPersonalData({ ...personalData, email: e.target.value })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, email: e.target.value });
+                            if (validationErrors.personal_email) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_email; return u; });
+                            }
+                          }}
                           placeholder="seu@email.com"
+                          className={cn(validationErrors.personal_email && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_email && (
                           <p className="text-destructive text-xs">{validationErrors.personal_email}</p>
@@ -1026,13 +1065,21 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Telefone *</Label>
+                        <Label htmlFor="phone" className={cn(validationErrors.personal_phone && "text-destructive")}>
+                          Telefone *
+                        </Label>
                         <Input
                           id="phone"
                           value={personalData.phone}
-                          onChange={(e) => setPersonalData({ ...personalData, phone: formatPhone(e.target.value) })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, phone: formatPhone(e.target.value) });
+                            if (validationErrors.personal_phone) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_phone; return u; });
+                            }
+                          }}
                           placeholder="(00) 00000-0000"
                           maxLength={15}
+                          className={cn(validationErrors.personal_phone && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_phone && (
                           <p className="text-destructive text-xs">{validationErrors.personal_phone}</p>
@@ -1040,13 +1087,21 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="cpf">CPF *</Label>
+                        <Label htmlFor="cpf" className={cn(validationErrors.personal_cpf && "text-destructive")}>
+                          CPF *
+                        </Label>
                         <Input
                           id="cpf"
                           value={personalData.cpf}
-                          onChange={(e) => setPersonalData({ ...personalData, cpf: formatCPF(e.target.value) })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, cpf: formatCPF(e.target.value) });
+                            if (validationErrors.personal_cpf) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_cpf; return u; });
+                            }
+                          }}
                           placeholder="000.000.000-00"
                           maxLength={14}
+                          className={cn(validationErrors.personal_cpf && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_cpf && (
                           <p className="text-destructive text-xs">{validationErrors.personal_cpf}</p>
@@ -1054,14 +1109,22 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="cep">CEP *</Label>
+                        <Label htmlFor="cep" className={cn(validationErrors.personal_cep && "text-destructive")}>
+                          CEP *
+                        </Label>
                         <div className="relative">
                           <Input
                             id="cep"
                             value={personalData.cep}
-                            onChange={(e) => handleCEPChange(e.target.value)}
+                            onChange={(e) => {
+                              handleCEPChange(e.target.value);
+                              if (validationErrors.personal_cep) {
+                                setValidationErrors(prev => { const u = { ...prev }; delete u.personal_cep; return u; });
+                              }
+                            }}
                             placeholder="00000-000"
                             maxLength={9}
+                            className={cn(validationErrors.personal_cep && "border-destructive focus-visible:ring-destructive")}
                           />
                           {isLoadingCEP && (
                             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -1073,12 +1136,20 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="address">Endereço *</Label>
+                        <Label htmlFor="address" className={cn(validationErrors.personal_address && "text-destructive")}>
+                          Endereço *
+                        </Label>
                         <Input
                           id="address"
                           value={personalData.address}
-                          onChange={(e) => setPersonalData({ ...personalData, address: e.target.value })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, address: e.target.value });
+                            if (validationErrors.personal_address) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_address; return u; });
+                            }
+                          }}
                           placeholder="Rua, número, complemento"
+                          className={cn(validationErrors.personal_address && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_address && (
                           <p className="text-destructive text-xs">{validationErrors.personal_address}</p>
@@ -1086,12 +1157,20 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="neighborhood">Bairro *</Label>
+                        <Label htmlFor="neighborhood" className={cn(validationErrors.personal_neighborhood && "text-destructive")}>
+                          Bairro *
+                        </Label>
                         <Input
                           id="neighborhood"
                           value={personalData.neighborhood}
-                          onChange={(e) => setPersonalData({ ...personalData, neighborhood: e.target.value })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, neighborhood: e.target.value });
+                            if (validationErrors.personal_neighborhood) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_neighborhood; return u; });
+                            }
+                          }}
                           placeholder="Bairro"
+                          className={cn(validationErrors.personal_neighborhood && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_neighborhood && (
                           <p className="text-destructive text-xs">{validationErrors.personal_neighborhood}</p>
@@ -1099,12 +1178,20 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="city">Cidade *</Label>
+                        <Label htmlFor="city" className={cn(validationErrors.personal_city && "text-destructive")}>
+                          Cidade *
+                        </Label>
                         <Input
                           id="city"
                           value={personalData.city}
-                          onChange={(e) => setPersonalData({ ...personalData, city: e.target.value })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, city: e.target.value });
+                            if (validationErrors.personal_city) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_city; return u; });
+                            }
+                          }}
                           placeholder="Cidade"
+                          className={cn(validationErrors.personal_city && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_city && (
                           <p className="text-destructive text-xs">{validationErrors.personal_city}</p>
@@ -1112,13 +1199,21 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="state">UF *</Label>
+                        <Label htmlFor="state" className={cn(validationErrors.personal_state && "text-destructive")}>
+                          UF *
+                        </Label>
                         <Input
                           id="state"
                           value={personalData.state}
-                          onChange={(e) => setPersonalData({ ...personalData, state: e.target.value.toUpperCase() })}
+                          onChange={(e) => {
+                            setPersonalData({ ...personalData, state: e.target.value.toUpperCase() });
+                            if (validationErrors.personal_state) {
+                              setValidationErrors(prev => { const u = { ...prev }; delete u.personal_state; return u; });
+                            }
+                          }}
                           placeholder="UF"
                           maxLength={2}
+                          className={cn(validationErrors.personal_state && "border-destructive focus-visible:ring-destructive")}
                         />
                         {validationErrors.personal_state && (
                           <p className="text-destructive text-xs">{validationErrors.personal_state}</p>
@@ -1182,34 +1277,59 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                     {brandQuantity > 1 ? (
                       <div className="space-y-4">
                         {brandsArray.map((brand, index) => (
-                          <div key={index} className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                          <div key={index} className={cn(
+                            "border rounded-lg p-4 space-y-3 bg-muted/30",
+                            (validationErrors[`brand_${index}_name`] || validationErrors[`brand_${index}_area`]) && "border-destructive"
+                          )}>
                             <h4 className="font-medium text-sm text-primary">Marca #{index + 1}</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                               <div className="space-y-1">
-                                <Label className="text-xs">Nome da Marca *</Label>
+                                <Label className={cn("text-xs", validationErrors[`brand_${index}_name`] && "text-destructive")}>
+                                  Nome da Marca *
+                                </Label>
                                 <Input
                                   value={brand.brandName}
                                   onChange={(e) => {
                                     const newBrands = [...brandsArray];
                                     newBrands[index] = { ...newBrands[index], brandName: e.target.value };
                                     setBrandsArray(newBrands);
+                                    // Clear error on change
+                                    if (validationErrors[`brand_${index}_name`]) {
+                                      setValidationErrors(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[`brand_${index}_name`];
+                                        return updated;
+                                      });
+                                    }
                                   }}
                                   placeholder="Nome da marca"
+                                  className={cn(validationErrors[`brand_${index}_name`] && "border-destructive focus-visible:ring-destructive")}
                                 />
                                 {validationErrors[`brand_${index}_name`] && (
                                   <p className="text-destructive text-xs">{validationErrors[`brand_${index}_name`]}</p>
                                 )}
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs">Ramo de Atividade *</Label>
+                                <Label className={cn("text-xs", validationErrors[`brand_${index}_area`] && "text-destructive")}>
+                                  Ramo de Atividade *
+                                </Label>
                                 <Input
                                   value={brand.businessArea}
                                   onChange={(e) => {
                                     const newBrands = [...brandsArray];
                                     newBrands[index] = { ...newBrands[index], businessArea: e.target.value };
                                     setBrandsArray(newBrands);
+                                    // Clear error on change
+                                    if (validationErrors[`brand_${index}_area`]) {
+                                      setValidationErrors(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[`brand_${index}_area`];
+                                        return updated;
+                                      });
+                                    }
                                   }}
                                   placeholder="Ramo de atividade"
+                                  className={cn(validationErrors[`brand_${index}_area`] && "border-destructive focus-visible:ring-destructive")}
                                 />
                                 {validationErrors[`brand_${index}_area`] && (
                                   <p className="text-destructive text-xs">{validationErrors[`brand_${index}_area`]}</p>
@@ -1245,12 +1365,24 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       /* Single brand - original form */
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="brandName">Nome da Marca *</Label>
+                          <Label htmlFor="brandName" className={cn(validationErrors.brand_brandName && "text-destructive")}>
+                            Nome da Marca *
+                          </Label>
                           <Input
                             id="brandName"
                             value={brandData.brandName}
-                            onChange={(e) => setBrandData({ ...brandData, brandName: e.target.value })}
+                            onChange={(e) => {
+                              setBrandData({ ...brandData, brandName: e.target.value });
+                              if (validationErrors.brand_brandName) {
+                                setValidationErrors(prev => {
+                                  const updated = { ...prev };
+                                  delete updated.brand_brandName;
+                                  return updated;
+                                });
+                              }
+                            }}
                             placeholder="Nome que será registrado"
+                            className={cn(validationErrors.brand_brandName && "border-destructive focus-visible:ring-destructive")}
                           />
                           {validationErrors.brand_brandName && (
                             <p className="text-destructive text-xs">{validationErrors.brand_brandName}</p>
@@ -1258,12 +1390,24 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                         </div>
 
                         <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="businessArea">Ramo de Atividade *</Label>
+                          <Label htmlFor="businessArea" className={cn(validationErrors.brand_businessArea && "text-destructive")}>
+                            Ramo de Atividade *
+                          </Label>
                           <Input
                             id="businessArea"
                             value={brandData.businessArea}
-                            onChange={(e) => setBrandData({ ...brandData, businessArea: e.target.value })}
+                            onChange={(e) => {
+                              setBrandData({ ...brandData, businessArea: e.target.value });
+                              if (validationErrors.brand_businessArea) {
+                                setValidationErrors(prev => {
+                                  const updated = { ...prev };
+                                  delete updated.brand_businessArea;
+                                  return updated;
+                                });
+                              }
+                            }}
                             placeholder="Ex: Serviços Jurídicos, Alimentação, etc."
+                            className={cn(validationErrors.brand_businessArea && "border-destructive focus-visible:ring-destructive")}
                           />
                           {validationErrors.brand_businessArea && (
                             <p className="text-destructive text-xs">{validationErrors.brand_businessArea}</p>
@@ -1290,13 +1434,25 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       {brandData.hasCNPJ && (
                         <>
                           <div className="space-y-2">
-                            <Label htmlFor="cnpj">CNPJ *</Label>
+                            <Label htmlFor="cnpj" className={cn(validationErrors.brand_cnpj && "text-destructive")}>
+                              CNPJ *
+                            </Label>
                             <Input
                               id="cnpj"
                               value={brandData.cnpj}
-                              onChange={(e) => setBrandData({ ...brandData, cnpj: formatCNPJ(e.target.value) })}
+                              onChange={(e) => {
+                                setBrandData({ ...brandData, cnpj: formatCNPJ(e.target.value) });
+                                if (validationErrors.brand_cnpj) {
+                                  setValidationErrors(prev => {
+                                    const updated = { ...prev };
+                                    delete updated.brand_cnpj;
+                                    return updated;
+                                  });
+                                }
+                              }}
                               placeholder="00.000.000/0000-00"
                               maxLength={18}
+                              className={cn(validationErrors.brand_cnpj && "border-destructive focus-visible:ring-destructive")}
                             />
                             {validationErrors.brand_cnpj && (
                               <p className="text-destructive text-xs">{validationErrors.brand_cnpj}</p>
@@ -1304,12 +1460,24 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="companyName">Razão Social *</Label>
+                            <Label htmlFor="companyName" className={cn(validationErrors.brand_companyName && "text-destructive")}>
+                              Razão Social *
+                            </Label>
                             <Input
                               id="companyName"
                               value={brandData.companyName}
-                              onChange={(e) => setBrandData({ ...brandData, companyName: e.target.value })}
+                              onChange={(e) => {
+                                setBrandData({ ...brandData, companyName: e.target.value });
+                                if (validationErrors.brand_companyName) {
+                                  setValidationErrors(prev => {
+                                    const updated = { ...prev };
+                                    delete updated.brand_companyName;
+                                    return updated;
+                                  });
+                                }
+                              }}
                               placeholder="Nome da empresa"
+                              className={cn(validationErrors.brand_companyName && "border-destructive focus-visible:ring-destructive")}
                             />
                             {validationErrors.brand_companyName && (
                               <p className="text-destructive text-xs">{validationErrors.brand_companyName}</p>
