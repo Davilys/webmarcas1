@@ -95,6 +95,9 @@ serve(async (req) => {
 
     const paymentMethod = contract.payment_method || 'avista';
     
+    // CORREÇÃO: Usar o valor do contrato salvo no banco (já calculado com múltiplas marcas)
+    const savedContractValue = contract.contract_value;
+    
     // Determine payment configuration based on method using dynamic pricing
     let billingType: string;
     let totalValue: number;
@@ -105,23 +108,43 @@ serve(async (req) => {
       case 'cartao6x':
         billingType = 'CREDIT_CARD';
         installmentCount = pricing.cardInstallments || DEFAULT_PRICING.cardInstallments;
-        installmentValue = pricing.cardInstallmentValue || DEFAULT_PRICING.cardInstallmentValue;
-        totalValue = installmentCount * installmentValue;
+        // CORREÇÃO: Se o contrato tem valor salvo, usar ele. Senão, fallback para cálculo padrão
+        if (savedContractValue && savedContractValue > 0) {
+          totalValue = savedContractValue;
+          installmentValue = Math.round(totalValue / installmentCount * 100) / 100;
+        } else {
+          installmentValue = pricing.cardInstallmentValue || DEFAULT_PRICING.cardInstallmentValue;
+          totalValue = installmentCount * installmentValue;
+        }
         break;
       case 'boleto3x':
         billingType = 'BOLETO';
         installmentCount = pricing.boletoInstallments || DEFAULT_PRICING.boletoInstallments;
-        installmentValue = pricing.boletoInstallmentValue || DEFAULT_PRICING.boletoInstallmentValue;
-        totalValue = installmentCount * installmentValue;
+        // CORREÇÃO: Mesmo padrão - usar valor salvo se existir
+        if (savedContractValue && savedContractValue > 0) {
+          totalValue = savedContractValue;
+          installmentValue = Math.round(totalValue / installmentCount * 100) / 100;
+        } else {
+          installmentValue = pricing.boletoInstallmentValue || DEFAULT_PRICING.boletoInstallmentValue;
+          totalValue = installmentCount * installmentValue;
+        }
         break;
       case 'avista':
       default:
         billingType = 'PIX';
-        totalValue = pricing.basePrice || DEFAULT_PRICING.basePrice;
         installmentCount = 1;
+        // CORREÇÃO: Usar valor salvo se existir
+        if (savedContractValue && savedContractValue > 0) {
+          totalValue = savedContractValue;
+        } else {
+          totalValue = pricing.basePrice || DEFAULT_PRICING.basePrice;
+        }
         installmentValue = totalValue;
         break;
     }
+
+    console.log(`Contract saved value: ${savedContractValue}`);
+    console.log(`Calculated total: ${totalValue}, installments: ${installmentCount}x${installmentValue}`);
 
     console.log(`=== PAYMENT CONFIG ===`);
     console.log(`Contract ID: ${contractId}`);
