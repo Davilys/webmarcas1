@@ -213,20 +213,13 @@ export interface BrandItem {
   nclClass: string;
 }
 
-// Generate multiple brands clause for contract
-const generateMultipleBrandsClause = (brands: BrandItem[]): string => {
-  if (!brands || brands.length <= 1) return '';
+// Format multiple brands inline for clause 10.1
+const formatMultipleBrandsInline = (brands: BrandItem[]): string => {
+  if (!brands || brands.length === 0) return '';
   
-  let clause = `\n\nCLÁUSULA DE MÚLTIPLAS MARCAS\n\n`;
-  clause += `O presente contrato contempla o pedido de registro das seguintes marcas:\n\n`;
-  
-  brands.forEach((brand, index) => {
-    clause += `${index + 1}. Marca: ${brand.brandName}\n`;
-    clause += `   Classe NCL: ${brand.nclClass || 'A definir'}\n`;
-    clause += `   Ramo: ${brand.businessArea}\n\n`;
-  });
-  
-  return clause;
+  return brands.map((brand, index) => 
+    `${index + 1}. Marca: <strong>${brand.brandName}</strong> - Classe NCL: <strong>${brand.nclClass || 'A definir'}</strong>`
+  ).join('. ') + '.';
 };
 
 // Helper function to replace template variables with actual data
@@ -277,15 +270,29 @@ export function replaceContractVariables(
     ? `inscrita no CNPJ sob nº ${brandData.cnpj}, ` 
     : '';
 
-  // Payment method details
+  // Payment method details with total for multiple brands
   const getPaymentDetails = () => {
+    const brandCount = data.multipleBrands?.length || 1;
+    
     switch (paymentMethod) {
-      case 'avista':
-        return `• Pagamento à vista via PIX: R$ 699,00 (seiscentos e noventa e nove reais) - com 43% de desconto sobre o valor integral de R$ 1.230,00.`;
-      case 'cartao6x':
-        return `• Pagamento parcelado no Cartão de Crédito: 6x de R$ 199,00 (cento e noventa e nove reais) = Total: R$ 1.194,00 - sem juros.`;
-      case 'boleto3x':
-        return `• Pagamento parcelado via Boleto Bancário: 3x de R$ 399,00 (trezentos e noventa e nove reais) = Total: R$ 1.197,00.`;
+      case 'avista': {
+        const totalSuffix = brandCount > 1 
+          ? ` Valor total de ${brandCount} marcas: R$ ${(699 * brandCount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+          : '';
+        return `• Pagamento à vista via PIX: R$ 699,00 (seiscentos e noventa e nove reais) - com 43% de desconto sobre o valor integral de R$ 1.230,00.${totalSuffix}`;
+      }
+      case 'cartao6x': {
+        const totalSuffix = brandCount > 1 
+          ? ` Valor total de ${brandCount} marcas: R$ ${(1194 * brandCount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+          : '';
+        return `• Pagamento parcelado no Cartão de Crédito: 6x de R$ 199,00 (cento e noventa e nove reais) = Total: R$ 1.194,00 - sem juros.${totalSuffix}`;
+      }
+      case 'boleto3x': {
+        const totalSuffix = brandCount > 1 
+          ? ` Valor total de ${brandCount} marcas: R$ ${(1197 * brandCount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+          : '';
+        return `• Pagamento parcelado via Boleto Bancário: 3x de R$ 399,00 (trezentos e noventa e nove reais) = Total: R$ 1.197,00.${totalSuffix}`;
+      }
       default:
         return `• Forma de pagamento a ser definida.`;
     }
@@ -303,7 +310,6 @@ export function replaceContractVariables(
     .replace(/\{\{cpf_cnpj\}\}/g, cpfCnpj)
     .replace(/\{\{email\}\}/g, personalData.email)
     .replace(/\{\{telefone\}\}/g, personalData.phone)
-    .replace(/\{\{marca\}\}/g, brandData.brandName)
     .replace(/\{\{ramo_atividade\}\}/g, brandData.businessArea)
     .replace(/\{\{endereco_completo\}\}/g, enderecoCompleto)
     .replace(/\{\{endereco\}\}/g, personalData.address)
@@ -317,12 +323,12 @@ export function replaceContractVariables(
     .replace(/\{\{data_extenso\}\}/g, currentDate)
     .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'));
 
-  // Insert multiple brands clause before signature section (if applicable)
+  // Handle brand name replacement - inline format for multiple brands in clause 10.1
   if (data.multipleBrands && data.multipleBrands.length > 1) {
-    result = result.replace(
-      /Por estarem justas e contratadas/,
-      `${generateMultipleBrandsClause(data.multipleBrands)}Por estarem justas e contratadas`
-    );
+    const brandsInline = formatMultipleBrandsInline(data.multipleBrands);
+    result = result.replace(/\{\{marca\}\}/g, brandsInline);
+  } else {
+    result = result.replace(/\{\{marca\}\}/g, brandData.brandName);
   }
 
   return result;
