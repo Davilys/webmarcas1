@@ -206,6 +206,29 @@ export function useContractTemplate(templateName: string = 'Contrato Padrão - R
   return { template, isLoading, error, documentType, refetch: fetchTemplate };
 }
 
+// Interface for multiple brands
+export interface BrandItem {
+  brandName: string;
+  businessArea: string;
+  nclClass: string;
+}
+
+// Generate multiple brands clause for contract
+const generateMultipleBrandsClause = (brands: BrandItem[]): string => {
+  if (!brands || brands.length <= 1) return '';
+  
+  let clause = `\n\nCLÁUSULA DE MÚLTIPLAS MARCAS\n\n`;
+  clause += `O presente contrato contempla o pedido de registro das seguintes marcas:\n\n`;
+  
+  brands.forEach((brand, index) => {
+    clause += `${index + 1}. Marca: ${brand.brandName}\n`;
+    clause += `   Classe NCL: ${brand.nclClass || 'A definir'}\n`;
+    clause += `   Ramo: ${brand.businessArea}\n\n`;
+  });
+  
+  return clause;
+};
+
 // Helper function to replace template variables with actual data
 export function replaceContractVariables(
   template: string,
@@ -229,6 +252,7 @@ export function replaceContractVariables(
       companyName: string;
     };
     paymentMethod: string;
+    multipleBrands?: BrandItem[];
   }
 ): string {
   const { personalData, brandData, paymentMethod } = data;
@@ -292,6 +316,14 @@ export function replaceContractVariables(
     .replace(/\{\{forma_pagamento_detalhada\}\}/g, getPaymentDetails())
     .replace(/\{\{data_extenso\}\}/g, currentDate)
     .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'));
+
+  // Insert multiple brands clause before signature section (if applicable)
+  if (data.multipleBrands && data.multipleBrands.length > 1) {
+    result = result.replace(
+      /Por estarem justas e contratadas/,
+      `${generateMultipleBrandsClause(data.multipleBrands)}Por estarem justas e contratadas`
+    );
+  }
 
   return result;
 }

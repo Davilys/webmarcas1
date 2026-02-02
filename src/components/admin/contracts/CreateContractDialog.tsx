@@ -136,6 +136,17 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     companyName: '',
   });
 
+  // Multiple brands support - NEW
+  interface BrandItem {
+    brandName: string;
+    businessArea: string;
+    nclClass: string;
+  }
+  const [brandQuantity, setBrandQuantity] = useState(1);
+  const [brandsArray, setBrandsArray] = useState<BrandItem[]>([
+    { brandName: '', businessArea: '', nclClass: '' }
+  ]);
+
   // Payment method - matching public form (null = no charge)
   const [paymentMethod, setPaymentMethod] = useState<'avista' | 'cartao6x' | 'boleto3x' | null>(null);
   
@@ -255,6 +266,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   const generateNewClientContractHtml = () => {
     const template = selectedTemplate?.content || '';
     
+    // For multiple brands, use first brand as primary and pass array
+    const primaryBrand = brandQuantity > 1 ? brandsArray[0] : brandData;
+    
     return replaceContractVariables(template, {
       personalData: {
         fullName: personalData.fullName,
@@ -268,18 +282,31 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         state: personalData.state,
       },
       brandData: {
-        brandName: brandData.brandName,
-        businessArea: brandData.businessArea,
+        brandName: brandQuantity > 1 ? primaryBrand.brandName : brandData.brandName,
+        businessArea: brandQuantity > 1 ? primaryBrand.businessArea : brandData.businessArea,
         hasCNPJ: brandData.hasCNPJ,
         cnpj: brandData.cnpj,
         companyName: brandData.companyName,
       },
       paymentMethod: paymentMethod,
+      multipleBrands: brandQuantity > 1 ? brandsArray : undefined,
     });
   };
 
-  // Get contract value based on payment method
+  // Get contract value based on payment method - multiplied by brand quantity
   const getContractValue = (): number | null => {
+    if (!paymentMethod) return null;
+    const quantity = brandQuantity;
+    switch (paymentMethod) {
+      case 'avista': return 699 * quantity;
+      case 'cartao6x': return 1194 * quantity;
+      case 'boleto3x': return 1197 * quantity;
+      default: return null;
+    }
+  };
+
+  // Get unit value for display
+  const getUnitValue = (): number | null => {
     if (!paymentMethod) return null;
     switch (paymentMethod) {
       case 'avista': return 699;
@@ -289,13 +316,15 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     }
   };
 
-  // Get payment description for display
+  // Get payment description for display - with quantity suffix
   const getPaymentDescription = () => {
     if (!paymentMethod) return 'Nenhuma (sem cobrança)';
+    const qty = brandQuantity;
+    const suffix = qty > 1 ? ` (${qty} marcas)` : '';
     switch (paymentMethod) {
-      case 'avista': return 'PIX à vista - R$ 699,00';
-      case 'cartao6x': return 'Cartão 6x de R$ 199,00 = R$ 1.194,00';
-      case 'boleto3x': return 'Boleto 3x de R$ 399,00 = R$ 1.197,00';
+      case 'avista': return `PIX à vista - R$ ${(699 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
+      case 'cartao6x': return `Cartão 6x de R$ ${(199 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(1194 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
+      case 'boleto3x': return `Boleto 3x de R$ ${(399 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(1197 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
       default: return 'Nenhuma (sem cobrança)';
     }
   };
@@ -801,6 +830,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setPaymentMethod(null);
     setPixPaymentDate(undefined);
     setBoletoVencimentoDate(undefined);
+    // Reset multiple brands state
+    setBrandQuantity(1);
+    setBrandsArray([{ brandName: '', businessArea: '', nclClass: '' }]);
   };
 
   const handleProfileChange = async (userId: string) => {
@@ -1097,36 +1129,151 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
                   <TabsContent value="brand" className="space-y-4 mt-4">
                     <p className="text-sm text-muted-foreground">
-                      Informe os dados da marca que será registrada.
+                      Informe os dados da(s) marca(s) que será(ão) registrada(s).
                     </p>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="brandName">Nome da Marca *</Label>
-                        <Input
-                          id="brandName"
-                          value={brandData.brandName}
-                          onChange={(e) => setBrandData({ ...brandData, brandName: e.target.value })}
-                          placeholder="Nome que será registrado"
-                        />
-                        {validationErrors.brand_brandName && (
-                          <p className="text-destructive text-xs">{validationErrors.brand_brandName}</p>
-                        )}
-                      </div>
+                    {/* Quantity selector for multiple brands */}
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2">
+                      <Label className="text-sm font-medium">Quantidade de Marcas a Registrar</Label>
+                      <Select 
+                        value={brandQuantity.toString()} 
+                        onValueChange={(v) => {
+                          const qty = parseInt(v);
+                          setBrandQuantity(qty);
+                          // Adjust brands array
+                          if (qty > brandsArray.length) {
+                            const newBrands = [...brandsArray];
+                            for (let i = brandsArray.length; i < qty; i++) {
+                              newBrands.push({ brandName: '', businessArea: '', nclClass: '' });
+                            }
+                            setBrandsArray(newBrands);
+                          } else {
+                            setBrandsArray(brandsArray.slice(0, qty));
+                          }
+                          // Sync first brand with brandData when qty = 1
+                          if (qty === 1 && brandsArray.length > 0) {
+                            setBrandData(prev => ({
+                              ...prev,
+                              brandName: brandsArray[0].brandName,
+                              businessArea: brandsArray[0].businessArea,
+                            }));
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-full md:w-48">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                            <SelectItem key={n} value={n.toString()}>
+                              {n} marca{n > 1 ? 's' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {brandQuantity > 1 && (
+                        <p className="text-xs text-muted-foreground">
+                          O valor do contrato será calculado automaticamente: {brandQuantity} marcas × valor unitário
+                        </p>
+                      )}
+                    </div>
 
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="businessArea">Ramo de Atividade *</Label>
-                        <Input
-                          id="businessArea"
-                          value={brandData.businessArea}
-                          onChange={(e) => setBrandData({ ...brandData, businessArea: e.target.value })}
-                          placeholder="Ex: Serviços Jurídicos, Alimentação, etc."
-                        />
-                        {validationErrors.brand_businessArea && (
-                          <p className="text-destructive text-xs">{validationErrors.brand_businessArea}</p>
-                        )}
+                    {/* Dynamic brand blocks for multiple brands */}
+                    {brandQuantity > 1 ? (
+                      <div className="space-y-4">
+                        {brandsArray.map((brand, index) => (
+                          <div key={index} className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                            <h4 className="font-medium text-sm text-primary">Marca #{index + 1}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-xs">Nome da Marca *</Label>
+                                <Input
+                                  value={brand.brandName}
+                                  onChange={(e) => {
+                                    const newBrands = [...brandsArray];
+                                    newBrands[index] = { ...newBrands[index], brandName: e.target.value };
+                                    setBrandsArray(newBrands);
+                                  }}
+                                  placeholder="Nome da marca"
+                                />
+                                {validationErrors[`brand_${index}_name`] && (
+                                  <p className="text-destructive text-xs">{validationErrors[`brand_${index}_name`]}</p>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Ramo de Atividade *</Label>
+                                <Input
+                                  value={brand.businessArea}
+                                  onChange={(e) => {
+                                    const newBrands = [...brandsArray];
+                                    newBrands[index] = { ...newBrands[index], businessArea: e.target.value };
+                                    setBrandsArray(newBrands);
+                                  }}
+                                  placeholder="Ramo de atividade"
+                                />
+                                {validationErrors[`brand_${index}_area`] && (
+                                  <p className="text-destructive text-xs">{validationErrors[`brand_${index}_area`]}</p>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Classe NCL</Label>
+                                <Select
+                                  value={brand.nclClass}
+                                  onValueChange={(v) => {
+                                    const newBrands = [...brandsArray];
+                                    newBrands[index] = { ...newBrands[index], nclClass: v };
+                                    setBrandsArray(newBrands);
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Classe" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from({ length: 45 }, (_, i) => i + 1).map(n => (
+                                      <SelectItem key={n} value={n.toString()}>
+                                        Classe {n}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
+                    ) : (
+                      /* Single brand - original form */
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="brandName">Nome da Marca *</Label>
+                          <Input
+                            id="brandName"
+                            value={brandData.brandName}
+                            onChange={(e) => setBrandData({ ...brandData, brandName: e.target.value })}
+                            placeholder="Nome que será registrado"
+                          />
+                          {validationErrors.brand_brandName && (
+                            <p className="text-destructive text-xs">{validationErrors.brand_brandName}</p>
+                          )}
+                        </div>
 
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="businessArea">Ramo de Atividade *</Label>
+                          <Input
+                            id="businessArea"
+                            value={brandData.businessArea}
+                            onChange={(e) => setBrandData({ ...brandData, businessArea: e.target.value })}
+                            placeholder="Ex: Serviços Jurídicos, Alimentação, etc."
+                          />
+                          {validationErrors.brand_businessArea && (
+                            <p className="text-destructive text-xs">{validationErrors.brand_businessArea}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CNPJ section - always visible */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
                       <div className="md:col-span-2">
                         <div className="flex items-center space-x-2 py-2">
                           <Checkbox
@@ -1361,6 +1508,23 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                         )}
                       </div>
                     </div>
+
+                    {/* Multiple brands summary */}
+                    {brandQuantity > 1 && paymentMethod && (
+                      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
+                        <h4 className="font-semibold text-blue-800 dark:text-blue-200">Resumo do Contrato</h4>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <span className="text-muted-foreground">Quantidade de marcas:</span>
+                          <span className="font-medium">{brandQuantity}</span>
+                          <span className="text-muted-foreground">Valor unitário:</span>
+                          <span className="font-medium">R$ {getUnitValue()?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-muted-foreground">Total do contrato:</span>
+                          <span className="font-bold text-primary text-lg">
+                            R$ {getContractValue()?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="bg-muted/50 rounded-lg p-3 text-sm">
                       <strong>Forma selecionada:</strong> {getPaymentDescription()}
