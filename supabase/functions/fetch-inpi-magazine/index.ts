@@ -64,8 +64,8 @@ function calculateExpectedRpiNumber(): number {
   return referenceRpi + diffWeeks;
 }
 
-// Fetch the RPI portal page to get available RPI numbers
-async function fetchAvailableRpis(): Promise<{ latest: number; available: number[] }> {
+// Fetch the RPI portal page to get available RPI numbers and which have XML
+async function fetchAvailableRpis(): Promise<{ latest: number; available: number[]; withXml: number[] }> {
   const expectedRpi = calculateExpectedRpiNumber();
   console.log(`Expected RPI based on date: ${expectedRpi}`);
   
@@ -85,43 +85,66 @@ async function fetchAvailableRpis(): Promise<{ latest: number; available: number
     const html = await response.text();
     console.log(`Fetched INPI page, length: ${html.length}`);
     
-    // Try multiple patterns to extract RPI numbers
-    const patterns = [
-      /RM(\d{4})\.zip/gi,
-      /Marcas(\d{4})\.pdf/gi,
-      /RPI\s*(\d{4})/gi,
-      /rpi\/(\d{4})/gi,
-      /numero[^>]*>(\d{4})</gi,
+    // Find all RPI numbers from the page
+    const rpiNumbers: number[] = [];
+    const rpiRegex = /<td>(\d{4})<\/td>/g;
+    let match;
+    while ((match = rpiRegex.exec(html)) !== null) {
+      const num = parseInt(match[1]);
+      if (num >= 2800 && num <= 3000) {
+        rpiNumbers.push(num);
+      }
+    }
+    
+    // Find which RPIs have XML files for Marcas (RM*.zip)
+    const rpWithXml: number[] = [];
+    // More flexible regex patterns to find XML links
+    const xmlPatterns = [
+      /href=["'][^"']*\/txt\/RM(\d{4})\.zip["']/gi,
+      /href=["'][^"']*RM(\d{4})\.zip["']/gi,
+      /\/txt\/RM(\d{4})\.zip/gi,
     ];
     
-    const allNumbers: number[] = [];
-    
-    for (const pattern of patterns) {
-      const matches = [...html.matchAll(pattern)];
-      for (const match of matches) {
+    for (const pattern of xmlPatterns) {
+      while ((match = pattern.exec(html)) !== null) {
         const num = parseInt(match[1]);
-        if (num >= 2800 && num <= 3000) { // Reasonable range
-          allNumbers.push(num);
+        if (num >= 2800 && num <= 3000 && !rpWithXml.includes(num)) {
+          rpWithXml.push(num);
         }
       }
     }
     
-    const uniqueNumbers = [...new Set(allNumbers)].sort((a, b) => b - a);
+    // Debug: log a sample of the HTML to see what we're parsing
+    const marcasSection = html.indexOf('MARCAS');
+    if (marcasSection > -1) {
+      console.log(`Found MARCAS section at position ${marcasSection}`);
+      const sampleHtml = html.substring(marcasSection, marcasSection + 500);
+      console.log(`Sample HTML near MARCAS: ${sampleHtml.substring(0, 200)}`);
+    }
+    
+    const uniqueNumbers = [...new Set(rpiNumbers)].sort((a, b) => b - a);
+    const sortedWithXml = rpWithXml.sort((a, b) => b - a);
+    
     console.log(`Found RPI numbers from page: ${uniqueNumbers.slice(0, 10).join(', ')}`);
+    console.log(`RPIs with XML available: ${sortedWithXml.slice(0, 10).join(', ')}`);
     
     if (uniqueNumbers.length > 0) {
-      return { latest: uniqueNumbers[0], available: uniqueNumbers.slice(0, 20) };
+      return { 
+        latest: uniqueNumbers[0], 
+        available: uniqueNumbers.slice(0, 20),
+        withXml: sortedWithXml
+      };
     }
     
     // Fallback: return expected RPI based on calculation
     const fallbackNumbers = Array.from({ length: 20 }, (_, i) => expectedRpi - i);
-    return { latest: expectedRpi, available: fallbackNumbers };
+    return { latest: expectedRpi, available: fallbackNumbers, withXml: [] };
     
   } catch (error) {
     console.error('Error fetching available RPIs:', error);
     // Fallback to calculated RPIs
     const fallbackNumbers = Array.from({ length: 20 }, (_, i) => expectedRpi - i);
-    return { latest: expectedRpi, available: fallbackNumbers };
+    return { latest: expectedRpi, available: fallbackNumbers, withXml: [] };
   }
 }
 
@@ -418,9 +441,10 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Fetch available RPIs from the portal
-    const { latest, available } = await fetchAvailableRpis();
+    const { latest, available, withXml } = await fetchAvailableRpis();
     
     console.log(`Latest RPI available: ${latest}, requested: ${rpiNumber || 'latest'}`);
+    console.log(`RPIs with XML: ${withXml.slice(0, 5).join(', ')}`);
     
     // Get list of recent RPIs if mode is 'list'
     if (mode === 'list') {
@@ -429,30 +453,58 @@ serve(async (req) => {
           success: true, 
           latestRpi: latest,
           recentRpis: available,
-          message: `Última RPI disponível: ${latest}`
+          rpWithXml: withXml,
+          message: `Última RPI disponível: ${latest}. RPIs com XML de Marcas: ${withXml.slice(0, 5).join(', ')}`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     // Determine which RPI to fetch
-    const targetRpi = rpiNumber || latest;
+    let targetRpi = rpiNumber || latest;
+    
+    // If requesting latest but it doesn't have XML, use the latest that has XML
+    if (!rpiNumber && withXml.length > 0 && !withXml.includes(targetRpi)) {
+      console.log(`RPI ${targetRpi} doesn't have XML yet, falling back to latest with XML: ${withXml[0]}`);
+      targetRpi = withXml[0];
+    }
     
     console.log(`Fetching RPI ${targetRpi}...`);
+    
+    // Check if this RPI has XML available
+    const hasXml = withXml.includes(targetRpi);
+    if (!hasXml && withXml.length > 0) {
+      const latestWithXml = withXml[0];
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'XML_NOT_YET_AVAILABLE',
+          message: `A RPI ${targetRpi} ainda não possui arquivo XML de Marcas disponível no site do INPI. A última RPI com XML disponível é a ${latestWithXml}.`,
+          rpiNumber: targetRpi,
+          latestAvailable: latest,
+          latestWithXml: latestWithXml,
+          suggestedUrl: 'https://revistas.inpi.gov.br/rpi/',
+          suggestedAction: `Tente buscar a RPI ${latestWithXml} ou aguarde a publicação do XML.`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
     
     // Try to download the XML
     const xmlContent = await tryDownloadRpiXml(targetRpi);
     
     // If XML not available, return info about manual upload
     if (!xmlContent) {
+      const latestWithXml = withXml.length > 0 ? withXml[0] : null;
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'XML_NOT_AVAILABLE',
-          message: `Não foi possível baixar o XML da RPI ${targetRpi} automaticamente. O INPI pode ter alterado a estrutura. Por favor, acesse revistas.inpi.gov.br e faça upload manual do arquivo.`,
+          message: `Não foi possível baixar o XML da RPI ${targetRpi} automaticamente.${latestWithXml ? ` Última RPI com XML: ${latestWithXml}.` : ''} Por favor, acesse revistas.inpi.gov.br e faça upload manual do arquivo.`,
           rpiNumber: targetRpi,
           latestAvailable: latest,
-          suggestedUrl: 'https://revistas.inpi.gov.br/',
+          latestWithXml: latestWithXml,
+          suggestedUrl: 'https://revistas.inpi.gov.br/rpi/',
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );

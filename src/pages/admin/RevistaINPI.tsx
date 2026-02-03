@@ -160,6 +160,7 @@ export default function RevistaINPI() {
   // Remote fetch state
   const [fetchingRemote, setFetchingRemote] = useState(false);
   const [recentRpis, setRecentRpis] = useState<number[]>([]);
+  const [rpWithXml, setRpWithXml] = useState<number[]>([]);
   const [latestRpi, setLatestRpi] = useState<number | null>(null);
   const [selectedRpiNumber, setSelectedRpiNumber] = useState<string>('');
   
@@ -216,8 +217,11 @@ export default function RevistaINPI() {
       if (response.ok) {
         const data = await response.json();
         setRecentRpis(data.recentRpis || []);
+        setRpWithXml(data.rpWithXml || []);
         setLatestRpi(data.latestRpi);
-        setSelectedRpiNumber(data.latestRpi?.toString() || '');
+        // Default to latest RPI that has XML available
+        const defaultRpi = data.rpWithXml?.[0] || data.latestRpi;
+        setSelectedRpiNumber(defaultRpi?.toString() || '');
       }
     } catch (error) {
       console.error('Error fetching RPI list:', error);
@@ -308,8 +312,13 @@ export default function RevistaINPI() {
       const result = await response.json();
       
       if (!response.ok) {
-        if (result.error === 'XML_NOT_AVAILABLE') {
-          toast.info(result.message, { duration: 6000 });
+        if (result.error === 'XML_NOT_AVAILABLE' || result.error === 'XML_NOT_YET_AVAILABLE') {
+          toast.info(result.message, { duration: 8000 });
+          // Se houver sugestão de RPI com XML, atualizar a seleção
+          if (result.latestWithXml) {
+            setSelectedRpiNumber(result.latestWithXml.toString());
+            toast.info(`Sugerimos buscar a RPI ${result.latestWithXml} que possui XML disponível.`, { duration: 5000 });
+          }
         } else {
           toast.error(result.message || 'Erro ao buscar RPI');
         }
@@ -746,15 +755,26 @@ export default function RevistaINPI() {
                   <Label htmlFor="rpi-select">Selecionar edição da RPI</Label>
                   <div className="flex gap-2">
                     <Select value={selectedRpiNumber} onValueChange={setSelectedRpiNumber}>
-                      <SelectTrigger className="w-48">
+                      <SelectTrigger className="w-64">
                         <SelectValue placeholder="Selecione a RPI" />
                       </SelectTrigger>
                       <SelectContent>
-                        {recentRpis.map(rpi => (
-                          <SelectItem key={rpi} value={rpi.toString()}>
-                            RPI {rpi} {rpi === latestRpi && '(Última)'}
-                          </SelectItem>
-                        ))}
+                        {recentRpis.map(rpi => {
+                          const hasXml = rpWithXml.includes(rpi);
+                          return (
+                            <SelectItem key={rpi} value={rpi.toString()}>
+                              <span className="flex items-center gap-2">
+                                RPI {rpi} 
+                                {rpi === latestRpi && <Badge variant="secondary" className="text-xs">Última</Badge>}
+                                {hasXml ? (
+                                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">XML</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs text-muted-foreground">Sem XML</Badge>
+                                )}
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     
@@ -771,12 +791,18 @@ export default function RevistaINPI() {
                       Buscar RPI
                     </Button>
                   </div>
+                  {!rpWithXml.includes(parseInt(selectedRpiNumber)) && selectedRpiNumber && (
+                    <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Esta RPI ainda não possui arquivo XML de Marcas disponível no INPI
+                    </p>
+                  )}
                 </div>
                 
                 <div className="flex-shrink-0">
                   <Button
-                    onClick={() => handleRemoteFetch(latestRpi || undefined)}
-                    disabled={fetchingRemote || !latestRpi}
+                    onClick={() => handleRemoteFetch(rpWithXml[0] || latestRpi || undefined)}
+                    disabled={fetchingRemote || (!latestRpi && rpWithXml.length === 0)}
                     size="lg"
                     className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25"
                   >
@@ -785,14 +811,19 @@ export default function RevistaINPI() {
                     ) : (
                       <Zap className="h-5 w-5" />
                     )}
-                    Buscar Última RPI {latestRpi && `(${latestRpi})`}
+                    Buscar Última RPI com XML {rpWithXml[0] && `(${rpWithXml[0]})`}
                   </Button>
                 </div>
               </div>
               
               {latestRpi && (
                 <p className="text-xs text-muted-foreground mt-3">
-                  A RPI é publicada toda terça-feira. Última edição estimada: RPI {latestRpi}
+                  Última RPI publicada: {latestRpi}. 
+                  {rpWithXml.length > 0 && rpWithXml[0] !== latestRpi && (
+                    <span className="text-yellow-600 ml-1">
+                      (O XML de Marcas da RPI {latestRpi} ainda não foi disponibilizado pelo INPI)
+                    </span>
+                  )}
                 </p>
               )}
             </CardContent>
