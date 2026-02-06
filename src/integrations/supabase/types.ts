@@ -1506,6 +1506,30 @@ export type Database = {
         }
         Relationships: []
       }
+      promotion_expiration_logs: {
+        Row: {
+          contract_ids: Json | null
+          contracts_updated: number | null
+          executed_at: string | null
+          id: string
+          status: string | null
+        }
+        Insert: {
+          contract_ids?: Json | null
+          contracts_updated?: number | null
+          executed_at?: string | null
+          id?: string
+          status?: string | null
+        }
+        Update: {
+          contract_ids?: Json | null
+          contracts_updated?: number | null
+          executed_at?: string | null
+          id?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
       rpi_entries: {
         Row: {
           attorney_name: string | null

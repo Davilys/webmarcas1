@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.transcribe-audio]
 verify_jwt = false
+
+[functions.expire-promotion-price]
+verify_jwt = false
