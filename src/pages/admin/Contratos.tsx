@@ -412,8 +412,11 @@ export default function AdminContratos() {
                             Ver
                           </button>
                           <button 
-                            className="hover:underline mr-2"
-                            onClick={() => {
+                            className="hover:underline mr-2 text-primary"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('Edit clicked for contract:', contract.id, contract.signature_status);
                               if (contract.signature_status === 'signed') {
                                 toast.error('Contratos assinados não podem ser editados');
                                 return;
