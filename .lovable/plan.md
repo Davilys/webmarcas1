@@ -1,25 +1,18 @@
 
 
-## Plano: Atualização Completa de Contratos ao Expirar Promoção
+## Plano: Implementar Edição Completa de Contratos Não Assinados
 
 ### Resumo
 
-Quando a promoção expirar (automaticamente às sextas 23:59 ou via botão "Expirar Promoções"), o sistema deve:
-
-1. Atualizar o **valor do contrato** de R$ 699,00 para R$ 1.194,00 ✓ (já implementado)
-2. Atualizar o **método de pagamento** de `avista` para `boleto3x` (3x R$ 398,00)
-3. Atualizar o **texto do contrato (contract_html)** substituindo a cláusula 5.1 pelo novo texto
+Criar um diálogo de edição de contratos semelhante ao `CreateContractDialog`, permitindo que o administrador edite todos os dados (Dados Pessoais, Dados da Marca, Pagamento) de contratos **não assinados**. As alterações devem ser refletidas no contrato, no perfil do cliente, e quando o cliente acessar o link de assinatura, verá os dados atualizados.
 
 ---
 
-### Novo Texto da Cláusula 5.1 (após expiração)
+### Problema Atual
 
-```text
-5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida pelo CONTRATANTE:
-
-• Pagamento à vista: R$ 1.194,00 (mil cento e noventa e quatro reais).
-• Pagamento parcelado via boleto bancário: 3 (três) parcelas de R$ 398,00 (trezentos e noventa e oito reais).
-• Pagamento parcelado via cartão de crédito: 6 (seis) parcelas de R$ 199,00 (cento e noventa e nove reais) sem incidência de juros.
+Na linha 408 do arquivo `src/pages/admin/Contratos.tsx`, o botão "Editar" existe mas **não tem ação (onClick) definida**:
+```tsx
+<button className="hover:underline mr-2">Editar</button>
 ```
 
 ---
@@ -28,156 +21,195 @@ Quando a promoção expirar (automaticamente às sextas 23:59 ou via botão "Exp
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/expire-promotion-price/index.ts` | Modificar - Adicionar lógica de atualização do contract_html e payment_method |
+| `src/components/admin/contracts/EditContractDialog.tsx` | Criar - Novo componente de edição |
+| `src/pages/admin/Contratos.tsx` | Modificar - Conectar botão "Editar" ao novo dialog |
 
 ---
 
-### Lógica de Atualização
+### Arquitetura da Solução
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE EXPIRAÇÃO                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  1. Buscar contratos elegíveis:                                      │
-│     - contract_value = 699.00                                        │
-│     - payment_method = 'avista'                                      │
-│     - signature_status = 'not_signed'                                │
-│     - asaas_payment_id IS NULL                                       │
-│                                                                      │
-│  2. Para cada contrato:                                              │
-│     a) Atualizar contract_value para 1194.00                         │
-│     b) Atualizar payment_method para 'boleto3x'                      │
-│     c) Substituir cláusula 5.1 no contract_html                      │
-│                                                                      │
-│  3. Registrar log de execução                                        │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FLUXO DE EDIÇÃO                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. Admin clica em "Editar" em contrato NÃO ASSINADO                        │
+│                                                                              │
+│  2. EditContractDialog abre pré-preenchido com:                             │
+│     - Aba "Dados Pessoais": nome, email, telefone, CPF, endereço            │
+│     - Aba "Dados da Marca": nome da marca, ramo de atividade, CNPJ          │
+│     - Aba "Pagamento": método de pagamento selecionado                      │
+│                                                                              │
+│  3. Admin edita os campos desejados                                         │
+│                                                                              │
+│  4. Ao salvar:                                                              │
+│     a) Atualiza tabela `profiles` (dados pessoais)                          │
+│     b) Regenera `contract_html` com novos dados                             │
+│     c) Atualiza `contracts` (valor, método, html)                           │
+│     d) Cliente vê alterações no link de assinatura                          │
+│                                                                              │
+│  5. Se pagamento já criado no Asaas (asaas_payment_id != null):             │
+│     -> Mostrar aviso que cobrança existente não será alterada               │
+│     -> Admin deve cancelar manualmente no Asaas se necessário               │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Implementação no Edge Function
+### Detalhes do Componente EditContractDialog
 
+**Props:**
 ```typescript
-// Texto novo da cláusula 5.1 após expiração
-const NEW_CLAUSE_51 = `5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida pelo CONTRATANTE:
-
-• Pagamento à vista: R$ 1.194,00 (mil cento e noventa e quatro reais).
-• Pagamento parcelado via boleto bancário: 3 (três) parcelas de R$ 398,00 (trezentos e noventa e oito reais).
-• Pagamento parcelado via cartão de crédito: 6 (seis) parcelas de R$ 199,00 (cento e noventa e nove reais) sem incidência de juros.`;
-
-// Função para atualizar o contract_html
-function updateContractClause51(contractHtml: string): string {
-  // Regex para encontrar a cláusula 5.1 existente (até 5.2)
-  const clause51Regex = /5\.1 Os pagamentos à CONTRATADA[\s\S]*?(?=5\.2 Taxas do INPI)/;
-  
-  return contractHtml.replace(clause51Regex, NEW_CLAUSE_51 + '\n');
-}
-
-// Para cada contrato elegível:
-for (const contract of eligibleContracts) {
-  // Atualizar texto da cláusula 5.1
-  const updatedHtml = updateContractClause51(contract.contract_html);
-  
-  // Atualizar todos os campos
-  await supabase
-    .from('contracts')
-    .update({ 
-      contract_value: 1194.00,
-      payment_method: 'boleto3x',  // Novo: 3x R$398
-      contract_html: updatedHtml   // Novo: texto atualizado
-    })
-    .eq('id', contract.id);
+interface EditContractDialogProps {
+  contract: Contract | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
 }
 ```
 
+**Estado interno:**
+- `personalData`: dados pessoais (nome, email, telefone, CPF, endereço)
+- `brandData`: dados da marca (nome, ramo, CNPJ)
+- `paymentMethod`: método de pagamento ('avista' | 'cartao6x' | 'boleto3x')
+- `loading`: estado de salvamento
+- `currentTab`: aba ativa ('personal' | 'brand' | 'payment')
+
+**Carregamento inicial (useEffect ao abrir):**
+1. Buscar perfil do cliente (`profiles`) pelo `contract.user_id`
+2. Extrair dados da marca do `contract.subject` ou `brand_processes`
+3. Ler `contract.payment_method` para selecionar método
+
+**Ação de Salvar:**
+1. Atualizar `profiles` com dados pessoais editados
+2. Regenerar `contract_html` usando `replaceContractVariables`
+3. Atualizar `contracts` com:
+   - `contract_value` (recalculado pelo método)
+   - `payment_method`
+   - `contract_html`
+   - `subject` (se marca alterada)
+4. Toast de sucesso + recarregar lista
+
 ---
 
-### Geração da Cobrança (create-post-signature-payment)
+### Restrições de Segurança
 
-Após assinatura, a Edge Function `create-post-signature-payment` já está configurada para:
-
-1. Ler o `contract_value` do banco (1194.00)
-2. Ler o `payment_method` do banco (boleto3x)
-3. Gerar cobrança no Asaas: **3x de R$ 398,00**
-
-O cálculo de parcela será:
-```typescript
-// Para boleto3x com contract_value = 1194:
-installmentCount = 3
-installmentValue = 1194 / 3 = 398.00
-```
+| Condição | Comportamento |
+|----------|---------------|
+| `signature_status = 'signed'` | Botão "Editar" desabilitado ou oculto |
+| `asaas_payment_id != null` | Aviso: "Cobrança já gerada no gateway" |
+| Contrato com link expirado | Pode editar normalmente |
 
 ---
 
-### Padrão do Regex de Substituição
+### Visual das Abas (idêntico ao CreateContractDialog)
 
 ```text
-ANTES (texto promocional):
-┌────────────────────────────────────────────────────────────────┐
-│ 5.1 Os pagamentos à CONTRATADA serão efetuados...              │
-│ • Pagamento à vista via PIX: R$ 699,00 (seiscentos e noventa   │
-│   e nove reais) - com 43% de desconto sobre o valor integral   │
-│   de R$ 1.230,00.                                              │
-└────────────────────────────────────────────────────────────────┘
-
-DEPOIS (preço cheio com opções):
-┌────────────────────────────────────────────────────────────────┐
-│ 5.1 Os pagamentos à CONTRATADA serão efetuados conforme a      │
-│ opção escolhida pelo CONTRATANTE:                              │
-│                                                                │
-│ • Pagamento à vista: R$ 1.194,00 (mil cento e noventa e        │
-│   quatro reais).                                               │
-│ • Pagamento parcelado via boleto bancário: 3 (três) parcelas   │
-│   de R$ 398,00 (trezentos e noventa e oito reais).             │
-│ • Pagamento parcelado via cartão de crédito: 6 (seis)          │
-│   parcelas de R$ 199,00 (cento e noventa e nove reais)         │
-│   sem incidência de juros.                                     │
-└────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  Editar Contrato #20267601                                       │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────┬───────────────────┬──────────────────┐     │
+│  │ Dados Pessoais  │  Dados da Marca   │    Pagamento     │     │
+│  └─────────────────┴───────────────────┴──────────────────┘     │
+│                                                                  │
+│  Nome Completo *                                                 │
+│  ┌────────────────────────────────────────────────────┐         │
+│  │ João da Silva                                       │         │
+│  └────────────────────────────────────────────────────┘         │
+│                                                                  │
+│  E-mail *                        Telefone *                      │
+│  ┌──────────────────────┐        ┌──────────────────────┐       │
+│  │ joao@email.com       │        │ (11) 99999-9999      │       │
+│  └──────────────────────┘        └──────────────────────┘       │
+│                                                                  │
+│  ... (demais campos)                                             │
+│                                                                  │
+│                                    ┌──────────────────────────┐  │
+│                                    │   Salvar Alterações     │  │
+│                                    └──────────────────────────┘  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Verificação de Segurança
+### Modificações em Contratos.tsx
 
-| Item | Status |
-|------|--------|
-| Contratos assinados | Não afetados (signature_status = 'signed') |
-| Contratos pagos | Não afetados (asaas_payment_id != NULL) |
-| Contratos parcelados originais | Não afetados (payment_method != 'avista') |
-| Integração Asaas | Mantida - usa campo payment_method e contract_value |
-| Visualização do contrato | Atualizada via contract_html |
-| Download PDF | Usa contract_html atualizado |
+**Adicionar estado:**
+```typescript
+const [editContract, setEditContract] = useState<Contract | null>(null);
+const [editOpen, setEditOpen] = useState(false);
+```
+
+**Modificar botão "Editar":**
+```tsx
+<button 
+  className="hover:underline mr-2"
+  onClick={() => {
+    if (contract.signature_status === 'signed') {
+      toast.error('Contratos assinados não podem ser editados');
+      return;
+    }
+    setEditContract(contract);
+    setEditOpen(true);
+  }}
+>
+  Editar
+</button>
+```
+
+**Adicionar dialog:**
+```tsx
+<EditContractDialog
+  contract={editContract}
+  open={editOpen}
+  onOpenChange={setEditOpen}
+  onSuccess={fetchContracts}
+/>
+```
 
 ---
 
-### Campos Atualizados por Contrato
+### Regeneração do contract_html
 
-| Campo | Valor Anterior | Novo Valor |
-|-------|----------------|------------|
-| `contract_value` | 699.00 | 1194.00 |
-| `payment_method` | avista | boleto3x |
-| `contract_html` | Cláusula 5.1 com PIX 699 | Cláusula 5.1 com opções 1194/398x3/199x6 |
+Ao salvar edições, o sistema deve:
+1. Buscar o template ativo (`contract_templates`)
+2. Chamar `replaceContractVariables` com os novos dados
+3. Salvar o HTML regenerado em `contracts.contract_html`
+
+Isso garante que o cliente veja os dados atualizados ao acessar o link de assinatura.
+
+---
+
+### Considerações sobre Asaas
+
+- Se o contrato já tem `asaas_payment_id`: a cobrança já foi criada
+- Alterações no valor/método NÃO alteram cobrança existente automaticamente
+- Admin deve cancelar manualmente no Asaas e regenerar o link
+- O diálogo exibirá um aviso amarelo quando houver cobrança existente
 
 ---
 
 ### Seção Técnica
 
-**Regex de substituição:**
-```javascript
-// Captura desde "5.1 Os pagamentos à CONTRATADA" até antes de "5.2 Taxas do INPI"
-const regex = /5\.1 Os pagamentos à CONTRATADA[\s\S]*?(?=5\.2 Taxas do INPI)/;
-```
+**Reutilização de código:**
+- O `EditContractDialog` reutilizará grande parte da lógica do `CreateContractDialog`
+- Funções compartilhadas: `replaceContractVariables`, validadores, formatters
+- Componentes UI: mesma estrutura de tabs e campos
 
-**Tratamento de casos especiais:**
-- Se o contract_html for NULL: pular a atualização do HTML (manter apenas valor e método)
-- Se o regex não encontrar match: manter o HTML original
+**Tabelas afetadas:**
+- `profiles`: dados pessoais do cliente
+- `contracts`: valor, método, html, subject
 
-**Arquivo a modificar:**
-- `supabase/functions/expire-promotion-price/index.ts`
-  - Adicionar busca do campo `contract_html` no SELECT
-  - Adicionar constante `NEW_CLAUSE_51` com o novo texto
-  - Adicionar função `updateContractClause51(html)`
-  - Modificar UPDATE para incluir `payment_method` e `contract_html`
+**Sem alteração em Edge Functions:**
+- A Edge Function `create-post-signature-payment` já lê os dados do banco
+- Ao atualizar o banco, a próxima execução usará os novos valores
+
+**Ordem de implementação:**
+1. Criar componente `EditContractDialog.tsx`
+2. Importar e conectar em `Contratos.tsx`
+3. Implementar lógica de carregamento e salvamento
+4. Adicionar validações e avisos
 
