@@ -9,13 +9,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, Plus, RefreshCw, FileSignature, MoreHorizontal, 
-  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer 
+  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer, Edit 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ContractDetailSheet } from '@/components/admin/contracts/ContractDetailSheet';
 import { CreateContractDialog } from '@/components/admin/contracts/CreateContractDialog';
+import { EditContractDialog } from '@/components/admin/contracts/EditContractDialog';
 import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 
 interface Contract {
@@ -33,6 +34,9 @@ interface Contract {
   contract_type_id: string | null;
   contract_html?: string | null;
   description?: string | null;
+  payment_method?: string | null;
+  asaas_payment_id?: string | null;
+  template_id?: string | null;
   contract_type?: { name: string } | null;
   profile?: { full_name: string | null; phone: string | null } | null;
 }
@@ -45,6 +49,8 @@ export default function AdminContratos() {
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editContract, setEditContract] = useState<Contract | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [expiringPromotion, setExpiringPromotion] = useState(false);
 
@@ -405,7 +411,19 @@ export default function AdminContratos() {
                           >
                             Ver
                           </button>
-                          <button className="hover:underline mr-2">Editar</button>
+                          <button 
+                            className="hover:underline mr-2"
+                            onClick={() => {
+                              if (contract.signature_status === 'signed') {
+                                toast.error('Contratos assinados não podem ser editados');
+                                return;
+                              }
+                              setEditContract(contract);
+                              setEditOpen(true);
+                            }}
+                          >
+                            Editar
+                          </button>
                           <button 
                             className="hover:underline text-destructive"
                             onClick={() => handleDelete(contract.id)}
@@ -499,6 +517,14 @@ export default function AdminContratos() {
       <CreateContractDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onSuccess={fetchContracts}
+      />
+
+      {/* Edit Contract Dialog */}
+      <EditContractDialog
+        contract={editContract}
+        open={editOpen}
+        onOpenChange={setEditOpen}
         onSuccess={fetchContracts}
       />
     </AdminLayout>
