@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, Plus, RefreshCw, FileSignature, MoreHorizontal, 
-  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2 
+  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -46,6 +46,40 @@ export default function AdminContratos() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [expiringPromotion, setExpiringPromotion] = useState(false);
+
+  const handleExpirePromotions = async () => {
+    if (!confirm(
+      'Deseja atualizar contratos promocionais não assinados?\n\n' +
+      '• Valor atual: R$ 699,00\n' +
+      '• Novo valor: R$ 1.194,00\n\n' +
+      'Apenas contratos à vista, não assinados e não pagos serão afetados.'
+    )) return;
+    
+    setExpiringPromotion(true);
+    try {
+      const response = await supabase.functions.invoke('expire-promotion-price', {
+        body: { triggered_by: 'manual_admin' }
+      });
+      
+      if (response.error) throw response.error;
+      
+      const { updated_count } = response.data;
+      
+      if (updated_count > 0) {
+        toast.success(`${updated_count} contrato(s) atualizado(s) com sucesso`);
+      } else {
+        toast.info('Nenhum contrato elegível para atualização');
+      }
+      
+      fetchContracts();
+    } catch (error) {
+      console.error('Error expiring promotions:', error);
+      toast.error('Erro ao expirar promoções');
+    } finally {
+      setExpiringPromotion(false);
+    }
+  };
 
   const handleDownloadPDF = async (contractId: string) => {
     setDownloadingId(contractId);
@@ -242,6 +276,19 @@ export default function AdminContratos() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={fetchContracts}>
               <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleExpirePromotions}
+              disabled={expiringPromotion}
+              className="text-amber-600 border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
+            >
+              {expiringPromotion ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Timer className="h-4 w-4 mr-2" />
+              )}
+              Expirar Promoções
             </Button>
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
