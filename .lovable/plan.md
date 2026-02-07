@@ -1,128 +1,183 @@
 
 
-## Plano: Adicionar Botão "Expirar Promoções" na Tela de Contratos
+## Plano: Atualização Completa de Contratos ao Expirar Promoção
 
 ### Resumo
 
-Adicionar um botão na página `/admin/contratos` que permite executar manualmente a função `expire-promotion-price` para atualizar contratos promocionais não assinados de R$ 699 para R$ 1.194.
+Quando a promoção expirar (automaticamente às sextas 23:59 ou via botão "Expirar Promoções"), o sistema deve:
+
+1. Atualizar o **valor do contrato** de R$ 699,00 para R$ 1.194,00 ✓ (já implementado)
+2. Atualizar o **método de pagamento** de `avista` para `boleto3x` (3x R$ 398,00)
+3. Atualizar o **texto do contrato (contract_html)** substituindo a cláusula 5.1 pelo novo texto
 
 ---
 
-### Alterações
+### Novo Texto da Cláusula 5.1 (após expiração)
+
+```text
+5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida pelo CONTRATANTE:
+
+• Pagamento à vista: R$ 1.194,00 (mil cento e noventa e quatro reais).
+• Pagamento parcelado via boleto bancário: 3 (três) parcelas de R$ 398,00 (trezentos e noventa e oito reais).
+• Pagamento parcelado via cartão de crédito: 6 (seis) parcelas de R$ 199,00 (cento e noventa e nove reais) sem incidência de juros.
+```
+
+---
+
+### Alterações Necessárias
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/admin/Contratos.tsx` | Modificar - Adicionar botão e lógica |
+| `supabase/functions/expire-promotion-price/index.ts` | Modificar - Adicionar lógica de atualização do contract_html e payment_method |
 
 ---
 
-### Detalhes da Implementação
-
-**1. Adicionar Estado para Controlar Loading**
-```typescript
-const [expiringPromotion, setExpiringPromotion] = useState(false);
-```
-
-**2. Criar Função `handleExpirePromotions`**
-- Chamar a Edge Function `expire-promotion-price`
-- Mostrar confirmação antes de executar
-- Exibir toast com resultado (quantos contratos atualizados)
-- Recarregar lista de contratos após sucesso
-
-**3. Adicionar Botão no Header**
-- Localização: Entre o botão de Refresh e "Novo Contrato"
-- Estilo: Variante `outline` com ícone de relógio/timer
-- Texto: "Expirar Promoções"
-- Estado de loading durante execução
-
----
-
-### Visual do Botão
+### Lógica de Atualização
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  [🔄]  [⏱ Expirar Promoções]  [+ Novo Contrato]                │
-│                                                                  │
-│  Contratos                                                       │
-│  Gerencie contratos e assinaturas                               │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    FLUXO DE EXPIRAÇÃO                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. Buscar contratos elegíveis:                                      │
+│     - contract_value = 699.00                                        │
+│     - payment_method = 'avista'                                      │
+│     - signature_status = 'not_signed'                                │
+│     - asaas_payment_id IS NULL                                       │
+│                                                                      │
+│  2. Para cada contrato:                                              │
+│     a) Atualizar contract_value para 1194.00                         │
+│     b) Atualizar payment_method para 'boleto3x'                      │
+│     c) Substituir cláusula 5.1 no contract_html                      │
+│                                                                      │
+│  3. Registrar log de execução                                        │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Fluxo de Execução
-
-1. Usuário clica em "Expirar Promoções"
-2. Modal de confirmação aparece: "Deseja atualizar contratos promocionais não assinados de R$ 699 para R$ 1.194?"
-3. Ao confirmar, chama a Edge Function
-4. Toast mostra resultado: "X contratos atualizados com sucesso"
-5. Lista de contratos é recarregada automaticamente
-
----
-
-### Código do Botão
+### Implementação no Edge Function
 
 ```typescript
-<Button 
-  variant="outline" 
-  onClick={handleExpirePromotions}
-  disabled={expiringPromotion}
-  className="text-amber-600 border-amber-600 hover:bg-amber-50"
->
-  {expiringPromotion ? (
-    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-  ) : (
-    <Timer className="h-4 w-4 mr-2" />
-  )}
-  Expirar Promoções
-</Button>
-```
+// Texto novo da cláusula 5.1 após expiração
+const NEW_CLAUSE_51 = `5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida pelo CONTRATANTE:
 
----
+• Pagamento à vista: R$ 1.194,00 (mil cento e noventa e quatro reais).
+• Pagamento parcelado via boleto bancário: 3 (três) parcelas de R$ 398,00 (trezentos e noventa e oito reais).
+• Pagamento parcelado via cartão de crédito: 6 (seis) parcelas de R$ 199,00 (cento e noventa e nove reais) sem incidência de juros.`;
 
-### Função de Execução
-
-```typescript
-const handleExpirePromotions = async () => {
-  if (!confirm(
-    'Deseja atualizar contratos promocionais não assinados?\n\n' +
-    '• Valor atual: R$ 699,00\n' +
-    '• Novo valor: R$ 1.194,00\n\n' +
-    'Apenas contratos à vista, não assinados e não pagos serão afetados.'
-  )) return;
+// Função para atualizar o contract_html
+function updateContractClause51(contractHtml: string): string {
+  // Regex para encontrar a cláusula 5.1 existente (até 5.2)
+  const clause51Regex = /5\.1 Os pagamentos à CONTRATADA[\s\S]*?(?=5\.2 Taxas do INPI)/;
   
-  setExpiringPromotion(true);
-  try {
-    const response = await supabase.functions.invoke('expire-promotion-price', {
-      body: { triggered_by: 'manual_admin' }
-    });
-    
-    if (response.error) throw response.error;
-    
-    const { updated_count } = response.data;
-    
-    if (updated_count > 0) {
-      toast.success(`${updated_count} contrato(s) atualizado(s) com sucesso`);
-    } else {
-      toast.info('Nenhum contrato elegível para atualização');
-    }
-    
-    fetchContracts(); // Recarrega a lista
-  } catch (error) {
-    console.error('Error expiring promotions:', error);
-    toast.error('Erro ao expirar promoções');
-  } finally {
-    setExpiringPromotion(false);
-  }
-};
+  return contractHtml.replace(clause51Regex, NEW_CLAUSE_51 + '\n');
+}
+
+// Para cada contrato elegível:
+for (const contract of eligibleContracts) {
+  // Atualizar texto da cláusula 5.1
+  const updatedHtml = updateContractClause51(contract.contract_html);
+  
+  // Atualizar todos os campos
+  await supabase
+    .from('contracts')
+    .update({ 
+      contract_value: 1194.00,
+      payment_method: 'boleto3x',  // Novo: 3x R$398
+      contract_html: updatedHtml   // Novo: texto atualizado
+    })
+    .eq('id', contract.id);
+}
 ```
 
 ---
 
-### Segurança
+### Geração da Cobrança (create-post-signature-payment)
 
-- Confirmação obrigatória antes de executar
-- Feedback claro do resultado
-- Não afeta contratos já assinados ou pagos
-- Registro de log na tabela `promotion_expiration_logs`
+Após assinatura, a Edge Function `create-post-signature-payment` já está configurada para:
+
+1. Ler o `contract_value` do banco (1194.00)
+2. Ler o `payment_method` do banco (boleto3x)
+3. Gerar cobrança no Asaas: **3x de R$ 398,00**
+
+O cálculo de parcela será:
+```typescript
+// Para boleto3x com contract_value = 1194:
+installmentCount = 3
+installmentValue = 1194 / 3 = 398.00
+```
+
+---
+
+### Padrão do Regex de Substituição
+
+```text
+ANTES (texto promocional):
+┌────────────────────────────────────────────────────────────────┐
+│ 5.1 Os pagamentos à CONTRATADA serão efetuados...              │
+│ • Pagamento à vista via PIX: R$ 699,00 (seiscentos e noventa   │
+│   e nove reais) - com 43% de desconto sobre o valor integral   │
+│   de R$ 1.230,00.                                              │
+└────────────────────────────────────────────────────────────────┘
+
+DEPOIS (preço cheio com opções):
+┌────────────────────────────────────────────────────────────────┐
+│ 5.1 Os pagamentos à CONTRATADA serão efetuados conforme a      │
+│ opção escolhida pelo CONTRATANTE:                              │
+│                                                                │
+│ • Pagamento à vista: R$ 1.194,00 (mil cento e noventa e        │
+│   quatro reais).                                               │
+│ • Pagamento parcelado via boleto bancário: 3 (três) parcelas   │
+│   de R$ 398,00 (trezentos e noventa e oito reais).             │
+│ • Pagamento parcelado via cartão de crédito: 6 (seis)          │
+│   parcelas de R$ 199,00 (cento e noventa e nove reais)         │
+│   sem incidência de juros.                                     │
+└────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Verificação de Segurança
+
+| Item | Status |
+|------|--------|
+| Contratos assinados | Não afetados (signature_status = 'signed') |
+| Contratos pagos | Não afetados (asaas_payment_id != NULL) |
+| Contratos parcelados originais | Não afetados (payment_method != 'avista') |
+| Integração Asaas | Mantida - usa campo payment_method e contract_value |
+| Visualização do contrato | Atualizada via contract_html |
+| Download PDF | Usa contract_html atualizado |
+
+---
+
+### Campos Atualizados por Contrato
+
+| Campo | Valor Anterior | Novo Valor |
+|-------|----------------|------------|
+| `contract_value` | 699.00 | 1194.00 |
+| `payment_method` | avista | boleto3x |
+| `contract_html` | Cláusula 5.1 com PIX 699 | Cláusula 5.1 com opções 1194/398x3/199x6 |
+
+---
+
+### Seção Técnica
+
+**Regex de substituição:**
+```javascript
+// Captura desde "5.1 Os pagamentos à CONTRATADA" até antes de "5.2 Taxas do INPI"
+const regex = /5\.1 Os pagamentos à CONTRATADA[\s\S]*?(?=5\.2 Taxas do INPI)/;
+```
+
+**Tratamento de casos especiais:**
+- Se o contract_html for NULL: pular a atualização do HTML (manter apenas valor e método)
+- Se o regex não encontrar match: manter o HTML original
+
+**Arquivo a modificar:**
+- `supabase/functions/expire-promotion-price/index.ts`
+  - Adicionar busca do campo `contract_html` no SELECT
+  - Adicionar constante `NEW_CLAUSE_51` com o novo texto
+  - Adicionar função `updateContractClause51(html)`
+  - Modificar UPDATE para incluir `payment_method` e `contract_html`
 
