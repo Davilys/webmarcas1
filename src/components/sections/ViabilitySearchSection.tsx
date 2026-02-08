@@ -213,7 +213,7 @@ const ViabilitySearchSection = () => {
   };
 
   return (
-    <section id="consultar" className="section-padding relative overflow-hidden">
+    <section id="consultar" className="py-8 md:py-12 lg:py-16 relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-hero-gradient opacity-30" />
       <div className="absolute top-1/4 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
