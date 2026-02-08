@@ -1,19 +1,108 @@
 
 
-## Plano: Corrigir Contador de Estatísticas no Hero
+## Plano: Corrigir Fluxo de Criação de Cliente e Envio de Credenciais
 
-### Resumo
+### Resumo do Problema
 
-Corrigir o valor de "10.000" para "11.000" (11 mil) e garantir que o número não seja cortado visualmente.
+Após análise detalhada do código e banco de dados, identifiquei que:
+
+1. **Usuários SÃO criados automaticamente** quando contratos são assinados ✅
+2. **Role 'user' É atribuída** corretamente ✅
+3. **Área do cliente FUNCIONA** - login via `/cliente/login` ✅
+4. **Senha padrão `123Mudar@` está documentada** na tela de login ✅
+
+**PORÉM**, existe um problema crítico no fluxo:
 
 ---
 
-### Problemas Identificados
+### Problema Identificado
 
-| Problema | Localização | Solução |
-|----------|-------------|---------|
-| Valor errado (10000 → 11000) | `HeroSection.tsx` linha 59 | Alterar `value: 10000` para `value: 11000` |
-| Número cortado visualmente | CSS do container | Adicionar `whitespace-nowrap` para evitar quebra |
+| Fluxo | O que acontece | Problema |
+|-------|----------------|----------|
+| Admin cria contrato para **novo cliente** | `create-client-user` é chamado | Cria usuário com senha **ALEATÓRIA** (não `123Mudar@`) e **NÃO envia email** |
+| Cliente assina contrato | `sign-contract-blockchain` verifica se usuário existe | Como já existe, `userCreated = false` e **email de boas-vindas NÃO é enviado** |
+
+**Resultado**: Cliente é criado mas **nunca recebe email com credenciais** e a senha não é `123Mudar@`.
+
+---
+
+### Evidências do Banco de Dados
+
+```text
+Últimos emails 'user_created' enviados:
+- 2026-01-27: ola@webmarcas.net
+- 2026-01-24: davilys@icloud.com  
+- 2026-01-13: andreguimel@gmail.com
+
+Contratos assinados recentemente (Feb 2026):
+- rafaejg7@gmail.com → assinado em 07/02 → SEM email de boas-vindas
+- Jefls2014@gmail.com → assinado em 06/02 → SEM email de boas-vindas
+- geneciaraujo94@gmail.com → assinado em 06/02 → SEM email de boas-vindas
+```
+
+---
+
+### Arquitetura do Fluxo (Atual vs Desejado)
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       FLUXO ATUAL (COM PROBLEMA)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Admin cria contrato para novo cliente                                   │
+│     └─> Chama create-client-user                                           │
+│         └─> Cria usuário com senha ALEATÓRIA (não 123Mudar@)               │
+│         └─> NÃO envia email de boas-vindas                                 │
+│                                                                             │
+│  2. Cliente recebe link de assinatura por email                            │
+│                                                                             │
+│  3. Cliente assina contrato                                                │
+│     └─> Chama sign-contract-blockchain                                     │
+│         └─> Verifica: usuário já existe? SIM                               │
+│         └─> userCreated = false                                            │
+│         └─> Email de boas-vindas NÃO enviado                               │
+│                                                                             │
+│  RESULTADO: Cliente não sabe como acessar área do cliente                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       FLUXO DESEJADO (CORRIGIDO)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Admin cria contrato para novo cliente                                   │
+│     └─> Chama create-client-user                                           │
+│         └─> Verifica se cliente já existe                                  │
+│         └─> Se novo: cria com senha 123Mudar@                              │
+│         └─> NÃO envia email ainda (aguarda assinatura)                     │
+│                                                                             │
+│  2. Cliente recebe link de assinatura por email                            │
+│                                                                             │
+│  3. Cliente assina contrato                                                │
+│     └─> Chama sign-contract-blockchain                                     │
+│         └─> Verifica: usuário já existe? SIM (criado no passo 1)           │
+│         └─> NOVO: Verifica se email de boas-vindas já foi enviado          │
+│         └─> Se não enviado, envia email com credenciais                    │
+│                                                                             │
+│  RESULTADO: Cliente recebe credenciais após assinar                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Solução Proposta
+
+#### Opção 1: Corrigir `create-client-user` (Recomendada)
+
+1. Usar senha fixa `123Mudar@` em vez de aleatória
+2. Adicionar flag `welcome_email_sent` no profile
+3. Enviar email de boas-vindas APENAS após assinatura
+
+#### Opção 2: Corrigir `sign-contract-blockchain`
+
+1. Se usuário já existe mas nunca logou, enviar email de boas-vindas
+2. Usar verificação baseada em `last_sign_in_at` do auth.users
 
 ---
 
@@ -21,60 +110,64 @@ Corrigir o valor de "10.000" para "11.000" (11 mil) e garantir que o número nã
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/sections/HeroSection.tsx` | Modificar - Corrigir valor e ajustar estilo |
+| `supabase/functions/create-client-user/index.ts` | Modificar - Usar senha `123Mudar@` |
+| `supabase/functions/sign-contract-blockchain/index.ts` | Modificar - Sempre enviar email de boas-vindas se usuário existe mas não logou |
 
 ---
 
-### Detalhes da Correção
+### Detalhes Técnicos
 
-**1. Corrigir o valor de 10000 para 11000:**
+#### 1. Modificar `create-client-user/index.ts`
+
+**Antes (linha 164):**
 ```typescript
-// ANTES (linha 59)
-{ value: 10000, suffix: "+", label: t("hero.stats.brands") },
-
-// DEPOIS
-{ value: 11000, suffix: "+", label: t("hero.stats.brands") },
+const tempPassword = generateTempPassword();
 ```
 
-**2. Evitar corte do número adicionando whitespace-nowrap:**
-```tsx
-// ANTES (linha 184)
-<div className="font-display text-4xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2">
-
-// DEPOIS
-<div className="font-display text-4xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2 whitespace-nowrap">
+**Depois:**
+```typescript
+const tempPassword = '123Mudar@'; // Fixed password - email sent after contract signing
 ```
 
----
+#### 2. Modificar `sign-contract-blockchain/index.ts`
 
-### Animação Existente
+Adicionar lógica para enviar email mesmo para usuários existentes que nunca logaram:
 
-O componente `AnimatedCounter` já possui a animação de contagem que você deseja. Ele:
-- Inicia em 0
-- Conta rapidamente até o valor final
-- Usa easing `easeOutQuart` para uma animação suave
-- Duração configurada: 2.5 segundos
-
-A animação já está funcionando - ao carregar a página, os números contam de 0 até o valor final.
-
----
-
-### Resultado Visual
-
-```text
-ANTES:                          DEPOIS:
-┌────────────────────┐          ┌────────────────────┐
-│  10.00[cortado]    │          │     11.000+        │
-│  Marcas Registradas│          │  Marcas Registradas│
-└────────────────────┘          └────────────────────┘
+```typescript
+// Após linha 286 - onde encontra usuário existente
+if (existingUser) {
+  userId = existingUser.id;
+  console.log('Found existing user:', userId);
+  
+  // NEW: Check if user never logged in (first access pending)
+  if (!existingUser.last_sign_in_at) {
+    userCreated = true; // Flag to send welcome email
+    console.log('User exists but never logged in - will send welcome email');
+  }
+}
 ```
 
 ---
 
-### Seção Técnica
+### Validação Pós-Implementação
 
-**Arquivo modificado:**
-- `src/components/sections/HeroSection.tsx`
-  - Linha 59: `value: 10000` → `value: 11000`
-  - Linha 184: adicionar `whitespace-nowrap` ao className
+1. Criar novo contrato via admin para novo cliente
+2. Enviar link de assinatura
+3. Assinar contrato
+4. Verificar:
+   - [ ] Usuário existe no banco
+   - [ ] Role 'user' atribuída
+   - [ ] Email de boas-vindas enviado com senha `123Mudar@`
+   - [ ] Cliente consegue logar em `/cliente/login`
+
+---
+
+### Impacto
+
+| Item | Status |
+|------|--------|
+| Contratos existentes | Não afetados |
+| Usuários existentes | Não afetados (já têm senha) |
+| Novos contratos | Receberão email após assinatura |
+| Edge functions | Atualização automática |
 
