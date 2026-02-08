@@ -76,38 +76,99 @@ serve(async (req) => {
 
     console.log(`Processing payment ${paymentId} with status ${paymentStatus}`);
 
-    // Find the contract associated with this payment
+    // STEP 1: Always try to update invoice first (most common case)
+    const { data: invoice, error: invoiceError } = await supabaseAdmin
+      .from('invoices')
+      .select('*')
+      .eq('asaas_invoice_id', paymentId)
+      .maybeSingle();
+
+    if (invoice) {
+      const invoiceStatus = getInvoiceStatus(paymentStatus);
+      const paymentDate = payment.paymentDate || payment.confirmedDate || 
+        ((invoiceStatus === 'confirmed' || invoiceStatus === 'received') ? new Date().toISOString().split('T')[0] : null);
+      
+      await supabaseAdmin
+        .from('invoices')
+        .update({
+          status: invoiceStatus,
+          payment_date: paymentDate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', invoice.id);
+      
+      console.log(`Updated invoice ${invoice.id} to status ${invoiceStatus}`);
+
+      // If payment is confirmed and invoice has contract_id, update contract too
+      if ((paymentStatus === 'RECEIVED' || paymentStatus === 'CONFIRMED' || paymentStatus === 'RECEIVED_IN_CASH') && invoice.contract_id) {
+        // Trigger email automation for payment received
+        try {
+          const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+          const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          
+          // Get user email for notification
+          if (invoice.user_id) {
+            const { data: profile } = await supabaseAdmin
+              .from('profiles')
+              .select('email, full_name')
+              .eq('id', invoice.user_id)
+              .single();
+
+            if (profile?.email) {
+              await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                },
+                body: JSON.stringify({
+                  trigger_event: 'payment_received',
+                  data: {
+                    nome: profile.full_name || 'Cliente',
+                    email: profile.email,
+                    valor: invoice.amount,
+                    descricao: invoice.description,
+                    data_pagamento: paymentDate,
+                  }
+                })
+              });
+              console.log('Payment received email triggered for:', profile.email);
+            }
+          }
+        } catch (emailError) {
+          console.error('Error sending payment confirmation email:', emailError);
+        }
+      }
+
+      // If no contract linked, just return success
+      if (!invoice.contract_id) {
+        return new Response(
+          JSON.stringify({ success: true, message: 'Invoice updated successfully' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+    }
+
+    // STEP 2: Find the contract associated with this payment
     const { data: contract, error: contractError } = await supabaseAdmin
       .from('contracts')
       .select('*, leads(*)')
       .eq('asaas_payment_id', paymentId)
-      .single();
+      .maybeSingle();
 
     if (contractError || !contract) {
       console.log('Contract not found for payment:', paymentId);
-      // Try to find by invoice
-      const { data: invoice } = await supabaseAdmin
-        .from('invoices')
-        .select('*')
-        .eq('asaas_invoice_id', paymentId)
-        .single();
-
+      
+      // If we already updated the invoice above, return success
       if (invoice) {
-        // Update invoice status based on payment status
-        const invoiceStatus = getInvoiceStatus(paymentStatus);
-        await supabaseAdmin
-          .from('invoices')
-          .update({
-            status: invoiceStatus,
-            payment_date: payment.paymentDate || payment.confirmedDate || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', invoice.id);
-        console.log(`Updated invoice ${invoice.id} to status ${invoiceStatus}`);
+        return new Response(
+          JSON.stringify({ success: true, message: 'Invoice updated, no contract linked' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
       }
 
       return new Response(
-        JSON.stringify({ success: true, message: 'Invoice updated if found' }),
+        JSON.stringify({ success: true, message: 'No invoice or contract found for this payment' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
@@ -135,7 +196,7 @@ serve(async (req) => {
         await supabaseAdmin
           .from('invoices')
           .update({
-            status: 'paid',
+            status: 'confirmed',
             payment_date: payment.paymentDate || payment.confirmedDate || new Date().toISOString().split('T')[0],
             updated_at: new Date().toISOString(),
           })
@@ -205,7 +266,7 @@ serve(async (req) => {
         await supabaseAdmin
           .from('invoices')
           .update({
-            status: 'paid',
+            status: 'confirmed',
             payment_date: payment.paymentDate || payment.confirmedDate || new Date().toISOString().split('T')[0],
             user_id: confirmResult.userId,
             updated_at: new Date().toISOString(),
@@ -270,20 +331,21 @@ serve(async (req) => {
 
 // Helper functions
 function getInvoiceStatus(asaasStatus: AsaasPaymentStatus): string {
+  // Values allowed by check constraint: pending, confirmed, received, overdue, refunded, canceled
   const statusMap: Record<AsaasPaymentStatus, string> = {
     'PENDING': 'pending',
-    'RECEIVED': 'paid',
-    'CONFIRMED': 'paid',
-    'RECEIVED_IN_CASH': 'paid',
+    'RECEIVED': 'received',         // Changed from 'paid' to 'received'
+    'CONFIRMED': 'confirmed',       // Changed from 'paid' to 'confirmed'
+    'RECEIVED_IN_CASH': 'received', // Changed from 'paid' to 'received'
     'OVERDUE': 'overdue',
     'REFUNDED': 'refunded',
-    'REFUND_REQUESTED': 'refund_requested',
-    'REFUND_IN_PROGRESS': 'refund_requested',
-    'CHARGEBACK_REQUESTED': 'disputed',
-    'CHARGEBACK_DISPUTE': 'disputed',
-    'AWAITING_CHARGEBACK_REVERSAL': 'disputed',
+    'REFUND_REQUESTED': 'pending',  // Changed to valid value
+    'REFUND_IN_PROGRESS': 'pending',
+    'CHARGEBACK_REQUESTED': 'pending',
+    'CHARGEBACK_DISPUTE': 'pending',
+    'AWAITING_CHARGEBACK_REVERSAL': 'pending',
     'DUNNING_REQUESTED': 'overdue',
-    'DUNNING_RECEIVED': 'paid',
+    'DUNNING_RECEIVED': 'received', // Changed from 'paid' to 'received'
     'AWAITING_RISK_ANALYSIS': 'pending',
   };
   return statusMap[asaasStatus] || 'pending';
