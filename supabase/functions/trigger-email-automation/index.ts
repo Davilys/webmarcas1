@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,73 +28,6 @@ interface TriggerRequest {
   };
 }
 
-// Generate a unique Message-ID for email headers
-function generateMessageId(domain: string): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 15);
-  return `<${timestamp}.${random}@${domain}>`;
-}
-
-// Extract domain from email address
-function extractDomain(email: string): string {
-  const match = email.match(/@([^>]+)/);
-  return match ? match[1] : 'webmarcas.net';
-}
-
-// Retry helper with exponential backoff
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  initialDelay: number = 2000
-): Promise<T> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      lastError = error as Error;
-      const errorMsg = (error as Error)?.message || "";
-      
-      // Don't retry on permanent errors
-      if (errorMsg.includes("550") || errorMsg.includes("553") || errorMsg.includes("554") || errorMsg.includes("535")) {
-        console.log(`Permanent error detected (attempt ${attempt + 1}): ${errorMsg}`);
-        throw error;
-      }
-      
-      if (attempt < maxRetries - 1) {
-        const delay = initialDelay * Math.pow(2, attempt);
-        console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  throw lastError;
-}
-
-// Rate limiter
-const emailsSentThisMinute: { count: number; resetAt: number } = { count: 0, resetAt: Date.now() + 60000 };
-const MAX_EMAILS_PER_MINUTE = 5;
-
-async function waitForRateLimit(): Promise<void> {
-  const now = Date.now();
-  if (now > emailsSentThisMinute.resetAt) {
-    emailsSentThisMinute.count = 0;
-    emailsSentThisMinute.resetAt = now + 60000;
-  }
-  
-  if (emailsSentThisMinute.count >= MAX_EMAILS_PER_MINUTE) {
-    const waitTime = emailsSentThisMinute.resetAt - now + 1000;
-    console.log(`Rate limit reached, waiting ${waitTime}ms...`);
-    await new Promise(resolve => setTimeout(resolve, waitTime));
-    emailsSentThisMinute.count = 0;
-    emailsSentThisMinute.resetAt = Date.now() + 60000;
-  }
-  
-  emailsSentThisMinute.count++;
-}
-
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -105,6 +38,18 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log(`Processing email automation for trigger: ${trigger_event}`);
     console.log('Data received:', JSON.stringify(data, null, 2));
+
+    // Initialize Resend client
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      console.error("RESEND_API_KEY not configured");
+      return new Response(
+        JSON.stringify({ error: "Email service not configured" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const resend = new Resend(resendApiKey);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -184,20 +129,12 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Found template: ${template.name}`);
 
-    // Fetch default email account
-    const { data: emailAccount, error: accountError } = await supabase
+    // Fetch default email account for from address
+    const { data: emailAccount } = await supabase
       .from('email_accounts')
-      .select('*')
+      .select('email_address, display_name')
       .eq('is_default', true)
       .single();
-
-    if (accountError || !emailAccount) {
-      console.error('No default email account configured');
-      return new Response(
-        JSON.stringify({ error: 'No default email account configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     // Replace template variables
     let subject = template.subject;
@@ -236,28 +173,10 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Wait for rate limit
-    await waitForRateLimit();
-
-    const domain = extractDomain(emailAccount.email_address);
-    const messageId = generateMessageId(domain);
-
-    // Configure SMTP client
-    const client = new SMTPClient({
-      connection: {
-        hostname: emailAccount.smtp_host,
-        port: emailAccount.smtp_port,
-        tls: emailAccount.smtp_port === 465,
-        auth: {
-          username: emailAccount.smtp_user,
-          password: emailAccount.smtp_password,
-        },
-      },
-    });
-
-    const fromAddress = emailAccount.display_name 
+    // Determine from address
+    const fromAddress = emailAccount?.display_name 
       ? `${emailAccount.display_name} <${emailAccount.email_address}>`
-      : emailAccount.email_address;
+      : emailAccount?.email_address || "WebMarcas <noreply@webmarcas.net>";
 
     // Wrap body in professional HTML template
     const htmlContent = `
@@ -272,31 +191,32 @@ const handler = async (req: Request): Promise<Response> => {
 </body>
 </html>`;
 
-    // Send email with retry
-    await retryWithBackoff(async () => {
-      await client.send({
-        from: fromAddress,
-        to: data.email!,
-        subject: subject,
-        html: htmlContent,
-        headers: {
-          "Message-ID": messageId,
-          "X-Mailer": "WebMarcas CRM",
-          "X-Priority": "3",
-          "Importance": "Normal",
-        },
-      });
+    console.log("Sending email via Resend to:", data.email);
+    console.log("From:", fromAddress);
+
+    // Send email via Resend API
+    const { data: emailData, error: emailError } = await resend.emails.send({
+      from: fromAddress,
+      to: [data.email],
+      subject: subject,
+      html: htmlContent,
     });
 
-    await client.close();
+    if (emailError) {
+      console.error("Resend API error:", emailError);
+      return new Response(
+        JSON.stringify({ error: emailError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    console.log(`Email sent successfully to ${data.email}`);
+    console.log(`Email sent successfully to ${data.email}`, emailData);
 
     // Log the email
     const { error: logError } = await supabase
       .from('email_logs')
       .insert({
-        from_email: emailAccount.email_address,
+        from_email: emailAccount?.email_address || 'noreply@webmarcas.net',
         to_email: data.email,
         subject: subject,
         body: body.replace(/<[^>]*>/g, '').substring(0, 500),
@@ -317,7 +237,7 @@ const handler = async (req: Request): Promise<Response> => {
         message: 'Email sent successfully',
         template: template.name,
         to: data.email,
-        messageId
+        id: emailData?.id
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
