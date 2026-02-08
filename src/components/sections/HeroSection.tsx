@@ -56,7 +56,7 @@ const HeroSection = () => {
   ];
 
   const stats = [
-    { value: 10000, suffix: "+", label: t("hero.stats.brands") },
+    { value: 11000, suffix: "+", label: t("hero.stats.brands") },
     { value: 98, suffix: "%", label: t("hero.stats.success") },
     { value: 48, suffix: "h", label: t("hero.stats.time") },
     { value: 15, suffix: "+", label: t("hero.stats.experience") },
@@ -181,7 +181,7 @@ const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
             >
-              <div className="font-display text-4xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2">
+              <div className="font-display text-4xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2 whitespace-nowrap">
                 <AnimatedCounter 
                   value={stat.value} 
                   suffix={stat.suffix}
