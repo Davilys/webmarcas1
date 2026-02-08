@@ -1,173 +1,113 @@
 
 
-## Plano: Corrigir Fluxo de Criação de Cliente e Envio de Credenciais
+## Plano: Resolver Bloqueio de Emails como Spam - Migrar para Resend
 
-### Resumo do Problema
+### Diagnóstico do Problema
 
-Após análise detalhada do código e banco de dados, identifiquei que:
+O email `juridico@webpatentes.com.br` está sendo bloqueado pela Hostinger por "atividades suspeitas" (erro 550). Isso ocorre porque:
 
-1. **Usuários SÃO criados automaticamente** quando contratos são assinados ✅
-2. **Role 'user' É atribuída** corretamente ✅
-3. **Área do cliente FUNCIONA** - login via `/cliente/login` ✅
-4. **Senha padrão `123Mudar@` está documentada** na tela de login ✅
+| Causa | Explicação |
+|-------|------------|
+| Volume de envio | Servidores de hospedagem compartilhada limitam envios diarios (geralmente 100-500/dia) |
+| Falta de SPF/DKIM | O dominio pode nao ter registros DNS de autenticacao configurados corretamente |
+| IP compartilhado | O IP do servidor SMTP da Hostinger e usado por muitos clientes, o que degrada a reputacao |
+| Conteudo repetitivo | Emails automatizados com templates similares podem ser flagados como spam |
 
-**PORÉM**, existe um problema crítico no fluxo:
+### Por que empresas nao tem esse problema?
 
----
+Empresas que enviam notificacoes usam servicos especializados de email transacional como:
+- Resend
+- SendGrid
+- Mailgun
+- Amazon SES
 
-### Problema Identificado
+Esses servicos possuem:
+- IPs dedicados com alta reputacao
+- Autenticacao SPF/DKIM/DMARC automatica
+- Infraestrutura otimizada para deliverability
 
-| Fluxo | O que acontece | Problema |
-|-------|----------------|----------|
-| Admin cria contrato para **novo cliente** | `create-client-user` é chamado | Cria usuário com senha **ALEATÓRIA** (não `123Mudar@`) e **NÃO envia email** |
-| Cliente assina contrato | `sign-contract-blockchain` verifica se usuário existe | Como já existe, `userCreated = false` e **email de boas-vindas NÃO é enviado** |
+### Solucao Proposta: Migrar para Resend
 
-**Resultado**: Cliente é criado mas **nunca recebe email com credenciais** e a senha não é `123Mudar@`.
+Resend e um servico profissional de email transacional que resolve todos os problemas mencionados.
 
----
-
-### Evidências do Banco de Dados
-
-```text
-Últimos emails 'user_created' enviados:
-- 2026-01-27: ola@webmarcas.net
-- 2026-01-24: davilys@icloud.com  
-- 2026-01-13: andreguimel@gmail.com
-
-Contratos assinados recentemente (Feb 2026):
-- rafaejg7@gmail.com → assinado em 07/02 → SEM email de boas-vindas
-- Jefls2014@gmail.com → assinado em 06/02 → SEM email de boas-vindas
-- geneciaraujo94@gmail.com → assinado em 06/02 → SEM email de boas-vindas
-```
+#### Vantagens
+- Entrega garantida (99%+ deliverability)
+- SPF/DKIM automatico
+- Dashboard com metricas de entrega
+- Plano gratuito: 3.000 emails/mes
+- Plano Pro: $20/mes por 50.000 emails
 
 ---
 
-### Arquitetura do Fluxo (Atual vs Desejado)
+### Etapas de Implementacao
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       FLUXO ATUAL (COM PROBLEMA)                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Admin cria contrato para novo cliente                                   │
-│     └─> Chama create-client-user                                           │
-│         └─> Cria usuário com senha ALEATÓRIA (não 123Mudar@)               │
-│         └─> NÃO envia email de boas-vindas                                 │
-│                                                                             │
-│  2. Cliente recebe link de assinatura por email                            │
-│                                                                             │
-│  3. Cliente assina contrato                                                │
-│     └─> Chama sign-contract-blockchain                                     │
-│         └─> Verifica: usuário já existe? SIM                               │
-│         └─> userCreated = false                                            │
-│         └─> Email de boas-vindas NÃO enviado                               │
-│                                                                             │
-│  RESULTADO: Cliente não sabe como acessar área do cliente                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+#### 1. Criar conta no Resend
+O usuario deve acessar https://resend.com e criar uma conta.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       FLUXO DESEJADO (CORRIGIDO)                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Admin cria contrato para novo cliente                                   │
-│     └─> Chama create-client-user                                           │
-│         └─> Verifica se cliente já existe                                  │
-│         └─> Se novo: cria com senha 123Mudar@                              │
-│         └─> NÃO envia email ainda (aguarda assinatura)                     │
-│                                                                             │
-│  2. Cliente recebe link de assinatura por email                            │
-│                                                                             │
-│  3. Cliente assina contrato                                                │
-│     └─> Chama sign-contract-blockchain                                     │
-│         └─> Verifica: usuário já existe? SIM (criado no passo 1)           │
-│         └─> NOVO: Verifica se email de boas-vindas já foi enviado          │
-│         └─> Se não enviado, envia email com credenciais                    │
-│                                                                             │
-│  RESULTADO: Cliente recebe credenciais após assinar                        │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+#### 2. Verificar dominio
+Acessar https://resend.com/domains e adicionar o dominio `webpatentes.com.br` (ou `webmarcas.net`).
+O Resend fornecera registros DNS (SPF, DKIM, DMARC) que devem ser adicionados no painel da Hostinger.
+
+#### 3. Gerar API Key
+Acessar https://resend.com/api-keys e criar uma chave com escopo para o dominio verificado.
+
+#### 4. Configurar secret no sistema
+Adicionar a secret `RESEND_API_KEY` no backend do projeto.
+
+#### 5. Atualizar Edge Functions
+Modificar as funcoes de envio de email para usar a API do Resend em vez de SMTP direto.
 
 ---
 
-### Solução Proposta
+### Arquivos a Modificar
 
-#### Opção 1: Corrigir `create-client-user` (Recomendada)
-
-1. Usar senha fixa `123Mudar@` em vez de aleatória
-2. Adicionar flag `welcome_email_sent` no profile
-3. Enviar email de boas-vindas APENAS após assinatura
-
-#### Opção 2: Corrigir `sign-contract-blockchain`
-
-1. Se usuário já existe mas nunca logou, enviar email de boas-vindas
-2. Usar verificação baseada em `last_sign_in_at` do auth.users
-
----
-
-### Alterações Necessárias
-
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| `supabase/functions/create-client-user/index.ts` | Modificar - Usar senha `123Mudar@` |
-| `supabase/functions/sign-contract-blockchain/index.ts` | Modificar - Sempre enviar email de boas-vindas se usuário existe mas não logou |
+| `supabase/functions/send-email/index.ts` | Reescrever para usar Resend API |
+| `supabase/functions/trigger-email-automation/index.ts` | Reescrever para usar Resend API |
+| Adicionar secret `RESEND_API_KEY` | Necessario para autenticacao |
 
 ---
 
-### Detalhes Técnicos
+### Detalhes Tecnicos
 
-#### 1. Modificar `create-client-user/index.ts`
-
-**Antes (linha 164):**
-```typescript
-const tempPassword = generateTempPassword();
-```
-
-**Depois:**
-```typescript
-const tempPassword = '123Mudar@'; // Fixed password - email sent after contract signing
-```
-
-#### 2. Modificar `sign-contract-blockchain/index.ts`
-
-Adicionar lógica para enviar email mesmo para usuários existentes que nunca logaram:
+#### Nova implementacao do send-email
 
 ```typescript
-// Após linha 286 - onde encontra usuário existente
-if (existingUser) {
-  userId = existingUser.id;
-  console.log('Found existing user:', userId);
-  
-  // NEW: Check if user never logged in (first access pending)
-  if (!existingUser.last_sign_in_at) {
-    userCreated = true; // Flag to send welcome email
-    console.log('User exists but never logged in - will send welcome email');
-  }
-}
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { Resend } from "npm:resend@2.0.0";
+
+const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+
+// Enviar email via API Resend
+const { data, error } = await resend.emails.send({
+  from: "Juridico WebMarcas <juridico@webpatentes.com.br>",
+  to: [recipientEmail],
+  subject: subject,
+  html: htmlContent,
+});
 ```
 
 ---
 
-### Validação Pós-Implementação
+### Consideracoes de Custos
 
-1. Criar novo contrato via admin para novo cliente
-2. Enviar link de assinatura
-3. Assinar contrato
-4. Verificar:
-   - [ ] Usuário existe no banco
-   - [ ] Role 'user' atribuída
-   - [ ] Email de boas-vindas enviado com senha `123Mudar@`
-   - [ ] Cliente consegue logar em `/cliente/login`
+| Plano | Emails/mes | Custo |
+|-------|------------|-------|
+| Free | 3.000 | Gratuito |
+| Pro | 50.000 | $20/mes |
+| Business | 100.000 | $45/mes |
+
+Para o volume atual do sistema (estimado em ~100-200 emails/mes), o plano gratuito e suficiente.
 
 ---
 
-### Impacto
+### Proximos Passos
 
-| Item | Status |
-|------|--------|
-| Contratos existentes | Não afetados |
-| Usuários existentes | Não afetados (já têm senha) |
-| Novos contratos | Receberão email após assinatura |
-| Edge functions | Atualização automática |
+1. Criar conta no Resend
+2. Verificar o dominio webpatentes.com.br (ou webmarcas.net)
+3. Me informar a API Key para configurarmos no sistema
+4. Implementar as alteracoes nas Edge Functions
+
+**Posso comecar a implementacao assim que voce fornecer a API Key do Resend?**
 
