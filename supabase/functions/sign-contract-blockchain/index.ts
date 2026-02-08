@@ -286,9 +286,19 @@ serve(async (req) => {
         userId = existingUser.id;
         console.log('Found existing user:', userId);
         
-        // NEW: Check if user never logged in (first access pending)
-        // If user was pre-created by admin but never logged in, send welcome email
+        // NEW: If user was pre-created (e.g., by admin) and never logged in,
+        // enforce default password and send welcome email with credentials.
         if (!existingUser.last_sign_in_at) {
+          const { error: pwError } = await supabase.auth.admin.updateUserById(userId, {
+            password: tempPassword,
+          });
+
+          if (pwError) {
+            console.error('Error enforcing default password for existing user:', pwError);
+          } else {
+            console.log('Default password enforced for existing user');
+          }
+
           userCreated = true; // Flag to send welcome email
           console.log('User exists but never logged in - will send welcome email');
         }
