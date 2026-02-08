@@ -161,7 +161,8 @@ serve(async (req) => {
     }
 
     // No existing profile - create new user
-    const tempPassword = generateTempPassword();
+    // Fixed password - welcome email sent after contract signing
+    const tempPassword = '123Mudar@';
 
     // Create user in auth.users
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({

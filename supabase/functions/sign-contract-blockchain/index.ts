@@ -285,6 +285,13 @@ serve(async (req) => {
       if (existingUser) {
         userId = existingUser.id;
         console.log('Found existing user:', userId);
+        
+        // NEW: Check if user never logged in (first access pending)
+        // If user was pre-created by admin but never logged in, send welcome email
+        if (!existingUser.last_sign_in_at) {
+          userCreated = true; // Flag to send welcome email
+          console.log('User exists but never logged in - will send welcome email');
+        }
       } else {
         // Create new user with fixed password
         const { data: newUser, error: userError } = await supabase.auth.admin.createUser({
