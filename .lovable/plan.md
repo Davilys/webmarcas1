@@ -1,113 +1,60 @@
 
 
-## Plano: Resolver Bloqueio de Emails como Spam - Migrar para Resend
+# Atualizar Aba de Contratos com Separacao por Tipo
 
-### Diagnóstico do Problema
+## Problema Atual
+1. Todos os contratos aparecem numa lista unica sem separacao por tipo.
+2. A coluna "Tipo de Contrato" mostra "Nao definido" porque o campo `contract_type_id` esta NULL em todos os 56 contratos, mesmo que cada contrato tenha um `template_id` valido que aponta para um template com tipo definido.
 
-O email `juridico@webpatentes.com.br` está sendo bloqueado pela Hostinger por "atividades suspeitas" (erro 550). Isso ocorre porque:
+## Solucao
 
-| Causa | Explicação |
-|-------|------------|
-| Volume de envio | Servidores de hospedagem compartilhada limitam envios diarios (geralmente 100-500/dia) |
-| Falta de SPF/DKIM | O dominio pode nao ter registros DNS de autenticacao configurados corretamente |
-| IP compartilhado | O IP do servidor SMTP da Hostinger e usado por muitos clientes, o que degrada a reputacao |
-| Conteudo repetitivo | Emails automatizados com templates similares podem ser flagados como spam |
+### 1. Corrigir dados existentes
+Criar uma migracao SQL que preencha o `contract_type_id` dos contratos existentes baseado no template associado:
+- Contratos com template "Contrato Padrao - Registro de Marca INPI" (32 contratos) -> tipo "Registro de Marca"
+- Contratos com template "Procuracao INPI - Padrao" (20 contratos) -> tipo "PROCURACAO"
+- Contratos com template "Distrato sem Multa - Padrao" (2 contratos) -> tipo "DISTRATO SEM MULTA"
+- Contratos com template "Distrato com Multa - Padrao" (2 contratos) -> tipo "DISTRATO COM MULTA"
 
-### Por que empresas nao tem esse problema?
+### 2. Adicionar abas na pagina de Contratos
+Modificar `src/pages/admin/Contratos.tsx` para incluir abas (Tabs) que separam contratos por tipo de template:
+- **Todos** (aba padrao, mostra tudo como hoje)
+- **Contrato Padrao - Registro de Marca INPI**
+- **Procuracao INPI - Padrao**
+- **Distrato sem Multa - Padrao**
+- **Distrato com Multa - Padrao**
 
-Empresas que enviam notificacoes usam servicos especializados de email transacional como:
-- Resend
-- SendGrid
-- Mailgun
-- Amazon SES
+As abas ficarao entre os filtros e os cards de estatisticas. Cada aba filtrara a lista pela coluna `template_name` (via join com `contract_templates`). Os cards de estatisticas e a tabela serao atualizados conforme a aba selecionada.
 
-Esses servicos possuem:
-- IPs dedicados com alta reputacao
-- Autenticacao SPF/DKIM/DMARC automatica
-- Infraestrutura otimizada para deliverability
+### 3. Exibir tipo de contrato correto na tabela
+Na coluna "Tipo de Contrato", em vez de usar `contract_type.name` (que esta NULL), usar o nome do template (`contract_templates.name`) como fallback.
 
-### Solucao Proposta: Migrar para Resend
+## Detalhes Tecnicos
 
-Resend e um servico profissional de email transacional que resolve todos os problemas mencionados.
-
-#### Vantagens
-- Entrega garantida (99%+ deliverability)
-- SPF/DKIM automatico
-- Dashboard com metricas de entrega
-- Plano gratuito: 3.000 emails/mes
-- Plano Pro: $20/mes por 50.000 emails
-
----
-
-### Etapas de Implementacao
-
-#### 1. Criar conta no Resend
-O usuario deve acessar https://resend.com e criar uma conta.
-
-#### 2. Verificar dominio
-Acessar https://resend.com/domains e adicionar o dominio `webpatentes.com.br` (ou `webmarcas.net`).
-O Resend fornecera registros DNS (SPF, DKIM, DMARC) que devem ser adicionados no painel da Hostinger.
-
-#### 3. Gerar API Key
-Acessar https://resend.com/api-keys e criar uma chave com escopo para o dominio verificado.
-
-#### 4. Configurar secret no sistema
-Adicionar a secret `RESEND_API_KEY` no backend do projeto.
-
-#### 5. Atualizar Edge Functions
-Modificar as funcoes de envio de email para usar a API do Resend em vez de SMTP direto.
-
----
-
-### Arquivos a Modificar
-
-| Arquivo | Acao |
-|---------|------|
-| `supabase/functions/send-email/index.ts` | Reescrever para usar Resend API |
-| `supabase/functions/trigger-email-automation/index.ts` | Reescrever para usar Resend API |
-| Adicionar secret `RESEND_API_KEY` | Necessario para autenticacao |
-
----
-
-### Detalhes Tecnicos
-
-#### Nova implementacao do send-email
-
-```typescript
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
-
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
-
-// Enviar email via API Resend
-const { data, error } = await resend.emails.send({
-  from: "Juridico WebMarcas <juridico@webpatentes.com.br>",
-  to: [recipientEmail],
-  subject: subject,
-  html: htmlContent,
-});
+### Migracao SQL
+```sql
+UPDATE contracts c
+SET contract_type_id = t.contract_type_id
+FROM contract_templates t
+WHERE c.template_id = t.id
+AND c.contract_type_id IS NULL
+AND t.contract_type_id IS NOT NULL;
 ```
 
----
+### Mudancas no Arquivo `src/pages/admin/Contratos.tsx`
+1. Importar componentes `Tabs, TabsList, TabsTrigger, TabsContent` de `@/components/ui/tabs`
+2. Atualizar a query Supabase para incluir join com `contract_templates`:
+   ```
+   contract_template:contract_templates(name)
+   ```
+3. Adicionar estado `activeTab` para controlar a aba selecionada
+4. Adicionar componente de abas acima da tabela com as 5 opcoes (Todos + 4 tipos)
+5. Filtrar `filteredContracts` pela aba ativa comparando `contract.contract_template?.name`
+6. Na coluna "Tipo de Contrato", exibir `contract.contract_template?.name` como fallback quando `contract_type?.name` for nulo
+7. Atualizar os cards de estatisticas para refletir apenas os contratos da aba ativa
 
-### Consideracoes de Custos
-
-| Plano | Emails/mes | Custo |
-|-------|------------|-------|
-| Free | 3.000 | Gratuito |
-| Pro | 50.000 | $20/mes |
-| Business | 100.000 | $45/mes |
-
-Para o volume atual do sistema (estimado em ~100-200 emails/mes), o plano gratuito e suficiente.
-
----
-
-### Proximos Passos
-
-1. Criar conta no Resend
-2. Verificar o dominio webpatentes.com.br (ou webmarcas.net)
-3. Me informar a API Key para configurarmos no sistema
-4. Implementar as alteracoes nas Edge Functions
-
-**Posso comecar a implementacao assim que voce fornecer a API Key do Resend?**
+### Interface da Contract
+Adicionar campo opcional:
+```typescript
+contract_template?: { name: string } | null;
+```
 
