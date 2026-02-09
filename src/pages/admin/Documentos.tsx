@@ -46,13 +46,12 @@ const documentTypes = [
   { value: 'contrato', label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
   { value: 'contract', label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
   { value: 'procuracao', label: 'Procuração', color: 'bg-purple-100 text-purple-700' },
+  { value: 'taxa', label: 'Taxa', color: 'bg-cyan-100 text-cyan-700' },
+  { value: 'busca_inpi', label: 'Busca INPI', color: 'bg-indigo-100 text-indigo-700' },
   { value: 'certificado', label: 'Certificado', color: 'bg-green-100 text-green-700' },
-  { value: 'comprovante', label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
+  { value: 'rpi', label: 'Publicação RPI', color: 'bg-yellow-100 text-yellow-700' },
   { value: 'parecer', label: 'Parecer INPI', color: 'bg-orange-100 text-orange-700' },
-  { value: 'rpi', label: 'RPI', color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'laudo', label: 'Laudo', color: 'bg-rose-100 text-rose-700' },
-  { value: 'notificacao', label: 'Notificação', color: 'bg-amber-100 text-amber-700' },
-  { value: 'protocolo', label: 'Protocolo de Registro', color: 'bg-teal-100 text-teal-700' },
+  { value: 'comprovante', label: 'Comprovantes', color: 'bg-teal-100 text-teal-700' },
   { value: 'outro', label: 'Outro', color: 'bg-gray-100 text-gray-700' },
 ];
 
@@ -60,12 +59,13 @@ const tabDefinitions = [
   { value: 'todos', label: 'Todos', types: [] as string[] },
   { value: 'contrato', label: 'Contrato', types: ['contrato', 'contract'] },
   { value: 'procuracao', label: 'Procuração', types: ['procuracao'] },
-  { value: 'anexo', label: 'Anexo', types: ['anexo'] },
+  { value: 'taxa', label: 'Taxa', types: ['taxa'] },
+  { value: 'busca_inpi', label: 'Busca INPI', types: ['busca_inpi'] },
   { value: 'certificado', label: 'Certificado', types: ['certificado'] },
-  { value: 'comprovante', label: 'Comprovante', types: ['comprovante'] },
+  { value: 'rpi', label: 'Publicação RPI', types: ['rpi'] },
   { value: 'parecer', label: 'Parecer INPI', types: ['parecer'] },
-  { value: 'protocolo', label: 'Protocolo', types: ['protocolo'] },
-  { value: 'outros', label: 'Outros', types: ['laudo', 'notificacao', 'rpi', 'outro'] },
+  { value: 'comprovante', label: 'Comprovantes', types: ['comprovante'] },
+  { value: 'outros', label: 'Outros', types: ['outro'] },
 ];
 
 export default function AdminDocumentos() {
