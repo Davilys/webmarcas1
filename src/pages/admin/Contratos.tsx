@@ -18,6 +18,7 @@ import { ContractDetailSheet } from '@/components/admin/contracts/ContractDetail
 import { CreateContractDialog } from '@/components/admin/contracts/CreateContractDialog';
 import { EditContractDialog } from '@/components/admin/contracts/EditContractDialog';
 import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Contract {
   id: string;
@@ -38,6 +39,7 @@ interface Contract {
   asaas_payment_id?: string | null;
   template_id?: string | null;
   contract_type?: { name: string } | null;
+  contract_template?: { name: string } | null;
   profile?: { full_name: string | null; phone: string | null } | null;
 }
 
@@ -53,6 +55,7 @@ export default function AdminContratos() {
   const [editContract, setEditContract] = useState<Contract | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [expiringPromotion, setExpiringPromotion] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
 
   const handleExpirePromotions = async () => {
     if (!confirm(
@@ -191,6 +194,7 @@ export default function AdminContratos() {
         .select(`
           *,
           contract_type:contract_types(name),
+          contract_template:contract_templates(name),
           profile:profiles(full_name, phone)
         `)
         .order('created_at', { ascending: false });
@@ -247,6 +251,14 @@ export default function AdminContratos() {
     return <Badge variant="destructive">Não assinado</Badge>;
   };
 
+  const CONTRACT_TABS = [
+    { value: 'all', label: 'Todos' },
+    { value: 'Contrato Padrão - Registro de Marca INPI', label: 'Contrato Padrão' },
+    { value: 'Procuração INPI - Padrão', label: 'Procuração' },
+    { value: 'Distrato sem Multa - Padrão', label: 'Distrato sem Multa' },
+    { value: 'Distrato com Multa - Padrão', label: 'Distrato com Multa' },
+  ];
+
   const filteredContracts = contracts.filter(contract => {
     const clientName = contract.profile?.full_name || '';
     const matchesSearch = 
@@ -258,8 +270,12 @@ export default function AdminContratos() {
       signatureFilter === 'all' ||
       (signatureFilter === 'signed' && contract.signature_status === 'signed') ||
       (signatureFilter === 'not_signed' && contract.signature_status !== 'signed');
+
+    const matchesTab = 
+      activeTab === 'all' || 
+      contract.contract_template?.name === activeTab;
     
-    return matchesSearch && matchesSignature;
+    return matchesSearch && matchesSignature && matchesTab;
   });
 
   return (
@@ -327,11 +343,22 @@ export default function AdminContratos() {
           </Select>
         </div>
 
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full justify-start overflow-x-auto">
+            {CONTRACT_TABS.map(tab => (
+              <TabsTrigger key={tab.value} value={tab.value} className="text-xs sm:text-sm">
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-card border rounded-lg p-4">
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="text-2xl font-bold">{contracts.length}</p>
+            <p className="text-2xl font-bold">{filteredContracts.length}</p>
           </div>
           <div className="bg-card border rounded-lg p-4">
             <div className="flex items-center gap-2">
@@ -339,7 +366,7 @@ export default function AdminContratos() {
               <p className="text-sm text-muted-foreground">Assinados</p>
             </div>
             <p className="text-2xl font-bold text-emerald-600">
-              {contracts.filter(c => c.signature_status === 'signed').length}
+              {filteredContracts.filter(c => c.signature_status === 'signed').length}
             </p>
           </div>
           <div className="bg-card border rounded-lg p-4">
@@ -348,13 +375,13 @@ export default function AdminContratos() {
               <p className="text-sm text-muted-foreground">Não assinados</p>
             </div>
             <p className="text-2xl font-bold text-destructive">
-              {contracts.filter(c => c.signature_status !== 'signed').length}
+              {filteredContracts.filter(c => c.signature_status !== 'signed').length}
             </p>
           </div>
           <div className="bg-card border rounded-lg p-4">
             <p className="text-sm text-muted-foreground">Valor Total</p>
             <p className="text-2xl font-bold">
-              R$ {contracts.reduce((sum, c) => sum + (c.contract_value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {filteredContracts.reduce((sum, c) => sum + (c.contract_value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </div>
         </div>
@@ -439,7 +466,7 @@ export default function AdminContratos() {
                     <TableCell>{contract.profile?.full_name || '-'}</TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {contract.contract_type?.name || 'Não definido'}
+                        {contract.contract_type?.name || contract.contract_template?.name || 'Não definido'}
                       </Badge>
                     </TableCell>
                     <TableCell>
