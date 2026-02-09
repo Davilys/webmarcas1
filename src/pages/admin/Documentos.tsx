@@ -117,6 +117,13 @@ export default function AdminDocumentos() {
     setProcesses(data || []);
   };
 
+  const generateProtocol = () => {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const rand = Math.floor(10000 + Math.random() * 90000);
+    return `DOC-${date}-${rand}`;
+  };
+
   const handleUploadComplete = async (fileUrl: string, fileName: string, fileSize: number) => {
     if (!formData.user_id) {
       toast.error('Selecione um cliente primeiro');
@@ -124,6 +131,7 @@ export default function AdminDocumentos() {
     }
 
     try {
+      const protocol = generateProtocol();
       const { error: insertError } = await supabase.from('documents').insert({
         name: formData.name || fileName,
         file_url: fileUrl,
@@ -132,10 +140,12 @@ export default function AdminDocumentos() {
         user_id: formData.user_id,
         process_id: formData.process_id || null,
         uploaded_by: 'admin',
-      });
+        protocol,
+      } as any);
 
       if (insertError) throw insertError;
 
+      toast.success(`Documento enviado! Protocolo: ${protocol}`);
       fetchDocuments();
       setDialogOpen(false);
       resetForm();
@@ -210,60 +220,16 @@ export default function AdminDocumentos() {
     <AdminLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Documentos</h1>
-            <p className="text-muted-foreground">Gerencie documentos dos clientes</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <div className="relative flex-1 sm:w-80">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome, cliente..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Documentos</h1>
+              <p className="text-muted-foreground">Gerencie documentos dos clientes</p>
             </div>
-
-            <Select value={clientFilter} onValueChange={setClientFilter}>
-              <SelectTrigger className="w-48">
-                <User className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filtrar cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os clientes</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.full_name || c.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-40">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filtrar tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os tipos</SelectItem>
-                {documentTypes.filter(t => t.value !== 'contract').map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {(typeFilter !== 'all' || clientFilter !== 'all') && (
-              <Button variant="ghost" size="icon" onClick={() => { setTypeFilter('all'); setClientFilter('all'); }}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
-                  Enviar
+                  Enviar Documento
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
@@ -277,7 +243,7 @@ export default function AdminDocumentos() {
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um cliente" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         {clients.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.full_name || c.email}
@@ -316,7 +282,10 @@ export default function AdminDocumentos() {
                     </div>
                     <div>
                       <Label>Tipo</Label>
-                      <Select value={formData.document_type} onValueChange={(v) => setFormData({ ...formData, document_type: v })}>
+                      <Select value={formData.document_type} onValueChange={(v) => {
+                        const typeLabel = documentTypes.find(t => t.value === v)?.label || '';
+                        setFormData({ ...formData, document_type: v, name: typeLabel });
+                      }}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -342,6 +311,51 @@ export default function AdminDocumentos() {
                 </div>
               </DialogContent>
             </Dialog>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <div className="relative flex-1 sm:w-80">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, cliente..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <Select value={clientFilter} onValueChange={setClientFilter}>
+              <SelectTrigger className="w-48">
+                <User className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar cliente" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60 overflow-y-auto">
+                <SelectItem value="all">Todos os clientes</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name || c.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-40">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {documentTypes.filter(t => t.value !== 'contract').map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {(typeFilter !== 'all' || clientFilter !== 'all') && (
+              <Button variant="ghost" size="icon" onClick={() => { setTypeFilter('all'); setClientFilter('all'); }}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -394,9 +408,14 @@ export default function AdminDocumentos() {
                     return (
                       <TableRow key={doc.id} className="group">
                         <TableCell>
-                          <div className="flex items-center gap-3">
-                            {getFileIcon(doc.file_url)}
-                            <span className="font-medium">{doc.name}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-3">
+                              {getFileIcon(doc.file_url)}
+                              <span className="font-medium">{doc.name}</span>
+                            </div>
+                            {(doc as any).protocol && (
+                              <span className="text-xs text-muted-foreground ml-7">{(doc as any).protocol}</span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>

@@ -707,6 +707,7 @@ export type Database = {
           mime_type: string | null
           name: string
           process_id: string | null
+          protocol: string | null
           uploaded_by: string | null
           user_id: string | null
         }
@@ -720,6 +721,7 @@ export type Database = {
           mime_type?: string | null
           name: string
           process_id?: string | null
+          protocol?: string | null
           uploaded_by?: string | null
           user_id?: string | null
         }
@@ -733,6 +735,7 @@ export type Database = {
           mime_type?: string | null
           name?: string
           process_id?: string | null
+          protocol?: string | null
           uploaded_by?: string | null
           user_id?: string | null
         }
