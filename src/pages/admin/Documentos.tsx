@@ -52,7 +52,7 @@ const documentTypes = [
   { value: 'rpi', label: 'RPI', color: 'bg-yellow-100 text-yellow-700' },
   { value: 'laudo', label: 'Laudo', color: 'bg-rose-100 text-rose-700' },
   { value: 'notificacao', label: 'Notificação', color: 'bg-amber-100 text-amber-700' },
-  { value: 'anexo', label: 'Anexo', color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'protocolo', label: 'Protocolo de Registro', color: 'bg-teal-100 text-teal-700' },
   { value: 'outro', label: 'Outro', color: 'bg-gray-100 text-gray-700' },
 ];
 
@@ -64,6 +64,7 @@ const tabDefinitions = [
   { value: 'certificado', label: 'Certificado', types: ['certificado'] },
   { value: 'comprovante', label: 'Comprovante', types: ['comprovante'] },
   { value: 'parecer', label: 'Parecer INPI', types: ['parecer'] },
+  { value: 'protocolo', label: 'Protocolo', types: ['protocolo'] },
   { value: 'outros', label: 'Outros', types: ['laudo', 'notificacao', 'rpi', 'outro'] },
 ];
 
