@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Plus, FileText, Download, Eye, Trash2, MoreVertical, Filter, X, Image, File as FileIcon } from 'lucide-react';
+import { Search, Plus, FileText, Download, Eye, Trash2, MoreVertical, Filter, X, Image, File as FileIcon, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { DocumentUploader } from '@/components/shared/DocumentUploader';
 import { DocumentPreview } from '@/components/shared/DocumentPreview';
@@ -43,6 +44,7 @@ interface Process {
 
 const documentTypes = [
   { value: 'contrato', label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
+  { value: 'contract', label: 'Contrato', color: 'bg-blue-100 text-blue-700' },
   { value: 'procuracao', label: 'Procuração', color: 'bg-purple-100 text-purple-700' },
   { value: 'certificado', label: 'Certificado', color: 'bg-green-100 text-green-700' },
   { value: 'comprovante', label: 'Comprovante', color: 'bg-cyan-100 text-cyan-700' },
@@ -54,12 +56,25 @@ const documentTypes = [
   { value: 'outro', label: 'Outro', color: 'bg-gray-100 text-gray-700' },
 ];
 
+const tabDefinitions = [
+  { value: 'todos', label: 'Todos', types: [] as string[] },
+  { value: 'contrato', label: 'Contrato', types: ['contrato', 'contract'] },
+  { value: 'procuracao', label: 'Procuração', types: ['procuracao'] },
+  { value: 'anexo', label: 'Anexo', types: ['anexo'] },
+  { value: 'certificado', label: 'Certificado', types: ['certificado'] },
+  { value: 'comprovante', label: 'Comprovante', types: ['comprovante'] },
+  { value: 'parecer', label: 'Parecer INPI', types: ['parecer'] },
+  { value: 'outros', label: 'Outros', types: ['laudo', 'notificacao', 'rpi', 'outro'] },
+];
+
 export default function AdminDocumentos() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('todos');
+  const [clientFilter, setClientFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
@@ -160,8 +175,18 @@ export default function AdminDocumentos() {
       (d.profiles as any)?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       (d.brand_processes as any)?.brand_name?.toLowerCase().includes(search.toLowerCase());
     const matchType = typeFilter === 'all' || d.document_type === typeFilter;
-    return matchSearch && matchType;
+    const matchClient = clientFilter === 'all' || d.user_id === clientFilter;
+
+    const currentTab = tabDefinitions.find(t => t.value === activeTab);
+    const matchTab = !currentTab || currentTab.types.length === 0 || currentTab.types.includes(d.document_type || '');
+
+    return matchSearch && matchType && matchClient && matchTab;
   });
+
+  const getTabCount = (tab: typeof tabDefinitions[0]) => {
+    if (tab.types.length === 0) return documents.length;
+    return documents.filter(d => tab.types.includes(d.document_type || '')).length;
+  };
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
@@ -199,6 +224,21 @@ export default function AdminDocumentos() {
                 className="pl-10"
               />
             </div>
+
+            <Select value={clientFilter} onValueChange={setClientFilter}>
+              <SelectTrigger className="w-48">
+                <User className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filtrar cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os clientes</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name || c.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-40">
@@ -207,14 +247,14 @@ export default function AdminDocumentos() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os tipos</SelectItem>
-                {documentTypes.map((t) => (
+                {documentTypes.filter(t => t.value !== 'contract').map((t) => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            {typeFilter !== 'all' && (
-              <Button variant="ghost" size="icon" onClick={() => setTypeFilter('all')}>
+            {(typeFilter !== 'all' || clientFilter !== 'all') && (
+              <Button variant="ghost" size="icon" onClick={() => { setTypeFilter('all'); setClientFilter('all'); }}>
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -281,7 +321,7 @@ export default function AdminDocumentos() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {documentTypes.map((t) => (
+                          {documentTypes.filter(t => t.value !== 'contract').map((t) => (
                             <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                           ))}
                         </SelectContent>
@@ -304,6 +344,19 @@ export default function AdminDocumentos() {
             </Dialog>
           </div>
         </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="flex-wrap h-auto gap-1">
+            {tabDefinitions.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className="text-xs sm:text-sm">
+                {tab.label}
+                <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
+                  {getTabCount(tab)}
+                </Badge>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         <Card>
           <CardContent className="p-0">
