@@ -190,8 +190,13 @@ export default function ChatSuporte() {
     </div>
   );
 
-  // Chat header
-  const ChatHeader = ({ title, subtitle, onBack, isAI }: { title: string; subtitle: string; onBack: () => void; isAI?: boolean }) => (
+  // Handle audio send
+  const handleAudioSend = async (file: File) => {
+    await handleFileUpload(file);
+  };
+
+  // Chat header - extracted as a plain function to avoid ref warnings
+  const renderChatHeader = ({ title, subtitle, onBack, isAI }: { title: string; subtitle: string; onBack: () => void; isAI?: boolean }) => (
     <div className="flex items-center gap-3 p-3 border-b bg-card">
       <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onBack}>
         <ArrowLeft className="h-4 w-4" />
@@ -233,12 +238,12 @@ export default function ChatSuporte() {
             <SelectMode />
           ) : (
             <>
-              <ChatHeader
-                title={chatMode === 'ai' ? 'Fernanda IA' : (assignedAdmin?.full_name || 'Consultor')}
-                subtitle={chatMode === 'ai' ? 'IA • Sempre online' : 'Online'}
-                onBack={() => setChatMode('select')}
-                isAI={chatMode === 'ai'}
-              />
+              {renderChatHeader({
+                title: chatMode === 'ai' ? 'Fernanda IA' : (assignedAdmin?.full_name || 'Consultor'),
+                subtitle: chatMode === 'ai' ? 'IA • Sempre online' : 'Online',
+                onBack: () => setChatMode('select'),
+                isAI: chatMode === 'ai',
+              })}
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
                 {currentMessages.length === 0 && (
                   <div className="text-center py-12">
@@ -268,6 +273,7 @@ export default function ChatSuporte() {
               <ChatInput
                 onSend={chatMode === 'ai' ? handleAISend : handleHumanSend}
                 onFileUpload={handleFileUpload}
+                onAudioSend={handleAudioSend}
                 disabled={chatMode === 'ai' ? aiLoading : chat.sendingMessage}
                 placeholder={chatMode === 'ai' ? 'Pergunte à IA...' : 'Digite uma mensagem...'}
               />

@@ -75,8 +75,15 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
               "flex items-center gap-3 p-2.5 rounded-xl mb-1.5",
               isOwnMessage ? "bg-white/10" : "bg-muted/60"
             )}>
-              {message.file_mime_type?.startsWith('image/') ? (
+          {message.file_mime_type?.startsWith('image/') ? (
                 <img src={message.file_url} alt={message.file_name || ''} className="max-w-[200px] max-h-[200px] rounded-lg object-cover" />
+              ) : message.file_mime_type?.startsWith('audio/') ? (
+                <div className="flex items-center gap-2 min-w-[200px]">
+                  <Music className="h-5 w-5 flex-shrink-0 text-green-400" />
+                  <audio controls preload="metadata" className="h-8 max-w-[220px] flex-1" style={{ colorScheme: 'dark' }}>
+                    <source src={message.file_url} type={message.file_mime_type} />
+                  </audio>
+                </div>
               ) : (
                 <>
                   {getFileIcon(message.file_mime_type)}
