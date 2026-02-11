@@ -78,8 +78,8 @@ const menuItems: MenuItem[] = [
   },
   { 
     icon: MessageSquare, 
-    label: 'Suporte IA', 
-    subtitle: 'Tire suas dúvidas',
+    label: 'Chat Suporte', 
+    subtitle: 'Fale com seu consultor',
     href: '/cliente/suporte',
     iconColor: 'text-pink-500',
     iconBg: 'bg-pink-100 dark:bg-pink-900/30'
