@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { 
   Eye, MessageCircle, Mail, Phone, Building2, DollarSign, 
   ChevronDown, ChevronRight, GripVertical, Star, Calendar,
-  MoreHorizontal, Trash2, UserPlus, CheckCircle, XCircle,
+  MoreHorizontal, Trash2, UserPlus, UserCheck, CheckCircle, XCircle,
   ArrowRight, Sparkles, Clock, Hash
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -522,42 +522,44 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, 
                                     </Badge>
                                   </div>
 
-                                  {/* Bottom Row - Creator & Assigned */}
-                                  <div className="flex items-center justify-between pt-2 border-t text-[10px] text-muted-foreground">
-                                    <div className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      <span>
-                                        {client.created_at 
-                                          ? formatDistanceToNow(new Date(client.created_at), { locale: ptBR, addSuffix: false })
-                                          : '—'}
+                                  {/* Responsible Admin - Highlighted */}
+                                  <div className="pt-2 border-t space-y-1.5">
+                                    {/* Assigned Admin (main responsible) */}
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                        <UserCheck className="h-3 w-3 text-primary" />
+                                      </div>
+                                      <span className="text-[11px] font-semibold text-primary truncate">
+                                        {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? '🌐 Site' : 'Não atribuído')}
                                       </span>
                                     </div>
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <div className="flex items-center gap-1">
-                                          <UserPlus className="h-3 w-3" />
-                                          <span className="truncate max-w-[60px]">
-                                            {client.created_by_name || (client.origin === 'site' ? 'Site' : '—')}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <div className="text-xs">
-                                          <p>Criado por: {client.created_by_name || (client.origin === 'site' ? 'Site (cadastro online)' : 'Não informado')}</p>
-                                          {client.assigned_to_name && <p>Atribuído a: {client.assigned_to_name}</p>}
-                                        </div>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    {client.assigned_to_name && (
+                                    {/* Creator info + time */}
+                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                                       <Tooltip>
                                         <TooltipTrigger>
-                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                                            {client.assigned_to_name.split(' ')[0]}
-                                          </Badge>
+                                          <div className="flex items-center gap-1">
+                                            <UserPlus className="h-2.5 w-2.5" />
+                                            <span className="truncate max-w-[80px]">
+                                              {client.created_by_name || (client.origin === 'site' ? 'Site' : '—')}
+                                            </span>
+                                          </div>
                                         </TooltipTrigger>
-                                        <TooltipContent>Atribuído a: {client.assigned_to_name}</TooltipContent>
+                                        <TooltipContent>
+                                          <div className="text-xs space-y-1">
+                                            <p><strong>Criado por:</strong> {client.created_by_name || (client.origin === 'site' ? 'Site (cadastro online)' : 'Não informado')}</p>
+                                            {client.assigned_to_name && <p><strong>Responsável:</strong> {client.assigned_to_name}</p>}
+                                          </div>
+                                        </TooltipContent>
                                       </Tooltip>
-                                    )}
+                                      <div className="flex items-center gap-1">
+                                        <Calendar className="h-2.5 w-2.5" />
+                                        <span>
+                                          {client.created_at 
+                                            ? formatDistanceToNow(new Date(client.created_at), { locale: ptBR, addSuffix: false })
+                                            : '—'}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
 
                                   {/* Quick Action on Hover */}

@@ -774,13 +774,86 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                   </Badge>
                 </SheetTitle>
                 <p className="text-sm text-white/70 mt-1">ID: {client.id.slice(0, 8)}...</p>
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-2 flex-wrap">
                   <Badge variant="secondary" className="bg-white/20 text-white border-0">
                     {client.origin === 'whatsapp' ? '💬 WhatsApp' : '🌐 Site'}
                   </Badge>
                   <Badge variant="secondary" className="bg-white/20 text-white border-0">
                     📍 {currentStage?.label}
                   </Badge>
+                </div>
+                {/* Responsible Admin - Highlighted */}
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="flex items-center gap-2 bg-white/20 hover:bg-white/30 rounded-lg px-3 py-1.5 transition-colors"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-white/30 flex items-center justify-center">
+                          <UserCheck className="h-3.5 w-3.5 text-white" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[10px] text-white/60 leading-none">Responsável</p>
+                          <p className="text-xs font-bold text-white leading-tight">
+                            {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? 'Site' : 'Não atribuído')}
+                          </p>
+                        </div>
+                      </motion.button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64" align="start">
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="font-semibold text-sm mb-1">Atribuir Cliente</h4>
+                          <p className="text-xs text-muted-foreground">Selecione o administrador responsável</p>
+                        </div>
+                        <Select
+                          value={editFormData.assigned_to}
+                          onValueChange={async (value) => {
+                            const newAssignedTo = value === 'none' ? null : value;
+                            setEditFormData(prev => ({ ...prev, assigned_to: newAssignedTo || '' }));
+                            try {
+                              await supabase.from('profiles').update({
+                                assigned_to: newAssignedTo
+                              }).eq('id', client.id);
+                              toast.success('Cliente atribuído com sucesso!');
+                              onUpdate();
+                            } catch {
+                              toast.error('Erro ao atribuir cliente');
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecionar admin..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            {adminUsersList.map((admin) => (
+                              <SelectItem key={admin.id} value={admin.id}>
+                                {admin.full_name || admin.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {client.created_by_name && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Criado por: <strong>{client.created_by_name}</strong>
+                          </p>
+                        )}
+                        {!client.created_by_name && client.origin === 'site' && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Criado via: <strong>Site (cadastro online)</strong>
+                          </p>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  {client.created_by_name && client.assigned_to_name && client.created_by !== client.assigned_to && (
+                    <Badge variant="secondary" className="bg-white/10 text-white/70 border-0 text-[10px]">
+                      Criado por: {client.created_by_name}
+                    </Badge>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
