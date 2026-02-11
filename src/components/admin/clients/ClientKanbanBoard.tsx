@@ -34,7 +34,11 @@ export interface ClientWithProcess {
   last_contact?: string;
   cpf_cnpj?: string;
   process_number?: string;
-  client_funnel_type?: string; // NEW: 'comercial' or 'juridico'
+  client_funnel_type?: string;
+  created_by?: string | null;
+  assigned_to?: string | null;
+  created_by_name?: string | null;
+  assigned_to_name?: string | null;
 }
 
 export interface KanbanFilters {
@@ -518,24 +522,42 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, 
                                     </Badge>
                                   </div>
 
-                                  {/* Bottom Row - Contact & Date */}
+                                  {/* Bottom Row - Creator & Assigned */}
                                   <div className="flex items-center justify-between pt-2 border-t text-[10px] text-muted-foreground">
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3" />
-                                      <span>Nunca</span>
-                                    </div>
                                     <div className="flex items-center gap-1">
                                       <Calendar className="h-3 w-3" />
                                       <span>
                                         {client.created_at 
                                           ? formatDistanceToNow(new Date(client.created_at), { locale: ptBR, addSuffix: false })
-                                          : 'há 1 mês'}
+                                          : '—'}
                                       </span>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                      <UserPlus className="h-3 w-3" />
-                                      <span>+</span>
-                                    </div>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <div className="flex items-center gap-1">
+                                          <UserPlus className="h-3 w-3" />
+                                          <span className="truncate max-w-[60px]">
+                                            {client.created_by_name || (client.origin === 'site' ? 'Site' : '—')}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <div className="text-xs">
+                                          <p>Criado por: {client.created_by_name || (client.origin === 'site' ? 'Site (cadastro online)' : 'Não informado')}</p>
+                                          {client.assigned_to_name && <p>Atribuído a: {client.assigned_to_name}</p>}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    {client.assigned_to_name && (
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                            {client.assigned_to_name.split(' ')[0]}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Atribuído a: {client.assigned_to_name}</TooltipContent>
+                                      </Tooltip>
+                                    )}
                                   </div>
 
                                   {/* Quick Action on Hover */}

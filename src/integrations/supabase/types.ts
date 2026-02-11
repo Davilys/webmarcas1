@@ -1441,6 +1441,7 @@ export type Database = {
         Row: {
           address: string | null
           asaas_customer_id: string | null
+          assigned_to: string | null
           city: string | null
           client_funnel_type: string | null
           cnpj: string | null
@@ -1449,6 +1450,7 @@ export type Database = {
           cpf: string | null
           cpf_cnpj: string | null
           created_at: string | null
+          created_by: string | null
           email: string
           full_name: string | null
           id: string
@@ -1464,6 +1466,7 @@ export type Database = {
         Insert: {
           address?: string | null
           asaas_customer_id?: string | null
+          assigned_to?: string | null
           city?: string | null
           client_funnel_type?: string | null
           cnpj?: string | null
@@ -1472,6 +1475,7 @@ export type Database = {
           cpf?: string | null
           cpf_cnpj?: string | null
           created_at?: string | null
+          created_by?: string | null
           email: string
           full_name?: string | null
           id: string
@@ -1487,6 +1491,7 @@ export type Database = {
         Update: {
           address?: string | null
           asaas_customer_id?: string | null
+          assigned_to?: string | null
           city?: string | null
           client_funnel_type?: string | null
           cnpj?: string | null
@@ -1495,6 +1500,7 @@ export type Database = {
           cpf?: string | null
           cpf_cnpj?: string | null
           created_at?: string | null
+          created_by?: string | null
           email?: string
           full_name?: string | null
           id?: string

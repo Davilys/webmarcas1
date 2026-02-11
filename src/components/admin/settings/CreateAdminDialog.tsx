@@ -21,6 +21,7 @@ interface FormData {
   password: string;
   confirmPassword: string;
   fullAccess: boolean;
+  viewOwnClientsOnly: boolean;
   permissions: {
     [key: string]: {
       can_view: boolean;
@@ -47,6 +48,7 @@ export function CreateAdminDialog({ open, onOpenChange }: CreateAdminDialogProps
     password: '',
     confirmPassword: '',
     fullAccess: true,
+    viewOwnClientsOnly: false,
     permissions: initialPermissions(),
   });
 
@@ -57,6 +59,7 @@ export function CreateAdminDialog({ open, onOpenChange }: CreateAdminDialogProps
       password: '',
       confirmPassword: '',
       fullAccess: true,
+      viewOwnClientsOnly: false,
       permissions: initialPermissions(),
     });
   };
@@ -78,6 +81,7 @@ export function CreateAdminDialog({ open, onOpenChange }: CreateAdminDialogProps
           fullName: formData.fullName,
           fullAccess: formData.fullAccess,
           permissions: formData.fullAccess ? null : formData.permissions,
+          viewOwnClientsOnly: formData.viewOwnClientsOnly,
         },
       });
 
@@ -103,6 +107,20 @@ export function CreateAdminDialog({ open, onOpenChange }: CreateAdminDialogProps
 
           if (permError) throw permError;
         }
+      }
+
+      // Save clients_own_only permission
+      if (formData.viewOwnClientsOnly && data?.userId) {
+        const { error: ownError } = await supabase
+          .from('admin_permissions')
+          .insert({
+            user_id: data.userId,
+            permission_key: 'clients_own_only',
+            can_view: true,
+            can_edit: false,
+            can_delete: false,
+          });
+        if (ownError) console.error('Error saving clients_own_only:', ownError);
       }
 
       return data;
@@ -222,6 +240,23 @@ export function CreateAdminDialog({ open, onOpenChange }: CreateAdminDialogProps
             <Label htmlFor="fullAccess" className="text-sm font-medium cursor-pointer">
               Conceder acesso total a todas as seções do CRM
             </Label>
+          </div>
+
+          {/* View Own Clients Only Toggle */}
+          <div className="flex items-center space-x-2 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <Checkbox
+              id="viewOwnClientsOnly"
+              checked={formData.viewOwnClientsOnly}
+              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, viewOwnClientsOnly: !!checked }))}
+            />
+            <div>
+              <Label htmlFor="viewOwnClientsOnly" className="text-sm font-medium cursor-pointer">
+                Ver apenas clientes próprios
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Este usuário só verá clientes criados por ele ou atribuídos a ele
+              </p>
+            </div>
           </div>
 
           {/* Permissions Grid */}
