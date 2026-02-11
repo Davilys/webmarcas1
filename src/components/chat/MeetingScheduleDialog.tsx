@@ -14,9 +14,11 @@ interface MeetingScheduleDialogProps {
   conversationId?: string;
   currentUserId?: string;
   participants?: { user_id: string; profile?: { full_name: string | null; email: string } }[];
+  isAdmin?: boolean;
+  assignedAdmin?: { id: string; full_name: string | null } | null;
 }
 
-export function MeetingScheduleDialog({ open, onOpenChange, conversationId, currentUserId, participants }: MeetingScheduleDialogProps) {
+export function MeetingScheduleDialog({ open, onOpenChange, conversationId, currentUserId, participants, isAdmin = false, assignedAdmin }: MeetingScheduleDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
@@ -28,17 +30,23 @@ export function MeetingScheduleDialog({ open, onOpenChange, conversationId, curr
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      // Fetch admin users for group invites
+    if (!open) return;
+
+    if (isAdmin) {
+      // Admin can invite other admins and see all users
       supabase.from('profiles').select('id, full_name, email').then(({ data }) => {
         if (data) setAdminUsers(data);
       });
-      // Pre-select conversation participants
       if (participants) {
         setSelectedParticipants(participants.map(p => p.user_id).filter(id => id !== currentUserId));
       }
+    } else {
+      // Client: only their assigned admin is available
+      if (assignedAdmin) {
+        setSelectedParticipants([assignedAdmin.id]);
+      }
     }
-  }, [open, participants, currentUserId]);
+  }, [open, participants, currentUserId, isAdmin, assignedAdmin]);
 
   const handleSubmit = async () => {
     if (!title || !date || !time || !currentUserId) {
@@ -66,7 +74,6 @@ export function MeetingScheduleDialog({ open, onOpenChange, conversationId, curr
 
       if (error) throw error;
 
-      // Add participants
       const allParticipants = [currentUserId, ...selectedParticipants];
       await supabase.from('meeting_participants').insert(
         allParticipants.map(uid => ({
@@ -76,7 +83,6 @@ export function MeetingScheduleDialog({ open, onOpenChange, conversationId, curr
         }))
       );
 
-      // Send system message if conversation exists
       if (conversationId) {
         await supabase.from('conversation_messages').insert({
           conversation_id: conversationId,
@@ -167,19 +173,35 @@ export function MeetingScheduleDialog({ open, onOpenChange, conversationId, curr
           {/* Participants */}
           <div>
             <label className="text-sm font-medium mb-2 flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Participantes</label>
-            <div className="max-h-32 overflow-y-auto space-y-1 border rounded-lg p-2">
-              {adminUsers.filter(u => u.id !== currentUserId).map(u => (
-                <label key={u.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selectedParticipants.includes(u.id)}
-                    onChange={() => toggleParticipant(u.id)}
-                    className="rounded"
-                  />
-                  <span className="truncate">{u.full_name || u.email}</span>
-                </label>
-              ))}
-            </div>
+            {isAdmin ? (
+              <div className="max-h-32 overflow-y-auto space-y-1 border rounded-lg p-2">
+                {adminUsers.filter(u => u.id !== currentUserId).map(u => (
+                  <label key={u.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedParticipants.includes(u.id)}
+                      onChange={() => toggleParticipant(u.id)}
+                      className="rounded"
+                    />
+                    <span className="truncate">{u.full_name || u.email}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="border rounded-lg p-3 bg-muted/30">
+                {assignedAdmin ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-semibold">
+                      {assignedAdmin.full_name?.substring(0, 2).toUpperCase() || '??'}
+                    </div>
+                    <span className="font-medium">{assignedAdmin.full_name || 'Consultor'}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">Seu consultor</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum consultor atribuído</p>
+                )}
+              </div>
+            )}
           </div>
 
           <Button onClick={handleSubmit} disabled={saving} className="w-full">

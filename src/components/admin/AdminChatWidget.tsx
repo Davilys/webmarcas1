@@ -225,7 +225,7 @@ export function AdminChatWidget() {
         )}
       </AnimatePresence>
 
-      <MeetingScheduleDialog open={meetingOpen} onOpenChange={setMeetingOpen} conversationId={chat.activeConversation?.id} currentUserId={user?.id} participants={chat.activeConversation?.participants} />
+      <MeetingScheduleDialog open={meetingOpen} onOpenChange={setMeetingOpen} conversationId={chat.activeConversation?.id} currentUserId={user?.id} participants={chat.activeConversation?.participants} isAdmin={true} />
     </>
   );
 }

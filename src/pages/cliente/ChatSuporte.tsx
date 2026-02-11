@@ -314,6 +314,8 @@ export default function ChatSuporte() {
         conversationId={chat.activeConversation?.id}
         currentUserId={user?.id}
         participants={chat.activeConversation?.participants}
+        isAdmin={false}
+        assignedAdmin={assignedAdmin}
       />
     </ClientLayout>
   );
