@@ -1,4 +1,5 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
+import { AdminChatWidget } from '@/components/admin/AdminChatWidget';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -401,6 +402,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             {children}
           </main>
         </SidebarInset>
+        <AdminChatWidget />
       </div>
     </SidebarProvider>
   );

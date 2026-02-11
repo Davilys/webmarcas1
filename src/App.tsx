@@ -21,7 +21,7 @@ import ClienteProcessos from "./pages/cliente/Processos";
 import ClienteProcessoDetalhe from "./pages/cliente/ProcessoDetalhe";
 import ClienteDocumentos from "./pages/cliente/Documentos";
 import ClienteFinanceiro from "./pages/cliente/Financeiro";
-import ClienteSuporte from "./pages/cliente/Suporte";
+import ClienteChatSuporte from "./pages/cliente/ChatSuporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 import ClienteRegistrarMarca from "./pages/cliente/RegistrarMarca";
 import ClienteStatusPedido from "./pages/cliente/StatusPedido";
@@ -74,7 +74,7 @@ const App = () => (
               <Route path="/cliente/processos/:id" element={<ClienteProcessoDetalhe />} />
               <Route path="/cliente/documentos" element={<ClienteDocumentos />} />
               <Route path="/cliente/financeiro" element={<ClienteFinanceiro />} />
-              <Route path="/cliente/suporte" element={<ClienteSuporte />} />
+              <Route path="/cliente/suporte" element={<ClienteChatSuporte />} />
               <Route path="/cliente/configuracoes" element={<ClienteConfiguracoes />} />
               <Route path="/cliente/registrar-marca" element={<ClienteRegistrarMarca />} />
               <Route path="/cliente/status-pedido" element={<ClienteStatusPedido />} />
