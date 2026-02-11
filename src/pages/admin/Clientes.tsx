@@ -508,6 +508,8 @@ export default function AdminClientes() {
             onRefresh={fetchClients}
             filters={filters}
             funnelType={funnelType}
+            adminUsers={adminUsers}
+            canAssign={!viewOwnOnly}
           />
         ) : (
           <ClientListView
