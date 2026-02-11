@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale } from 'lucide-react';
+import { Search, LayoutGrid, List, Settings, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters, type FunnelType } from '@/components/admin/clients/ClientKanbanBoard';
 import { ClientListView } from '@/components/admin/clients/ClientListView';
@@ -44,21 +45,62 @@ export default function AdminClientes() {
   const [importExportOpen, setImportExportOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [viewOwnOnly, setViewOwnOnly] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
   
   // NEW: Funnel type toggle - default to commercial
   const [funnelType, setFunnelType] = useState<FunnelType>('comercial');
 
   useEffect(() => {
+    fetchCurrentUserAndPermissions();
     fetchClients();
+    fetchAdminUsers();
   }, []);
+
+  const fetchCurrentUserAndPermissions = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setCurrentUserId(user.id);
+      // Check if user has clients_own_only permission
+      const { data: perms } = await supabase
+        .from('admin_permissions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('permission_key', 'clients_own_only');
+      
+      if (perms && perms.length > 0 && perms[0].can_view) {
+        setViewOwnOnly(true);
+      }
+    }
+  };
+
+  const fetchAdminUsers = async () => {
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'admin');
+    
+    if (roles && roles.length > 0) {
+      const userIds = roles.map(r => r.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+      
+      if (profiles) {
+        setAdminUsers(profiles);
+      }
+    }
+  };
 
   const fetchClients = async () => {
     setLoading(true);
     try {
-      // Fetch profiles with their processes (including client_funnel_type)
+      // Fetch profiles with their processes
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*, client_funnel_type')
+        .select('*, client_funnel_type, created_by, assigned_to')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -70,14 +112,36 @@ export default function AdminClientes() {
 
       if (processesError) throw processesError;
 
+      // Fetch admin profiles for name resolution
+      const adminIds = new Set<string>();
+      for (const p of profiles || []) {
+        if ((p as any).created_by) adminIds.add((p as any).created_by);
+        if ((p as any).assigned_to) adminIds.add((p as any).assigned_to);
+      }
+      
+      let adminNameMap: Record<string, string> = {};
+      if (adminIds.size > 0) {
+        const { data: adminProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', Array.from(adminIds));
+        
+        if (adminProfiles) {
+          adminProfiles.forEach(a => {
+            adminNameMap[a.id] = a.full_name || a.email;
+          });
+        }
+      }
+
       // Combine profiles with their processes
       const clientsWithProcesses: ClientWithProcess[] = [];
 
       for (const profile of profiles || []) {
         const userProcesses = (processes || []).filter(p => p.user_id === profile.id);
+        const createdByName = (profile as any).created_by ? adminNameMap[(profile as any).created_by] || null : null;
+        const assignedToName = (profile as any).assigned_to ? adminNameMap[(profile as any).assigned_to] || null : null;
         
         if (userProcesses.length === 0) {
-          // Client without process
           clientsWithProcesses.push({
             id: profile.id,
             full_name: profile.full_name,
@@ -94,10 +158,13 @@ export default function AdminClientes() {
             process_status: null,
             created_at: profile.created_at || undefined,
             cpf_cnpj: profile.cpf_cnpj || undefined,
-            client_funnel_type: (profile as any).client_funnel_type || 'juridico'
+            client_funnel_type: (profile as any).client_funnel_type || 'juridico',
+            created_by: (profile as any).created_by || null,
+            assigned_to: (profile as any).assigned_to || null,
+            created_by_name: createdByName,
+            assigned_to_name: assignedToName,
           });
         } else {
-          // One entry per process
           for (const process of userProcesses) {
             clientsWithProcesses.push({
               id: profile.id,
@@ -116,7 +183,11 @@ export default function AdminClientes() {
               created_at: profile.created_at || undefined,
               cpf_cnpj: profile.cpf_cnpj || undefined,
               process_number: process.process_number || undefined,
-              client_funnel_type: (profile as any).client_funnel_type || 'juridico'
+              client_funnel_type: (profile as any).client_funnel_type || 'juridico',
+              created_by: (profile as any).created_by || null,
+              assigned_to: (profile as any).assigned_to || null,
+              created_by_name: createdByName,
+              assigned_to_name: assignedToName,
             });
           }
         }
@@ -169,12 +240,20 @@ export default function AdminClientes() {
     });
   }, [clients, dateFilter, selectedMonth]);
 
+  // Filter by own clients if restricted
+  const ownFilteredClients = useMemo(() => {
+    if (!viewOwnOnly || !currentUserId) return dateFilteredClients;
+    return dateFilteredClients.filter(client => 
+      client.created_by === currentUserId || client.assigned_to === currentUserId
+    );
+  }, [dateFilteredClients, viewOwnOnly, currentUserId]);
+
   // Filter by funnel type
   const funnelFilteredClients = useMemo(() => {
-    return dateFilteredClients.filter(client => 
+    return ownFilteredClients.filter(client => 
       (client.client_funnel_type || 'juridico') === funnelType
     );
-  }, [dateFilteredClients, funnelType]);
+  }, [ownFilteredClients, funnelType]);
 
   // Filter by search (name, email, cpf/cnpj, phone, brand, company)
   const filteredClients = funnelFilteredClients.filter(client =>

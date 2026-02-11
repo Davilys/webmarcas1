@@ -23,6 +23,7 @@ export function EditPermissionsDialog({ open, onOpenChange, user }: EditPermissi
   const queryClient = useQueryClient();
   const [permissions, setPermissions] = useState<UserPermissions>({});
   const [fullAccess, setFullAccess] = useState(true);
+  const [viewOwnClientsOnly, setViewOwnClientsOnly] = useState(false);
   
   const { data: userPermsData, isLoading } = useUserPermissions(user?.id || '');
 
@@ -30,6 +31,11 @@ export function EditPermissionsDialog({ open, onOpenChange, user }: EditPermissi
     if (userPermsData) {
       setPermissions(userPermsData.permissionsMap);
       setFullAccess(!userPermsData.hasAnyPermission);
+      // Check if clients_own_only permission exists
+      const hasOwnOnly = userPermsData.rawPermissions?.some(
+        (p: any) => p.permission_key === 'clients_own_only' && p.can_view
+      );
+      setViewOwnClientsOnly(!!hasOwnOnly);
     }
   }, [userPermsData]);
 
@@ -43,10 +49,8 @@ export function EditPermissionsDialog({ open, onOpenChange, user }: EditPermissi
         .delete()
         .eq('user_id', user.id);
 
-      // If full access, don't insert any permissions (default behavior)
-      if (fullAccess) {
-        return;
-      }
+      // If full access, don't insert section permissions
+      if (!fullAccess) {
 
       // Insert new permissions
       const permissionsToInsert = Object.entries(permissions)
@@ -65,6 +69,20 @@ export function EditPermissionsDialog({ open, onOpenChange, user }: EditPermissi
           .insert(permissionsToInsert);
 
         if (error) throw error;
+      }
+      }
+
+      // Save clients_own_only permission
+      if (viewOwnClientsOnly) {
+        await supabase
+          .from('admin_permissions')
+          .insert({
+            user_id: user.id,
+            permission_key: 'clients_own_only',
+            can_view: true,
+            can_edit: false,
+            can_delete: false,
+          });
       }
     },
     onSuccess: () => {
@@ -135,6 +153,23 @@ export function EditPermissionsDialog({ open, onOpenChange, user }: EditPermissi
               <Label htmlFor="fullAccessEdit" className="text-sm font-medium cursor-pointer">
                 Conceder acesso total a todas as seções do CRM
               </Label>
+            </div>
+
+            {/* View Own Clients Only Toggle */}
+            <div className="flex items-center space-x-2 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+              <Checkbox
+                id="viewOwnClientsOnlyEdit"
+                checked={viewOwnClientsOnly}
+                onCheckedChange={(checked) => setViewOwnClientsOnly(!!checked)}
+              />
+              <div>
+                <Label htmlFor="viewOwnClientsOnlyEdit" className="text-sm font-medium cursor-pointer">
+                  Ver apenas clientes próprios
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Este usuário só verá clientes criados por ele ou atribuídos a ele
+                </p>
+              </div>
             </div>
 
             {/* Permissions Grid */}

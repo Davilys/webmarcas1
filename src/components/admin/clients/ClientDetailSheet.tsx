@@ -23,7 +23,7 @@ import {
   FileText, CreditCard, MessageSquare, Calendar as CalendarIcon, Paperclip,
   Upload, Loader2, ExternalLink, Plus, Edit, X, Check, 
   MessageCircle, ArrowUpRight, Tag, Zap, AlertTriangle,
-  CheckCircle, XCircle, TrendingUp, Users, Receipt, Trash2
+  CheckCircle, XCircle, TrendingUp, Users, Receipt, Trash2, UserCheck
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
@@ -199,8 +199,10 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     priority: 'medium',
     origin: 'site',
     brand_name: '',
-    business_area: ''
+    business_area: '',
+    assigned_to: '' as string,
   });
+  const [adminUsersList, setAdminUsersList] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
   
   // NEW: Add process dialog
   const [showAddProcessDialog, setShowAddProcessDialog] = useState(false);
@@ -255,7 +257,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         priority: client.priority || 'medium',
         origin: client.origin || 'site',
         brand_name: client.brand_name || '',
-        business_area: client.business_area || ''
+        business_area: client.business_area || '',
+        assigned_to: client.assigned_to || '',
       });
       // Try to match existing value with a pricing option
       const matchedOption = SERVICE_PRICING_OPTIONS.find(opt => opt.value === client.contract_value);
@@ -278,7 +281,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         supabase.from('client_appointments').select('*').eq('user_id', client.id).order('scheduled_at', { ascending: true }),
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false }),
-        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code').eq('id', client.id).maybeSingle()
+        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code, assigned_to').eq('id', client.id).maybeSingle()
       ]);
 
       setNotes(notesRes.data || []);
@@ -287,7 +290,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       setInvoices(invoicesRes.data || []);
       setProfileData(profileRes.data);
       
-      // Update edit form with profile data including cpf, cnpj, company_name
+      // Update edit form with profile data
       if (profileRes.data) {
         setEditFormData(prev => ({
           ...prev,
@@ -298,8 +301,27 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
           neighborhood: profileRes.data.neighborhood || '',
           city: profileRes.data.city || '',
           state: profileRes.data.state || '',
-          zip_code: profileRes.data.zip_code || ''
+          zip_code: profileRes.data.zip_code || '',
+          assigned_to: (profileRes.data as any).assigned_to || '',
         }));
+      }
+
+      // Fetch admin users for assignment dropdown
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin');
+      
+      if (roles && roles.length > 0) {
+        const userIds = roles.map(r => r.user_id);
+        const { data: adminProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', userIds);
+        
+        if (adminProfiles) {
+          setAdminUsersList(adminProfiles);
+        }
       }
     } catch (error) {
       console.error('Error fetching client data:', error);
@@ -475,7 +497,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         phone: editFormData.phone,
         cpf: editFormData.cpf || null,
         cnpj: editFormData.cnpj || null,
-        cpf_cnpj: editFormData.cpf || editFormData.cnpj || null, // Keep legacy field updated
+        cpf_cnpj: editFormData.cpf || editFormData.cnpj || null,
         company_name: editFormData.company_name,
         address: editFormData.address,
         neighborhood: editFormData.neighborhood,
@@ -483,7 +505,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         state: editFormData.state,
         zip_code: editFormData.zip_code,
         priority: editFormData.priority,
-        origin: editFormData.origin
+        origin: editFormData.origin,
+        assigned_to: editFormData.assigned_to || null,
       }).eq('id', client.id);
 
       if (profileError) throw profileError;
@@ -1904,6 +1927,27 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
                   <SelectItem value="indicacao">Indicação</SelectItem>
                   <SelectItem value="instagram">Instagram</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Atribuir a usuário admin */}
+            <div className="col-span-2">
+              <Label className="flex items-center gap-1">
+                <UserCheck className="h-3.5 w-3.5" />
+                Atribuir Cliente a
+              </Label>
+              <Select 
+                value={editFormData.assigned_to} 
+                onValueChange={(v) => setEditFormData({...editFormData, assigned_to: v === 'none' ? '' : v})}
+              >
+                <SelectTrigger><SelectValue placeholder="Nenhum (não atribuído)" /></SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="none">Nenhum (não atribuído)</SelectItem>
+                  {adminUsersList.map(admin => (
+                    <SelectItem key={admin.id} value={admin.id}>
+                      {admin.full_name || admin.email}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
