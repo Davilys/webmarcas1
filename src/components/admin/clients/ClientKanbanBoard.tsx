@@ -4,6 +4,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Eye, MessageCircle, Mail, Phone, Building2, DollarSign, 
   ChevronDown, ChevronRight, GripVertical, Star, Calendar,
@@ -53,7 +55,9 @@ interface ClientKanbanBoardProps {
   onClientClick: (client: ClientWithProcess) => void;
   onRefresh: () => void;
   filters?: KanbanFilters;
-  funnelType?: FunnelType; // NEW: which funnel to display
+  funnelType?: FunnelType;
+  adminUsers?: { id: string; full_name: string | null; email: string }[];
+  canAssign?: boolean;
 }
 
 // COMMERCIAL FUNNEL STAGES (for sales pipeline)
@@ -83,7 +87,7 @@ const ORIGIN_CONFIG: Record<string, { icon: typeof MessageCircle; color: string;
   'indicacao': { icon: UserPlus, color: 'text-purple-600', bg: 'bg-purple-100', label: 'Ind' },
 };
 
-export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, funnelType = 'juridico' }: ClientKanbanBoardProps) {
+export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, funnelType = 'juridico', adminUsers = [], canAssign = false }: ClientKanbanBoardProps) {
   const [draggedClient, setDraggedClient] = useState<ClientWithProcess | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
@@ -524,15 +528,63 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, 
 
                                   {/* Responsible Admin - Highlighted */}
                                   <div className="pt-2 border-t space-y-1.5">
-                                    {/* Assigned Admin (main responsible) */}
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                        <UserCheck className="h-3 w-3 text-primary" />
+                                    {/* Assigned Admin (main responsible) - clickable if canAssign */}
+                                    {canAssign ? (
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <button 
+                                            className="flex items-center gap-1.5 w-full hover:bg-primary/5 rounded-md p-0.5 -m-0.5 transition-colors"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                              <UserCheck className="h-3 w-3 text-primary" />
+                                            </div>
+                                            <span className="text-[11px] font-semibold text-primary truncate">
+                                              {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? '🌐 Site' : 'Não atribuído')}
+                                            </span>
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-56" align="start" onClick={(e) => e.stopPropagation()}>
+                                          <div className="space-y-2">
+                                            <p className="text-xs font-semibold">Atribuir a:</p>
+                                            <Select
+                                              value={client.assigned_to || ''}
+                                              onValueChange={async (value) => {
+                                                const newVal = value === 'none' ? null : value;
+                                                try {
+                                                  await supabase.from('profiles').update({ assigned_to: newVal }).eq('id', client.id);
+                                                  toast.success('Cliente atribuído!');
+                                                  onRefresh();
+                                                } catch {
+                                                  toast.error('Erro ao atribuir');
+                                                }
+                                              }}
+                                            >
+                                              <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Selecionar..." />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="none">Nenhum</SelectItem>
+                                                {adminUsers.map((a) => (
+                                                  <SelectItem key={a.id} value={a.id}>
+                                                    {a.full_name || a.email}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                          <UserCheck className="h-3 w-3 text-primary" />
+                                        </div>
+                                        <span className="text-[11px] font-semibold text-primary truncate">
+                                          {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? '🌐 Site' : 'Não atribuído')}
+                                        </span>
                                       </div>
-                                      <span className="text-[11px] font-semibold text-primary truncate">
-                                        {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? '🌐 Site' : 'Não atribuído')}
-                                      </span>
-                                    </div>
+                                    )}
                                     {/* Creator info + time */}
                                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                                       <Tooltip>
