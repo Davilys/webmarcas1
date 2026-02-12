@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Send, Paperclip, Mic, X, Loader2, Image, FileText, Film, Smile } from 'lucide-react';
+import { Send, Paperclip, Mic, X, Loader2, Image, FileText, Film, Smile, Trash2, Pause } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -143,23 +143,50 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   };
 
-  // Recording UI
+  // Recording UI - WhatsApp style
   if (isRecording) {
     return (
-      <div ref={ref} className="border-t bg-[#f0f2f5] dark:bg-[#1f2c33] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full text-destructive hover:bg-destructive/10" onClick={cancelRecording}>
-            <X className="h-5 w-5" />
+      <div ref={ref} className="border-t bg-[#f0f2f5] dark:bg-[#1f2c33] px-3 py-2">
+        <div className="flex items-center gap-2">
+          {/* Delete / cancel button */}
+          <Button type="button" variant="ghost" size="icon"
+            className="h-10 w-10 rounded-full flex-shrink-0 text-[#54656f] dark:text-[#aebac1] hover:text-destructive hover:bg-transparent"
+            onClick={cancelRecording}>
+            <Trash2 className="h-5 w-5" />
           </Button>
-          <div className="flex-1 flex items-center gap-3 bg-white dark:bg-[#2a3942] rounded-full px-4 py-2">
-            <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-sm font-mono text-destructive font-medium">{formatTime(recordingTime)}</span>
-            <div className="flex-1 h-1 bg-destructive/20 rounded-full overflow-hidden">
-              <div className="h-full bg-destructive/60 rounded-full animate-pulse" style={{ width: '60%' }} />
+
+          {/* Waveform area */}
+          <div className="flex-1 flex items-center gap-3 bg-white dark:bg-[#2a3942] rounded-lg px-4 py-2.5">
+            {/* Red recording dot */}
+            <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+            {/* Timer */}
+            <span className="text-sm font-mono text-foreground/80 font-medium flex-shrink-0 min-w-[40px]">{formatTime(recordingTime)}</span>
+            {/* Animated waveform bars */}
+            <div className="flex-1 flex items-center justify-center gap-[2px] h-[28px] overflow-hidden">
+              {Array.from({ length: 40 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-[3px] rounded-full bg-[#54656f] dark:bg-[#aebac1]"
+                  style={{
+                    height: `${Math.max(4, Math.random() * 24)}px`,
+                    animation: `waveform ${0.4 + Math.random() * 0.6}s ease-in-out ${Math.random() * 0.5}s infinite alternate`,
+                  }}
+                />
+              ))}
             </div>
+            {/* Pause button */}
+            <Button type="button" variant="ghost" size="icon"
+              className="h-8 w-8 rounded-full flex-shrink-0 text-[#54656f] dark:text-[#aebac1] hover:bg-transparent"
+              onClick={stopRecording}>
+              <Pause className="h-5 w-5" />
+            </Button>
           </div>
-          <Button type="button" size="icon" className="h-10 w-10 rounded-full bg-[#00a884] hover:bg-[#008069] text-white shadow-md" onClick={stopRecording}>
-            <Send className="h-4 w-4" />
+
+          {/* Send button */}
+          <Button type="button" size="icon"
+            className="h-10 w-10 rounded-full flex-shrink-0 bg-[#00a884] hover:bg-[#008069] text-white shadow-md"
+            onClick={stopRecording}>
+            <Send className="h-5 w-5" />
           </Button>
         </div>
       </div>
