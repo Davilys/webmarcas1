@@ -195,7 +195,25 @@ export function useChat(user: User | null) {
             .single();
 
           if (conv) {
-            const c = { ...conv, type: conv.type as 'direct' | 'group' | 'ai_support' };
+            // Fetch participants with profiles for this conversation
+            const { data: parts } = await supabase
+              .from('conversation_participants')
+              .select('*')
+              .eq('conversation_id', conv.id);
+
+            const partUserIds = [...new Set(parts?.map(p => p.user_id) || [])];
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .in('id', partUserIds);
+
+            const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+            const c = {
+              ...conv,
+              type: conv.type as 'direct' | 'group' | 'ai_support',
+              participants: parts?.map(p => ({ ...p, profile: profileMap.get(p.user_id) })) || [],
+            };
             setActiveConversation(c);
             await fetchMessages(c.id);
             return c;
@@ -218,7 +236,22 @@ export function useChat(user: User | null) {
       { conversation_id: newConv.id, user_id: otherUserId, role: 'member' },
     ]);
 
-    const c = { ...newConv, type: newConv.type as 'direct' | 'group' | 'ai_support' };
+    // Fetch profiles for participants
+    const { data: participantProfiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', [user.id, otherUserId]);
+
+    const profileMap = new Map(participantProfiles?.map(p => [p.id, p]) || []);
+
+    const c = {
+      ...newConv,
+      type: newConv.type as 'direct' | 'group' | 'ai_support',
+      participants: [
+        { id: '', conversation_id: newConv.id, user_id: user.id, role: 'member', joined_at: new Date().toISOString(), last_read_at: null, is_typing: false, is_online: true, profile: profileMap.get(user.id) },
+        { id: '', conversation_id: newConv.id, user_id: otherUserId, role: 'member', joined_at: new Date().toISOString(), last_read_at: null, is_typing: false, is_online: false, profile: profileMap.get(otherUserId) },
+      ],
+    };
     setActiveConversation(c);
     await fetchMessages(c.id);
     await fetchConversations();
