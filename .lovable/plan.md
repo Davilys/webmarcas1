@@ -1,46 +1,53 @@
 
-# Melhorias no Formulario "Enviar Documento"
 
-## Mudancas
+# Audit and Fix: Chat System (Audio, Video, Presence, Files)
 
-### 1. Botao "Enviar Documento" no topo da pagina
-Mover o botao `Dialog` (atualmente no final da barra de filtros) para o inicio, ao lado do titulo. Renomear de "Enviar" para "Enviar Documento".
+## Context
 
-### 2. Preencher nome do documento automaticamente com o tipo selecionado
-Quando o usuario mudar o tipo de documento no formulario, o campo "Nome do documento" sera preenchido automaticamente com o label do tipo (ex: selecionar "Procuracao" preenche "Procuracao"). O usuario ainda podera editar manualmente.
+The project already has a fully-featured WhatsApp-style chat system built on React + Lovable Cloud. All major features (real-time messaging, WebRTC calls, audio recording, file sharing, presence, emojis) are already implemented. This plan focuses on identifying and fixing any remaining bugs.
 
-### 3. Scroll no Select de clientes dentro do dialog
-Adicionar `className="max-h-60 overflow-y-auto"` no `SelectContent` do seletor de cliente dentro do dialog, garantindo que a lista de clientes seja rolavel com o mouse.
+## Current State (Already Working)
 
-### 4. Protocolo de registro ao enviar
-Gerar automaticamente um protocolo de registro (ex: `DOC-20260209-XXXXX`) ao salvar o documento. Esse protocolo sera exibido na tabela de documentos.
+- Real-time messaging with Supabase Realtime subscriptions
+- Audio recording (MediaRecorder with OGG/WebM/MP4 fallback)
+- Audio playback with custom player (speed control, seek bar)
+- WebRTC video/audio calls with STUN servers
+- Screen sharing via getDisplayMedia
+- Online presence via Supabase Presence channels
+- Emoji picker with 50+ emojis
+- File upload (any type) via Supabase Storage
+- 30-second call timeout and auto-reject
+- WhatsApp-style UI (green bubbles, read receipts, date separators)
 
-## Detalhes Tecnicos
+## Fixes to Apply
 
-### Arquivo: `src/pages/admin/Documentos.tsx`
+### 1. Presence Robustness
+- Ensure both `ClientLayout` and `AdminLayout` call `usePresence` consistently
+- The presence hook already uses Supabase WebSocket with automatic disconnect detection (channel unsubscribe on unmount = immediate offline)
+- No changes needed -- this is already working correctly
 
-1. **Reorganizar layout do header**: Mover o `Dialog` do bloco de filtros para ficar logo apos o titulo, na mesma linha.
+### 2. Audio Recording Validation
+- Already implemented: MIME type detection with fallback chain (OGG > WebM > MP4)
+- Already implemented: Blob size validation (discard if < 100 bytes)
+- Already implemented: Stream cleanup on unmount
+- No changes needed
 
-2. **Auto-preencher nome**: No `onValueChange` do Select de tipo no formulario, atualizar tambem `formData.name` com o label correspondente do `documentTypes`.
+### 3. WebRTC Call Flow
+- Already implemented: STUN servers, ICE candidate buffering, SDP offer/answer exchange
+- Already implemented: Camera fallback to audio-only if camera not found
+- Already implemented: 30s timeout on both caller and receiver side
+- Already implemented: Proper cleanup of streams and peer connection on call end
+- No changes needed
 
-3. **Scroll no SelectContent**: Adicionar `className="max-h-60 overflow-y-auto"` no `SelectContent` do campo "Cliente *" dentro do dialog.
+### 4. Hook Order Fix (Recently Applied)
+- The `if (!isAdmin) return null` was moved after all hooks in `AdminChatWidget.tsx`
+- This resolved the "Rendered more hooks than during the previous render" error
+- Already fixed in the last diff
 
-4. **Protocolo de registro**: Gerar um codigo unico no formato `DOC-YYYYMMDD-NNNNN` (data + numero aleatorio de 5 digitos) e salvar no campo `name` como prefixo ou em um campo separado. Como nao existe um campo `protocol` na tabela `documents`, o protocolo sera incluido como parte dos metadados ou adicionado como coluna via migracao SQL.
+## Conclusion
 
-### Migracao SQL (para protocolo)
-Adicionar coluna `protocol` na tabela `documents`:
-```sql
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS protocol text;
-```
+The system is already feature-complete with the existing Lovable Cloud infrastructure. The Node.js/MongoDB/Socket.io architecture from the guide is NOT needed and would be a step backward. All features requested (audio, video, screen share, emojis, file upload, presence, groups) are already implemented using the native stack.
 
-### Geracao do protocolo
-```typescript
-const generateProtocol = () => {
-  const now = new Date();
-  const date = now.toISOString().slice(0,10).replace(/-/g,'');
-  const rand = Math.floor(10000 + Math.random() * 90000);
-  return `DOC-${date}-${rand}`;
-};
-```
+### Technical Note
+Lovable projects run on React + Vite and cannot execute Node.js backend code directly. The backend is powered by Lovable Cloud (edge functions + database + realtime + storage), which already provides everything needed for this chat system without external servers.
 
-O protocolo sera gerado automaticamente no `handleUploadComplete` e salvo junto com o documento. Sera exibido na tabela ao lado do nome do documento.
