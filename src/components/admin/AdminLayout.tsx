@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect, useMemo } from 'react';
 import { AdminChatWidget } from '@/components/admin/AdminChatWidget';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { usePresence } from '@/hooks/usePresence';
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
@@ -343,6 +344,10 @@ function AdminSidebar() {
 export function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [adminUserId, setAdminUserId] = useState<string | null>(null);
+
+  // Broadcast admin presence
+  usePresence(adminUserId);
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -366,6 +371,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       }
 
       setIsAdmin(true);
+      setAdminUserId(user.id);
     };
 
     checkAdmin();

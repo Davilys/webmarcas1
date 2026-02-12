@@ -22,6 +22,7 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const iceCandidatesBuffer = useRef<RTCIceCandidateInit[]>([]);
+  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const createPeerConnection = useCallback(() => {
     const pc = new RTCPeerConnection({
@@ -115,6 +116,14 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
 
       setCallActive(true);
       toast.success(`Chamada de ${type === 'video' ? 'vídeo' : 'áudio'} iniciada`);
+
+      // 30s timeout if no answer
+      callTimeoutRef.current = setTimeout(() => {
+        if (!pcRef.current?.remoteDescription) {
+          toast.error('Chamada não atendida (tempo expirado)');
+          endCall();
+        }
+      }, 30000);
     } catch (err) {
       console.error('Error starting call:', err);
       toast.error('Erro ao iniciar chamada.');
@@ -179,12 +188,15 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
 
       setCallActive(true);
       setIncomingCall(null);
+      // Clear any timeout from caller side
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     } catch (err) {
       console.error('Error accepting call:', err);
     }
   }, [incomingCall, conversationId, userId, createPeerConnection]);
 
   const endCall = useCallback(async () => {
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     screenStreamRef.current?.getTracks().forEach(t => t.stop());
     pcRef.current?.close();
@@ -361,6 +373,7 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
             break;
 
           case 'answer':
+            if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
             if (pcRef.current) {
               const answerData = signal.signal_data as any;
               await pcRef.current.setRemoteDescription(new RTCSessionDescription(answerData.sdp));
@@ -392,6 +405,16 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
 
     return () => { channel.unsubscribe(); };
   }, [userId, endCall]);
+
+  // Auto-reject incoming call after 30s
+  useEffect(() => {
+    if (!incomingCall) return;
+    const timer = setTimeout(() => {
+      toast.error('Chamada não atendida (tempo expirado)');
+      rejectCall();
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, [incomingCall, rejectCall]);
 
   return {
     callActive,
