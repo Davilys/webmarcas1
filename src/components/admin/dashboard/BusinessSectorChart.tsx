@@ -92,17 +92,15 @@ export function BusinessSectorChart() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.4 }}
     >
-      <Card className="border-0 shadow-lg h-full">
+      <Card className="border border-border/50 bg-card/80 backdrop-blur-sm shadow-xl h-full overflow-hidden">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-900/30">
-              <Briefcase className="h-5 w-5 text-purple-600" />
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-400 shadow-lg">
+              <Briefcase className="h-5 w-5 text-white" />
             </div>
             <div>
-              <CardTitle className="text-lg">Ramos de Atividade</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Setores que mais fecham negócios
-              </p>
+              <CardTitle className="text-lg font-bold">Ramos de Atividade</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Setores que mais fecham negócios</p>
             </div>
           </div>
         </CardHeader>

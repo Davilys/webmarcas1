@@ -3,28 +3,23 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Target, Users, FileCheck, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface FunnelStep {
   name: string;
   value: number;
   percentage: number;
   icon: typeof Target;
-  color: string;
-  bgColor: string;
+  gradient: string;
 }
 
 export function ConversionFunnel() {
   const [steps, setSteps] = useState<FunnelStep[]>([]);
   const [conversionRate, setConversionRate] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    setIsLoading(true);
-    
     const [leadsRes, clientsRes, contractsRes, processesRes] = await Promise.all([
       supabase.from('leads').select('id, status', { count: 'exact' }),
       supabase.from('profiles').select('id', { count: 'exact' }),
@@ -37,46 +32,13 @@ export function ConversionFunnel() {
     const signedContracts = contractsRes.data?.filter(c => c.signature_status === 'signed').length || 0;
     const completedProcesses = processesRes.data?.filter(p => p.status === 'registrada').length || 0;
 
-    const maxValue = Math.max(totalLeads, 1);
-
-    const funnelSteps: FunnelStep[] = [
-      {
-        name: 'Leads',
-        value: totalLeads,
-        percentage: 100,
-        icon: Target,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100 dark:bg-blue-900/30'
-      },
-      {
-        name: 'Clientes',
-        value: totalClients,
-        percentage: totalLeads > 0 ? (totalClients / totalLeads) * 100 : 0,
-        icon: Users,
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-100 dark:bg-purple-900/30'
-      },
-      {
-        name: 'Contratos Assinados',
-        value: signedContracts,
-        percentage: totalLeads > 0 ? (signedContracts / totalLeads) * 100 : 0,
-        icon: FileCheck,
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-100 dark:bg-orange-900/30'
-      },
-      {
-        name: 'Processos Concluídos',
-        value: completedProcesses,
-        percentage: totalLeads > 0 ? (completedProcesses / totalLeads) * 100 : 0,
-        icon: CheckCircle,
-        color: 'text-emerald-600',
-        bgColor: 'bg-emerald-100 dark:bg-emerald-900/30'
-      }
-    ];
-
-    setSteps(funnelSteps);
+    setSteps([
+      { name: 'Leads', value: totalLeads, percentage: 100, icon: Target, gradient: 'from-blue-500 to-cyan-400' },
+      { name: 'Clientes', value: totalClients, percentage: totalLeads > 0 ? (totalClients / totalLeads) * 100 : 0, icon: Users, gradient: 'from-violet-500 to-purple-400' },
+      { name: 'Contratos', value: signedContracts, percentage: totalLeads > 0 ? (signedContracts / totalLeads) * 100 : 0, icon: FileCheck, gradient: 'from-amber-500 to-orange-400' },
+      { name: 'Concluídos', value: completedProcesses, percentage: totalLeads > 0 ? (completedProcesses / totalLeads) * 100 : 0, icon: CheckCircle, gradient: 'from-emerald-500 to-green-400' }
+    ]);
     setConversionRate(totalLeads > 0 ? (totalClients / totalLeads) * 100 : 0);
-    setIsLoading(false);
   };
 
   return (
@@ -85,18 +47,16 @@ export function ConversionFunnel() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.5 }}
     >
-      <Card className="border-0 shadow-lg h-full">
-        <CardHeader className="pb-2">
+      <Card className="border border-border/50 bg-card/80 backdrop-blur-sm shadow-xl h-full overflow-hidden">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-orange-100 dark:bg-orange-900/30">
-                <Target className="h-5 w-5 text-orange-600" />
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-400 shadow-lg">
+                <Target className="h-5 w-5 text-white" />
               </div>
               <div>
-                <CardTitle className="text-lg">Funil de Conversão</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Taxa de conversão de leads
-                </p>
+                <CardTitle className="text-lg font-bold">Funil de Conversão</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Taxa de conversão de leads</p>
               </div>
             </div>
             <motion.div 
@@ -105,10 +65,10 @@ export function ConversionFunnel() {
               animate={{ scale: 1 }}
               transition={{ delay: 0.8, type: "spring" }}
             >
-              <p className="text-3xl font-bold text-emerald-600">
+              <p className="text-3xl font-bold bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
                 {conversionRate.toFixed(1)}%
               </p>
-              <p className="text-xs text-muted-foreground">Taxa de conversão</p>
+              <p className="text-[10px] text-muted-foreground font-medium">Conversão</p>
             </motion.div>
           </div>
         </CardHeader>
@@ -116,7 +76,7 @@ export function ConversionFunnel() {
           <div className="space-y-4">
             {steps.map((step, index) => {
               const Icon = step.icon;
-              const widthPercentage = Math.max(step.percentage, 10);
+              const widthPct = Math.max(step.percentage, 8);
               
               return (
                 <motion.div
@@ -125,55 +85,41 @@ export function ConversionFunnel() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.3 + index * 0.1 }}
                 >
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-lg ${step.bgColor}`}>
-                        <Icon className={`h-4 w-4 ${step.color}`} />
+                      <div className={cn("flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br shadow-sm", step.gradient)}>
+                        <Icon className="h-3.5 w-3.5 text-white" />
                       </div>
                       <span className="text-sm font-medium">{step.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold">{step.value}</span>
-                      <span className="text-xs text-muted-foreground">
-                        ({step.percentage.toFixed(1)}%)
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        ({step.percentage.toFixed(0)}%)
                       </span>
                     </div>
                   </div>
-                  <div className="relative h-8 bg-muted rounded-lg overflow-hidden">
+                  <div className="relative h-7 bg-muted/50 rounded-lg overflow-hidden">
                     <motion.div
-                      className={`absolute inset-y-0 left-0 rounded-lg ${step.bgColor.replace('/30', '')}`}
-                      style={{ backgroundColor: step.color.replace('text-', '').replace('-600', '') }}
+                      className={cn("absolute inset-y-0 left-0 rounded-lg bg-gradient-to-r", step.gradient)}
                       initial={{ width: 0 }}
-                      animate={{ width: `${widthPercentage}%` }}
-                      transition={{ 
-                        duration: 1, 
-                        delay: 0.5 + index * 0.15,
-                        ease: "easeOut"
-                      }}
-                    >
-                      <div 
-                        className="absolute inset-0 opacity-30"
-                        style={{
-                          background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)`,
-                          animation: 'shimmer 2s infinite'
-                        }}
-                      />
-                    </motion.div>
+                      animate={{ width: `${widthPct}%` }}
+                      transition={{ duration: 1.2, delay: 0.5 + index * 0.15, ease: [0.22, 1, 0.36, 1] }}
+                    />
                   </div>
                 </motion.div>
               );
             })}
           </div>
 
-          {/* Conversion insights */}
           <motion.div 
-            className="mt-6 p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20"
+            className="mt-6 p-4 rounded-xl border border-border/50 bg-gradient-to-r from-primary/5 to-transparent"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1 }}
           >
-            <p className="text-sm font-medium mb-2">💡 Insights</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm font-semibold mb-1">💡 Insights</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
               {conversionRate >= 30 
                 ? "Excelente taxa de conversão! Continue com a estratégia atual."
                 : conversionRate >= 15

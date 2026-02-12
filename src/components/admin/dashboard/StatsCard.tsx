@@ -12,8 +12,7 @@ interface StatsCardProps {
   icon: LucideIcon;
   trend?: number;
   trendLabel?: string;
-  color: string;
-  bgColor: string;
+  gradient: string;
   index: number;
 }
 
@@ -25,8 +24,7 @@ export function StatsCard({
   icon: Icon, 
   trend,
   trendLabel,
-  color, 
-  bgColor,
+  gradient,
   index 
 }: StatsCardProps) {
   const isPositiveTrend = trend && trend > 0;
@@ -34,67 +32,65 @@ export function StatsCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ 
         duration: 0.5, 
-        delay: index * 0.1,
-        type: "spring",
-        stiffness: 100
+        delay: index * 0.08,
+        ease: [0.22, 1, 0.36, 1]
       }}
       whileHover={{ 
-        y: -5, 
-        boxShadow: "0 20px 40px -15px rgba(0,0,0,0.15)",
-        transition: { duration: 0.2 }
+        y: -4, 
+        transition: { duration: 0.2, ease: 'easeOut' }
       }}
+      className="group"
     >
-      <Card className="relative overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300">
-        <div className={cn("absolute inset-0 opacity-10", bgColor)} />
-        <div className="absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 rounded-full opacity-10" 
-          style={{ background: `radial-gradient(circle, ${color.replace('text-', 'rgb(var(--')})` }} 
-        />
-        <CardContent className="pt-6 relative">
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">{title}</p>
-              <p className={cn("text-3xl font-bold", color)}>
-                <AnimatedCounter value={value} prefix={prefix} suffix={suffix} />
-              </p>
-              {trend !== undefined && (
-                <motion.div 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + index * 0.1 }}
-                  className="flex items-center gap-1"
-                >
-                  {isPositiveTrend && (
-                    <TrendingUp className="h-4 w-4 text-emerald-500" />
-                  )}
-                  {isNegativeTrend && (
-                    <TrendingDown className="h-4 w-4 text-red-500" />
-                  )}
-                  <span className={cn(
-                    "text-sm font-medium",
-                    isPositiveTrend && "text-emerald-500",
-                    isNegativeTrend && "text-red-500",
-                    !isPositiveTrend && !isNegativeTrend && "text-muted-foreground"
-                  )}>
-                    {isPositiveTrend && '+'}{trend}%
-                  </span>
-                  {trendLabel && (
-                    <span className="text-xs text-muted-foreground">{trendLabel}</span>
-                  )}
-                </motion.div>
-              )}
-            </div>
+      <Card className="relative overflow-hidden border border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+        {/* Gradient accent line */}
+        <div className={cn("absolute top-0 left-0 right-0 h-1 bg-gradient-to-r", gradient)} />
+        
+        <CardContent className="pt-5 pb-4 px-4">
+          <div className="flex items-start justify-between mb-3">
             <motion.div 
-              className={cn("p-3 rounded-2xl", bgColor)}
-              whileHover={{ rotate: 10, scale: 1.1 }}
-              transition={{ type: "spring", stiffness: 300 }}
+              className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br shadow-lg",
+                gradient
+              )}
+              whileHover={{ rotate: 8, scale: 1.1 }}
+              transition={{ type: "spring", stiffness: 400, damping: 15 }}
             >
-              <Icon className={cn("h-6 w-6", color)} />
+              <Icon className="h-5 w-5 text-white" />
             </motion.div>
           </div>
+
+          <p className="text-2xl font-bold tracking-tight mb-0.5">
+            <AnimatedCounter value={value} prefix={prefix} suffix={suffix} />
+          </p>
+          
+          <p className="text-xs font-medium text-muted-foreground">{title}</p>
+
+          {trend !== undefined && (
+            <motion.div 
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 + index * 0.08 }}
+              className="flex items-center gap-1 mt-2 pt-2 border-t border-border/50"
+            >
+              {isPositiveTrend && <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />}
+              {isNegativeTrend && <TrendingDown className="h-3.5 w-3.5 text-red-500" />}
+              <span className={cn(
+                "text-xs font-semibold",
+                isPositiveTrend && "text-emerald-500",
+                isNegativeTrend && "text-red-500",
+                !isPositiveTrend && !isNegativeTrend && "text-muted-foreground"
+              )}>
+                {isPositiveTrend && '+'}{trend}%
+              </span>
+              {trendLabel && (
+                <span className="text-[10px] text-muted-foreground">{trendLabel}</span>
+              )}
+            </motion.div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
