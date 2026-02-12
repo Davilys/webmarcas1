@@ -15,6 +15,7 @@ import { ClientListView } from '@/components/admin/clients/ClientListView';
 import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
 import { ClientImportExportDialog } from '@/components/admin/clients/ClientImportExportDialog';
 import { DuplicateClientsDialog } from '@/components/admin/clients/DuplicateClientsDialog';
+import { CreateClientDialog } from '@/components/admin/clients/CreateClientDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { DatePeriodFilter, type DateFilterType } from '@/components/admin/clients/DatePeriodFilter';
 import { startOfDay, startOfWeek, startOfMonth, endOfMonth, endOfDay, isWithinInterval, parseISO, format } from 'date-fns';
@@ -325,6 +326,7 @@ export default function AdminClientes() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <CreateClientDialog onClientCreated={fetchClients} />
               <DuplicateClientsDialog 
                 onMergeComplete={fetchClients}
                 trigger={
