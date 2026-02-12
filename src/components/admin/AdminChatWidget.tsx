@@ -47,6 +47,7 @@ export function AdminChatWidget() {
   const [adminProfiles, setAdminProfiles] = useState<Map<string, string>>(new Map());
   const [convFilter, setConvFilter] = useState<'all' | 'unread'>('all');
   const [activeTab, setActiveTab] = useState<'clients' | 'internal'>('clients');
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   const chat = useChat(user);
   const remoteId = chat.activeConversation?.participants?.find(p => p.user_id !== user?.id)?.user_id || null;
@@ -79,6 +80,31 @@ export function AdminChatWidget() {
       }
     });
   }, []);
+
+  // Track online users via Supabase Presence
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+
+    const presenceChannel = supabase.channel('online-users-listen', {
+      config: { presence: { key: user.id } },
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const ids = new Set<string>(Object.keys(state));
+        setOnlineUsers(ids);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ user_id: user.id, online_at: new Date().toISOString() });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [user, isAdmin]);
 
   // Listen for open-admin-chat events
   useEffect(() => {
@@ -393,7 +419,9 @@ export function AdminChatWidget() {
                                   {initials}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                              {onlineUsers.has(client.id) && (
+                                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                              )}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-1">
