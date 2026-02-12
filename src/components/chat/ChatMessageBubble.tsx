@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { FileText, Image, Video, Music, File as FileIcon, Download, Bot, Check, CheckCheck, Play, Pause } from 'lucide-react';
+import { FileText, Image, Video, Music, File as FileIcon, Download, Bot, CheckCheck, Play, Pause } from 'lucide-react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import type { ChatMessage } from '@/hooks/useChat';
 import ReactMarkdown from 'react-markdown';
 
@@ -39,24 +38,57 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const onLoaded = () => setDuration(audio.duration || 0);
+
+    const onLoaded = () => {
+      if (audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
+    const onDurationChange = () => {
+      if (audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
     const onTime = () => setCurrentTime(audio.currentTime);
     const onEnded = () => setPlaying(false);
+    const onError = () => console.error('Audio load error:', audio.error);
+
     audio.addEventListener('loadedmetadata', onLoaded);
+    audio.addEventListener('durationchange', onDurationChange);
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+    audio.addEventListener('canplaythrough', onLoaded);
+
+    audio.load();
+
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
+      audio.removeEventListener('canplaythrough', onLoaded);
     };
-  }, []);
+  }, [src]);
 
-  const toggle = () => {
+  const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
-    if (playing) { a.pause(); } else { a.play(); }
-    setPlaying(!playing);
+    try {
+      if (playing) {
+        a.pause();
+        setPlaying(false);
+      } else {
+        a.volume = 1;
+        a.muted = false;
+        await a.play();
+        setPlaying(true);
+      }
+    } catch (err) {
+      console.error('Audio play error:', err);
+      setPlaying(false);
+    }
   };
 
   const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,7 +116,7 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio ref={audioRef} src={src} preload="auto" />
       <button
         onClick={toggle}
         className={cn(
@@ -214,7 +246,7 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
             </div>
           )}
 
-          {/* Time & read status - inline WhatsApp style */}
+          {/* Time & read status */}
           <div className={cn(
             "flex items-center gap-1 justify-end -mb-1 mt-0.5",
             isOwnMessage ? "text-[#667781] dark:text-white/50" : "text-[#667781] dark:text-white/40"
