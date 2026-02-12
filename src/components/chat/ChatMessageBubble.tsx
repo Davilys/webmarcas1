@@ -46,35 +46,37 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
         setDuration(audio.duration);
       }
     };
-    const onDurationChange = () => {
-      if (audio.duration && isFinite(audio.duration)) {
-        setDuration(audio.duration);
-      }
-    };
     const onTime = () => setCurrentTime(audio.currentTime);
     const onEnded = () => setPlaying(false);
     const onError = () => {
-      const err = audio.error;
-      console.warn('Audio load error:', err?.code, err?.message || 'unknown');
+      console.warn('Audio load error:', audio.error?.code, audio.error?.message || 'unknown');
       setLoadError(true);
     };
 
     audio.addEventListener('loadedmetadata', onLoaded);
-    audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('durationchange', onLoaded);
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
     audio.addEventListener('canplaythrough', onLoaded);
 
-    // Set crossOrigin before setting src to avoid CORS issues
-    audio.crossOrigin = 'anonymous';
-    audio.preload = 'auto';
+    // Don't set crossOrigin for same-origin / supabase storage URLs
+    const isExternal = (() => {
+      try {
+        if (src.startsWith('data:') || src.startsWith('blob:')) return false;
+        const srcOrigin = new URL(src).origin;
+        return srcOrigin !== window.location.origin && !src.includes('supabase.co');
+      } catch { return false; }
+    })();
+    if (isExternal) audio.crossOrigin = 'anonymous';
+
+    audio.preload = 'metadata';
     audio.src = src;
     audio.load();
 
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
-      audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('durationchange', onLoaded);
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
@@ -87,11 +89,10 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
-    
-    // If there was a load error, try reloading without crossOrigin
+
     if (loadError) {
       setLoadError(false);
-      a.crossOrigin = null as any;
+      a.removeAttribute('crossOrigin');
       a.src = src;
       a.load();
       try {
@@ -99,19 +100,16 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
         setPlaying(true);
       } catch (err) {
         console.error('Audio play retry error:', err);
-        setPlaying(false);
         setLoadError(true);
       }
       return;
     }
-    
+
     try {
       if (playing) {
         a.pause();
         setPlaying(false);
       } else {
-        a.volume = 1;
-        a.muted = false;
         await a.play();
         setPlaying(true);
       }
