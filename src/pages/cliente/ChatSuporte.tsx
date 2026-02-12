@@ -299,7 +299,7 @@ export default function ChatSuporte() {
       </div>
 
       {/* Video call overlay */}
-      <AnimatePresence>
+      {webrtc.callActive && (
         <VideoCallOverlay
           callActive={webrtc.callActive}
           callType={webrtc.callType}
@@ -314,8 +314,11 @@ export default function ChatSuporte() {
           onToggleCamera={webrtc.toggleCamera}
           onToggleScreenShare={webrtc.toggleScreenShare}
         />
+      )}
+      <AnimatePresence>
         {webrtc.incomingCall && (
           <IncomingCallNotification
+            key="incoming-call"
             callerName={webrtc.incomingCall.callerName || ''}
             callType={webrtc.incomingCall.callType}
             onAccept={webrtc.acceptCall}

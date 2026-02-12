@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Monitor, MonitorOff, Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -139,35 +140,38 @@ interface IncomingCallProps {
   onReject: () => void;
 }
 
-export function IncomingCallNotification({ callerName, callType, onAccept, onReject }: IncomingCallProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -50, scale: 0.9 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -50, scale: 0.9 }}
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[340px]"
-    >
-      <div className="bg-card border shadow-2xl rounded-2xl p-5 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center animate-pulse">
-            {callType === 'video' ? <Video className="h-6 w-6 text-primary" /> : <Phone className="h-6 w-6 text-primary" />}
+export const IncomingCallNotification = forwardRef<HTMLDivElement, IncomingCallProps>(
+  function IncomingCallNotification({ callerName, callType, onAccept, onReject }, ref) {
+    return (
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, y: -50, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -50, scale: 0.9 }}
+        className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-[340px]"
+      >
+        <div className="bg-card border shadow-2xl rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center animate-pulse">
+              {callType === 'video' ? <Video className="h-6 w-6 text-primary" /> : <Phone className="h-6 w-6 text-primary" />}
+            </div>
+            <div>
+              <p className="font-semibold">{callerName}</p>
+              <p className="text-sm text-muted-foreground">
+                Chamada de {callType === 'video' ? 'vídeo' : 'áudio'} recebida...
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold">{callerName}</p>
-            <p className="text-sm text-muted-foreground">
-              Chamada de {callType === 'video' ? 'vídeo' : 'áudio'} recebida...
-            </p>
+          <div className="flex gap-3">
+            <Button onClick={onReject} variant="destructive" className="flex-1 rounded-xl">
+              <PhoneOff className="h-4 w-4 mr-2" /> Recusar
+            </Button>
+            <Button onClick={onAccept} className="flex-1 rounded-xl bg-green-600 hover:bg-green-700">
+              <Phone className="h-4 w-4 mr-2" /> Atender
+            </Button>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button onClick={onReject} variant="destructive" className="flex-1 rounded-xl">
-            <PhoneOff className="h-4 w-4 mr-2" /> Recusar
-          </Button>
-          <Button onClick={onAccept} className="flex-1 rounded-xl bg-green-600 hover:bg-green-700">
-            <Phone className="h-4 w-4 mr-2" /> Atender
-          </Button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+      </motion.div>
+    );
+  }
+);
