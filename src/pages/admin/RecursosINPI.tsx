@@ -524,7 +524,7 @@ export default function RecursosINPI() {
       {/* Floating Legal AI Chat Button - outside scrollable content */}
       <button
         onClick={() => setShowLegalChat(true)}
-        className="fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 flex items-center justify-center"
+        className="fixed bottom-24 right-6 z-[9999] h-14 w-14 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 flex items-center justify-center"
         title="Consultora Jurídica IA"
       >
         <Scale className="h-6 w-6" />
