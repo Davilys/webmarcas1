@@ -49,28 +49,51 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // CRITICAL: getUserMedia called directly in click handler for browser gesture policy
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100,
+        },
+      });
       streamRef.current = stream;
       chunksRef.current = [];
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+
+      // Prefer OGG/Opus for better compatibility, fallback to webm then mp4
+      const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        if (blob.size < 100) {
+          console.warn('Audio blob too small, discarding');
+          return;
+        }
+        const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: mimeType });
         if (onAudioSend) { onAudioSend(file); } else { onFileUpload(file); }
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       };
-      recorder.start(250);
+
+      recorder.start(1000); // Collect data every second for more reliable chunks
       setIsRecording(true);
       setRecordingTime(0);
       timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-    } catch { /* Mic permission denied */ }
+    } catch (err) {
+      console.error('Microphone access error:', err);
+    }
   }, [onAudioSend, onFileUpload]);
 
   const stopRecording = useCallback(() => {
