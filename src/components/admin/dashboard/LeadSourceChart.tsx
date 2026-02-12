@@ -86,17 +86,15 @@ export function LeadSourceChart() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.35 }}
     >
-      <Card className="border-0 shadow-lg h-full">
+      <Card className="border border-border/50 bg-card/80 backdrop-blur-sm shadow-xl h-full overflow-hidden">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-pink-100 dark:bg-pink-900/30">
-              <Share2 className="h-5 w-5 text-pink-600" />
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-400 shadow-lg">
+              <Share2 className="h-5 w-5 text-white" />
             </div>
             <div>
-              <CardTitle className="text-lg">Origem dos Leads</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                De onde vêm seus clientes
-              </p>
+              <CardTitle className="text-lg font-bold">Origem dos Leads</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">De onde vêm seus clientes</p>
             </div>
           </div>
         </CardHeader>
