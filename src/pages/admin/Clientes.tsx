@@ -112,6 +112,12 @@ export default function AdminClientes() {
 
       if (processesError) throw processesError;
 
+      // Fetch contract values to sync
+      const { data: contracts } = await supabase
+        .from('contracts')
+        .select('user_id, contract_value, payment_method')
+        .order('created_at', { ascending: false });
+
       // Fetch admin profiles for name resolution
       const adminIds = new Set<string>();
       for (const p of profiles || []) {
@@ -133,6 +139,14 @@ export default function AdminClientes() {
         }
       }
 
+      // Build contract value map (latest contract per user)
+      const contractValueMap: Record<string, { value: number; method: string | null }> = {};
+      for (const c of contracts || []) {
+        if (c.user_id && !contractValueMap[c.user_id] && c.contract_value) {
+          contractValueMap[c.user_id] = { value: Number(c.contract_value), method: c.payment_method };
+        }
+      }
+
       // Combine profiles with their processes
       const clientsWithProcesses: ClientWithProcess[] = [];
 
@@ -140,6 +154,8 @@ export default function AdminClientes() {
         const userProcesses = (processes || []).filter(p => p.user_id === profile.id);
         const createdByName = (profile as any).created_by ? adminNameMap[(profile as any).created_by] || null : null;
         const assignedToName = (profile as any).assigned_to ? adminNameMap[(profile as any).assigned_to] || null : null;
+        // Use contract value from contracts table if available, otherwise from profile
+        const contractVal = contractValueMap[profile.id]?.value || profile.contract_value;
         
         if (userProcesses.length === 0) {
           clientsWithProcesses.push({
@@ -150,7 +166,7 @@ export default function AdminClientes() {
             company_name: profile.company_name,
             priority: profile.priority,
             origin: profile.origin,
-            contract_value: profile.contract_value,
+            contract_value: contractVal,
             process_id: null,
             brand_name: null,
             business_area: null,
@@ -174,7 +190,7 @@ export default function AdminClientes() {
               company_name: profile.company_name,
               priority: profile.priority,
               origin: profile.origin,
-              contract_value: profile.contract_value,
+              contract_value: contractVal,
               process_id: process.id,
               brand_name: process.brand_name,
               business_area: process.business_area || null,
