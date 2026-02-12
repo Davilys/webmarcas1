@@ -111,20 +111,43 @@ export function AdminChatWidget() {
 
   if (!isAdmin) return null;
 
+  // Get admin user IDs set for filtering
+  const adminUserIds = new Set(adminProfiles.keys());
+
   const filteredConversations = chat.conversations.filter(conv => {
     if (convFilter === 'unread' && !(conv.unread_count && conv.unread_count > 0)) return false;
-    if (!searchQuery) return true;
+
+    // Filter by tab: clients vs internal (admin-to-admin)
     const otherP = conv.participants?.find(p => p.user_id !== user?.id);
+    if (otherP) {
+      const isOtherAdmin = adminUserIds.has(otherP.user_id);
+      if (activeTab === 'clients' && isOtherAdmin) return false;
+      if (activeTab === 'internal' && !isOtherAdmin) return false;
+    }
+
+    if (!searchQuery) return true;
     const name = otherP?.profile?.full_name || otherP?.profile?.email || '';
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const filteredNewClients = searchQuery
-    ? clients.filter(c =>
-        c.id !== user?.id &&
-        !chat.conversations.some(conv => conv.participants?.some(p => p.user_id === c.id)) &&
-        ((c.full_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-         c.email.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredNewContacts = searchQuery
+    ? (activeTab === 'internal'
+        // Show other admins not yet in conversations
+        ? Array.from(adminProfiles.entries())
+            .filter(([id]) =>
+              id !== user?.id &&
+              !chat.conversations.some(conv => conv.participants?.some(p => p.user_id === id))
+            )
+            .filter(([, name]) => name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .map(([id, name]) => ({ id, full_name: name, email: '', phone: null, cpf_cnpj: null, created_at: null, assigned_to: null }))
+        // Show clients not yet in conversations
+        : clients.filter(c =>
+            c.id !== user?.id &&
+            !adminUserIds.has(c.id) &&
+            !chat.conversations.some(conv => conv.participants?.some(p => p.user_id === c.id)) &&
+            ((c.full_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+             c.email.toLowerCase().includes(searchQuery.toLowerCase()))
+          )
       )
     : [];
 
@@ -263,33 +286,43 @@ export function AdminChatWidget() {
                   "flex flex-col border-r bg-card overflow-hidden",
                   isFullView ? "w-[320px] shrink-0" : "flex-1"
                 )}>
-                  {/* Filters row */}
-                  <div className="px-3 pt-2 pb-1 flex items-center gap-2">
+                  {/* Tabs: Clientes / Interno */}
+                  <div className="px-3 pt-2 pb-1 flex items-center gap-1 border-b border-border/30">
                     <button
-                      onClick={() => setConvFilter('all')}
+                      onClick={() => setActiveTab('clients')}
                       className={cn(
-                        "text-xs font-medium px-3 py-1 rounded-full transition-colors",
-                        convFilter === 'all'
-                          ? "bg-[#008069]/10 text-[#008069] dark:bg-[#00a884]/20 dark:text-[#00a884]"
-                          : "text-muted-foreground hover:bg-muted"
+                        "text-xs font-semibold px-3 py-1.5 rounded-t transition-colors border-b-2",
+                        activeTab === 'clients'
+                          ? "border-[#00a884] text-[#008069] dark:text-[#00a884]"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      Todos
+                      <Users className="h-3.5 w-3.5 inline mr-1" />
+                      Clientes
                     </button>
                     <button
-                      onClick={() => setConvFilter('unread')}
+                      onClick={() => setActiveTab('internal')}
                       className={cn(
-                        "text-xs font-medium px-3 py-1 rounded-full transition-colors",
+                        "text-xs font-semibold px-3 py-1.5 rounded-t transition-colors border-b-2",
+                        activeTab === 'internal'
+                          ? "border-[#00a884] text-[#008069] dark:text-[#00a884]"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5 inline mr-1" />
+                      Interno
+                    </button>
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => setConvFilter(f => f === 'all' ? 'unread' : 'all')}
+                      className={cn(
+                        "text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors",
                         convFilter === 'unread'
                           ? "bg-[#008069]/10 text-[#008069] dark:bg-[#00a884]/20 dark:text-[#00a884]"
                           : "text-muted-foreground hover:bg-muted"
                       )}
                     >
-                      Não lidos
-                    </button>
-                    <div className="flex-1" />
-                    <button className="text-muted-foreground hover:text-foreground p-1">
-                      <Filter className="h-3.5 w-3.5" />
+                      {convFilter === 'unread' ? 'Não lidos' : 'Todos'}
                     </button>
                   </div>
 
@@ -362,7 +395,7 @@ export function AdminChatWidget() {
                       })}
 
                       {/* New client matches from search */}
-                      {filteredNewClients.map(client => (
+                      {filteredNewContacts.map(client => (
                         <button
                           key={client.id}
                           onClick={() => openChatWith(client.id)}
@@ -380,7 +413,7 @@ export function AdminChatWidget() {
                         </button>
                       ))}
 
-                      {filteredConversations.length === 0 && filteredNewClients.length === 0 && (
+                      {filteredConversations.length === 0 && filteredNewContacts.length === 0 && (
                         <div className="p-8 text-center text-sm text-muted-foreground">
                           <MessageCircle className="h-10 w-10 mx-auto mb-3 opacity-20" />
                           <p>Nenhuma conversa encontrada</p>

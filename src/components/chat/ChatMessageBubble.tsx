@@ -207,17 +207,8 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
 
           {/* Text content */}
           {message.content && !isAudio && (
-            <div className="text-[14px] leading-relaxed">
-              <ReactMarkdown
-                components={{
-                  p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                  a: ({ href, children }) => (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline">
-                      {children}
-                    </a>
-                  ),
-                }}
-              >
+            <div className="text-[14px] leading-relaxed [&_p]:mb-1 [&_p:last-child]:mb-0 [&_a]:text-blue-600 dark:[&_a]:text-blue-400 [&_a]:underline">
+              <ReactMarkdown>
                 {message.content}
               </ReactMarkdown>
             </div>
