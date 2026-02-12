@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ interface MeetingScheduleDialogProps {
   assignedAdmin?: { id: string; full_name: string | null } | null;
 }
 
-export function MeetingScheduleDialog({ open, onOpenChange, conversationId, currentUserId, participants, isAdmin = false, assignedAdmin }: MeetingScheduleDialogProps) {
+export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleDialogProps>(function MeetingScheduleDialog({ open, onOpenChange, conversationId, currentUserId, participants, isAdmin = false, assignedAdmin }, ref) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
@@ -212,4 +212,4 @@ export function MeetingScheduleDialog({ open, onOpenChange, conversationId, curr
       </DialogContent>
     </Dialog>
   );
-}
+});
