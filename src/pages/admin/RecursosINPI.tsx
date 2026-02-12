@@ -519,19 +519,19 @@ export default function RecursosINPI() {
           </DialogContent>
         </Dialog>
 
-        {/* Floating Legal AI Chat Button */}
-        <Button
-          onClick={() => setShowLegalChat(true)}
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50"
-          size="icon"
-          title="Consultora Jurídica IA"
-        >
-          <Scale className="h-6 w-6" />
-        </Button>
-
-        {/* Legal Chat Dialog */}
-        <INPILegalChatDialog open={showLegalChat} onOpenChange={setShowLegalChat} />
       </div>
+
+      {/* Floating Legal AI Chat Button - outside scrollable content */}
+      <button
+        onClick={() => setShowLegalChat(true)}
+        className="fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 flex items-center justify-center"
+        title="Consultora Jurídica IA"
+      >
+        <Scale className="h-6 w-6" />
+      </button>
+
+      {/* Legal Chat Dialog */}
+      <INPILegalChatDialog open={showLegalChat} onOpenChange={setShowLegalChat} />
     </AdminLayout>
   );
 }
