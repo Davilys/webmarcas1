@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import { cn } from '@/lib/utils';
+import { usePresence } from '@/hooks/usePresence';
 
 interface ClientLayoutProps {
   children: ReactNode;
@@ -98,6 +99,15 @@ export function ClientLayout({ children }: ClientLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id || null);
+    });
+  }, []);
+
+  usePresence(userId);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
