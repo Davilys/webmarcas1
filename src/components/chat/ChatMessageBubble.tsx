@@ -34,10 +34,12 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    setLoadError(false);
 
     const onLoaded = () => {
       if (audio.duration && isFinite(audio.duration)) {
@@ -51,7 +53,11 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
     };
     const onTime = () => setCurrentTime(audio.currentTime);
     const onEnded = () => setPlaying(false);
-    const onError = () => console.error('Audio load error:', audio.error);
+    const onError = () => {
+      const err = audio.error;
+      console.warn('Audio load error:', err?.code, err?.message || 'unknown');
+      setLoadError(true);
+    };
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('durationchange', onDurationChange);
@@ -60,6 +66,10 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
     audio.addEventListener('error', onError);
     audio.addEventListener('canplaythrough', onLoaded);
 
+    // Set crossOrigin before setting src to avoid CORS issues
+    audio.crossOrigin = 'anonymous';
+    audio.preload = 'auto';
+    audio.src = src;
     audio.load();
 
     return () => {
@@ -69,12 +79,32 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
       audio.removeEventListener('canplaythrough', onLoaded);
+      audio.pause();
+      audio.removeAttribute('src');
     };
   }, [src]);
 
   const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
+    
+    // If there was a load error, try reloading without crossOrigin
+    if (loadError) {
+      setLoadError(false);
+      a.crossOrigin = null as any;
+      a.src = src;
+      a.load();
+      try {
+        await a.play();
+        setPlaying(true);
+      } catch (err) {
+        console.error('Audio play retry error:', err);
+        setPlaying(false);
+        setLoadError(true);
+      }
+      return;
+    }
+    
     try {
       if (playing) {
         a.pause();
@@ -116,12 +146,13 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      <audio ref={audioRef} src={src} preload="auto" />
+      <audio ref={audioRef} />
       <button
         onClick={toggle}
         className={cn(
           "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors",
-          isOwn ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#00a884]/15 text-[#00a884] hover:bg-[#00a884]/25"
+          isOwn ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#00a884]/15 text-[#00a884] hover:bg-[#00a884]/25",
+          loadError && "opacity-70"
         )}
       >
         {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
