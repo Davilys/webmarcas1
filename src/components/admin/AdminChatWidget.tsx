@@ -114,42 +114,64 @@ export function AdminChatWidget() {
   // Get admin user IDs set for filtering
   const adminUserIds = new Set(adminProfiles.keys());
 
-  const filteredConversations = chat.conversations.filter(conv => {
-    if (convFilter === 'unread' && !(conv.unread_count && conv.unread_count > 0)) return false;
+  // Build a unified contact list: merge CRM data with conversation data, no duplicates
+  const buildUnifiedList = () => {
+    const convByUserId = new Map<string, Conversation>();
+    chat.conversations.forEach(conv => {
+      const otherP = conv.participants?.find(p => p.user_id !== user?.id);
+      if (otherP) convByUserId.set(otherP.user_id, conv);
+    });
 
-    // Filter by tab: clients vs internal (admin-to-admin)
-    const otherP = conv.participants?.find(p => p.user_id !== user?.id);
-    if (otherP) {
-      const isOtherAdmin = adminUserIds.has(otherP.user_id);
-      if (activeTab === 'clients' && isOtherAdmin) return false;
-      if (activeTab === 'internal' && !isOtherAdmin) return false;
+    if (activeTab === 'clients') {
+      // Show ALL CRM clients (non-admin, non-self)
+      const allClients = clients
+        .filter(c => c.id !== user?.id && !adminUserIds.has(c.id))
+        .map(c => ({
+          client: c,
+          conversation: convByUserId.get(c.id) || null,
+        }));
+
+      // Sort: conversations with recent messages first, then alphabetical
+      allClients.sort((a, b) => {
+        const aTime = a.conversation?.last_message_at;
+        const bTime = b.conversation?.last_message_at;
+        if (aTime && !bTime) return -1;
+        if (!aTime && bTime) return 1;
+        if (aTime && bTime) return new Date(bTime).getTime() - new Date(aTime).getTime();
+        return (a.client.full_name || a.client.email).localeCompare(b.client.full_name || b.client.email);
+      });
+
+      return allClients;
+    } else {
+      // Internal: show all other admins
+      const adminEntries = Array.from(adminProfiles.entries())
+        .filter(([id]) => id !== user?.id)
+        .map(([id, name]) => ({
+          client: { id, full_name: name, email: '', phone: null, cpf_cnpj: null, created_at: null, assigned_to: null } as ClientProfile,
+          conversation: convByUserId.get(id) || null,
+        }));
+
+      adminEntries.sort((a, b) => {
+        const aTime = a.conversation?.last_message_at;
+        const bTime = b.conversation?.last_message_at;
+        if (aTime && !bTime) return -1;
+        if (!aTime && bTime) return 1;
+        if (aTime && bTime) return new Date(bTime).getTime() - new Date(aTime).getTime();
+        return (a.client.full_name || '').localeCompare(b.client.full_name || '');
+      });
+
+      return adminEntries;
     }
+  };
 
+  const unifiedList = buildUnifiedList().filter(item => {
+    if (convFilter === 'unread') {
+      if (!item.conversation || !(item.conversation.unread_count && item.conversation.unread_count > 0)) return false;
+    }
     if (!searchQuery) return true;
-    const name = otherP?.profile?.full_name || otherP?.profile?.email || '';
+    const name = item.client.full_name || item.client.email || '';
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
-
-  const filteredNewContacts = searchQuery
-    ? (activeTab === 'internal'
-        // Show other admins not yet in conversations
-        ? Array.from(adminProfiles.entries())
-            .filter(([id]) =>
-              id !== user?.id &&
-              !chat.conversations.some(conv => conv.participants?.some(p => p.user_id === id))
-            )
-            .filter(([, name]) => name.toLowerCase().includes(searchQuery.toLowerCase()))
-            .map(([id, name]) => ({ id, full_name: name, email: '', phone: null, cpf_cnpj: null, created_at: null, assigned_to: null }))
-        // Show clients not yet in conversations
-        : clients.filter(c =>
-            c.id !== user?.id &&
-            !adminUserIds.has(c.id) &&
-            !chat.conversations.some(conv => conv.participants?.some(p => p.user_id === c.id)) &&
-            ((c.full_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-             c.email.toLowerCase().includes(searchQuery.toLowerCase()))
-          )
-      )
-    : [];
 
   const openChatWith = async (clientId: string) => {
     await chat.openDirectConversation(clientId);
@@ -342,18 +364,24 @@ export function AdminChatWidget() {
                   {/* Conversations */}
                   <ScrollArea className="flex-1">
                     <div>
-                      {filteredConversations.map(conv => {
-                        const otherP = conv.participants?.find(p => p.user_id !== user?.id);
-                        const name = otherP?.profile?.full_name || otherP?.profile?.email || 'Cliente';
+                      {unifiedList.map(({ client, conversation: conv }) => {
+                        const name = client.full_name || client.email || 'Cliente';
                         const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                        const isActive = chat.activeConversation?.id === conv.id;
-                        const preview = getLastMsgPreview(conv);
-                        const hasUnread = conv.unread_count && conv.unread_count > 0;
+                        const isActive = conv && chat.activeConversation?.id === conv.id;
+                        const preview = conv ? getLastMsgPreview(conv) : 'Sem mensagens';
+                        const hasUnread = conv?.unread_count && conv.unread_count > 0;
 
                         return (
                           <button
-                            key={conv.id}
-                            onClick={() => { chat.setActiveConversation(conv); chat.fetchMessages(conv.id); }}
+                            key={client.id}
+                            onClick={() => {
+                              if (conv) {
+                                chat.setActiveConversation(conv);
+                                chat.fetchMessages(conv.id);
+                              } else {
+                                openChatWith(client.id);
+                              }
+                            }}
                             className={cn(
                               "w-full flex items-center gap-3 px-3 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border/30",
                               isActive && "bg-[#008069]/5 dark:bg-[#00a884]/10"
@@ -365,7 +393,6 @@ export function AdminChatWidget() {
                                   {initials}
                                 </AvatarFallback>
                               </Avatar>
-                              {/* Online indicator */}
                               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -375,7 +402,7 @@ export function AdminChatWidget() {
                                   "text-[11px] shrink-0",
                                   hasUnread ? "text-[#00a884] font-semibold" : "text-muted-foreground"
                                 )}>
-                                  {getConvTimeLabel(conv.last_message_at)}
+                                  {conv ? getConvTimeLabel(conv.last_message_at) : ''}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1 mt-0.5">
@@ -385,7 +412,7 @@ export function AdminChatWidget() {
                                 )}>{preview}</p>
                                 {hasUnread && (
                                   <span className="min-w-5 h-5 px-1.5 bg-[#00a884] text-white text-[10px] rounded-full flex items-center justify-center font-bold shrink-0">
-                                    {conv.unread_count}
+                                    {conv?.unread_count}
                                   </span>
                                 )}
                               </div>
@@ -394,29 +421,10 @@ export function AdminChatWidget() {
                         );
                       })}
 
-                      {/* New client matches from search */}
-                      {filteredNewContacts.map(client => (
-                        <button
-                          key={client.id}
-                          onClick={() => openChatWith(client.id)}
-                          className="w-full flex items-center gap-3 px-3 py-3 hover:bg-muted/50 transition-colors text-left border-b border-border/30"
-                        >
-                          <Avatar className="w-12 h-12 shrink-0">
-                            <AvatarFallback className="bg-muted text-muted-foreground text-sm font-semibold">
-                              {client.full_name?.substring(0, 2).toUpperCase() || '??'}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{client.full_name || client.email}</p>
-                            <p className="text-xs text-[#00a884]">+ Nova conversa</p>
-                          </div>
-                        </button>
-                      ))}
-
-                      {filteredConversations.length === 0 && filteredNewContacts.length === 0 && (
+                      {unifiedList.length === 0 && (
                         <div className="p-8 text-center text-sm text-muted-foreground">
                           <MessageCircle className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                          <p>Nenhuma conversa encontrada</p>
+                          <p>Nenhum contato encontrado</p>
                         </div>
                       )}
                     </div>
