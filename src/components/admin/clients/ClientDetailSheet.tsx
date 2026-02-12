@@ -171,6 +171,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const [customValueReason, setCustomValueReason] = useState<string>('');
   const [showPricingDialog, setShowPricingDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [showNotificationDialog, setShowNotificationDialog] = useState(false);
+  const [notificationTemplates, setNotificationTemplates] = useState<{id:string;name:string;title:string;message:string;type:string}[]>([]);
+  const [notificationForm, setNotificationForm] = useState({ title: '', message: '', type: 'info', link: '/cliente/processos' });
   const [editData, setEditData] = useState({
     priority: '',
     origin: '',
@@ -669,25 +672,18 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         break;
       case 'email':
         if (client?.email) {
-          window.location.href = `/admin/emails?compose=true&to=${encodeURIComponent(client.email)}`;
+          window.location.href = `/admin/emails?compose=true&to=${encodeURIComponent(client.email)}&name=${encodeURIComponent(client.full_name || '')}`;
         } else {
           toast.error('Cliente sem e-mail cadastrado');
         }
         break;
       case 'notification':
         if (client) {
-          try {
-            const { data: { user } } = await supabase.auth.getUser();
-            await supabase.from('notifications').insert({
-              user_id: client.id,
-              title: 'Nova notificação',
-              message: `Você recebeu uma notificação do administrador.`,
-              type: 'info'
-            });
-            toast.success('Notificação enviada ao cliente!');
-          } catch {
-            toast.error('Erro ao enviar notificação');
-          }
+          // Fetch templates and open dialog
+          const { data: tpls } = await supabase.from('notification_templates').select('id, name, title, message, type').eq('is_active', true);
+          setNotificationTemplates(tpls || []);
+          setNotificationForm({ title: '', message: '', type: 'info', link: '/cliente/processos' });
+          setShowNotificationDialog(true);
         }
         break;
       case 'excluir':
@@ -2125,6 +2121,86 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
               Cancelar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notification Dialog */}
+      <Dialog open={showNotificationDialog} onOpenChange={setShowNotificationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar Notificação</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!notificationForm.title || !notificationForm.message || !client) return;
+            try {
+              await supabase.from('notifications').insert({
+                user_id: client.id,
+                title: notificationForm.title,
+                message: notificationForm.message,
+                type: notificationForm.type,
+                link: notificationForm.link || null,
+                read: false,
+              });
+              toast.success('Notificação enviada ao cliente!');
+              setShowNotificationDialog(false);
+            } catch {
+              toast.error('Erro ao enviar notificação');
+            }
+          }} className="space-y-4">
+            {notificationTemplates.length > 0 && (
+              <div>
+                <Label>Usar Template (opcional)</Label>
+                <Select onValueChange={(id) => {
+                  const t = notificationTemplates.find(t => t.id === id);
+                  if (t) setNotificationForm(f => ({ ...f, title: t.title, message: t.message, type: t.type }));
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Selecione um template..." /></SelectTrigger>
+                  <SelectContent>
+                    {notificationTemplates.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label>Título *</Label>
+              <Input value={notificationForm.title} onChange={e => setNotificationForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Atualização do seu processo" required />
+            </div>
+            <div>
+              <Label>Mensagem *</Label>
+              <Textarea value={notificationForm.message} onChange={e => setNotificationForm(f => ({ ...f, message: e.target.value }))} placeholder="Conteúdo da notificação..." rows={4} required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Tipo</Label>
+                <Select value={notificationForm.type} onValueChange={v => setNotificationForm(f => ({ ...f, type: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="info">Informação</SelectItem>
+                    <SelectItem value="success">Sucesso</SelectItem>
+                    <SelectItem value="warning">Aviso</SelectItem>
+                    <SelectItem value="error">Urgente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Link (opcional)</Label>
+                <Input value={notificationForm.link} onChange={e => setNotificationForm(f => ({ ...f, link: e.target.value }))} placeholder="/cliente/processos" />
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-muted/50">
+              <p className="text-sm text-muted-foreground">
+                <Users className="inline h-4 w-4 mr-1" />
+                Cliente: <strong>{client?.full_name || client?.email}</strong>
+              </p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowNotificationDialog(false)}>Cancelar</Button>
+              <Button type="submit"><Send className="h-4 w-4 mr-2" />Enviar</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </Sheet>
