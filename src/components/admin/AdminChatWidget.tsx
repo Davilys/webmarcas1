@@ -93,10 +93,14 @@ export function AdminChatWidget() {
     try {
       const fd = await chat.uploadFile(file);
       if (fd) {
-        const mt = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+        const mt = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'file';
         await chat.sendMessage(file.name, mt, fd);
       }
     } catch { toast.error('Erro ao enviar'); }
+  };
+
+  const handleAudioSend = async (file: File) => {
+    await handleFileUpload(file);
   };
 
   const activeName = chat.activeConversation?.participants?.find(p => p.user_id !== user?.id)?.profile?.full_name || 'Cliente';
@@ -217,7 +221,7 @@ export function AdminChatWidget() {
                     <ChatMessageBubble key={msg.id} message={msg} isOwnMessage={msg.sender_id === user?.id} />
                   ))}
                 </div>
-                <ChatInput onSend={handleSend} onFileUpload={handleFileUpload} disabled={chat.sendingMessage} />
+                <ChatInput onSend={handleSend} onFileUpload={handleFileUpload} onAudioSend={handleAudioSend} disabled={chat.sendingMessage} />
               </div>
             )}
           </motion.div>

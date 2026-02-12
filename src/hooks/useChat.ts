@@ -348,13 +348,13 @@ export function useChat(user: User | null) {
     const ext = file.name.split('.').pop();
     const path = `chat/${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
-    const { error } = await supabase.storage.from('documents').upload(path, file, { cacheControl: '3600' });
+    const { error } = await supabase.storage.from('documents').upload(path, file, { cacheControl: '3600', upsert: false });
     if (error) throw error;
 
-    const { data: signedData } = await supabase.storage.from('documents').createSignedUrl(path, 3600);
-    if (!signedData?.signedUrl) throw new Error('Failed to create signed URL');
+    const { data: publicData } = supabase.storage.from('documents').getPublicUrl(path);
+    if (!publicData?.publicUrl) throw new Error('Failed to get public URL');
 
-    return { url: signedData.signedUrl, name: file.name, size: file.size, mime: file.type };
+    return { url: publicData.publicUrl, name: file.name, size: file.size, mime: file.type };
   }, [user]);
 
   useEffect(() => {

@@ -109,15 +109,31 @@ export default function ChatSuporte() {
 
   // Human chat
   const handleHumanSend = async (text: string) => {
-    if (!assignedAdmin) return;
-    if (!chat.activeConversation) {
-      await chat.openDirectConversation(assignedAdmin.id);
+    if (!assignedAdmin) {
+      toast.error('Nenhum consultor atribuído');
+      return;
+    }
+    let conv = chat.activeConversation;
+    if (!conv) {
+      conv = await chat.openDirectConversation(assignedAdmin.id);
+      if (!conv) {
+        toast.error('Erro ao iniciar conversa');
+        return;
+      }
     }
     await chat.sendMessage(text);
   };
 
   const handleFileUpload = async (file: File) => {
     try {
+      // Ensure conversation exists for human mode
+      if (chatMode === 'human' && !chat.activeConversation && assignedAdmin) {
+        const conv = await chat.openDirectConversation(assignedAdmin.id);
+        if (!conv) {
+          toast.error('Erro ao iniciar conversa');
+          return;
+        }
+      }
       const fileData = await chat.uploadFile(file);
       if (fileData) {
         const mimeType = file.type;
