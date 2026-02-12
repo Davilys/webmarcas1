@@ -51,9 +51,23 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        endCall();
+      console.log('[WebRTC] Connection state:', pc.connectionState);
+      if (pc.connectionState === 'failed') {
+        console.warn('[WebRTC] Connection failed, attempting ICE restart...');
+        pc.restartIce();
+      } else if (pc.connectionState === 'disconnected') {
+        // Give 5s grace period before ending call (network blip recovery)
+        setTimeout(() => {
+          if (pcRef.current?.connectionState === 'disconnected') {
+            console.warn('[WebRTC] Still disconnected after 5s, ending call');
+            endCall();
+          }
+        }, 5000);
       }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('[WebRTC] ICE state:', pc.iceConnectionState);
     };
 
     pcRef.current = pc;
