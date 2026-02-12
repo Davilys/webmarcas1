@@ -225,8 +225,73 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
   }, [conversationId, userId, incomingCall]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!pcRef.current || !localStreamRef.current) return;
+    // If no active call, start a screen share call
+    if (!pcRef.current || !localStreamRef.current) {
+      if (!conversationId || !userId) return;
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true } as any);
+        screenStreamRef.current = screenStream;
+        setCallType('video');
 
+        // Also get audio mic
+        let audioStream: MediaStream | null = null;
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch { /* no mic is ok */ }
+
+        // Combine screen video + mic audio
+        const combinedStream = new MediaStream();
+        screenStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+        if (audioStream) {
+          audioStream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+        } else {
+          screenStream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+        }
+
+        localStreamRef.current = audioStream || new MediaStream();
+        if (localVideoRef.current) localVideoRef.current.srcObject = screenStream;
+
+        const pc = createPeerConnection();
+        combinedStream.getTracks().forEach(t => pc.addTrack(t, combinedStream));
+
+        await (supabase.from('call_signals') as any).insert({
+          conversation_id: conversationId,
+          caller_id: userId,
+          receiver_id: remoteUserId,
+          signal_type: 'call_start',
+          call_type: 'video',
+          signal_data: {},
+        });
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        await (supabase.from('call_signals') as any).insert({
+          conversation_id: conversationId,
+          caller_id: userId,
+          receiver_id: remoteUserId,
+          signal_type: 'offer',
+          signal_data: { sdp: offer },
+          call_type: 'video',
+        });
+
+        screenStream.getVideoTracks()[0].onended = () => {
+          endCall();
+        };
+
+        setCallActive(true);
+        setIsScreenSharing(true);
+        toast.success('Compartilhamento de tela iniciado');
+      } catch (err: any) {
+        if (err?.name !== 'NotAllowedError') {
+          console.error('Error starting screen share:', err);
+          toast.error('Erro ao compartilhar tela.');
+        }
+      }
+      return;
+    }
+
+    // Toggle during active call
     if (isScreenSharing) {
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
@@ -238,7 +303,7 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
       setIsScreenSharing(false);
     } else {
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true } as any);
         screenStreamRef.current = screenStream;
         const screenTrack = screenStream.getVideoTracks()[0];
         const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
@@ -246,11 +311,14 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
         if (localVideoRef.current) localVideoRef.current.srcObject = screenStream;
         screenTrack.onended = () => toggleScreenShare();
         setIsScreenSharing(true);
-      } catch {
-        // User cancelled
+        toast.success('Compartilhando tela');
+      } catch (err: any) {
+        if (err?.name !== 'NotAllowedError') {
+          toast.error('Erro ao compartilhar tela.');
+        }
       }
     }
-  }, [isScreenSharing]);
+  }, [isScreenSharing, conversationId, userId, remoteUserId, createPeerConnection, endCall]);
 
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
