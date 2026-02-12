@@ -198,7 +198,7 @@ export function AdminChatWidget() {
               {view === 'chat' && (
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => webrtc.startCall('video')}><Video className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => webrtc.startCall('audio')}><Users className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => webrtc.startCall('audio')}><Phone className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => setMeetingOpen(true)}><Calendar className="h-3.5 w-3.5" /></Button>
                 </div>
               )}
