@@ -36,80 +36,51 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [loadError, setLoadError] = useState(false);
 
+  // Simple setup - just use native <audio> with src, no crossOrigin manipulation
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    setLoadError(false);
 
-    const onLoaded = () => {
-      if (audio.duration && isFinite(audio.duration)) {
-        setDuration(audio.duration);
-      }
-    };
     const onTime = () => setCurrentTime(audio.currentTime);
+    const onDuration = () => {
+      if (audio.duration && isFinite(audio.duration)) setDuration(audio.duration);
+    };
     const onEnded = () => setPlaying(false);
     const onError = () => {
-      console.warn('Audio load error:', audio.error?.code, audio.error?.message || 'unknown');
+      console.warn('Audio error:', audio.error?.code, audio.error?.message);
       setLoadError(true);
     };
 
-    audio.addEventListener('loadedmetadata', onLoaded);
-    audio.addEventListener('durationchange', onLoaded);
     audio.addEventListener('timeupdate', onTime);
+    audio.addEventListener('loadedmetadata', onDuration);
+    audio.addEventListener('durationchange', onDuration);
+    audio.addEventListener('canplaythrough', onDuration);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
-    audio.addEventListener('canplaythrough', onLoaded);
-
-    // Don't set crossOrigin for same-origin / supabase storage URLs
-    const isExternal = (() => {
-      try {
-        if (src.startsWith('data:') || src.startsWith('blob:')) return false;
-        const srcOrigin = new URL(src).origin;
-        return srcOrigin !== window.location.origin && !src.includes('supabase.co');
-      } catch { return false; }
-    })();
-    if (isExternal) audio.crossOrigin = 'anonymous';
-
-    audio.preload = 'metadata';
-    audio.src = src;
-    audio.load();
 
     return () => {
-      audio.removeEventListener('loadedmetadata', onLoaded);
-      audio.removeEventListener('durationchange', onLoaded);
       audio.removeEventListener('timeupdate', onTime);
+      audio.removeEventListener('loadedmetadata', onDuration);
+      audio.removeEventListener('durationchange', onDuration);
+      audio.removeEventListener('canplaythrough', onDuration);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
-      audio.removeEventListener('canplaythrough', onLoaded);
-      audio.pause();
-      audio.removeAttribute('src');
     };
-  }, [src]);
+  }, []);
 
   const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
-
-    if (loadError) {
-      setLoadError(false);
-      a.removeAttribute('crossOrigin');
-      a.src = src;
-      a.load();
-      try {
-        await a.play();
-        setPlaying(true);
-      } catch (err) {
-        console.error('Audio play retry error:', err);
-        setLoadError(true);
-      }
-      return;
-    }
 
     try {
       if (playing) {
         a.pause();
         setPlaying(false);
       } else {
+        if (loadError) {
+          setLoadError(false);
+          a.load();
+        }
         await a.play();
         setPlaying(true);
       }
@@ -144,7 +115,7 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      <audio ref={audioRef} />
+      <audio ref={audioRef} src={src} preload="metadata" />
       <button
         onClick={toggle}
         className={cn(
