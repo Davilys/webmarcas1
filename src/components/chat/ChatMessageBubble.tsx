@@ -39,11 +39,9 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
     const onLoaded = () => setDuration(audio.duration || 0);
     const onTime = () => setCurrentTime(audio.currentTime);
     const onEnded = () => setPlaying(false);
-
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('ended', onEnded);
@@ -90,32 +88,27 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
       <button
         onClick={toggle}
         className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-          isOwn ? "bg-white/20 text-primary-foreground hover:bg-white/30" : "bg-primary/10 text-primary hover:bg-primary/20"
+          "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors",
+          isOwn ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#00a884]/15 text-[#00a884] hover:bg-[#00a884]/25"
         )}
       >
         {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
       </button>
       <div className="flex-1 flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <span className={cn("text-[11px] font-mono shrink-0", isOwn ? "text-primary-foreground/70" : "text-muted-foreground")}>
+          <span className={cn("text-[11px] font-mono shrink-0", isOwn ? "text-white/70" : "text-muted-foreground")}>
             {fmt(currentTime || duration)}
           </span>
           <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            step={0.1}
-            value={currentTime}
-            onChange={seek}
+            type="range" min={0} max={duration || 0} step={0.1} value={currentTime} onChange={seek}
             className={cn(
               "flex-1 h-1 rounded-full appearance-none cursor-pointer",
-              isOwn 
-                ? "[&::-webkit-slider-thumb]:bg-primary-foreground [&::-webkit-slider-track]:bg-primary-foreground/30"
-                : "[&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-track]:bg-primary/30"
+              isOwn
+                ? "[&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-track]:bg-white/30"
+                : "[&::-webkit-slider-thumb]:bg-[#00a884] [&::-webkit-slider-track]:bg-[#00a884]/30"
             )}
             style={{
-              background: `linear-gradient(to right, ${isOwn ? 'rgba(255,255,255,0.8)' : 'hsl(var(--primary))'} ${duration ? (currentTime / duration) * 100 : 0}%, ${isOwn ? 'rgba(255,255,255,0.25)' : 'hsl(var(--primary) / 0.2)'} 0%)`,
+              background: `linear-gradient(to right, ${isOwn ? 'rgba(255,255,255,0.8)' : '#00a884'} ${duration ? (currentTime / duration) * 100 : 0}%, ${isOwn ? 'rgba(255,255,255,0.25)' : 'rgba(0,168,132,0.2)'} 0%)`,
             }}
           />
         </div>
@@ -124,7 +117,7 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
         onClick={cycleSpeed}
         className={cn(
           "text-[11px] font-bold shrink-0 px-1 rounded",
-          isOwn ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          isOwn ? "text-white/70 hover:text-white" : "text-muted-foreground hover:text-foreground"
         )}
       >
         {playbackRate}x
@@ -141,23 +134,23 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
 
   if (isSystem) {
     return (
-      <div className="flex justify-center my-2">
-        <span className="text-xs text-muted-foreground bg-muted/60 px-3 py-1 rounded-full">
+      <div className="flex justify-center my-3">
+        <span className="text-[11px] text-muted-foreground bg-white/80 dark:bg-card/80 backdrop-blur-sm px-4 py-1.5 rounded-lg shadow-sm">
           {message.content}
         </span>
       </div>
     );
   }
 
-  const timeStr = format(new Date(message.created_at), "EEE, d MMM yyyy, HH:mm", { locale: ptBR });
+  const timeStr = format(new Date(message.created_at), "HH:mm");
 
   return (
-    <div className={cn('flex gap-2 max-w-[80%] group mb-1', isOwnMessage ? 'ml-auto flex-row-reverse' : '')}>
+    <div className={cn('flex gap-2 max-w-[75%] group mb-1', isOwnMessage ? 'ml-auto flex-row-reverse' : '')}>
       {showAvatar && !isOwnMessage && (
-        <Avatar className="w-7 h-7 flex-shrink-0 mt-auto">
+        <Avatar className="w-7 h-7 flex-shrink-0 mt-auto opacity-0 group-first:opacity-100">
           <AvatarFallback className={cn(
             "text-[10px] font-semibold",
-            message.sender_id ? "bg-primary/15 text-primary" : "bg-emerald-100 text-emerald-700"
+            message.sender_id ? "bg-[#00a884]/15 text-[#008069]" : "bg-emerald-100 text-emerald-700"
           )}>
             {message.sender_id ? initials : <Bot className="h-3.5 w-3.5" />}
           </AvatarFallback>
@@ -166,12 +159,25 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
 
       <div className="flex flex-col gap-0.5 min-w-0">
         <div className={cn(
-          'rounded-2xl px-3 py-2 shadow-sm relative',
+          'rounded-lg px-3 py-2 shadow-sm relative',
           isOwnMessage
-            ? 'bg-primary text-primary-foreground rounded-br-sm'
-            : 'bg-card border rounded-bl-sm'
+            ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-foreground rounded-tr-none'
+            : 'bg-white dark:bg-[#1f2c33] border-0 rounded-tl-none shadow-sm'
         )}>
-          {/* Audio attachment - WhatsApp style */}
+          {/* WhatsApp-style tail */}
+          <div className={cn(
+            "absolute top-0 w-3 h-3 overflow-hidden",
+            isOwnMessage ? "-right-2" : "-left-2"
+          )}>
+            <div className={cn(
+              "w-4 h-4 rotate-45 origin-bottom-left",
+              isOwnMessage
+                ? "bg-[#d9fdd3] dark:bg-[#005c4b]"
+                : "bg-white dark:bg-[#1f2c33]"
+            )} />
+          </div>
+
+          {/* Audio attachment */}
           {isAudio && message.file_url && (
             <AudioPlayer src={message.file_url} isOwn={isOwnMessage} />
           )}
@@ -180,7 +186,7 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
           {isFile && !isAudio && message.file_url && (
             <div className={cn(
               "flex items-center gap-3 p-2 rounded-xl mb-1",
-              isOwnMessage ? "bg-white/10" : "bg-muted/60"
+              isOwnMessage ? "bg-[#c1f0be] dark:bg-[#004d40]" : "bg-muted/60"
             )}>
               {message.file_mime_type?.startsWith('image/') ? (
                 <img src={message.file_url} alt={message.file_name || ''} className="max-w-[200px] max-h-[200px] rounded-lg object-cover" />
@@ -199,17 +205,16 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
             </div>
           )}
 
-          {/* Text content (skip for audio-only messages) */}
+          {/* Text content */}
           {message.content && !isAudio && (
-            <div className={cn("text-sm leading-relaxed", isOwnMessage ? "prose-invert" : "prose prose-sm")}>
+            <div className="text-[14px] leading-relaxed">
               <ReactMarkdown
                 components={{
                   p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
                   a: ({ href, children }) => (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className={cn(
-                      "underline",
-                      isOwnMessage ? "text-primary-foreground/90" : "text-primary"
-                    )}>{children}</a>
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline">
+                      {children}
+                    </a>
                   ),
                 }}
               >
@@ -218,16 +223,16 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
             </div>
           )}
 
-          {/* Time & read status */}
+          {/* Time & read status - inline WhatsApp style */}
           <div className={cn(
-            "flex items-center gap-1 justify-end mt-1",
-            isOwnMessage ? "text-primary-foreground/60" : "text-muted-foreground"
+            "flex items-center gap-1 justify-end -mb-1 mt-0.5",
+            isOwnMessage ? "text-[#667781] dark:text-white/50" : "text-[#667781] dark:text-white/40"
           )}>
-            <span className="text-[10px]">{timeStr}</span>
+            <span className="text-[11px]">{timeStr}</span>
             {isOwnMessage && (
               message.is_read
-                ? <CheckCheck className="h-3 w-3 text-blue-300" />
-                : <Check className="h-3 w-3" />
+                ? <CheckCheck className="h-4 w-4 text-[#53bdeb]" />
+                : <CheckCheck className="h-4 w-4 text-[#667781] dark:text-white/40" />
             )}
           </div>
         </div>

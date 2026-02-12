@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send, Paperclip, Mic, MicOff, X, Loader2, Image, FileText, Film, Square } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Send, Paperclip, Mic, X, Loader2, Image, FileText, Film, Smile } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -12,12 +13,21 @@ interface ChatInputProps {
   placeholder?: string;
 }
 
+// Common emojis grid for quick access
+const QUICK_EMOJIS = [
+  '😀','😂','😍','🥰','😊','😎','🤔','😢','😡','👍','👎','❤️','🔥','⭐','✅',
+  '🎉','💪','🙏','👋','🤝','💯','🚀','📌','📎','💼','📊','📈','🎯','⚡','🏆',
+  '😁','😃','😄','😅','🤣','😇','🥲','😋','😜','🤪','😝','🤑','🤗','🤭','🤫',
+  '🤩','😤','😠','🥺','😱','😰','🤯','😴','🤮','🤧','😷','🤒','👀','💀','🫡',
+];
+
 export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
   ({ onSend, onFileUpload, onAudioSend, disabled, uploading, placeholder = 'Digite uma mensagem...' }, ref) => {
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -32,47 +42,35 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
     };
   }, []);
 
+  const insertEmoji = (emoji: string) => {
+    setInput(prev => prev + emoji);
+    textareaRef.current?.focus();
+  };
+
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
-
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/mp4')
-          ? 'audio/mp4'
-          : 'audio/webm';
-
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
         const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: mimeType });
-
-        if (onAudioSend) {
-          onAudioSend(file);
-        } else {
-          onFileUpload(file);
-        }
-
+        if (onAudioSend) { onAudioSend(file); } else { onFileUpload(file); }
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       };
-
       recorder.start(250);
       setIsRecording(true);
       setRecordingTime(0);
       timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-    } catch {
-      // Mic permission denied
-    }
+    } catch { /* Mic permission denied */ }
   }, [onAudioSend, onFileUpload]);
 
   const stopRecording = useCallback(() => {
@@ -125,21 +123,19 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
   // Recording UI
   if (isRecording) {
     return (
-      <div ref={ref} className="border-t bg-card/80 backdrop-blur-sm p-3">
+      <div ref={ref} className="border-t bg-[#f0f2f5] dark:bg-[#1f2c33] px-4 py-3">
         <div className="flex items-center gap-3">
-          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-full text-destructive" onClick={cancelRecording}>
+          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full text-destructive hover:bg-destructive/10" onClick={cancelRecording}>
             <X className="h-5 w-5" />
           </Button>
-
-          <div className="flex-1 flex items-center gap-3">
-            <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+          <div className="flex-1 flex items-center gap-3 bg-white dark:bg-[#2a3942] rounded-full px-4 py-2">
+            <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
             <span className="text-sm font-mono text-destructive font-medium">{formatTime(recordingTime)}</span>
             <div className="flex-1 h-1 bg-destructive/20 rounded-full overflow-hidden">
               <div className="h-full bg-destructive/60 rounded-full animate-pulse" style={{ width: '60%' }} />
             </div>
           </div>
-
-          <Button type="button" size="icon" className="h-10 w-10 rounded-full bg-primary shadow-md" onClick={stopRecording}>
+          <Button type="button" size="icon" className="h-10 w-10 rounded-full bg-[#00a884] hover:bg-[#008069] text-white shadow-md" onClick={stopRecording}>
             <Send className="h-4 w-4" />
           </Button>
         </div>
@@ -148,9 +144,9 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
   }
 
   return (
-    <div ref={ref} className="border-t bg-card/80 backdrop-blur-sm p-3">
+    <div ref={ref} className="border-t bg-[#f0f2f5] dark:bg-[#1f2c33] px-3 py-2">
       {selectedFile && (
-        <div className="flex items-center gap-2 mb-2 p-2 bg-muted rounded-lg">
+        <div className="flex items-center gap-2 mb-2 p-2 bg-white dark:bg-[#2a3942] rounded-lg">
           {selectedFile.type.startsWith('image/') ? <Image className="h-4 w-4 text-blue-500" /> :
            selectedFile.type.startsWith('video/') ? <Film className="h-4 w-4 text-purple-500" /> :
            <FileText className="h-4 w-4 text-red-500" />}
@@ -164,34 +160,63 @@ export const ChatInput = forwardRef<HTMLDivElement, ChatInputProps>(
       <form onSubmit={handleSubmit} className="flex items-end gap-2">
         <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} accept="*" />
 
+        {/* Emoji button */}
+        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="ghost" size="icon"
+              className="h-10 w-10 rounded-full flex-shrink-0 text-[#54656f] dark:text-[#aebac1] hover:text-foreground hover:bg-transparent">
+              <Smile className="h-6 w-6" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="start" className="w-[320px] p-3 z-[300]">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Emojis</p>
+            <div className="grid grid-cols-8 gap-1 max-h-[240px] overflow-y-auto">
+              {QUICK_EMOJIS.map((emoji, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { insertEmoji(emoji); }}
+                  className="text-xl w-8 h-8 flex items-center justify-center hover:bg-muted rounded transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Attach button */}
         <Button type="button" variant="ghost" size="icon"
-          className="h-9 w-9 rounded-full flex-shrink-0 text-muted-foreground hover:text-foreground"
+          className="h-10 w-10 rounded-full flex-shrink-0 text-[#54656f] dark:text-[#aebac1] hover:text-foreground hover:bg-transparent"
           onClick={() => fileInputRef.current?.click()} disabled={disabled || uploading}>
-          <Paperclip className="h-5 w-5" />
+          <Paperclip className="h-6 w-6" />
         </Button>
 
+        {/* Text input */}
         <div className="flex-1 relative">
           <textarea ref={textareaRef} value={input} onChange={handleTextareaChange} onKeyDown={handleKeyDown}
             placeholder={placeholder} rows={1}
             className={cn(
-              "w-full resize-none rounded-2xl bg-muted/60 border-0 px-4 py-2.5 text-sm",
-              "focus:outline-none focus:ring-1 focus:ring-primary/30",
-              "placeholder:text-muted-foreground/60", "max-h-[120px] scrollbar-thin"
+              "w-full resize-none rounded-lg bg-white dark:bg-[#2a3942] border-0 px-4 py-2.5 text-sm",
+              "focus:outline-none focus:ring-0",
+              "placeholder:text-[#667781] dark:placeholder:text-[#8696a0]",
+              "max-h-[120px] scrollbar-thin"
             )}
             disabled={disabled || uploading} />
         </div>
 
+        {/* Send / Mic button */}
         {input.trim() || selectedFile ? (
           <Button type="submit" size="icon"
-            className="h-9 w-9 rounded-full flex-shrink-0 bg-primary shadow-md"
+            className="h-10 w-10 rounded-full flex-shrink-0 bg-[#00a884] hover:bg-[#008069] text-white shadow-md"
             disabled={disabled || uploading || (!input.trim() && !selectedFile)}>
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
           </Button>
         ) : (
           <Button type="button" size="icon"
-            className="h-9 w-9 rounded-full flex-shrink-0 bg-primary shadow-md"
+            className="h-10 w-10 rounded-full flex-shrink-0 bg-[#00a884] hover:bg-[#008069] text-white shadow-md"
             onClick={startRecording} disabled={disabled || uploading}>
-            <Mic className="h-4 w-4" />
+            <Mic className="h-5 w-5" />
           </Button>
         )}
       </form>
