@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface UseWebRTCProps {
   conversationId: string | null;
@@ -63,10 +64,27 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
     setCallType(type);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: type === 'video',
-        audio: true,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: type === 'video',
+          audio: true,
+        });
+      } catch (mediaErr: any) {
+        if (type === 'video' && (mediaErr.name === 'NotFoundError' || mediaErr.name === 'NotAllowedError')) {
+          toast.error('Câmera não encontrada. Tentando apenas áudio...');
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            setCallType('audio');
+          } catch {
+            toast.error('Nenhum dispositivo de mídia encontrado.');
+            return;
+          }
+        } else {
+          toast.error(mediaErr.name === 'NotFoundError' ? 'Microfone não encontrado.' : 'Permissão de mídia negada.');
+          return;
+        }
+      }
 
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -74,7 +92,6 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
       const pc = createPeerConnection();
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
-      // Signal call start
       await (supabase.from('call_signals') as any).insert({
         conversation_id: conversationId,
         caller_id: userId,
@@ -97,8 +114,10 @@ export function useWebRTC({ conversationId, userId, remoteUserId }: UseWebRTCPro
       });
 
       setCallActive(true);
+      toast.success(`Chamada de ${type === 'video' ? 'vídeo' : 'áudio'} iniciada`);
     } catch (err) {
       console.error('Error starting call:', err);
+      toast.error('Erro ao iniciar chamada.');
     }
   }, [conversationId, userId, remoteUserId, createPeerConnection]);
 
