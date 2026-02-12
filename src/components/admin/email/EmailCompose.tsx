@@ -26,6 +26,8 @@ interface Attachment {
 interface EmailComposeProps {
   onClose: () => void;
   replyTo?: Email | null;
+  initialTo?: string;
+  initialName?: string;
 }
 
 interface ClientWithProcess {
@@ -267,17 +269,17 @@ function replaceTemplateVariables(text: string, client: ClientWithProcess | null
     .replace(/\{\{numero_processo\}\}/g, client.process_number || '');
 }
 
-export function EmailCompose({ onClose, replyTo }: EmailComposeProps) {
+export function EmailCompose({ onClose, replyTo, initialTo, initialName }: EmailComposeProps) {
   const queryClient = useQueryClient();
   
   // Standard email state
-  const [to, setTo] = useState(replyTo?.from_email || '');
+  const [to, setTo] = useState(replyTo?.from_email || initialTo || '');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '');
   const [body, setBody] = useState(
     replyTo
       ? `\n\n---\nEm resposta a:\n${replyTo.body_text?.slice(0, 500)}`
-      : ''
+      : initialName ? `Prezado(a) ${initialName},\n\n` : ''
   );
 
   // Processual mode state
@@ -381,7 +383,7 @@ export function EmailCompose({ onClose, replyTo }: EmailComposeProps) {
     if (!isProcessualMode) {
       setSelectedClient(null);
       setPublicationType('');
-      if (!replyTo) {
+      if (!replyTo && !initialTo) {
         setTo('');
         setSubject('');
         setBody('');

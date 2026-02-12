@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { EmailSidebar } from '@/components/admin/email/EmailSidebar';
 import { EmailList } from '@/components/admin/email/EmailList';
@@ -24,10 +25,29 @@ export interface Email {
 }
 
 export default function Emails() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [currentFolder, setCurrentFolder] = useState<EmailFolder>('inbox');
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<Email | null>(null);
+  const [initialTo, setInitialTo] = useState('');
+  const [initialName, setInitialName] = useState('');
+
+  // Read URL params to auto-open compose with client data
+  useEffect(() => {
+    const compose = searchParams.get('compose');
+    const to = searchParams.get('to');
+    const name = searchParams.get('name');
+    if (compose === 'true') {
+      setIsComposing(true);
+      setSelectedEmail(null);
+      setReplyTo(null);
+      if (to) setInitialTo(decodeURIComponent(to));
+      if (name) setInitialName(decodeURIComponent(name));
+      // Clean URL params after reading
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleFolderChange = (folder: EmailFolder) => {
     // Reset states when changing folders to prevent UI glitches
@@ -72,7 +92,7 @@ export default function Emails() {
     }
 
     if (isComposing) {
-      return <EmailCompose onClose={handleCloseCompose} replyTo={replyTo} />;
+      return <EmailCompose onClose={handleCloseCompose} replyTo={replyTo} initialTo={initialTo} initialName={initialName} />;
     }
 
     if (selectedEmail) {
