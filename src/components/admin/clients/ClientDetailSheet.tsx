@@ -23,7 +23,8 @@ import {
   FileText, CreditCard, MessageSquare, Calendar as CalendarIcon, Paperclip,
   Upload, Loader2, ExternalLink, Plus, Edit, X, Check, 
   MessageCircle, ArrowUpRight, Tag, Zap, AlertTriangle,
-  CheckCircle, XCircle, TrendingUp, Users, Receipt, Trash2, UserCheck
+  CheckCircle, XCircle, TrendingUp, Users, Receipt, Trash2, UserCheck,
+  Bell, Send
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
@@ -141,10 +142,9 @@ SERVICE_TYPES.forEach(s => {
 const QUICK_ACTIONS = [
   { id: 'chat', label: 'Chats', icon: MessageCircle, color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
   { id: 'move', label: 'Mover', icon: ArrowUpRight, color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-  { id: 'chance', label: 'Marcar Chance', icon: Star, color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
-  { id: 'lost', label: 'Perdido', icon: AlertTriangle, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-  { id: 'won', label: 'Ganho', icon: CheckCircle, color: 'bg-green-100 text-green-700 hover:bg-green-200' },
-  { id: 'convert', label: 'Converter', icon: Users, color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
+  { id: 'email', label: 'Enviar Email', icon: Mail, color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
+  { id: 'notification', label: 'Enviar Notificação', icon: Bell, color: 'bg-green-100 text-green-700 hover:bg-green-200' },
+  { id: 'excluir', label: 'Excluir', icon: Trash2, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
 ];
 
 export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: ClientDetailSheetProps) {
@@ -170,6 +170,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const [customValue, setCustomValue] = useState<number>(0);
   const [customValueReason, setCustomValueReason] = useState<string>('');
   const [showPricingDialog, setShowPricingDialog] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [editData, setEditData] = useState({
     priority: '',
     origin: '',
@@ -276,12 +277,13 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     setLoading(true);
 
     try {
-      const [notesRes, appointmentsRes, docsRes, invoicesRes, profileRes] = await Promise.all([
+      const [notesRes, appointmentsRes, docsRes, invoicesRes, profileRes, contractRes] = await Promise.all([
         supabase.from('client_notes').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('client_appointments').select('*').eq('user_id', client.id).order('scheduled_at', { ascending: true }),
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false }),
-        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code, assigned_to').eq('id', client.id).maybeSingle()
+        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code, assigned_to, contract_value').eq('id', client.id).maybeSingle(),
+        supabase.from('contracts').select('contract_value, payment_method, signature_status').eq('user_id', client.id).order('created_at', { ascending: false }).limit(1)
       ]);
 
       setNotes(notesRes.data || []);
@@ -289,6 +291,18 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       setDocuments(docsRes.data || []);
       setInvoices(invoicesRes.data || []);
       setProfileData(profileRes.data);
+      
+      // Sync contract value from contracts table if available
+      if (contractRes.data && contractRes.data.length > 0) {
+        const contract = contractRes.data[0];
+        if (contract.contract_value && contract.contract_value > 0) {
+          setEditData(prev => ({ ...prev, contract_value: Number(contract.contract_value) }));
+          // Also update the profile if needed
+          if (profileRes.data && Number(profileRes.data.contract_value || 0) !== Number(contract.contract_value)) {
+            await supabase.from('profiles').update({ contract_value: contract.contract_value }).eq('id', client.id);
+          }
+        }
+      }
       
       // Update edit form with profile data
       if (profileRes.data) {
@@ -645,90 +659,111 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const handleQuickAction = async (actionId: string) => {
     switch (actionId) {
       case 'chat':
-        if (client?.phone) {
-          const cleanPhone = client.phone.replace(/\D/g, '');
-          window.open(`https://wa.me/55${cleanPhone}`, '_blank');
-        } else {
-          toast.error('Cliente sem telefone');
+        // Open internal chat with the client
+        if (client) {
+          // Navigate to admin chat or open chat widget
+          window.location.href = `/admin/chat-ao-vivo?clientId=${client.id}`;
         }
         break;
       case 'move':
-        // NEW: Move client from commercial to legal funnel
-        await handleMoveToLegalFunnel();
+        setShowMoveDialog(true);
         break;
-      case 'won':
-        toast.success('Cliente marcado como GANHO! 🎉');
+      case 'email':
+        if (client?.email) {
+          window.location.href = `/admin/emails?compose=true&to=${encodeURIComponent(client.email)}`;
+        } else {
+          toast.error('Cliente sem e-mail cadastrado');
+        }
         break;
-      case 'lost':
-        toast.info('Cliente marcado como PERDIDO');
+      case 'notification':
+        if (client) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            await supabase.from('notifications').insert({
+              user_id: client.id,
+              title: 'Nova notificação',
+              message: `Você recebeu uma notificação do administrador.`,
+              type: 'info'
+            });
+            toast.success('Notificação enviada ao cliente!');
+          } catch {
+            toast.error('Erro ao enviar notificação');
+          }
+        }
         break;
-      case 'chance':
-        toast.success('Marcado como alta chance!');
+      case 'excluir':
+        setShowDeleteConfirm(true);
         break;
       default:
         toast.info(`Ação: ${actionId}`);
     }
   };
 
-  // NEW: Handle moving client from commercial to legal funnel
-  const handleMoveToLegalFunnel = async () => {
+  // Handle moving client between funnels
+  const handleMoveFunnel = async (targetFunnel: 'comercial' | 'juridico') => {
     if (!client) return;
 
     try {
-      // Check if client has a signed contract (ONLY requirement)
-      const { data: contracts } = await supabase
-        .from('contracts')
-        .select('id, signature_status')
-        .eq('user_id', client.id)
-        .eq('signature_status', 'signed')
-        .limit(1);
-
-      const hasSignedContract = contracts && contracts.length > 0;
-
-      // VALIDAÇÃO ÚNICA: apenas contrato assinado
-      if (!hasSignedContract) {
-        toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
+      const currentFunnel = client.client_funnel_type || 'juridico';
+      if (currentFunnel === targetFunnel) {
+        toast.info('Cliente já está neste funil');
+        setShowMoveDialog(false);
         return;
       }
 
-      // Move client to legal funnel
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ 
+      if (targetFunnel === 'juridico') {
+        // Moving to legal: check signed contract
+        const { data: contracts } = await supabase
+          .from('contracts')
+          .select('id, signature_status')
+          .eq('user_id', client.id)
+          .eq('signature_status', 'signed')
+          .limit(1);
+
+        if (!contracts || contracts.length === 0) {
+          toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
+          return;
+        }
+
+        await supabase.from('profiles').update({ 
           client_funnel_type: 'juridico',
           updated_at: new Date().toISOString()
-        })
-        .eq('id', client.id);
+        }).eq('id', client.id);
 
-      if (profileError) throw profileError;
+        if (client.process_id) {
+          await supabase.from('brand_processes').update({ pipeline_stage: 'protocolado' }).eq('id', client.process_id);
+        }
+      } else {
+        // Moving to commercial
+        await supabase.from('profiles').update({ 
+          client_funnel_type: 'comercial',
+          updated_at: new Date().toISOString()
+        }).eq('id', client.id);
 
-      // Update process pipeline stage to 'protocolado' (entry point of legal funnel)
-      if (client.process_id) {
-        const { error: processError } = await supabase
-          .from('brand_processes')
-          .update({ pipeline_stage: 'protocolado' })
-          .eq('id', client.process_id);
-
-        if (processError) throw processError;
+        if (client.process_id) {
+          await supabase.from('brand_processes').update({ pipeline_stage: 'assinou_contrato' }).eq('id', client.process_id);
+        }
       }
 
-      // Log the action
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('client_activities').insert({
         user_id: client.id,
         admin_id: user?.id,
         activity_type: 'funnel_move',
-        description: 'Cliente movido do funil Comercial para Jurídico após assinatura do contrato.'
+        description: `Cliente movido para o funil ${targetFunnel === 'comercial' ? 'Comercial' : 'Jurídico'}.`
       });
 
-      toast.success('✅ Cliente movido para o funil jurídico com sucesso!');
+      toast.success(`✅ Cliente movido para o funil ${targetFunnel === 'comercial' ? 'Comercial' : 'Jurídico'}!`);
+      setShowMoveDialog(false);
       onUpdate();
       onOpenChange(false);
     } catch (error: any) {
-      console.error('Error moving client to legal funnel:', error);
+      console.error('Error moving client:', error);
       toast.error(`Erro ao mover cliente: ${error?.message || 'Tente novamente'}`);
     }
   };
+
+  // handleMoveToLegalFunnel replaced by handleMoveFunnel above
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -1727,7 +1762,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => setShowEditDialog(true)}>
               <ExternalLink className="h-4 w-4" />
               Ver Completo
             </Button>
@@ -2032,6 +2067,63 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
             <Button onClick={handleSaveFullEdit}>
               <Check className="h-4 w-4 mr-2" />
               Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Funnel Dialog */}
+      <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpRight className="h-5 w-5 text-blue-600" />
+              Mover Cliente para Funil
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Funil atual: <strong>{(client?.client_funnel_type || 'juridico') === 'comercial' ? 'Comercial' : 'Jurídico'}</strong>
+            </p>
+            <p className="text-sm text-muted-foreground">Selecione o funil de destino:</p>
+            <div className="grid grid-cols-2 gap-3">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleMoveFunnel('comercial')}
+                className={cn(
+                  "p-4 rounded-xl border-2 text-center transition-all",
+                  (client?.client_funnel_type || 'juridico') === 'comercial'
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30 opacity-50 cursor-not-allowed"
+                    : "border-border hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                )}
+                disabled={(client?.client_funnel_type || 'juridico') === 'comercial'}
+              >
+                <Building2 className="h-8 w-8 mx-auto mb-2 text-blue-600" />
+                <p className="font-semibold text-sm">Comercial</p>
+                <p className="text-xs text-muted-foreground mt-1">Pipeline de vendas</p>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleMoveFunnel('juridico')}
+                className={cn(
+                  "p-4 rounded-xl border-2 text-center transition-all",
+                  (client?.client_funnel_type || 'juridico') === 'juridico'
+                    ? "border-purple-500 bg-purple-50 dark:bg-purple-950/30 opacity-50 cursor-not-allowed"
+                    : "border-border hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                )}
+                disabled={(client?.client_funnel_type || 'juridico') === 'juridico'}
+              >
+                <FileText className="h-8 w-8 mx-auto mb-2 text-purple-600" />
+                <p className="font-semibold text-sm">Jurídico</p>
+                <p className="text-xs text-muted-foreground mt-1">Processos INPI</p>
+              </motion.button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMoveDialog(false)}>
+              Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>
