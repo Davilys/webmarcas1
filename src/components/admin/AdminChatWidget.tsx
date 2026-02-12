@@ -135,8 +135,6 @@ export function AdminChatWidget() {
     if (found) setContactProfile(found);
   }, [chat.activeConversation, remoteId, clients]);
 
-  if (!isAdmin) return null;
-
   // Get admin user IDs set for filtering
   const adminUserIds = new Set(adminProfiles.keys());
 
@@ -272,6 +270,8 @@ export function AdminChatWidget() {
 
   // ==================== RENDER ====================
   const isFullView = expanded && open;
+
+  if (!isAdmin) return null;
 
   return (
     <>
