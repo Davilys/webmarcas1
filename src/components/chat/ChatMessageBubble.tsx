@@ -115,7 +115,11 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio ref={audioRef} preload="metadata">
+        <source src={src} type="audio/webm" />
+        <source src={src} type="audio/ogg" />
+        <source src={src} type="audio/mp4" />
+      </audio>
       <button
         onClick={toggle}
         className={cn(

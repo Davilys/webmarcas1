@@ -348,7 +348,7 @@ export function useChat(user: User | null) {
     const ext = file.name.split('.').pop();
     const path = `chat/${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
-    const { error } = await supabase.storage.from('documents').upload(path, file, { cacheControl: '3600', upsert: false });
+    const { error } = await supabase.storage.from('documents').upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
     if (error) throw error;
 
     const { data: publicData } = supabase.storage.from('documents').getPublicUrl(path);
