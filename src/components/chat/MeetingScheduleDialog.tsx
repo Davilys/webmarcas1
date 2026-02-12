@@ -1,10 +1,11 @@
 import { useState, useEffect, forwardRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { X, Calendar, Clock, Users, Video, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Clock, Users, Video, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -33,7 +34,6 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
     if (!open) return;
 
     if (isAdmin) {
-      // Admin can invite other admins and see all users
       supabase.from('profiles').select('id, full_name, email').then(({ data }) => {
         if (data) setAdminUsers(data);
       });
@@ -41,7 +41,6 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
         setSelectedParticipants(participants.map(p => p.user_id).filter(id => id !== currentUserId));
       }
     } else {
-      // Client: only their assigned admin is available
       if (assignedAdmin) {
         setSelectedParticipants([assignedAdmin.id]);
       }
@@ -113,103 +112,111 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Video className="h-5 w-5 text-primary" />
-            Agendar Reunião
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-1 block">Título *</label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Nome da reunião" />
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[200] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-[200] grid w-full max-w-md translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg">
+          <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+            <DialogPrimitive.Title className="text-lg font-semibold leading-none tracking-tight flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              Agendar Reunião
+            </DialogPrimitive.Title>
           </div>
 
-          <div>
-            <label className="text-sm font-medium mb-1 block">Descrição</label>
-            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalhes da reunião" rows={2} />
-          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Título *</label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Nome da reunião" />
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Data *</label>
-              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+              <label className="text-sm font-medium mb-1 block">Descrição</label>
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalhes da reunião" rows={2} />
             </div>
-            <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Hora *</label>
-              <Input type="time" value={time} onChange={e => setTime(e.target.value)} />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Duração</label>
-              <Select value={duration} onValueChange={setDuration}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15">15 min</SelectItem>
-                  <SelectItem value="30">30 min</SelectItem>
-                  <SelectItem value="45">45 min</SelectItem>
-                  <SelectItem value="60">1 hora</SelectItem>
-                  <SelectItem value="90">1h30</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Tipo</label>
-              <Select value={meetingType} onValueChange={v => setMeetingType(v as any)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="video">Vídeo</SelectItem>
-                  <SelectItem value="audio">Áudio</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Participants */}
-          <div>
-            <label className="text-sm font-medium mb-2 flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Participantes</label>
-            {isAdmin ? (
-              <div className="max-h-32 overflow-y-auto space-y-1 border rounded-lg p-2">
-                {adminUsers.filter(u => u.id !== currentUserId).map(u => (
-                  <label key={u.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedParticipants.includes(u.id)}
-                      onChange={() => toggleParticipant(u.id)}
-                      className="rounded"
-                    />
-                    <span className="truncate">{u.full_name || u.email}</span>
-                  </label>
-                ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Data *</label>
+                <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
               </div>
-            ) : (
-              <div className="border rounded-lg p-3 bg-muted/30">
-                {assignedAdmin ? (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-semibold">
-                      {assignedAdmin.full_name?.substring(0, 2).toUpperCase() || '??'}
+              <div>
+                <label className="text-sm font-medium mb-1 flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Hora *</label>
+                <Input type="time" value={time} onChange={e => setTime(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Duração</label>
+                <Select value={duration} onValueChange={setDuration}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[250]">
+                    <SelectItem value="15">15 min</SelectItem>
+                    <SelectItem value="30">30 min</SelectItem>
+                    <SelectItem value="45">45 min</SelectItem>
+                    <SelectItem value="60">1 hora</SelectItem>
+                    <SelectItem value="90">1h30</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Tipo</label>
+                <Select value={meetingType} onValueChange={v => setMeetingType(v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[250]">
+                    <SelectItem value="video">Vídeo</SelectItem>
+                    <SelectItem value="audio">Áudio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Participants */}
+            <div>
+              <label className="text-sm font-medium mb-2 flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Participantes</label>
+              {isAdmin ? (
+                <div className="max-h-32 overflow-y-auto space-y-1 border rounded-lg p-2">
+                  {adminUsers.filter(u => u.id !== currentUserId).map(u => (
+                    <label key={u.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedParticipants.includes(u.id)}
+                        onChange={() => toggleParticipant(u.id)}
+                        className="rounded"
+                      />
+                      <span className="truncate">{u.full_name || u.email}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-3 bg-muted/30">
+                  {assignedAdmin ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-semibold">
+                        {assignedAdmin.full_name?.substring(0, 2).toUpperCase() || '??'}
+                      </div>
+                      <span className="font-medium">{assignedAdmin.full_name || 'Consultor'}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">Seu consultor</span>
                     </div>
-                    <span className="font-medium">{assignedAdmin.full_name || 'Consultor'}</span>
-                    <span className="text-xs text-muted-foreground ml-auto">Seu consultor</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Nenhum consultor atribuído</p>
-                )}
-              </div>
-            )}
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum consultor atribuído</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Button onClick={handleSubmit} disabled={saving} className="w-full">
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />}
+              Agendar Reunião
+            </Button>
           </div>
 
-          <Button onClick={handleSubmit} disabled={saving} className="w-full">
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />}
-            Agendar Reunião
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fechar</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 });
