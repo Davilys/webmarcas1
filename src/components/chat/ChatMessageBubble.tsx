@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { FileText, Image, Video, Music, File as FileIcon, Download, Bot, Check, CheckCheck } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { ChatMessage } from '@/hooks/useChat';
 import ReactMarkdown from 'react-markdown';
@@ -124,7 +124,7 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
             isOwnMessage ? "text-primary-foreground/60" : "text-muted-foreground"
           )}>
             <span className="text-[10px]">
-              {formatDistanceToNow(new Date(message.created_at), { addSuffix: false, locale: ptBR })}
+              {format(new Date(message.created_at), 'HH:mm', { locale: ptBR })}
             </span>
             {isOwnMessage && (
               message.is_read

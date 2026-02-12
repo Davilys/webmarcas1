@@ -8,7 +8,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessageBubble } from '@/components/chat/ChatMessageBubble';
 import { VideoCallOverlay, IncomingCallNotification } from '@/components/chat/VideoCallOverlay';
 import { MeetingScheduleDialog } from '@/components/chat/MeetingScheduleDialog';
-import { useChat, type Conversation } from '@/hooks/useChat';
+import { useChat, type Conversation, type ChatMessage } from '@/hooks/useChat';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import {
   MessageCircle, X, Search, Phone, Video, Calendar, ChevronLeft,
@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
-import { formatDistanceToNow } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function AdminChatWidget() {
@@ -103,8 +103,40 @@ export function AdminChatWidget() {
     await handleFileUpload(file);
   };
 
-  const activeName = chat.activeConversation?.participants?.find(p => p.user_id !== user?.id)?.profile?.full_name || 'Cliente';
+  const otherParticipant = chat.activeConversation?.participants?.find(p => p.user_id !== user?.id);
+  const activeName = otherParticipant?.profile?.full_name || otherParticipant?.profile?.email || 'Cliente';
+  const activeInitials = activeName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   const unreadTotal = chat.conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+
+  // Group messages by date for separators
+  const getDateLabel = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isToday(d)) return 'Hoje';
+    if (isYesterday(d)) return 'Ontem';
+    return format(d, "d 'de' MMMM", { locale: ptBR });
+  };
+
+  const renderMessagesWithDateSeparators = (msgs: ChatMessage[]) => {
+    const elements: React.ReactNode[] = [];
+    let lastDate = '';
+    msgs.forEach((msg) => {
+      const dateLabel = getDateLabel(msg.created_at);
+      if (dateLabel !== lastDate) {
+        lastDate = dateLabel;
+        elements.push(
+          <div key={`date-${msg.created_at}`} className="flex justify-center my-3">
+            <span className="text-[11px] text-muted-foreground bg-muted/80 px-3 py-1 rounded-full shadow-sm">
+              {dateLabel}
+            </span>
+          </div>
+        );
+      }
+      elements.push(
+        <ChatMessageBubble key={msg.id} message={msg} isOwnMessage={msg.sender_id === user?.id} />
+      );
+    });
+    return elements;
+  };
 
   return (
     <>
@@ -148,13 +180,25 @@ export function AdminChatWidget() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
               )}
-              <span className="font-semibold text-sm flex-1 truncate">
-                {view === 'chat' ? activeName : 'Chat'}
-              </span>
+              {view === 'chat' ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Avatar className="w-8 h-8">
+                    <AvatarFallback className="bg-white/20 text-primary-foreground text-xs font-semibold">
+                      {activeInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{activeName}</p>
+                    <p className="text-[10px] text-primary-foreground/70">Chat direto</p>
+                  </div>
+                </div>
+              ) : (
+                <span className="font-semibold text-sm flex-1 truncate">Chat</span>
+              )}
               {view === 'chat' && (
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => webrtc.startCall('audio')}><Phone className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => webrtc.startCall('video')}><Video className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => webrtc.startCall('audio')}><Users className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-primary-foreground/80 hover:bg-white/10" onClick={() => setMeetingOpen(true)}><Calendar className="h-3.5 w-3.5" /></Button>
                 </div>
               )}
@@ -178,27 +222,26 @@ export function AdminChatWidget() {
                 {/* Conversations list */}
                 <ScrollArea className="flex-1">
                   <div className="p-1">
-                    {/* Existing conversations */}
                     {chat.conversations.map(conv => {
                       const otherP = conv.participants?.find(p => p.user_id !== user?.id);
+                      const name = otherP?.profile?.full_name || otherP?.profile?.email || 'Cliente';
                       return (
                         <button key={conv.id} onClick={() => { chat.setActiveConversation(conv); chat.fetchMessages(conv.id); setView('chat'); }}
                           className="w-full flex items-center gap-3 p-3 hover:bg-muted/60 rounded-xl transition-colors text-left">
-                          <Avatar className="w-10 h-10"><AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {otherP?.profile?.full_name?.substring(0, 2).toUpperCase() || '??'}
+                          <Avatar className="w-10 h-10"><AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                            {name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                           </AvatarFallback></Avatar>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{otherP?.profile?.full_name || otherP?.profile?.email || 'Cliente'}</p>
+                            <p className="text-sm font-medium truncate">{name}</p>
                             <p className="text-xs text-muted-foreground truncate">{conv.last_message_preview || 'Sem mensagens'}</p>
                           </div>
                           {conv.last_message_at && (
-                            <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(conv.last_message_at), { locale: ptBR })}</span>
+                            <span className="text-[10px] text-muted-foreground">{format(new Date(conv.last_message_at), 'HH:mm', { locale: ptBR })}</span>
                           )}
                         </button>
                       );
                     })}
 
-                    {/* New chat with clients */}
                     {searchQuery && filteredClients.filter(c => !chat.conversations.some(conv => conv.participants?.some(p => p.user_id === c.id))).map(client => (
                       <button key={client.id} onClick={() => openChatWith(client.id)}
                         className="w-full flex items-center gap-3 p-3 hover:bg-muted/60 rounded-xl transition-colors text-left">
@@ -217,9 +260,7 @@ export function AdminChatWidget() {
             ) : (
               <div className="flex flex-col flex-1 overflow-hidden">
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/20">
-                  {chat.messages.map(msg => (
-                    <ChatMessageBubble key={msg.id} message={msg} isOwnMessage={msg.sender_id === user?.id} />
-                  ))}
+                  {renderMessagesWithDateSeparators(chat.messages)}
                 </div>
                 <ChatInput onSend={handleSend} onFileUpload={handleFileUpload} onAudioSend={handleAudioSend} disabled={chat.sendingMessage} />
               </div>
