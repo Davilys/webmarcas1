@@ -231,7 +231,7 @@ export function AdminChatWidget() {
             className={cn(
               "fixed z-[90] bg-card border shadow-2xl flex flex-col overflow-hidden",
               isFullView
-                ? "inset-4 rounded-2xl"
+                ? "top-4 bottom-4 right-4 w-[50vw] rounded-2xl"
                 : "bottom-6 right-6 w-[400px] h-[560px] rounded-2xl"
             )}
           >
