@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Shield, UserPlus, Trash2, Loader2, Clock, User, Monitor, Settings2 } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Loader2, Clock, User, Monitor, Settings2, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -125,6 +125,10 @@ export function SecuritySettings() {
     },
   });
 
+  const refetchAdmins = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+  };
+
   const formatUserAgent = (ua: string | null) => {
     if (!ua) return 'Desconhecido';
     if (ua.includes('Chrome')) return 'Chrome';
@@ -154,10 +158,13 @@ export function SecuritySettings() {
               <Shield className="h-5 w-5 text-violet-500" />
               <CardTitle>Usuários Administradores</CardTitle>
             </div>
-            <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Criar Novo Admin
-            </Button>
+             <Button size="sm" variant="outline" onClick={refetchAdmins}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Criar Novo Admin
+              </Button>
           </div>
           <CardDescription>
             Crie e gerencie usuários com acesso ao CRM. Defina permissões granulares por seção.

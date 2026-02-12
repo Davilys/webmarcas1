@@ -25,7 +25,9 @@ serve(async (req) => {
 
     const { email, password, fullName, fullAccess, permissions } = await req.json();
 
-    // Create user
+    let userId: string;
+
+    // Try to create user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -36,16 +38,42 @@ serve(async (req) => {
     });
 
     if (authError) {
-      throw authError;
+      // If user already exists, find them and promote to admin
+      if (authError.message?.includes('already been registered')) {
+        // Find existing user by email
+        const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        if (listError) throw listError;
+
+        const existingUser = users?.find(u => u.email === email);
+        if (!existingUser) {
+          throw new Error('Usuário não encontrado após verificação de duplicidade.');
+        }
+
+        userId = existingUser.id;
+
+        // Update profile name if provided
+        if (fullName) {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ full_name: fullName })
+            .eq('id', userId);
+        }
+
+        console.log(`User ${email} already exists (${userId}), promoting to admin.`);
+      } else {
+        throw authError;
+      }
+    } else {
+      userId = authData.user.id;
     }
 
-    // Assign admin role
+    // Assign admin role (upsert to avoid duplicates)
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
-      .insert({
-        user_id: authData.user.id,
-        role: "admin",
-      });
+      .upsert(
+        { user_id: userId, role: "admin" },
+        { onConflict: "user_id,role" }
+      );
 
     if (roleError) {
       throw roleError;
@@ -56,7 +84,7 @@ serve(async (req) => {
       const permissionsToInsert = Object.entries(permissions)
         .filter(([_, perms]: [string, any]) => perms.can_view || perms.can_edit || perms.can_delete)
         .map(([key, perms]: [string, any]) => ({
-          user_id: authData.user.id,
+          user_id: userId,
           permission_key: key,
           can_view: perms.can_view || false,
           can_edit: perms.can_edit || false,
@@ -70,13 +98,12 @@ serve(async (req) => {
 
         if (permError) {
           console.error("Error inserting permissions:", permError);
-          // Don't throw - user is created, permissions can be set later
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, userId: authData.user.id }),
+      JSON.stringify({ success: true, userId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
