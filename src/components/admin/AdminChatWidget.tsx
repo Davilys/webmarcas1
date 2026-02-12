@@ -54,6 +54,20 @@ export function AdminChatWidget() {
     });
   }, []);
 
+  // Listen for open-admin-chat events from other components
+  useEffect(() => {
+    const handleOpenChat = async (e: Event) => {
+      const clientId = (e as CustomEvent).detail?.clientId;
+      if (clientId) {
+        setOpen(true);
+        await chat.openDirectConversation(clientId);
+        setView('chat');
+      }
+    };
+    window.addEventListener('open-admin-chat', handleOpenChat);
+    return () => window.removeEventListener('open-admin-chat', handleOpenChat);
+  }, [chat]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [chat.messages]);

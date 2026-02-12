@@ -659,10 +659,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const handleQuickAction = async (actionId: string) => {
     switch (actionId) {
       case 'chat':
-        // Open internal chat with the client
+        // Open the AdminChatWidget and start a conversation with this client
         if (client) {
-          // Navigate to admin chat or open chat widget
-          window.location.href = `/admin/chat-ao-vivo?clientId=${client.id}`;
+          window.dispatchEvent(new CustomEvent('open-admin-chat', { detail: { clientId: client.id } }));
         }
         break;
       case 'move':
