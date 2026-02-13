@@ -29,66 +29,66 @@ const formatSize = (bytes: number | null) => {
 };
 
 function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
 
-  // Fetch audio as blob to bypass content-type issues from storage
+  // Create Audio element programmatically to avoid ref issues with conditional rendering
   useEffect(() => {
-    let cancelled = false;
-    let url: string | null = null;
-
-    fetch(src)
-      .then(r => r.blob())
-      .then(blob => {
-        if (cancelled) return;
-        // Create blob with explicit webm type
-        const typedBlob = new Blob([blob], { type: 'audio/webm;codecs=opus' });
-        url = URL.createObjectURL(typedBlob);
-        setBlobUrl(url);
-      })
-      .catch(err => {
-        console.error('Audio fetch failed:', err);
-        // Fallback to direct URL
-        if (!cancelled) setBlobUrl(src);
-      });
-
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [src]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !blobUrl) return;
+    const audio = new Audio();
+    audioRef.current = audio;
+    audio.preload = 'metadata';
 
     const onTime = () => setCurrentTime(audio.currentTime);
     const onMeta = () => {
       if (audio.duration && isFinite(audio.duration)) setDuration(audio.duration);
     };
     const onEnded = () => setPlaying(false);
+    const onCanPlay = () => setAudioReady(true);
     const onError = () => {
-      console.warn('Audio playback error:', audio.error?.code, audio.error?.message);
+      console.warn('Audio error:', audio.error?.code, audio.error?.message, 'src:', src);
+      // If direct URL fails, try fetch-to-blob fallback
+      if (!audio.src.startsWith('blob:')) {
+        console.log('Trying blob fallback...');
+        fetch(src)
+          .then(r => r.arrayBuffer())
+          .then(buf => {
+            const blob = new Blob([buf], { type: 'audio/webm;codecs=opus' });
+            const blobUrl = URL.createObjectURL(blob);
+            audio.src = blobUrl;
+            audio.load();
+          })
+          .catch(e => console.error('Blob fallback also failed:', e));
+      }
     };
 
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onMeta);
     audio.addEventListener('durationchange', onMeta);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('canplaythrough', onCanPlay);
     audio.addEventListener('error', onError);
 
+    // Set src and load
+    audio.src = src;
+    audio.load();
+
     return () => {
+      audio.pause();
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('loadedmetadata', onMeta);
       audio.removeEventListener('durationchange', onMeta);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('canplaythrough', onCanPlay);
       audio.removeEventListener('error', onError);
+      if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
+      audio.src = '';
+      audioRef.current = null;
     };
-  }, [blobUrl]);
+  }, [src]);
 
   const toggle = async () => {
     const a = audioRef.current;
@@ -132,7 +132,7 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      {blobUrl && <audio ref={audioRef} src={blobUrl} preload="metadata" />}
+      {/* No visible audio element needed - using programmatic Audio() */}
       <button
         onClick={toggle}
         className={cn(
