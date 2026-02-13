@@ -34,53 +34,58 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [loadError, setLoadError] = useState(false);
 
-  // Simple setup - just use native <audio> with src, no crossOrigin manipulation
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    // Force load with correct src
+    audio.src = src;
+    audio.load();
+
     const onTime = () => setCurrentTime(audio.currentTime);
-    const onDuration = () => {
+    const onMeta = () => {
       if (audio.duration && isFinite(audio.duration)) setDuration(audio.duration);
     };
     const onEnded = () => setPlaying(false);
-    const onError = () => {
-      console.warn('Audio error:', audio.error?.code, audio.error?.message);
-      setLoadError(true);
+    const onError = (e: Event) => {
+      console.warn('Audio load error, retrying with fetch...', (e.target as HTMLAudioElement)?.error);
+      // Fallback: fetch as blob to bypass any content-type issues
+      fetch(src)
+        .then(r => r.blob())
+        .then(blob => {
+          const blobUrl = URL.createObjectURL(blob);
+          audio.src = blobUrl;
+          audio.load();
+        })
+        .catch(err => console.error('Audio fetch fallback failed:', err));
     };
 
     audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onDuration);
-    audio.addEventListener('durationchange', onDuration);
-    audio.addEventListener('canplaythrough', onDuration);
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('durationchange', onMeta);
     audio.addEventListener('ended', onEnded);
-    audio.addEventListener('error', onError);
+    audio.addEventListener('error', onError, { once: true });
 
     return () => {
       audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onDuration);
-      audio.removeEventListener('durationchange', onDuration);
-      audio.removeEventListener('canplaythrough', onDuration);
+      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('durationchange', onMeta);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
+      // Revoke blob URLs if any
+      if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
     };
-  }, []);
+  }, [src]);
 
   const toggle = async () => {
     const a = audioRef.current;
     if (!a) return;
-
     try {
       if (playing) {
         a.pause();
         setPlaying(false);
       } else {
-        if (loadError) {
-          setLoadError(false);
-          a.load();
-        }
         await a.play();
         setPlaying(true);
       }
@@ -115,17 +120,12 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      <audio ref={audioRef} preload="metadata">
-        <source src={src} type="audio/webm" />
-        <source src={src} type="audio/ogg" />
-        <source src={src} type="audio/mp4" />
-      </audio>
+      <audio ref={audioRef} preload="metadata" />
       <button
         onClick={toggle}
         className={cn(
           "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors",
-          isOwn ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#00a884]/15 text-[#00a884] hover:bg-[#00a884]/25",
-          loadError && "opacity-70"
+          isOwn ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#00a884]/15 text-[#00a884] hover:bg-[#00a884]/25"
         )}
       >
         {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
