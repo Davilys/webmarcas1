@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -49,6 +49,11 @@ export function AdminChatWidget() {
   const [convFilter, setConvFilter] = useState<'all' | 'unread'>('all');
   const [activeTab, setActiveTab] = useState<'clients' | 'internal'>('clients');
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // Resizable width state
+  const [panelWidth, setPanelWidth] = useState(900);
+  const isResizing = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const chat = useChat(user);
   const remoteId = chat.activeConversation?.participants?.find(p => p.user_id !== user?.id)?.user_id || null;
@@ -269,6 +274,31 @@ export function AdminChatWidget() {
     return preview;
   };
 
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = window.innerWidth - ev.clientX;
+      setPanelWidth(Math.max(420, Math.min(newWidth, window.innerWidth - 100)));
+    };
+
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, []);
+
   // ==================== RENDER ====================
   const isFullView = expanded && open;
 
@@ -300,17 +330,28 @@ export function AdminChatWidget() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            ref={panelRef}
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 40 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={cn(
-              "fixed z-[90] bg-card border shadow-2xl flex flex-col overflow-hidden",
+              "fixed z-[100] bg-card border shadow-2xl flex flex-col overflow-hidden",
               isFullView
-                ? "inset-3 rounded-xl"
+                ? "top-0 right-0 bottom-0 rounded-l-xl"
                 : "bottom-6 right-6 w-[420px] h-[580px] rounded-xl"
             )}
+            style={isFullView ? { width: panelWidth } : undefined}
           >
+            {/* Resize handle - left edge (only in expanded mode) */}
+            {isFullView && (
+              <div
+                onMouseDown={handleResizeStart}
+                className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 hover:bg-[#00a884]/30 active:bg-[#00a884]/50 transition-colors group"
+              >
+                <div className="absolute left-0.5 top-1/2 -translate-y-1/2 w-0.5 h-12 bg-border group-hover:bg-[#00a884] rounded-full transition-colors" />
+              </div>
+            )}
             {/* Top Header Bar - WhatsApp teal */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-[#008069] dark:bg-[#1f2c33] text-white">
               <div className="flex items-center gap-3">
