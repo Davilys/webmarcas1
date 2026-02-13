@@ -34,38 +34,52 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  // Fetch audio as blob to bypass content-type issues from storage
+  useEffect(() => {
+    let cancelled = false;
+    let url: string | null = null;
+
+    fetch(src)
+      .then(r => r.blob())
+      .then(blob => {
+        if (cancelled) return;
+        // Create blob with explicit webm type
+        const typedBlob = new Blob([blob], { type: 'audio/webm;codecs=opus' });
+        url = URL.createObjectURL(typedBlob);
+        setBlobUrl(url);
+      })
+      .catch(err => {
+        console.error('Audio fetch failed:', err);
+        // Fallback to direct URL
+        if (!cancelled) setBlobUrl(src);
+      });
+
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [src]);
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
-
-    // Force load with correct src
-    audio.src = src;
-    audio.load();
+    if (!audio || !blobUrl) return;
 
     const onTime = () => setCurrentTime(audio.currentTime);
     const onMeta = () => {
       if (audio.duration && isFinite(audio.duration)) setDuration(audio.duration);
     };
     const onEnded = () => setPlaying(false);
-    const onError = (e: Event) => {
-      console.warn('Audio load error, retrying with fetch...', (e.target as HTMLAudioElement)?.error);
-      // Fallback: fetch as blob to bypass any content-type issues
-      fetch(src)
-        .then(r => r.blob())
-        .then(blob => {
-          const blobUrl = URL.createObjectURL(blob);
-          audio.src = blobUrl;
-          audio.load();
-        })
-        .catch(err => console.error('Audio fetch fallback failed:', err));
+    const onError = () => {
+      console.warn('Audio playback error:', audio.error?.code, audio.error?.message);
     };
 
     audio.addEventListener('timeupdate', onTime);
     audio.addEventListener('loadedmetadata', onMeta);
     audio.addEventListener('durationchange', onMeta);
     audio.addEventListener('ended', onEnded);
-    audio.addEventListener('error', onError, { once: true });
+    audio.addEventListener('error', onError);
 
     return () => {
       audio.removeEventListener('timeupdate', onTime);
@@ -73,10 +87,8 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
       audio.removeEventListener('durationchange', onMeta);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
-      // Revoke blob URLs if any
-      if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
     };
-  }, [src]);
+  }, [blobUrl]);
 
   const toggle = async () => {
     const a = audioRef.current;
@@ -120,7 +132,7 @@ function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-[220px]">
-      <audio ref={audioRef} preload="metadata" />
+      {blobUrl && <audio ref={audioRef} src={blobUrl} preload="metadata" />}
       <button
         onClick={toggle}
         className={cn(
