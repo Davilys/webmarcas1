@@ -4,16 +4,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { ClientLayout } from '@/components/cliente/ClientLayout';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessageBubble } from '@/components/chat/ChatMessageBubble';
 import { VideoCallOverlay, IncomingCallNotification } from '@/components/chat/VideoCallOverlay';
 import { MeetingScheduleDialog } from '@/components/chat/MeetingScheduleDialog';
 import { useChat, type ChatMessage } from '@/hooks/useChat';
 import { useWebRTC } from '@/hooks/useWebRTC';
+import { whatsappBgStyle, whatsappBgDarkStyle } from '@/components/chat/WhatsAppBackground';
 import { 
   Bot, Phone, Video, Monitor, Calendar, ArrowLeft, Sparkles, User, 
-  MessageSquare, Send, Loader2, MoreVertical
+  MessageSquare, Search, MoreVertical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -151,55 +151,54 @@ export default function ChatSuporte() {
     }
   };
 
-  // Selection screen
+  // Selection screen - WhatsApp style
   const SelectMode = () => (
     <div className="flex flex-col h-full">
-      <div className="bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground p-6 pt-8">
-        <h2 className="text-2xl font-bold mb-1">Olá {userName || 'visitante'} 👋</h2>
-        <p className="text-primary-foreground/80">Como deseja ser atendido?</p>
+      {/* WhatsApp-style green header */}
+      <div className="bg-[#008069] dark:bg-[#1f2c33] text-white px-5 py-6">
+        <h2 className="text-xl font-semibold mb-0.5">Olá {userName || 'visitante'} 👋</h2>
+        <p className="text-white/70 text-sm">Como deseja ser atendido?</p>
       </div>
-      <div className="flex-1 p-5 space-y-3">
+      <div className="flex-1 p-4 space-y-2.5 bg-[#f0f2f5] dark:bg-[#111b21]">
         <motion.button
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
           onClick={() => setChatMode('ai')}
-          className="w-full flex items-center gap-4 p-5 bg-card hover:bg-accent rounded-2xl border shadow-sm transition-colors"
+          className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1f2c33] hover:bg-gray-50 dark:hover:bg-[#2a3942] rounded-xl shadow-sm transition-colors"
         >
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <Sparkles className="h-7 w-7 text-white" />
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <Sparkles className="h-6 w-6 text-white" />
           </div>
           <div className="text-left flex-1">
-            <p className="font-semibold text-base">Suporte IA</p>
-            <p className="text-sm text-muted-foreground">Respostas instantâneas 24/7</p>
+            <p className="font-semibold text-sm text-foreground">Fernanda IA</p>
+            <p className="text-xs text-muted-foreground">Respostas instantâneas 24/7</p>
           </div>
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
           onClick={startHumanChat}
-          className="w-full flex items-center gap-4 p-5 bg-card hover:bg-accent rounded-2xl border shadow-sm transition-colors"
+          className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1f2c33] hover:bg-gray-50 dark:hover:bg-[#2a3942] rounded-xl shadow-sm transition-colors"
         >
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
-            <User className="h-7 w-7 text-white" />
+          <div className="w-12 h-12 rounded-full bg-[#00a884] flex items-center justify-center">
+            <User className="h-6 w-6 text-white" />
           </div>
           <div className="text-left flex-1">
-            <p className="font-semibold text-base">Atendente</p>
-            <p className="text-sm text-muted-foreground">
-              {assignedAdmin?.full_name || 'Chat com seu consultor'}
-            </p>
+            <p className="font-semibold text-sm text-foreground">{assignedAdmin?.full_name || 'Atendente'}</p>
+            <p className="text-xs text-muted-foreground">Chat com seu consultor</p>
           </div>
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
           onClick={() => setMeetingOpen(true)}
-          className="w-full flex items-center gap-4 p-5 bg-card hover:bg-accent rounded-2xl border shadow-sm transition-colors"
+          className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1f2c33] hover:bg-gray-50 dark:hover:bg-[#2a3942] rounded-xl shadow-sm transition-colors"
         >
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-            <Calendar className="h-7 w-7 text-white" />
+          <div className="w-12 h-12 rounded-full bg-[#54656f] flex items-center justify-center">
+            <Calendar className="h-6 w-6 text-white" />
           </div>
           <div className="text-left flex-1">
-            <p className="font-semibold text-base">Agendar Reunião</p>
-            <p className="text-sm text-muted-foreground">Vídeo ou áudio com consultor</p>
+            <p className="font-semibold text-sm text-foreground">Agendar Reunião</p>
+            <p className="text-xs text-muted-foreground">Vídeo ou áudio com consultor</p>
           </div>
         </motion.button>
       </div>
@@ -213,31 +212,32 @@ export default function ChatSuporte() {
 
   // Chat header - extracted as a plain function to avoid ref warnings
   const renderChatHeader = ({ title, subtitle, onBack, isAI }: { title: string; subtitle: string; onBack: () => void; isAI?: boolean }) => (
-    <div className="flex items-center gap-3 p-3 border-b bg-card">
-      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onBack}>
-        <ArrowLeft className="h-4 w-4" />
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-[#008069] dark:bg-[#1f2c33] text-white">
+      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-white/80 hover:text-white hover:bg-white/10" onClick={onBack}>
+        <ArrowLeft className="h-5 w-5" />
       </Button>
-      <Avatar className="w-9 h-9">
-        <AvatarFallback className={isAI ? "bg-violet-100 text-violet-700" : "bg-primary/15 text-primary"}>
-          {isAI ? <Bot className="h-4 w-4" /> : title[0]}
-        </AvatarFallback>
-      </Avatar>
+      <div className="relative">
+        <Avatar className="w-10 h-10">
+          <AvatarFallback className={isAI ? "bg-violet-500/30 text-white" : "bg-white/20 text-white"}>
+            {isAI ? <Bot className="h-5 w-5" /> : title[0]}
+          </AvatarFallback>
+        </Avatar>
+        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-[#008069] dark:border-[#1f2c33]" />
+      </div>
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-sm truncate">{title}</p>
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-green-500 rounded-full" /> {subtitle}
-        </p>
+        <p className="text-xs text-white/70">{subtitle}</p>
       </div>
       {!isAI && (
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => webrtc.startCall('audio')}>
-            <Phone className="h-4 w-4" />
+        <div className="flex gap-0.5">
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-white/80 hover:text-white hover:bg-white/10" onClick={() => webrtc.startCall('video')}>
+            <Video className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => webrtc.startCall('video')}>
-            <Video className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-white/80 hover:text-white hover:bg-white/10" onClick={() => webrtc.startCall('audio')}>
+            <Phone className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setMeetingOpen(true)}>
-            <Calendar className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-white/80 hover:text-white hover:bg-white/10">
+            <MoreVertical className="h-5 w-5" />
           </Button>
         </div>
       )}
@@ -245,29 +245,33 @@ export default function ChatSuporte() {
   );
 
   const currentMessages = chatMode === 'ai' ? aiMessages : chat.messages;
+  const isDark = document.documentElement.classList.contains('dark');
 
   return (
     <ClientLayout>
       <div className="max-w-lg mx-auto h-[calc(100vh-8rem)]">
-        <div className="bg-card rounded-2xl shadow-xl border h-full overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-[#111b21] rounded-xl shadow-2xl border-0 h-full overflow-hidden flex flex-col">
           {chatMode === 'select' ? (
             <SelectMode />
           ) : (
             <>
               {renderChatHeader({
                 title: chatMode === 'ai' ? 'Fernanda IA' : (assignedAdmin?.full_name || 'Consultor'),
-                subtitle: chatMode === 'ai' ? 'IA • Sempre online' : 'Online',
+                subtitle: chatMode === 'ai' ? 'IA • Sempre online' : 'online',
                 onBack: () => setChatMode('select'),
                 isAI: chatMode === 'ai',
               })}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
+              <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto px-4 py-3 space-y-1"
+                style={isDark ? whatsappBgDarkStyle : whatsappBgStyle}
+              >
                 {currentMessages.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className={cn("w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4", chatMode === 'ai' ? "bg-violet-100" : "bg-primary/10")}>
-                      {chatMode === 'ai' ? <Sparkles className="h-8 w-8 text-violet-600" /> : <MessageSquare className="h-8 w-8 text-primary" />}
+                  <div className="text-center py-16">
+                    <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-white/60 dark:bg-white/5 shadow-sm">
+                      {chatMode === 'ai' ? <Sparkles className="h-10 w-10 text-violet-400" /> : <MessageSquare className="h-10 w-10 text-[#00a884]/40" />}
                     </div>
-                    <h4 className="font-medium mb-1">{chatMode === 'ai' ? 'Suporte IA' : 'Chat com Atendente'}</h4>
-                    <p className="text-sm text-muted-foreground">Envie sua primeira mensagem</p>
+                    <p className="text-sm text-[#667781] dark:text-[#8696a0]">Envie sua primeira mensagem</p>
                   </div>
                 )}
                 {currentMessages.map(msg => (
@@ -275,12 +279,12 @@ export default function ChatSuporte() {
                 ))}
                 {(aiLoading || chat.sendingMessage) && currentMessages[currentMessages.length - 1]?.sender_id === user?.id && (
                   <div className="flex gap-2">
-                    <Avatar className="w-8 h-8"><AvatarFallback className="bg-violet-100 text-violet-700"><Bot className="h-4 w-4" /></AvatarFallback></Avatar>
-                    <div className="bg-card border rounded-2xl rounded-bl-md px-4 py-3">
+                    <Avatar className="w-8 h-8"><AvatarFallback className="bg-white dark:bg-[#1f2c33] text-violet-600"><Bot className="h-4 w-4" /></AvatarFallback></Avatar>
+                    <div className="bg-white dark:bg-[#1f2c33] rounded-lg rounded-tl-none px-4 py-3 shadow-sm">
                       <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-2 h-2 bg-foreground/30 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <span className="w-2 h-2 bg-[#667781]/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-[#667781]/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-[#667781]/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
                   </div>
