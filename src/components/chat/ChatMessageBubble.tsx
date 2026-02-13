@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { FileText, Image, Video, Music, File as FileIcon, Download, Bot, CheckCheck, Play, Pause } from 'lucide-react';
+import { FileText, Image, Video, Music, File as FileIcon, Download, Bot, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import type { ChatMessage } from '@/hooks/useChat';
 import ReactMarkdown from 'react-markdown';
+import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -28,151 +28,7 @@ const formatSize = (bytes: number | null) => {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 };
 
-function AudioPlayer({ src, isOwn }: { src: string; isOwn: boolean }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [audioReady, setAudioReady] = useState(false);
-
-  // Create Audio element programmatically to avoid ref issues with conditional rendering
-  useEffect(() => {
-    const audio = new Audio();
-    audioRef.current = audio;
-    audio.preload = 'metadata';
-
-    const onTime = () => setCurrentTime(audio.currentTime);
-    const onMeta = () => {
-      if (audio.duration && isFinite(audio.duration)) setDuration(audio.duration);
-    };
-    const onEnded = () => setPlaying(false);
-    const onCanPlay = () => setAudioReady(true);
-    const onError = () => {
-      console.warn('Audio error:', audio.error?.code, audio.error?.message, 'src:', src);
-      // If direct URL fails, try fetch-to-blob fallback
-      if (!audio.src.startsWith('blob:')) {
-        console.log('Trying blob fallback...');
-        fetch(src)
-          .then(r => r.arrayBuffer())
-          .then(buf => {
-            const blob = new Blob([buf], { type: 'audio/webm;codecs=opus' });
-            const blobUrl = URL.createObjectURL(blob);
-            audio.src = blobUrl;
-            audio.load();
-          })
-          .catch(e => console.error('Blob fallback also failed:', e));
-      }
-    };
-
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onMeta);
-    audio.addEventListener('durationchange', onMeta);
-    audio.addEventListener('ended', onEnded);
-    audio.addEventListener('canplaythrough', onCanPlay);
-    audio.addEventListener('error', onError);
-
-    // Set src and load
-    audio.src = src;
-    audio.load();
-
-    return () => {
-      audio.pause();
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onMeta);
-      audio.removeEventListener('durationchange', onMeta);
-      audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('canplaythrough', onCanPlay);
-      audio.removeEventListener('error', onError);
-      if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
-      audio.src = '';
-      audioRef.current = null;
-    };
-  }, [src]);
-
-  const toggle = async () => {
-    const a = audioRef.current;
-    if (!a) return;
-    try {
-      if (playing) {
-        a.pause();
-        setPlaying(false);
-      } else {
-        await a.play();
-        setPlaying(true);
-      }
-    } catch (err) {
-      console.error('Audio play error:', err);
-      setPlaying(false);
-    }
-  };
-
-  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const a = audioRef.current;
-    if (!a) return;
-    const t = parseFloat(e.target.value);
-    a.currentTime = t;
-    setCurrentTime(t);
-  };
-
-  const cycleSpeed = () => {
-    const speeds = [1, 1.5, 2];
-    const idx = speeds.indexOf(playbackRate);
-    const next = speeds[(idx + 1) % speeds.length];
-    setPlaybackRate(next);
-    if (audioRef.current) audioRef.current.playbackRate = next;
-  };
-
-  const fmt = (s: number) => {
-    if (!s || !isFinite(s)) return '00:00';
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
-
-  return (
-    <div className="flex items-center gap-2.5 min-w-[220px]">
-      {/* No visible audio element needed - using programmatic Audio() */}
-      <button
-        onClick={toggle}
-        className={cn(
-          "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors",
-          isOwn ? "bg-white/20 text-white hover:bg-white/30" : "bg-[#00a884]/15 text-[#00a884] hover:bg-[#00a884]/25"
-        )}
-      >
-        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
-      </button>
-      <div className="flex-1 flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <span className={cn("text-[11px] font-mono shrink-0", isOwn ? "text-white/70" : "text-muted-foreground")}>
-            {fmt(currentTime || duration)}
-          </span>
-          <input
-            type="range" min={0} max={duration || 0} step={0.1} value={currentTime} onChange={seek}
-            className={cn(
-              "flex-1 h-1 rounded-full appearance-none cursor-pointer",
-              isOwn
-                ? "[&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-track]:bg-white/30"
-                : "[&::-webkit-slider-thumb]:bg-[#00a884] [&::-webkit-slider-track]:bg-[#00a884]/30"
-            )}
-            style={{
-              background: `linear-gradient(to right, ${isOwn ? 'rgba(255,255,255,0.8)' : '#00a884'} ${duration ? (currentTime / duration) * 100 : 0}%, ${isOwn ? 'rgba(255,255,255,0.25)' : 'rgba(0,168,132,0.2)'} 0%)`,
-            }}
-          />
-        </div>
-      </div>
-      <button
-        onClick={cycleSpeed}
-        className={cn(
-          "text-[11px] font-bold shrink-0 px-1 rounded",
-          isOwn ? "text-white/70 hover:text-white" : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        {playbackRate}x
-      </button>
-    </div>
-  );
-}
+// AudioPlayer is now in WhatsAppAudioPlayer.tsx
 
 export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: ChatMessageBubbleProps) {
   const initials = message.sender_profile?.full_name?.split(' ').map(n => n[0]).join('').substring(0, 2) || '?';
@@ -227,7 +83,7 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
 
           {/* Audio attachment */}
           {isAudio && message.file_url && (
-            <AudioPlayer src={message.file_url} isOwn={isOwnMessage} />
+            <WhatsAppAudioPlayer src={message.file_url} isOwn={isOwnMessage} />
           )}
 
           {/* Other file attachments */}
