@@ -12,13 +12,14 @@ import {
   Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer, Edit 
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ContractDetailSheet } from '@/components/admin/contracts/ContractDetailSheet';
 import { CreateContractDialog } from '@/components/admin/contracts/CreateContractDialog';
 import { EditContractDialog } from '@/components/admin/contracts/EditContractDialog';
 import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DatePeriodFilter, type DateFilterType } from '@/components/admin/clients/DatePeriodFilter';
 
 interface Contract {
   id: string;
@@ -56,6 +57,8 @@ export default function AdminContratos() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [expiringPromotion, setExpiringPromotion] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const handleExpirePromotions = async () => {
     if (!confirm(
@@ -274,8 +277,22 @@ export default function AdminContratos() {
     const matchesTab = 
       activeTab === 'all' || 
       contract.contract_template?.name === activeTab;
+
+    // Date filter
+    let matchesDate = true;
+    if (dateFilter !== 'all' && contract.created_at) {
+      const contractDate = new Date(contract.created_at);
+      if (dateFilter === 'today') {
+        matchesDate = isToday(contractDate);
+      } else if (dateFilter === 'week') {
+        matchesDate = isThisWeek(contractDate, { locale: ptBR });
+      } else if (dateFilter === 'month') {
+        matchesDate = contractDate.getMonth() === selectedMonth.getMonth() && 
+                      contractDate.getFullYear() === selectedMonth.getFullYear();
+      }
+    }
     
-    return matchesSearch && matchesSignature && matchesTab;
+    return matchesSearch && matchesSignature && matchesTab && matchesDate;
   });
 
   return (
@@ -320,7 +337,7 @@ export default function AdminContratos() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-wrap">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -341,6 +358,12 @@ export default function AdminContratos() {
               <SelectItem value="not_signed">Não assinados</SelectItem>
             </SelectContent>
           </Select>
+          <DatePeriodFilter
+            dateFilter={dateFilter}
+            onDateFilterChange={setDateFilter}
+            selectedMonth={selectedMonth}
+            onMonthChange={setSelectedMonth}
+          />
         </div>
 
         {/* Tabs */}
