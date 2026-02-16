@@ -47,6 +47,69 @@ export type Database = {
         }
         Relationships: []
       }
+      award_entries: {
+        Row: {
+          brand_name: string | null
+          brand_quantity: number | null
+          client_name: string
+          created_at: string | null
+          created_by: string | null
+          entry_date: string
+          entry_type: string
+          id: string
+          installments_paid: number | null
+          observations: string | null
+          payment_date: string | null
+          payment_form: string | null
+          payment_type: string | null
+          pub_quantity: number | null
+          publication_type: string | null
+          responsible_user_id: string
+          total_resolved_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          brand_name?: string | null
+          brand_quantity?: number | null
+          client_name: string
+          created_at?: string | null
+          created_by?: string | null
+          entry_date?: string
+          entry_type: string
+          id?: string
+          installments_paid?: number | null
+          observations?: string | null
+          payment_date?: string | null
+          payment_form?: string | null
+          payment_type?: string | null
+          pub_quantity?: number | null
+          publication_type?: string | null
+          responsible_user_id: string
+          total_resolved_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          brand_name?: string | null
+          brand_quantity?: number | null
+          client_name?: string
+          created_at?: string | null
+          created_by?: string | null
+          entry_date?: string
+          entry_type?: string
+          id?: string
+          installments_paid?: number | null
+          observations?: string | null
+          payment_date?: string | null
+          payment_form?: string | null
+          payment_type?: string | null
+          pub_quantity?: number | null
+          publication_type?: string | null
+          responsible_user_id?: string
+          total_resolved_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       brand_processes: {
         Row: {
           brand_name: string

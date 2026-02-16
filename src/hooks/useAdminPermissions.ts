@@ -16,6 +16,7 @@ export const CRM_SECTIONS = [
   { key: 'inpi_magazine', label: 'Revista INPI', description: 'Publicações oficiais' },
   { key: 'inpi_resources', label: 'Recursos INPI', description: 'Recursos e petições' },
   { key: 'perfex_integration', label: 'Integração Perfex', description: 'Sincronização CRM' },
+  { key: 'awards', label: 'Premiação', description: 'Metas e bonificações' },
   { key: 'settings', label: 'Configurações', description: 'Preferências do sistema' },
 ] as const;
 
@@ -54,6 +55,7 @@ const PATH_TO_PERMISSION_KEY: Record<string, PermissionKey> = {
   '/admin/revista-inpi': 'inpi_magazine',
   '/admin/recursos-inpi': 'inpi_resources',
   '/admin/integracao-perfex': 'perfex_integration',
+  '/admin/premiacao': 'awards',
   '/admin/configuracoes': 'settings',
 };
 
