@@ -3,7 +3,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, isWithinInterval, subMonths, addMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInterval, subMonths, addMonths, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -96,6 +96,7 @@ export default function Premiacao() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [datePeriod, setDatePeriod] = useState<'hoje' | 'semana' | 'mes'>('mes');
   const [filterUser, setFilterUser] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AwardEntry | null>(null);
@@ -209,15 +210,28 @@ export default function Premiacao() {
     },
   });
 
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    if (datePeriod === 'hoje') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      return { start, end };
+    }
+    if (datePeriod === 'semana') {
+      return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+    }
+    return { start: monthStart, end: monthEnd };
+  }, [datePeriod, monthStart, monthEnd]);
+
   const filteredEntries = useMemo(() => {
     const effectiveFilter = isMaster ? filterUser : (currentUser?.id || 'none');
     return entries.filter(e => {
       const d = new Date(e.entry_date);
-      const inMonth = isWithinInterval(d, { start: monthStart, end: monthEnd });
+      const inRange = isWithinInterval(d, { start: dateRange.start, end: dateRange.end });
       const matchUser = effectiveFilter === 'all' || e.responsible_user_id === effectiveFilter;
-      return inMonth && matchUser;
+      return inRange && matchUser;
     });
-  }, [entries, monthStart, monthEnd, filterUser, isMaster, currentUser?.id]);
+  }, [entries, dateRange, filterUser, isMaster, currentUser?.id]);
 
   const registroEntries = filteredEntries.filter(e => e.entry_type === 'registro_marca');
   const publicacaoEntries = filteredEntries.filter(e => e.entry_type === 'publicacao');
@@ -751,19 +765,42 @@ export default function Premiacao() {
             </Button>
           </div>
 
-          {/* Controls row */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-muted/50 rounded-xl p-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="font-medium text-sm min-w-[130px] text-center capitalize">
-                {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
-              </span>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+          {/* Date period filter + month nav */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Hoje | Semana | Mês */}
+              <div className="flex items-center bg-muted/50 rounded-xl p-1 gap-0.5">
+                {(['hoje', 'semana', 'mes'] as const).map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => setDatePeriod(period)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      datePeriod === period
+                        ? 'bg-card shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    {period === 'hoje' ? 'Hoje' : period === 'semana' ? 'Semana' : 'Mês'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Month navigator */}
+              <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-medium text-sm min-w-[120px] text-center capitalize flex items-center justify-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-primary" />
+                  {format(selectedMonth, "MMM 'De' yyyy", { locale: ptBR })}
+                </span>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+
             {isMaster && (
               <Select value={filterUser} onValueChange={setFilterUser}>
                 <SelectTrigger className="w-[160px] sm:w-[180px] h-9 text-sm">
