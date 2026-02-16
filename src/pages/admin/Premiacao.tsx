@@ -22,8 +22,6 @@ import {
   CreditCard, ChevronLeft, ChevronRight, Pencil, Trash2, BarChart3, Award,
   User, Tag, Hash, Calendar, MessageSquare, Wallet, Search
 } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 // ---- Types ----
 interface AwardEntry {
@@ -406,80 +404,47 @@ export default function Premiacao() {
           </div>
 
           {/* Nome do Cliente - Searchable */}
-          <div>
+          <div className="relative">
             <Label>Nome do Cliente *</Label>
-            <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className="w-full justify-start text-left font-normal h-10"
-                >
-                  <User className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
-                  {formClientName || <span className="text-muted-foreground">Pesquisar cliente...</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Digite o nome do cliente..."
-                    value={clientSearchQuery}
-                    onValueChange={setClientSearchQuery}
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      <div className="py-2 text-center text-sm">
-                        <p className="text-muted-foreground">Nenhum cliente encontrado</p>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="mt-1"
-                          onClick={() => {
-                            setFormClientName(clientSearchQuery);
-                            setClientSearchOpen(false);
-                          }}
-                        >
-                          Usar "{clientSearchQuery}" manualmente
-                        </Button>
-                      </div>
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {filteredClients.map(client => (
-                        <CommandItem
-                          key={client.id}
-                          value={client.id}
-                          onSelect={() => {
-                            setFormClientName(client.full_name || client.email);
-                            // Auto-fill brand name from first process
-                            if (client.brand_names.length > 0 && !formBrandName) {
-                              setFormBrandName(client.brand_names[0]);
-                            }
-                            setClientSearchOpen(false);
-                            setClientSearchQuery('');
-                          }}
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-medium">{client.full_name || 'Sem nome'}</span>
-                            <span className="text-xs text-muted-foreground">{client.email}</span>
-                            {client.brand_names.length > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                Marcas: {client.brand_names.join(', ')}
-                              </span>
-                            )}
-                          </div>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {formClientName && (
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-muted-foreground">Selecionado: {formClientName}</span>
-                <Button variant="ghost" size="sm" className="h-5 text-xs px-1" onClick={() => { setFormClientName(''); setFormBrandName(''); }}>
-                  Limpar
-                </Button>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-10"
+                value={formClientName}
+                onChange={e => {
+                  setFormClientName(e.target.value);
+                  setClientSearchQuery(e.target.value);
+                  setClientSearchOpen(true);
+                }}
+                onFocus={() => { if (formClientName.length >= 2) setClientSearchOpen(true); }}
+                onBlur={() => setTimeout(() => setClientSearchOpen(false), 200)}
+                placeholder="Pesquisar ou digitar nome do cliente..."
+              />
+            </div>
+            {clientSearchOpen && clientSearchQuery.length >= 2 && filteredClients.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+                {filteredClients.map(client => (
+                  <button
+                    key={client.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-accent text-sm cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setFormClientName(client.full_name || client.email);
+                      if (client.brand_names.length > 0 && !formBrandName) {
+                        setFormBrandName(client.brand_names[0]);
+                      }
+                      setClientSearchOpen(false);
+                      setClientSearchQuery('');
+                    }}
+                  >
+                    <div className="font-medium">{client.full_name || 'Sem nome'}</div>
+                    <div className="text-xs text-muted-foreground">{client.email}</div>
+                    {client.brand_names.length > 0 && (
+                      <div className="text-xs text-muted-foreground">Marcas: {client.brand_names.join(', ')}</div>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
           </div>
