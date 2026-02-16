@@ -382,8 +382,8 @@ export default function Premiacao() {
     </div>
   );
 
-  // Entry form dialog
-  const EntryFormDialog = () => (
+  // Entry form dialog - as JSX variable (NOT a component) to avoid remounting on state changes
+  const entryFormDialog = (
     <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -894,7 +894,7 @@ export default function Premiacao() {
         </Tabs>
       </div>
 
-      <EntryFormDialog />
+      {entryFormDialog}
     </AdminLayout>
   );
 }
