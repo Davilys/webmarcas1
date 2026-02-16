@@ -118,7 +118,30 @@ export default function Premiacao() {
   const [formCustomValue, setFormCustomValue] = useState('');
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [formObs, setFormObs] = useState('');
-  const [formResponsible, setFormResponsible] = useState('');
+
+  // Get current user
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    },
+  });
+
+  // Check if current user is master (has can_edit on awards permission)
+  const { data: isMaster = false } = useQuery({
+    queryKey: ['awards-is-master', currentUser?.id],
+    enabled: !!currentUser?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('admin_permissions')
+        .select('can_edit')
+        .eq('user_id', currentUser!.id)
+        .eq('permission_key', 'awards')
+        .maybeSingle();
+      return data?.can_edit === true;
+    },
+  });
 
   const monthStart = startOfMonth(selectedMonth);
   const monthEnd = endOfMonth(selectedMonth);
@@ -148,15 +171,16 @@ export default function Premiacao() {
     },
   });
 
-  // Filter entries by month and user
+  // Filter entries by month and user — non-master sees only own data
   const filteredEntries = useMemo(() => {
+    const effectiveFilter = isMaster ? filterUser : (currentUser?.id || 'none');
     return entries.filter(e => {
       const d = new Date(e.entry_date);
       const inMonth = isWithinInterval(d, { start: monthStart, end: monthEnd });
-      const matchUser = filterUser === 'all' || e.responsible_user_id === filterUser;
+      const matchUser = effectiveFilter === 'all' || e.responsible_user_id === effectiveFilter;
       return inMonth && matchUser;
     });
-  }, [entries, monthStart, monthEnd, filterUser]);
+  }, [entries, monthStart, monthEnd, filterUser, isMaster, currentUser?.id]);
 
   const registroEntries = filteredEntries.filter(e => e.entry_type === 'registro_marca');
   const publicacaoEntries = filteredEntries.filter(e => e.entry_type === 'publicacao');
@@ -213,7 +237,6 @@ export default function Premiacao() {
     setFormCustomValue('');
     setFormDate(format(new Date(), 'yyyy-MM-dd'));
     setFormObs('');
-    setFormResponsible('');
     setEditingEntry(null);
   }
 
@@ -232,7 +255,6 @@ export default function Premiacao() {
     setFormCustomValue('');
     setFormDate(entry.entry_date);
     setFormObs(entry.observations || '');
-    setFormResponsible(entry.responsible_user_id);
     setDialogOpen(true);
   }
 
@@ -240,7 +262,7 @@ export default function Premiacao() {
     if (!formClientName.trim()) return toast.error('Nome do cliente é obrigatório');
     
     const { data: { user } } = await supabase.auth.getUser();
-    const responsibleId = formResponsible || user?.id;
+    const responsibleId = user?.id;
     if (!responsibleId) return toast.error('Usuário não encontrado');
 
     const base: Record<string, unknown> = {
@@ -336,19 +358,6 @@ export default function Premiacao() {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input className="pl-10" value={formClientName} onChange={e => setFormClientName(e.target.value)} placeholder="Nome completo do cliente" />
             </div>
-          </div>
-
-          {/* Responsável */}
-          <div>
-            <Label>Responsável</Label>
-            <Select value={formResponsible} onValueChange={setFormResponsible}>
-              <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-              <SelectContent>
-                {teamMembers.map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* ===== REGISTRO DE MARCA ===== */}
@@ -593,17 +602,19 @@ export default function Premiacao() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <MonthNav />
-            <Select value={filterUser} onValueChange={setFilterUser}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Todos os usuários" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {teamMembers.map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {isMaster && (
+              <Select value={filterUser} onValueChange={setFilterUser}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todos os usuários" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {teamMembers.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.full_name || m.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" /> Novo Cadastro
             </Button>
@@ -617,7 +628,7 @@ export default function Premiacao() {
             <TabsTrigger value="registro" className="gap-1.5"><FileText className="h-4 w-4" /> Registro de Marca</TabsTrigger>
             <TabsTrigger value="publicacao" className="gap-1.5"><Megaphone className="h-4 w-4" /> Publicação</TabsTrigger>
             <TabsTrigger value="cobranca" className="gap-1.5"><CreditCard className="h-4 w-4" /> Cobrança</TabsTrigger>
-            <TabsTrigger value="equipe" className="gap-1.5"><Users className="h-4 w-4" /> Equipe</TabsTrigger>
+            {isMaster && <TabsTrigger value="equipe" className="gap-1.5"><Users className="h-4 w-4" /> Equipe</TabsTrigger>}
           </TabsList>
 
           {/* DASHBOARD TAB */}
