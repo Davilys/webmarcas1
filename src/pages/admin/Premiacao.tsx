@@ -20,8 +20,10 @@ import {
 import {
   Trophy, Plus, Users, TrendingUp, Target, DollarSign, FileText, Megaphone,
   CreditCard, ChevronLeft, ChevronRight, Pencil, Trash2, BarChart3, Award,
-  User, Tag, Hash, Calendar, MessageSquare, Wallet
+  User, Tag, Hash, Calendar, MessageSquare, Wallet, Search
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 // ---- Types ----
 interface AwardEntry {
@@ -103,6 +105,8 @@ export default function Premiacao() {
   const [filterUser, setFilterUser] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AwardEntry | null>(null);
+  const [clientSearchOpen, setClientSearchOpen] = useState(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
 
   // Form state
   const [formType, setFormType] = useState<'registro_marca' | 'publicacao' | 'cobranca'>('registro_marca');
@@ -157,6 +161,54 @@ export default function Premiacao() {
       return (profiles || []) as TeamMember[];
     },
   });
+
+  // Fetch clients for search autocomplete
+  interface ClientWithBrand {
+    id: string;
+    full_name: string | null;
+    email: string;
+    brand_names: string[];
+  }
+
+  const { data: clientsList = [] } = useQuery({
+    queryKey: ['award-clients-search'],
+    queryFn: async () => {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .order('full_name');
+      if (!profiles) return [];
+
+      const { data: processes } = await supabase
+        .from('brand_processes')
+        .select('user_id, brand_name');
+
+      const brandMap = new Map<string, string[]>();
+      (processes || []).forEach(p => {
+        if (p.user_id) {
+          const arr = brandMap.get(p.user_id) || [];
+          arr.push(p.brand_name);
+          brandMap.set(p.user_id, arr);
+        }
+      });
+
+      return profiles.map(p => ({
+        id: p.id,
+        full_name: p.full_name,
+        email: p.email,
+        brand_names: brandMap.get(p.id) || [],
+      })) as ClientWithBrand[];
+    },
+  });
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearchQuery.trim()) return clientsList.slice(0, 20);
+    const q = clientSearchQuery.toLowerCase();
+    return clientsList.filter(c =>
+      (c.full_name || '').toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [clientsList, clientSearchQuery]);
 
   // Fetch entries
   const { data: entries = [], isLoading } = useQuery({
@@ -238,6 +290,8 @@ export default function Premiacao() {
     setFormDate(format(new Date(), 'yyyy-MM-dd'));
     setFormObs('');
     setEditingEntry(null);
+    setClientSearchQuery('');
+    setClientSearchOpen(false);
   }
 
   function openEdit(entry: AwardEntry) {
@@ -351,13 +405,83 @@ export default function Premiacao() {
             </Select>
           </div>
 
-          {/* Nome do Cliente */}
+          {/* Nome do Cliente - Searchable */}
           <div>
             <Label>Nome do Cliente *</Label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-10" value={formClientName} onChange={e => setFormClientName(e.target.value)} placeholder="Nome completo do cliente" />
-            </div>
+            <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-start text-left font-normal h-10"
+                >
+                  <User className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
+                  {formClientName || <span className="text-muted-foreground">Pesquisar cliente...</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Digite o nome do cliente..."
+                    value={clientSearchQuery}
+                    onValueChange={setClientSearchQuery}
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      <div className="py-2 text-center text-sm">
+                        <p className="text-muted-foreground">Nenhum cliente encontrado</p>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="mt-1"
+                          onClick={() => {
+                            setFormClientName(clientSearchQuery);
+                            setClientSearchOpen(false);
+                          }}
+                        >
+                          Usar "{clientSearchQuery}" manualmente
+                        </Button>
+                      </div>
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {filteredClients.map(client => (
+                        <CommandItem
+                          key={client.id}
+                          value={client.id}
+                          onSelect={() => {
+                            setFormClientName(client.full_name || client.email);
+                            // Auto-fill brand name from first process
+                            if (client.brand_names.length > 0 && !formBrandName) {
+                              setFormBrandName(client.brand_names[0]);
+                            }
+                            setClientSearchOpen(false);
+                            setClientSearchQuery('');
+                          }}
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-medium">{client.full_name || 'Sem nome'}</span>
+                            <span className="text-xs text-muted-foreground">{client.email}</span>
+                            {client.brand_names.length > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Marcas: {client.brand_names.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {formClientName && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-muted-foreground">Selecionado: {formClientName}</span>
+                <Button variant="ghost" size="sm" className="h-5 text-xs px-1" onClick={() => { setFormClientName(''); setFormBrandName(''); }}>
+                  Limpar
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* ===== REGISTRO DE MARCA ===== */}
