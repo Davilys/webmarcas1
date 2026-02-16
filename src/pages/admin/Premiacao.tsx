@@ -11,17 +11,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
-} from '@/components/ui/table';
-import {
-  Trophy, Plus, Users, TrendingUp, Target, DollarSign, FileText, Megaphone,
+  Trophy, Plus, Users, DollarSign, FileText, Megaphone,
   CreditCard, ChevronLeft, ChevronRight, Pencil, Trash2, BarChart3, Award,
-  User, Tag, Hash, Calendar, MessageSquare, Wallet, Search
+  User, Tag, Hash, Calendar, MessageSquare, Wallet, Search, TrendingUp, Target, Sparkles
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 // ---- Types ----
 interface AwardEntry {
@@ -51,14 +50,9 @@ interface TeamMember {
 
 // ---- Calculation helpers ----
 function calcRegistroMarcaPremium(entries: AwardEntry[]): number {
-  const totalBrands = entries.reduce((s, e) => s + (e.brand_quantity || 1), 0);
-  const metaAtingida = totalBrands >= 30;
   let total = 0;
-
-  // Sort by date to apply meta sequentially
   const sorted = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date));
   let accumulated = 0;
-
   for (const entry of sorted) {
     const qty = entry.brand_quantity || 1;
     for (let i = 0; i < qty; i++) {
@@ -95,6 +89,8 @@ function calcCobrancaPremium(entries: AwardEntry[]): number {
   return total;
 }
 
+const formatCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
 // ---- Main Component ----
 export default function Premiacao() {
   const queryClient = useQueryClient();
@@ -121,7 +117,6 @@ export default function Premiacao() {
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [formObs, setFormObs] = useState('');
 
-  // Get current user
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
     queryFn: async () => {
@@ -130,7 +125,6 @@ export default function Premiacao() {
     },
   });
 
-  // Check if current user is master (has can_edit on awards permission)
   const { data: isMaster = false } = useQuery({
     queryKey: ['awards-is-master', currentUser?.id],
     enabled: !!currentUser?.id,
@@ -148,7 +142,6 @@ export default function Premiacao() {
   const monthStart = startOfMonth(selectedMonth);
   const monthEnd = endOfMonth(selectedMonth);
 
-  // Fetch team members (admins)
   const { data: teamMembers = [] } = useQuery({
     queryKey: ['award-team-members'],
     queryFn: async () => {
@@ -160,7 +153,6 @@ export default function Premiacao() {
     },
   });
 
-  // Fetch clients for search autocomplete
   interface ClientWithBrand {
     id: string;
     full_name: string | null;
@@ -176,11 +168,9 @@ export default function Premiacao() {
         .select('id, full_name, email')
         .order('full_name');
       if (!profiles) return [];
-
       const { data: processes } = await supabase
         .from('brand_processes')
         .select('user_id, brand_name');
-
       const brandMap = new Map<string, string[]>();
       (processes || []).forEach(p => {
         if (p.user_id) {
@@ -189,7 +179,6 @@ export default function Premiacao() {
           brandMap.set(p.user_id, arr);
         }
       });
-
       return profiles.map(p => ({
         id: p.id,
         full_name: p.full_name,
@@ -208,7 +197,6 @@ export default function Premiacao() {
     ).slice(0, 20);
   }, [clientsList, clientSearchQuery]);
 
-  // Fetch entries
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ['award-entries'],
     queryFn: async () => {
@@ -221,7 +209,6 @@ export default function Premiacao() {
     },
   });
 
-  // Filter entries by month and user — non-master sees only own data
   const filteredEntries = useMemo(() => {
     const effectiveFilter = isMaster ? filterUser : (currentUser?.id || 'none');
     return entries.filter(e => {
@@ -243,7 +230,6 @@ export default function Premiacao() {
   const totalBrands = registroEntries.reduce((s, e) => s + (e.brand_quantity || 1), 0);
   const totalPubs = publicacaoEntries.reduce((s, e) => s + (e.pub_quantity || 1), 0);
 
-  // Mutations
   const saveMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       if (editingEntry) {
@@ -312,7 +298,6 @@ export default function Premiacao() {
 
   async function handleSave() {
     if (!formClientName.trim()) return toast.error('Nome do cliente é obrigatório');
-    
     const { data: { user } } = await supabase.auth.getUser();
     const responsibleId = user?.id;
     if (!responsibleId) return toast.error('Usuário não encontrado');
@@ -330,9 +315,7 @@ export default function Premiacao() {
     if (formType === 'registro_marca') {
       base.brand_quantity = formBrandQty;
       base.payment_type = formPaymentType;
-      if (formPaymentType === 'promocao') {
-        base.payment_form = 'promocao';
-      }
+      if (formPaymentType === 'promocao') base.payment_form = 'promocao';
     } else if (formType === 'publicacao') {
       base.publication_type = formPubType;
       base.pub_quantity = formPubQty;
@@ -341,7 +324,6 @@ export default function Premiacao() {
       base.installments_paid = formInstallments;
       base.total_resolved_value = parseFloat(formResolvedValue) || 0;
     }
-
     saveMutation.mutate(base);
   }
 
@@ -349,7 +331,6 @@ export default function Premiacao() {
     return teamMembers.find(m => m.id === userId)?.full_name || 'Desconhecido';
   }
 
-  // Per-user stats for Equipe tab
   const perUserStats = useMemo(() => {
     const map = new Map<string, { registro: number; publicacao: number; cobranca: number; premium: number }>();
     for (const member of teamMembers) {
@@ -367,49 +348,180 @@ export default function Premiacao() {
     return map;
   }, [teamMembers, filteredEntries]);
 
-  // Month navigation
-  const MonthNav = () => (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" size="icon" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <span className="font-medium text-sm min-w-[140px] text-center">
-        {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
-      </span>
-      <Button variant="outline" size="icon" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-    </div>
+  // ---- Render helpers ----
+
+  const typeLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    registro_marca: { label: 'Registro de Marca', icon: <FileText className="h-4 w-4" />, color: 'text-primary' },
+    publicacao: { label: 'Publicação', icon: <Megaphone className="h-4 w-4" />, color: 'text-purple-500' },
+    cobranca: { label: 'Cobrança', icon: <CreditCard className="h-4 w-4" />, color: 'text-orange-500' },
+  };
+
+  // Mobile card for entries
+  const EntryCard = ({ entry, type }: { entry: AwardEntry; type: string }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border bg-card p-4 space-y-3"
+    >
+      <div className="flex items-start justify-between">
+        <div className="space-y-1 min-w-0 flex-1">
+          <p className="font-semibold text-sm truncate">{entry.client_name}</p>
+          {type !== 'cobranca' && entry.brand_name && (
+            <p className="text-xs text-muted-foreground truncate">
+              <Tag className="inline h-3 w-3 mr-1" />{entry.brand_name}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-1 shrink-0 ml-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entry)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
+            if (confirm('Excluir registro?')) deleteMutation.mutate(entry.id);
+          }}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Badge variant="outline" className="text-[11px] gap-1">
+          <Calendar className="h-3 w-3" />
+          {format(new Date(entry.entry_date), 'dd/MM/yyyy')}
+        </Badge>
+        {type === 'registro_marca' && (
+          <>
+            <Badge variant="secondary" className="text-[11px]">{entry.brand_quantity} marca(s)</Badge>
+            <Badge variant={entry.payment_type === 'avista' ? 'default' : 'secondary'} className="text-[11px]">
+              {entry.payment_type === 'avista' ? 'À Vista' : entry.payment_type === 'parcelado' ? 'Parcelado' : 'Promoção'}
+            </Badge>
+          </>
+        )}
+        {type === 'publicacao' && (
+          <>
+            <Badge variant="secondary" className="text-[11px]">{entry.pub_quantity} pub(s)</Badge>
+            <Badge variant="outline" className="text-[11px] capitalize">{(entry.publication_type || '').replace(/_/g, ' ')}</Badge>
+          </>
+        )}
+        {type === 'cobranca' && (
+          <>
+            <Badge variant="secondary" className="text-[11px]">{entry.installments_paid} parcela(s)</Badge>
+            <Badge variant="outline" className="text-[11px]">{formatCurrency(entry.total_resolved_value || 0)}</Badge>
+          </>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        <User className="inline h-3 w-3 mr-1" />{getUserName(entry.responsible_user_id)}
+      </p>
+    </motion.div>
   );
 
-  // Entry form dialog - as JSX variable (NOT a component) to avoid remounting on state changes
+  // Stat card component
+  const StatCard = ({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) => (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+      <Card className="overflow-hidden border-0 shadow-md">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+              <p className={`text-xl sm:text-2xl font-bold ${color}`}>{value}</p>
+              {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+            </div>
+            <div className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-muted/50 ${color}`}>
+              {icon}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+
+  // Progress card for goals
+  const GoalCard = ({ label, current, target, premium, color, icon }: { label: string; current: number; target: number; premium: number; color: string; icon: React.ReactNode }) => {
+    const pct = Math.min((current / target) * 100, 100);
+    const reached = current >= target;
+    return (
+      <Card className="overflow-hidden border-0 shadow-md">
+        <CardContent className="p-4 sm:p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-lg bg-muted/50 ${color}`}>{icon}</div>
+              <p className="text-sm font-semibold">{label}</p>
+            </div>
+            {reached && <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[11px]">✅ Meta</Badge>}
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{current} / {target}</span>
+              <span>{Math.round(pct)}%</span>
+            </div>
+            <Progress value={pct} className="h-2" />
+          </div>
+          <p className={`text-lg font-bold ${color}`}>{formatCurrency(premium)}</p>
+          <div className="text-[11px] text-muted-foreground space-y-0.5">
+            {label === 'Registro de Marca' && (
+              <>
+                <p>Antes da meta: R$ 50/marca</p>
+                <p>Após meta (à vista): R$ 100 | Parcelado: R$ 50</p>
+              </>
+            )}
+            {label === 'Publicação' && (
+              <>
+                <p>Até 49: R$ 50 cada</p>
+                <p>50 ou mais: R$ 100 cada</p>
+              </>
+            )}
+            {label === 'Cobrança' && (
+              <>
+                <p>R$199-397: R$10 | R$398-597: R$25</p>
+                <p>R$598-999: R$50 | R$1000+: R$75-100</p>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Entry form dialog — stable JSX variable
   const entryFormDialog = (
     <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editingEntry ? 'Editar Registro' : 'Novo Cadastro'}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
+        <div className="sticky top-0 z-10 bg-card border-b px-5 py-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              {editingEntry ? <Pencil className="h-4 w-4 text-primary" /> : <Plus className="h-4 w-4 text-primary" />}
+              {editingEntry ? 'Editar Registro' : 'Novo Cadastro'}
+            </DialogTitle>
+          </DialogHeader>
+        </div>
+
+        <div className="px-5 pb-5 space-y-4">
           {/* Tipo */}
-          <div>
-            <Label>Tipo *</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tipo *</Label>
             <Select value={formType} onValueChange={(v) => setFormType(v as typeof formType)} disabled={!!editingEntry}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="registro_marca">Registro de Marca</SelectItem>
-                <SelectItem value="publicacao">Publicação</SelectItem>
-                <SelectItem value="cobranca">Cobrança / Devedores</SelectItem>
+                <SelectItem value="registro_marca">
+                  <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-primary" /> Registro de Marca</span>
+                </SelectItem>
+                <SelectItem value="publicacao">
+                  <span className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-purple-500" /> Publicação</span>
+                </SelectItem>
+                <SelectItem value="cobranca">
+                  <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-orange-500" /> Cobrança / Devedores</span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Nome do Cliente - Searchable */}
-          <div className="relative">
-            <Label>Nome do Cliente *</Label>
+          {/* Nome do Cliente — Searchable */}
+          <div className="relative space-y-1.5">
+            <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nome do Cliente *</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                className="pl-10"
+                className="pl-10 h-11"
                 value={formClientName}
                 onChange={e => {
                   setFormClientName(e.target.value);
@@ -418,16 +530,16 @@ export default function Premiacao() {
                 }}
                 onFocus={() => { if (formClientName.length >= 2) setClientSearchOpen(true); }}
                 onBlur={() => setTimeout(() => setClientSearchOpen(false), 200)}
-                placeholder="Pesquisar ou digitar nome do cliente..."
+                placeholder="Pesquisar ou digitar nome..."
               />
             </div>
             {clientSearchOpen && clientSearchQuery.length >= 2 && filteredClients.length > 0 && (
-              <div className="absolute z-50 mt-1 w-full bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+              <div className="absolute z-50 mt-1 w-full bg-popover border rounded-xl shadow-lg max-h-48 overflow-y-auto">
                 {filteredClients.map(client => (
                   <button
                     key={client.id}
                     type="button"
-                    className="w-full text-left px-3 py-2 hover:bg-accent text-sm cursor-pointer"
+                    className="w-full text-left px-3 py-2.5 hover:bg-accent/50 text-sm cursor-pointer transition-colors first:rounded-t-xl last:rounded-b-xl"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       setFormClientName(client.full_name || client.email);
@@ -441,7 +553,10 @@ export default function Premiacao() {
                     <div className="font-medium">{client.full_name || 'Sem nome'}</div>
                     <div className="text-xs text-muted-foreground">{client.email}</div>
                     {client.brand_names.length > 0 && (
-                      <div className="text-xs text-muted-foreground">Marcas: {client.brand_names.join(', ')}</div>
+                      <div className="text-xs text-primary/70 mt-0.5">
+                        <Tag className="inline h-3 w-3 mr-0.5" />
+                        {client.brand_names.join(', ')}
+                      </div>
                     )}
                   </button>
                 ))}
@@ -451,75 +566,83 @@ export default function Premiacao() {
 
           {/* ===== REGISTRO DE MARCA ===== */}
           {formType === 'registro_marca' && (
-            <>
-              <div>
-                <Label>Nome da Marca *</Label>
+            <div className="space-y-4 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nome da Marca *</Label>
                 <div className="relative">
                   <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" value={formBrandName} onChange={e => setFormBrandName(e.target.value)} placeholder="Nome da marca" />
+                  <Input className="pl-10 h-11" value={formBrandName} onChange={e => setFormBrandName(e.target.value)} placeholder="Nome da marca" />
                 </div>
               </div>
-              <div>
-                <Label>Quantidade de Marcas/Classes *</Label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="number" min={1} value={formBrandQty} onChange={e => setFormBrandQty(Number(e.target.value))} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Qtd Marcas *</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10 h-11" type="number" min={1} value={formBrandQty} onChange={e => setFormBrandQty(Number(e.target.value))} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Data Pgto *</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10 h-11" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                  </div>
                 </div>
               </div>
-              <div>
-                <Label>Data do Pagamento *</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <Label>Forma de Pagamento *</Label>
-                <div className="relative">
-                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-                  <Select value={formPaymentType} onValueChange={setFormPaymentType}>
-                    <SelectTrigger className="pl-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="avista">À Vista — R$ 699,99</SelectItem>
-                      <SelectItem value="parcelado">Parcelado — R$ 1.194,00</SelectItem>
-                      <SelectItem value="promocao">Promoção — Valor Personalizado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Forma de Pagamento *</Label>
+                <Select value={formPaymentType} onValueChange={setFormPaymentType}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="avista">À Vista — R$ 699,99</SelectItem>
+                    <SelectItem value="parcelado">Parcelado — R$ 1.194,00</SelectItem>
+                    <SelectItem value="promocao">Promoção — Valor Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {formPaymentType === 'promocao' && (
-                <div>
-                  <Label>Valor Personalizado (R$) *</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Valor Personalizado (R$) *</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-10" type="number" step="0.01" value={formCustomValue} onChange={e => setFormCustomValue(e.target.value)} placeholder="0,00" />
+                    <Input className="pl-10 h-11" type="number" step="0.01" value={formCustomValue} onChange={e => setFormCustomValue(e.target.value)} placeholder="0,00" />
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {/* ===== PUBLICAÇÃO ===== */}
           {formType === 'publicacao' && (
-            <>
-              <div>
-                <Label>Nome da Marca *</Label>
+            <div className="space-y-4 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nome da Marca *</Label>
                 <div className="relative">
                   <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" value={formBrandName} onChange={e => setFormBrandName(e.target.value)} placeholder="Nome da marca" />
+                  <Input className="pl-10 h-11" value={formBrandName} onChange={e => setFormBrandName(e.target.value)} placeholder="Nome da marca" />
                 </div>
               </div>
-              <div>
-                <Label>Quantidade de Publicações *</Label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="number" min={1} value={formPubQty} onChange={e => setFormPubQty(Number(e.target.value))} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Qtd Pub *</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10 h-11" type="number" min={1} value={formPubQty} onChange={e => setFormPubQty(Number(e.target.value))} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Data *</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10 h-11" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                  </div>
                 </div>
               </div>
-              <div>
-                <Label>Tipo de Publicação *</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tipo de Publicação *</Label>
                 <Select value={formPubType} onValueChange={setFormPubType}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="exigencia_merito">Exigência de Mérito</SelectItem>
                     <SelectItem value="recurso">Recurso</SelectItem>
@@ -531,82 +654,76 @@ export default function Premiacao() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Data da Publicação *</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <Label>Forma de Pagamento *</Label>
-                <div className="relative">
-                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-                  <Select value={formPubPaymentForm} onValueChange={setFormPubPaymentForm}>
-                    <SelectTrigger className="pl-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="avista">À Vista — 1 Salário Mínimo</SelectItem>
-                      <SelectItem value="parcelado">Parcelado — 6x de R$ 398,00</SelectItem>
-                      <SelectItem value="promocao">Promoção — Valor Personalizado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Forma de Pagamento *</Label>
+                <Select value={formPubPaymentForm} onValueChange={setFormPubPaymentForm}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="avista">À Vista — 1 Salário Mínimo</SelectItem>
+                    <SelectItem value="parcelado">Parcelado — 6x de R$ 398,00</SelectItem>
+                    <SelectItem value="promocao">Promoção — Valor Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {formPubPaymentForm === 'promocao' && (
-                <div>
-                  <Label>Valor Personalizado (R$) *</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Valor Personalizado (R$) *</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-10" type="number" step="0.01" value={formCustomValue} onChange={e => setFormCustomValue(e.target.value)} placeholder="0,00" />
+                    <Input className="pl-10 h-11" type="number" step="0.01" value={formCustomValue} onChange={e => setFormCustomValue(e.target.value)} placeholder="0,00" />
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {/* ===== COBRANÇA ===== */}
           {formType === 'cobranca' && (
-            <>
-              <div>
-                <Label>Parcelas Pagas *</Label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="number" min={1} value={formInstallments} onChange={e => setFormInstallments(Number(e.target.value))} />
+            <div className="space-y-4 pt-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Parcelas Pagas *</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10 h-11" type="number" min={1} value={formInstallments} onChange={e => setFormInstallments(Number(e.target.value))} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Data Pgto *</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10 h-11" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                  </div>
                 </div>
               </div>
-              <div>
-                <Label>Data do Pagamento *</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <Label>Valor Total Resolvido (R$) *</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Valor Total Resolvido (R$) *</Label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" type="number" step="0.01" value={formResolvedValue} onChange={e => setFormResolvedValue(e.target.value)} placeholder="0,00" />
+                  <Input className="pl-10 h-11" type="number" step="0.01" value={formResolvedValue} onChange={e => setFormResolvedValue(e.target.value)} placeholder="0,00" />
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {/* Observações */}
-          <div>
-            <Label>Observações</Label>
-            <div className="relative">
-              <MessageSquare className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Textarea className="pl-10" value={formObs} onChange={e => setFormObs(e.target.value)} placeholder="Observações adicionais (opcional)" />
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Observações</Label>
+            <Textarea
+              value={formObs}
+              onChange={e => setFormObs(e.target.value)}
+              placeholder="Observações adicionais (opcional)"
+              className="min-h-[80px] resize-none"
+            />
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-3 pt-2">
-            <Button variant="outline" className="flex-1" onClick={() => { setDialogOpen(false); resetForm(); }}>
+          <div className="flex gap-3 pt-3">
+            <Button variant="outline" className="flex-1 h-11" onClick={() => { setDialogOpen(false); resetForm(); }}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} className="flex-1" disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? 'Salvando...' : editingEntry ? 'Atualizar' : 'Salvar Cadastro'}
+            <Button onClick={handleSave} className="flex-1 h-11" disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? 'Salvando...' : editingEntry ? 'Atualizar' : 'Salvar'}
             </Button>
           </div>
         </div>
@@ -614,87 +731,44 @@ export default function Premiacao() {
     </Dialog>
   );
 
-  // Table for entries
-  const EntriesTable = ({ type, data }: { type: string; data: AwardEntry[] }) => (
-    <div className="rounded-lg border overflow-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Data</TableHead>
-            <TableHead>Cliente</TableHead>
-            {type !== 'cobranca' && <TableHead>Marca</TableHead>}
-            {type === 'registro_marca' && <TableHead>Qtd</TableHead>}
-            {type === 'registro_marca' && <TableHead>Pagamento</TableHead>}
-            {type === 'publicacao' && <TableHead>Tipo</TableHead>}
-            {type === 'publicacao' && <TableHead>Qtd</TableHead>}
-            {type === 'cobranca' && <TableHead>Parcelas</TableHead>}
-            {type === 'cobranca' && <TableHead>Valor</TableHead>}
-            <TableHead>Responsável</TableHead>
-            <TableHead className="w-[80px]">Ações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.length === 0 ? (
-            <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum registro</TableCell></TableRow>
-          ) : data.map(entry => (
-            <TableRow key={entry.id}>
-              <TableCell>{format(new Date(entry.entry_date), 'dd/MM/yyyy')}</TableCell>
-              <TableCell className="font-medium">{entry.client_name}</TableCell>
-              {type !== 'cobranca' && <TableCell>{entry.brand_name || '-'}</TableCell>}
-              {type === 'registro_marca' && <TableCell>{entry.brand_quantity}</TableCell>}
-              {type === 'registro_marca' && (
-                <TableCell>
-                  <Badge variant={entry.payment_type === 'avista' ? 'default' : 'secondary'}>
-                    {entry.payment_type === 'avista' ? 'À Vista' : entry.payment_type === 'parcelado' ? 'Parcelado' : 'Promoção'}
-                  </Badge>
-                </TableCell>
-              )}
-              {type === 'publicacao' && (
-                <TableCell className="capitalize">{(entry.publication_type || '').replace(/_/g, ' ')}</TableCell>
-              )}
-              {type === 'publicacao' && <TableCell>{entry.pub_quantity}</TableCell>}
-              {type === 'cobranca' && <TableCell>{entry.installments_paid}</TableCell>}
-              {type === 'cobranca' && (
-                <TableCell>R$ {(entry.total_resolved_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
-              )}
-              <TableCell className="text-xs">{getUserName(entry.responsible_user_id)}</TableCell>
-              <TableCell>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
-                    if (confirm('Excluir registro?')) deleteMutation.mutate(entry.id);
-                  }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-
   return (
     <AdminLayout>
-      <div className="space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Trophy className="h-7 w-7 text-amber-500" />
-              Premiação
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">Sistema de premiação e metas da equipe</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/20">
+                <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Premiação</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">Metas e bônus da equipe</p>
+              </div>
+            </div>
+            <Button onClick={() => { resetForm(); setDialogOpen(true); }} size="sm" className="gap-1.5 shadow-md">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo Cadastro</span><span className="sm:hidden">Novo</span>
+            </Button>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <MonthNav />
+
+          {/* Controls row */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-muted/50 rounded-xl p-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="font-medium text-sm min-w-[130px] text-center capitalize">
+                {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
+              </span>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
             {isMaster && (
               <Select value={filterUser} onValueChange={setFilterUser}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Todos os usuários" />
+                <SelectTrigger className="w-[160px] sm:w-[180px] h-9 text-sm">
+                  <Users className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                  <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -704,189 +778,300 @@ export default function Premiacao() {
                 </SelectContent>
               </Select>
             )}
-            <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" /> Novo Cadastro
-            </Button>
           </div>
         </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="flex flex-wrap h-auto gap-1">
-            <TabsTrigger value="dashboard" className="gap-1.5"><BarChart3 className="h-4 w-4" /> Dashboard</TabsTrigger>
-            <TabsTrigger value="registro" className="gap-1.5"><FileText className="h-4 w-4" /> Registro de Marca</TabsTrigger>
-            <TabsTrigger value="publicacao" className="gap-1.5"><Megaphone className="h-4 w-4" /> Publicação</TabsTrigger>
-            <TabsTrigger value="cobranca" className="gap-1.5"><CreditCard className="h-4 w-4" /> Cobrança</TabsTrigger>
-            {isMaster && <TabsTrigger value="equipe" className="gap-1.5"><Users className="h-4 w-4" /> Equipe</TabsTrigger>}
+          <TabsList className="w-full h-auto p-1 grid grid-cols-4 sm:grid-cols-5 gap-1 bg-muted/50">
+            <TabsTrigger value="dashboard" className="gap-1 text-xs sm:text-sm px-2 py-2 data-[state=active]:shadow-md">
+              <BarChart3 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Dashboard</span><span className="sm:hidden">Painel</span>
+            </TabsTrigger>
+            <TabsTrigger value="registro" className="gap-1 text-xs sm:text-sm px-2 py-2 data-[state=active]:shadow-md">
+              <FileText className="h-3.5 w-3.5" /><span className="hidden sm:inline">Registro</span><span className="sm:hidden">Reg.</span>
+            </TabsTrigger>
+            <TabsTrigger value="publicacao" className="gap-1 text-xs sm:text-sm px-2 py-2 data-[state=active]:shadow-md">
+              <Megaphone className="h-3.5 w-3.5" /><span className="hidden sm:inline">Publicação</span><span className="sm:hidden">Pub.</span>
+            </TabsTrigger>
+            <TabsTrigger value="cobranca" className="gap-1 text-xs sm:text-sm px-2 py-2 data-[state=active]:shadow-md">
+              <CreditCard className="h-3.5 w-3.5" /><span className="hidden sm:inline">Cobrança</span><span className="sm:hidden">Cob.</span>
+            </TabsTrigger>
+            {isMaster && (
+              <TabsTrigger value="equipe" className="gap-1 text-xs sm:text-sm px-2 py-2 data-[state=active]:shadow-md col-span-4 sm:col-span-1">
+                <Users className="h-3.5 w-3.5" /> Equipe
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* DASHBOARD TAB */}
-          <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground flex items-center gap-2"><DollarSign className="h-4 w-4 text-emerald-500" /> Premiação Total</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold text-emerald-600">R$ {totalPremium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500" /> Marcas Registradas</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">{totalBrands}</p>
-                  <p className="text-xs text-muted-foreground">Meta: 30 | {totalBrands >= 30 ? '✅ Atingida' : `Faltam ${30 - totalBrands}`}</p>
+          <TabsContent value="dashboard" className="space-y-5 mt-5">
+            {/* Hero stat */}
+            <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}>
+              <Card className="overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl">
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-emerald-100 text-xs font-medium uppercase tracking-wide flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5" /> Premiação Total do Mês
+                      </p>
+                      <p className="text-3xl sm:text-4xl font-bold">{formatCurrency(totalPremium)}</p>
+                      <p className="text-emerald-100 text-xs">{filteredEntries.length} registros neste período</p>
+                    </div>
+                    <div className="hidden sm:flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-sm">
+                      <Trophy className="h-8 w-8 text-white" />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground flex items-center gap-2"><Megaphone className="h-4 w-4 text-purple-500" /> Publicações</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">{totalPubs}</p>
-                  <p className="text-xs text-muted-foreground">Meta: 50 | {totalPubs >= 50 ? '✅ Atingida' : `Faltam ${50 - totalPubs}`}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground flex items-center gap-2"><CreditCard className="h-4 w-4 text-orange-500" /> Cobranças</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">{cobrancaEntries.length}</p>
-                  <p className="text-xs text-muted-foreground">Prêmio: R$ {totalCobrancaPremium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                </CardContent>
-              </Card>
+            </motion.div>
+
+            {/* Mini stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard
+                icon={<FileText className="h-5 w-5" />}
+                label="Marcas"
+                value={String(totalBrands)}
+                sub={totalBrands >= 30 ? '✅ Meta atingida' : `Faltam ${30 - totalBrands}`}
+                color="text-primary"
+              />
+              <StatCard
+                icon={<Megaphone className="h-5 w-5" />}
+                label="Publicações"
+                value={String(totalPubs)}
+                sub={totalPubs >= 50 ? '✅ Meta atingida' : `Faltam ${50 - totalPubs}`}
+                color="text-purple-500"
+              />
+              <StatCard
+                icon={<CreditCard className="h-5 w-5" />}
+                label="Cobranças"
+                value={String(cobrancaEntries.length)}
+                sub={formatCurrency(totalCobrancaPremium)}
+                color="text-orange-500"
+              />
             </div>
 
-            {/* Breakdown */}
+            {/* Goal breakdown */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Premiação Registro de Marca</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-xl font-bold text-blue-600">R$ {totalRegistroPremium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                    <p>Antes da meta (30): R$ 50/marca</p>
-                    <p>Após meta à vista: R$ 100/marca</p>
-                    <p>Parcelado: sempre R$ 50/marca</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Premiação Publicação</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-xl font-bold text-purple-600">R$ {totalPublicacaoPremium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                    <p>Até 49: R$ 50 cada</p>
-                    <p>50 ou mais: R$ 100 cada</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Premiação Cobrança</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-xl font-bold text-orange-600">R$ {totalCobrancaPremium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                  <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                    <p>R$199-397/parcela: R$10</p>
-                    <p>R$398-597: R$25 | R$598-999: R$50</p>
-                    <p>R$1000-1500: R$75 | +R$1518: R$100</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <GoalCard label="Registro de Marca" current={totalBrands} target={30} premium={totalRegistroPremium} color="text-primary" icon={<FileText className="h-4 w-4" />} />
+              <GoalCard label="Publicação" current={totalPubs} target={50} premium={totalPublicacaoPremium} color="text-purple-500" icon={<Megaphone className="h-4 w-4" />} />
+              <GoalCard label="Cobrança" current={cobrancaEntries.length} target={20} premium={totalCobrancaPremium} color="text-orange-500" icon={<CreditCard className="h-4 w-4" />} />
             </div>
           </TabsContent>
 
           {/* REGISTRO DE MARCA TAB */}
-          <TabsContent value="registro" className="space-y-4">
+          <TabsContent value="registro" className="space-y-4 mt-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Registro de Marca</h2>
+              <h2 className="text-base sm:text-lg font-semibold">Registro de Marca</h2>
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{totalBrands} marcas</Badge>
-                <Badge variant={totalBrands >= 30 ? 'default' : 'secondary'}>
-                  {totalBrands >= 30 ? 'Meta atingida ✅' : `${totalBrands}/30`}
+                <Badge variant="outline" className="text-xs">{totalBrands} marcas</Badge>
+                <Badge variant={totalBrands >= 30 ? 'default' : 'secondary'} className="text-xs">
+                  {totalBrands >= 30 ? '✅ Meta' : `${totalBrands}/30`}
                 </Badge>
               </div>
             </div>
-            <EntriesTable type="registro_marca" data={registroEntries} />
+            {/* Mobile: cards, Desktop: hidden (table below) */}
+            <div className="space-y-3 md:hidden">
+              {registroEntries.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">Nenhum registro neste período</p>
+              ) : registroEntries.map(e => <EntryCard key={e.id} entry={e} type="registro_marca" />)}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden md:block rounded-xl border overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Cliente</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Marca</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Qtd</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Pagamento</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Responsável</th>
+                    <th className="p-3 w-[80px]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registroEntries.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro</td></tr>
+                  ) : registroEntries.map(entry => (
+                    <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="p-3">{format(new Date(entry.entry_date), 'dd/MM/yyyy')}</td>
+                      <td className="p-3 font-medium">{entry.client_name}</td>
+                      <td className="p-3">{entry.brand_name || '-'}</td>
+                      <td className="p-3">{entry.brand_quantity}</td>
+                      <td className="p-3">
+                        <Badge variant={entry.payment_type === 'avista' ? 'default' : 'secondary'} className="text-xs">
+                          {entry.payment_type === 'avista' ? 'À Vista' : entry.payment_type === 'parcelado' ? 'Parcelado' : 'Promoção'}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground">{getUserName(entry.responsible_user_id)}</td>
+                      <td className="p-3">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm('Excluir?')) deleteMutation.mutate(entry.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </TabsContent>
 
           {/* PUBLICAÇÃO TAB */}
-          <TabsContent value="publicacao" className="space-y-4">
+          <TabsContent value="publicacao" className="space-y-4 mt-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Publicações</h2>
+              <h2 className="text-base sm:text-lg font-semibold">Publicações</h2>
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{totalPubs} publicações</Badge>
-                <Badge variant={totalPubs >= 50 ? 'default' : 'secondary'}>
-                  {totalPubs >= 50 ? 'Meta atingida ✅' : `${totalPubs}/50`}
+                <Badge variant="outline" className="text-xs">{totalPubs} pub.</Badge>
+                <Badge variant={totalPubs >= 50 ? 'default' : 'secondary'} className="text-xs">
+                  {totalPubs >= 50 ? '✅ Meta' : `${totalPubs}/50`}
                 </Badge>
               </div>
             </div>
-            <EntriesTable type="publicacao" data={publicacaoEntries} />
+            <div className="space-y-3 md:hidden">
+              {publicacaoEntries.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">Nenhum registro neste período</p>
+              ) : publicacaoEntries.map(e => <EntryCard key={e.id} entry={e} type="publicacao" />)}
+            </div>
+            <div className="hidden md:block rounded-xl border overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Cliente</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Marca</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Tipo</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Qtd</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Responsável</th>
+                    <th className="p-3 w-[80px]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {publicacaoEntries.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro</td></tr>
+                  ) : publicacaoEntries.map(entry => (
+                    <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="p-3">{format(new Date(entry.entry_date), 'dd/MM/yyyy')}</td>
+                      <td className="p-3 font-medium">{entry.client_name}</td>
+                      <td className="p-3">{entry.brand_name || '-'}</td>
+                      <td className="p-3 capitalize">{(entry.publication_type || '').replace(/_/g, ' ')}</td>
+                      <td className="p-3">{entry.pub_quantity}</td>
+                      <td className="p-3 text-xs text-muted-foreground">{getUserName(entry.responsible_user_id)}</td>
+                      <td className="p-3">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm('Excluir?')) deleteMutation.mutate(entry.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </TabsContent>
 
           {/* COBRANÇA TAB */}
-          <TabsContent value="cobranca" className="space-y-4">
+          <TabsContent value="cobranca" className="space-y-4 mt-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Cobrança / Devedores</h2>
-              <Badge variant="outline">{cobrancaEntries.length} registros</Badge>
+              <h2 className="text-base sm:text-lg font-semibold">Cobrança / Devedores</h2>
+              <Badge variant="outline" className="text-xs">{cobrancaEntries.length} registros</Badge>
             </div>
-            <EntriesTable type="cobranca" data={cobrancaEntries} />
+            <div className="space-y-3 md:hidden">
+              {cobrancaEntries.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">Nenhum registro neste período</p>
+              ) : cobrancaEntries.map(e => <EntryCard key={e.id} entry={e} type="cobranca" />)}
+            </div>
+            <div className="hidden md:block rounded-xl border overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Cliente</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Parcelas</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Valor</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Responsável</th>
+                    <th className="p-3 w-[80px]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cobrancaEntries.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro</td></tr>
+                  ) : cobrancaEntries.map(entry => (
+                    <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="p-3">{format(new Date(entry.entry_date), 'dd/MM/yyyy')}</td>
+                      <td className="p-3 font-medium">{entry.client_name}</td>
+                      <td className="p-3">{entry.installments_paid}</td>
+                      <td className="p-3">{formatCurrency(entry.total_resolved_value || 0)}</td>
+                      <td className="p-3 text-xs text-muted-foreground">{getUserName(entry.responsible_user_id)}</td>
+                      <td className="p-3">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(entry)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm('Excluir?')) deleteMutation.mutate(entry.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </TabsContent>
 
           {/* EQUIPE TAB */}
-          <TabsContent value="equipe" className="space-y-6">
+          <TabsContent value="equipe" className="space-y-5 mt-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Desempenho da Equipe</h2>
-              <Badge variant="outline">{teamMembers.length} colaboradores</Badge>
+              <h2 className="text-base sm:text-lg font-semibold">Desempenho da Equipe</h2>
+              <Badge variant="outline" className="text-xs">{teamMembers.length} colaboradores</Badge>
             </div>
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Premiação Geral</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold text-emerald-600">R$ {totalPremium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Produção Total</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold">{totalBrands + totalPubs + cobrancaEntries.length} registros</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Colaboradores Ativos</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold">{teamMembers.length}</p></CardContent>
-              </Card>
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard icon={<DollarSign className="h-5 w-5" />} label="Prêmio Total" value={formatCurrency(totalPremium)} color="text-emerald-600" />
+              <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Produção" value={`${totalBrands + totalPubs + cobrancaEntries.length}`} sub="registros" color="text-primary" />
+              <StatCard icon={<Users className="h-5 w-5" />} label="Ativos" value={String(teamMembers.length)} color="text-muted-foreground" />
             </div>
 
-            {/* Team kanban-style cards */}
+            {/* Team cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {teamMembers.map(member => {
                 const stats = perUserStats.get(member.id);
                 if (!stats) return null;
                 return (
-                  <Card key={member.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => { setFilterUser(member.id); setActiveTab('dashboard'); }}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
-                          <Award className="h-5 w-5 text-primary" />
+                  <motion.div key={member.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                    <Card
+                      className="cursor-pointer hover:shadow-lg transition-all duration-200 border-0 shadow-md hover:-translate-y-0.5"
+                      onClick={() => { setFilterUser(member.id); setActiveTab('dashboard'); }}
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5">
+                            <Award className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{member.full_name || member.email}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <CardTitle className="text-sm">{member.full_name || member.email}</CardTitle>
-                          <p className="text-xs text-muted-foreground">{member.email}</p>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="rounded-lg bg-muted/30 p-2">
+                            <p className="text-base font-bold text-primary">{stats.registro}</p>
+                            <p className="text-[10px] text-muted-foreground">Marcas</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/30 p-2">
+                            <p className="text-base font-bold text-purple-500">{stats.publicacao}</p>
+                            <p className="text-[10px] text-muted-foreground">Pub.</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/30 p-2">
+                            <p className="text-base font-bold text-orange-500">{stats.cobranca}</p>
+                            <p className="text-[10px] text-muted-foreground">Cob.</p>
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-lg font-bold text-blue-600">{stats.registro}</p>
-                          <p className="text-[10px] text-muted-foreground">Marcas</p>
+                        <div className="pt-2 border-t flex items-center justify-between">
+                          <p className="text-sm font-bold text-emerald-600">{formatCurrency(stats.premium)}</p>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <div>
-                          <p className="text-lg font-bold text-purple-600">{stats.publicacao}</p>
-                          <p className="text-[10px] text-muted-foreground">Publicações</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-orange-600">{stats.cobranca}</p>
-                          <p className="text-[10px] text-muted-foreground">Cobranças</p>
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t">
-                        <p className="text-sm font-semibold text-emerald-600">
-                          Prêmio: R$ {stats.premium.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
                 );
               })}
             </div>
