@@ -19,7 +19,8 @@ import {
 } from '@/components/ui/table';
 import {
   Trophy, Plus, Users, TrendingUp, Target, DollarSign, FileText, Megaphone,
-  CreditCard, ChevronLeft, ChevronRight, Pencil, Trash2, BarChart3, Award
+  CreditCard, ChevronLeft, ChevronRight, Pencil, Trash2, BarChart3, Award,
+  User, Tag, Hash, Calendar, MessageSquare, Wallet
 } from 'lucide-react';
 
 // ---- Types ----
@@ -111,8 +112,10 @@ export default function Premiacao() {
   const [formPaymentType, setFormPaymentType] = useState('avista');
   const [formPubType, setFormPubType] = useState('deferimento');
   const [formPubQty, setFormPubQty] = useState(1);
+  const [formPubPaymentForm, setFormPubPaymentForm] = useState('avista');
   const [formInstallments, setFormInstallments] = useState(1);
   const [formResolvedValue, setFormResolvedValue] = useState('');
+  const [formCustomValue, setFormCustomValue] = useState('');
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [formObs, setFormObs] = useState('');
   const [formResponsible, setFormResponsible] = useState('');
@@ -204,8 +207,10 @@ export default function Premiacao() {
     setFormPaymentType('avista');
     setFormPubType('deferimento');
     setFormPubQty(1);
+    setFormPubPaymentForm('avista');
     setFormInstallments(1);
     setFormResolvedValue('');
+    setFormCustomValue('');
     setFormDate(format(new Date(), 'yyyy-MM-dd'));
     setFormObs('');
     setFormResponsible('');
@@ -221,8 +226,10 @@ export default function Premiacao() {
     setFormPaymentType(entry.payment_type || 'avista');
     setFormPubType(entry.publication_type || 'deferimento');
     setFormPubQty(entry.pub_quantity || 1);
+    setFormPubPaymentForm(entry.payment_form || 'avista');
     setFormInstallments(entry.installments_paid || 1);
     setFormResolvedValue(String(entry.total_resolved_value || ''));
+    setFormCustomValue('');
     setFormDate(entry.entry_date);
     setFormObs(entry.observations || '');
     setFormResponsible(entry.responsible_user_id);
@@ -249,9 +256,13 @@ export default function Premiacao() {
     if (formType === 'registro_marca') {
       base.brand_quantity = formBrandQty;
       base.payment_type = formPaymentType;
+      if (formPaymentType === 'promocao') {
+        base.payment_form = 'promocao';
+      }
     } else if (formType === 'publicacao') {
       base.publication_type = formPubType;
       base.pub_quantity = formPubQty;
+      base.payment_form = formPubPaymentForm;
     } else {
       base.installments_paid = formInstallments;
       base.total_resolved_value = parseFloat(formResolvedValue) || 0;
@@ -305,8 +316,9 @@ export default function Premiacao() {
           <DialogTitle>{editingEntry ? 'Editar Registro' : 'Novo Cadastro'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Tipo */}
           <div>
-            <Label>Tipo</Label>
+            <Label>Tipo *</Label>
             <Select value={formType} onValueChange={(v) => setFormType(v as typeof formType)} disabled={!!editingEntry}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -317,11 +329,16 @@ export default function Premiacao() {
             </Select>
           </div>
 
+          {/* Nome do Cliente */}
           <div>
             <Label>Nome do Cliente *</Label>
-            <Input value={formClientName} onChange={e => setFormClientName(e.target.value)} placeholder="Nome do cliente" />
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-10" value={formClientName} onChange={e => setFormClientName(e.target.value)} placeholder="Nome completo do cliente" />
+            </div>
           </div>
 
+          {/* Responsável */}
           <div>
             <Label>Responsável</Label>
             <Select value={formResponsible} onValueChange={setFormResponsible}>
@@ -334,45 +351,77 @@ export default function Premiacao() {
             </Select>
           </div>
 
-          <div>
-            <Label>Data</Label>
-            <Input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
-          </div>
-
+          {/* ===== REGISTRO DE MARCA ===== */}
           {formType === 'registro_marca' && (
             <>
               <div>
-                <Label>Nome da Marca</Label>
-                <Input value={formBrandName} onChange={e => setFormBrandName(e.target.value)} />
+                <Label>Nome da Marca *</Label>
+                <div className="relative">
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" value={formBrandName} onChange={e => setFormBrandName(e.target.value)} placeholder="Nome da marca" />
+                </div>
               </div>
               <div>
-                <Label>Qtd. Marcas/Classes</Label>
-                <Input type="number" min={1} value={formBrandQty} onChange={e => setFormBrandQty(Number(e.target.value))} />
+                <Label>Quantidade de Marcas/Classes *</Label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="number" min={1} value={formBrandQty} onChange={e => setFormBrandQty(Number(e.target.value))} />
+                </div>
               </div>
               <div>
-                <Label>Forma de Pagamento</Label>
-                <Select value={formPaymentType} onValueChange={setFormPaymentType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="avista">À Vista</SelectItem>
-                    <SelectItem value="parcelado">Parcelado</SelectItem>
-                    <SelectItem value="promocao">Promoção / Personalizado</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Data do Pagamento *</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                </div>
               </div>
+              <div>
+                <Label>Forma de Pagamento *</Label>
+                <div className="relative">
+                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                  <Select value={formPaymentType} onValueChange={setFormPaymentType}>
+                    <SelectTrigger className="pl-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="avista">À Vista — R$ 699,99</SelectItem>
+                      <SelectItem value="parcelado">Parcelado — R$ 1.194,00</SelectItem>
+                      <SelectItem value="promocao">Promoção — Valor Personalizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {formPaymentType === 'promocao' && (
+                <div>
+                  <Label>Valor Personalizado (R$) *</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10" type="number" step="0.01" value={formCustomValue} onChange={e => setFormCustomValue(e.target.value)} placeholder="0,00" />
+                  </div>
+                </div>
+              )}
             </>
           )}
 
+          {/* ===== PUBLICAÇÃO ===== */}
           {formType === 'publicacao' && (
             <>
               <div>
-                <Label>Nome da Marca</Label>
-                <Input value={formBrandName} onChange={e => setFormBrandName(e.target.value)} />
+                <Label>Nome da Marca *</Label>
+                <div className="relative">
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" value={formBrandName} onChange={e => setFormBrandName(e.target.value)} placeholder="Nome da marca" />
+                </div>
               </div>
               <div>
-                <Label>Tipo de Publicação</Label>
+                <Label>Quantidade de Publicações *</Label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="number" min={1} value={formPubQty} onChange={e => setFormPubQty(Number(e.target.value))} />
+                </div>
+              </div>
+              <div>
+                <Label>Tipo de Publicação *</Label>
                 <Select value={formPubType} onValueChange={setFormPubType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="exigencia_merito">Exigência de Mérito</SelectItem>
                     <SelectItem value="recurso">Recurso</SelectItem>
@@ -385,33 +434,83 @@ export default function Premiacao() {
                 </Select>
               </div>
               <div>
-                <Label>Quantidade</Label>
-                <Input type="number" min={1} value={formPubQty} onChange={e => setFormPubQty(Number(e.target.value))} />
+                <Label>Data da Publicação *</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                </div>
               </div>
+              <div>
+                <Label>Forma de Pagamento *</Label>
+                <div className="relative">
+                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                  <Select value={formPubPaymentForm} onValueChange={setFormPubPaymentForm}>
+                    <SelectTrigger className="pl-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="avista">À Vista — 1 Salário Mínimo</SelectItem>
+                      <SelectItem value="parcelado">Parcelado — 6x de R$ 398,00</SelectItem>
+                      <SelectItem value="promocao">Promoção — Valor Personalizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {formPubPaymentForm === 'promocao' && (
+                <div>
+                  <Label>Valor Personalizado (R$) *</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input className="pl-10" type="number" step="0.01" value={formCustomValue} onChange={e => setFormCustomValue(e.target.value)} placeholder="0,00" />
+                  </div>
+                </div>
+              )}
             </>
           )}
 
+          {/* ===== COBRANÇA ===== */}
           {formType === 'cobranca' && (
             <>
               <div>
-                <Label>Parcelas Pagas</Label>
-                <Input type="number" min={1} value={formInstallments} onChange={e => setFormInstallments(Number(e.target.value))} />
+                <Label>Parcelas Pagas *</Label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="number" min={1} value={formInstallments} onChange={e => setFormInstallments(Number(e.target.value))} />
+                </div>
               </div>
               <div>
-                <Label>Valor Total Resolvido (R$)</Label>
-                <Input type="number" step="0.01" value={formResolvedValue} onChange={e => setFormResolvedValue(e.target.value)} placeholder="0.00" />
+                <Label>Data do Pagamento *</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <Label>Valor Total Resolvido (R$) *</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-10" type="number" step="0.01" value={formResolvedValue} onChange={e => setFormResolvedValue(e.target.value)} placeholder="0,00" />
+                </div>
               </div>
             </>
           )}
 
+          {/* Observações */}
           <div>
             <Label>Observações</Label>
-            <Textarea value={formObs} onChange={e => setFormObs(e.target.value)} />
+            <div className="relative">
+              <MessageSquare className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Textarea className="pl-10" value={formObs} onChange={e => setFormObs(e.target.value)} placeholder="Observações adicionais (opcional)" />
+            </div>
           </div>
 
-          <Button onClick={handleSave} className="w-full" disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? 'Salvando...' : editingEntry ? 'Atualizar' : 'Cadastrar'}
-          </Button>
+          {/* Buttons */}
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => { setDialogOpen(false); resetForm(); }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} className="flex-1" disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? 'Salvando...' : editingEntry ? 'Atualizar' : 'Salvar Cadastro'}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
