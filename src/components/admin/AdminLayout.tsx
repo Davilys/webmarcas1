@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Mail,
   ChevronRight,
+  Trophy,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import logoIcon from '@/assets/webmarcas-icon.png';
@@ -165,6 +166,15 @@ const menuItems: MenuItem[] = [
     iconColor: 'text-purple-500',
     iconBg: 'bg-purple-100 dark:bg-purple-900/30',
     permissionKey: 'inpi_resources'
+  },
+  { 
+    icon: Trophy, 
+    label: 'Premiação', 
+    subtitle: 'Metas e bonificações',
+    href: '/admin/premiacao',
+    iconColor: 'text-amber-500',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+    permissionKey: 'awards'
   },
   { 
     icon: Settings, 
