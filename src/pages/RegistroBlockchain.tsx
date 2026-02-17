@@ -119,24 +119,28 @@ const RegistroBlockchain = () => {
                 Garanta a autenticidade e integridade dos seus documentos com registro imutável na rede Bitcoin. Prova de existência com validade jurídica.
               </motion.p>
 
-              <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row gap-4 justify-center mb-10">
+              <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-10">
                 <motion.a
                   href="https://registro.webmarcas.net"
                   target="_blank"
                   rel="noopener noreferrer"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="relative group"
                 >
-                  <Button size="lg" className="w-full sm:w-auto gap-2 text-base px-10 h-13 shadow-lg shadow-primary/20">
+                  {/* Glow behind button */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-primary/40 to-primary/20 rounded-2xl blur-lg opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+                  <Button size="lg" className="relative w-full sm:w-auto gap-3 text-base font-semibold px-10 h-14 rounded-xl shadow-xl shadow-primary/25 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary">
+                    <Blocks className="w-5 h-5" />
                     Registrar Agora
-                    <ExternalLink className="w-4 h-4" />
+                    <ExternalLink className="w-4 h-4 opacity-70" />
                   </Button>
                 </motion.a>
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
-                  <Button size="lg" variant="outline" className="gap-2 text-base h-13 px-8" asChild>
+                <motion.div whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}>
+                  <Button size="lg" variant="outline" className="gap-3 text-base font-semibold h-14 px-8 rounded-xl border-2 border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-all duration-300" asChild>
                     <a href="#como-funciona">
                       Como Funciona
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </a>
                   </Button>
                 </motion.div>
