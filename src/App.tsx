@@ -12,6 +12,7 @@ import StatusPedido from "./pages/StatusPedido";
 import Obrigado from "./pages/Obrigado";
 import VerificarContrato from "./pages/VerificarContrato";
 import AssinarDocumento from "./pages/AssinarDocumento";
+import RegistroBlockchain from "./pages/RegistroBlockchain";
 import NotFound from "./pages/NotFound";
 
 // Cliente pages
@@ -67,6 +68,7 @@ const App = () => (
               <Route path="/obrigado" element={<Obrigado />} />
               <Route path="/verificar-contrato" element={<VerificarContrato />} />
               <Route path="/assinar/:token" element={<AssinarDocumento />} />
+              <Route path="/registro-blockchain" element={<RegistroBlockchain />} />
               
               {/* Área do Cliente */}
               <Route path="/cliente/login" element={<ClienteLogin />} />

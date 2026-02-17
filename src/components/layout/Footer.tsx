@@ -1,4 +1,5 @@
 import { Mail, Phone, MapPin } from "lucide-react";
+import { Link } from "react-router-dom";
 import webmarcasLogo from "@/assets/webmarcas-logo.png";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -14,11 +15,12 @@ const Footer = () => {
   ];
 
   const services = [
-    t("footer.service1"),
-    t("footer.service2"),
-    t("footer.service3"),
-    t("footer.service4"),
-    t("footer.service5"),
+    { label: t("footer.service1"), href: "#" },
+    { label: t("footer.service2"), href: "#" },
+    { label: t("footer.service3"), href: "#" },
+    { label: t("footer.service4"), href: "#" },
+    { label: t("footer.service5"), href: "#" },
+    { label: "Registro em Blockchain", href: "/registro-blockchain" },
   ];
 
   return (
@@ -76,13 +78,22 @@ const Footer = () => {
             <h4 className="font-display font-semibold mb-4">{t("footer.services")}</h4>
             <ul className="space-y-3">
               {services.map((item) => (
-                <li key={item}>
-                  <a
-                    href="#"
-                    className="text-muted-foreground hover:text-foreground transition-colors text-sm"
-                  >
-                    {item}
-                  </a>
+                <li key={item.label}>
+                  {item.href.startsWith("/") ? (
+                    <Link
+                      to={item.href}
+                      className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <a
+                      href={item.href}
+                      className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                    >
+                      {item.label}
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
