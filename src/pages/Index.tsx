@@ -7,6 +7,7 @@ import BenefitsSection from "@/components/sections/BenefitsSection";
 import HowItWorksSection from "@/components/sections/HowItWorksSection";
 import ViabilitySearchSection from "@/components/sections/ViabilitySearchSection";
 import PricingSection from "@/components/sections/PricingSection";
+import BlockchainBanner from "@/components/sections/BlockchainBanner";
 import TestimonialsSection from "@/components/sections/TestimonialsSection";
 import FAQSection from "@/components/sections/FAQSection";
 import CTASection from "@/components/sections/CTASection";
@@ -21,6 +22,7 @@ const Index = () => {
         <BenefitsSection />
         <HowItWorksSection />
         <PricingSection />
+        <BlockchainBanner />
         <TestimonialsSection />
         <FAQSection />
         <CTASection />
