@@ -10,37 +10,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Upload, 
-  FileText, 
-  Users, 
-  Search, 
-  RefreshCw, 
-  CheckCircle, 
-  AlertCircle,
-  Calendar,
-  Loader2,
-  BookOpen,
-  Filter,
-  Download,
-  Eye,
-  ArrowRight,
-  Clock,
-  Building2,
-  Cloud,
-  CloudDownload,
-  Globe,
-  Sparkles,
-  Zap,
-  UserPlus,
-  AlertTriangle,
+  Upload, FileText, Users, Search, RefreshCw, CheckCircle, AlertCircle,
+  Calendar, Loader2, BookOpen, Filter, Download, Eye, ArrowRight, Clock,
+  Building2, Cloud, CloudDownload, Globe, Sparkles, Zap, UserPlus,
+  AlertTriangle, BarChart3, TrendingUp, Shield, Activity, Newspaper,
+  ExternalLink, Hash, Layers, Radio, Database, Wifi,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+// ─── Types ───────────────────────────────────────────────────────────
 interface RpiUpload {
   id: string;
   file_name: string;
@@ -71,26 +55,9 @@ interface RpiEntry {
   tag: string | null;
   deadline_date?: string | null;
   priority?: 'urgent' | 'medium' | null;
-  client?: {
-    full_name: string | null;
-    email: string;
-    company_name: string | null;
-  };
-  process?: {
-    pipeline_stage: string | null;
-    status: string | null;
-  };
+  client?: { full_name: string | null; email: string; company_name: string | null };
+  process?: { pipeline_stage: string | null; status: string | null };
 }
-
-// TAG options for RPI entries
-const TAG_OPTIONS = [
-  { value: 'pending', label: 'Aguardando', color: 'bg-gray-100 text-gray-800' },
-  { value: 'em_contato', label: 'Em contato', color: 'bg-blue-100 text-blue-800' },
-  { value: 'resolvido', label: 'Resolvido', color: 'bg-green-100 text-green-800' },
-  { value: 'nao_responde', label: 'Não responde', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'arquivado', label: 'Arquivado', color: 'bg-orange-100 text-orange-800' },
-  { value: 'prazo_encerrado', label: 'Prazo encerrado', color: 'bg-red-100 text-red-800' },
-];
 
 interface Profile {
   id: string;
@@ -98,6 +65,16 @@ interface Profile {
   email: string;
   company_name: string | null;
 }
+
+// ─── Constants ───────────────────────────────────────────────────────
+const TAG_OPTIONS = [
+  { value: 'pending', label: 'Aguardando', color: 'bg-muted text-muted-foreground' },
+  { value: 'em_contato', label: 'Em contato', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
+  { value: 'resolvido', label: 'Resolvido', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+  { value: 'nao_responde', label: 'Não responde', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+  { value: 'arquivado', label: 'Arquivado', color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400' },
+  { value: 'prazo_encerrado', label: 'Prazo encerrado', color: 'bg-red-500/10 text-red-600 dark:text-red-400' },
+];
 
 const PIPELINE_STAGES = [
   { value: 'protocolado', label: 'Protocolado' },
@@ -113,40 +90,59 @@ const PIPELINE_STAGES = [
 
 function getDispatchBadge(dispatchType: string | null) {
   const type = (dispatchType || '').toLowerCase();
-  
-  if (type.includes('deferido') || type.includes('deferimento')) {
-    return <Badge className="bg-green-100 text-green-800">Deferimento</Badge>;
-  }
-  if (type.includes('indeferido') || type.includes('indeferimento')) {
-    return <Badge className="bg-red-100 text-red-800">Indeferimento</Badge>;
-  }
-  if (type.includes('exigência') || type.includes('exigencia')) {
-    return <Badge className="bg-yellow-100 text-yellow-800">Exigência</Badge>;
-  }
-  if (type.includes('oposição') || type.includes('oposicao')) {
-    return <Badge className="bg-orange-100 text-orange-800">Oposição</Badge>;
-  }
-  if (type.includes('certificado')) {
-    return <Badge className="bg-blue-100 text-blue-800">Certificado</Badge>;
-  }
-  
+  if (type.includes('deferido') || type.includes('deferimento'))
+    return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400">✓ Deferimento</Badge>;
+  if (type.includes('indeferido') || type.includes('indeferimento'))
+    return <Badge className="bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400">✗ Indeferimento</Badge>;
+  if (type.includes('exigência') || type.includes('exigencia'))
+    return <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400">⚡ Exigência</Badge>;
+  if (type.includes('oposição') || type.includes('oposicao'))
+    return <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/20 dark:text-orange-400">⚔ Oposição</Badge>;
+  if (type.includes('certificado'))
+    return <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400">📜 Certificado</Badge>;
   return <Badge variant="outline">{dispatchType || 'Outro'}</Badge>;
 }
 
 function suggestStage(dispatchCode: string | null, dispatchText: string | null): string {
-  const code = (dispatchCode || '').toUpperCase();
   const text = (dispatchText || '').toLowerCase();
-  
   if (text.includes('deferido') || text.includes('deferimento')) return 'deferimento';
   if (text.includes('indeferido') || text.includes('indeferimento')) return 'indeferimento';
   if (text.includes('exigência') || text.includes('exigencia')) return '003';
   if (text.includes('oposição') || text.includes('oposicao')) return 'oposicao';
   if (text.includes('certificado') || text.includes('concessão')) return 'certificados';
   if (text.includes('renovação') || text.includes('prorrogação')) return 'renovacao';
-  
   return 'protocolado';
 }
 
+// ─── Animated stat card ──────────────────────────────────────────────
+function StatCard({ icon: Icon, label, value, gradient, delay = 0 }: { 
+  icon: typeof FileText; label: string; value: string | number; gradient: string; delay?: number; 
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay }}
+    >
+      <Card className={`relative overflow-hidden border-0 shadow-lg ${gradient}`}>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
+        <CardContent className="relative pt-6 pb-5">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-white/20 backdrop-blur-sm">
+              <Icon className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <p className="text-sm text-white/80 font-medium">{label}</p>
+              <p className="text-2xl font-bold text-white tracking-tight">{value}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────
 export default function RevistaINPI() {
   const [uploads, setUploads] = useState<RpiUpload[]>([]);
   const [entries, setEntries] = useState<RpiEntry[]>([]);
@@ -156,21 +152,15 @@ export default function RevistaINPI() {
   const [processing, setProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMatched, setFilterMatched] = useState<'all' | 'matched' | 'unmatched'>('all');
-  
-  // Remote fetch state
   const [fetchingRemote, setFetchingRemote] = useState(false);
   const [recentRpis, setRecentRpis] = useState<number[]>([]);
   const [rpWithXml, setRpWithXml] = useState<number[]>([]);
   const [latestRpi, setLatestRpi] = useState<number | null>(null);
   const [selectedRpiNumber, setSelectedRpiNumber] = useState<string>('');
-  
-  // Update dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RpiEntry | null>(null);
   const [newStage, setNewStage] = useState('');
   const [updating, setUpdating] = useState(false);
-  
-  // Client assignment dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignEntry, setAssignEntry] = useState<RpiEntry | null>(null);
   const [clientSearch, setClientSearch] = useState('');
@@ -179,6 +169,7 @@ export default function RevistaINPI() {
   const [assignPriority, setAssignPriority] = useState<'urgent' | 'medium'>('medium');
   const [assigning, setAssigning] = useState(false);
   const [updatingTag, setUpdatingTag] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('fetch');
 
   useEffect(() => {
     fetchUploads();
@@ -187,306 +178,140 @@ export default function RevistaINPI() {
   }, []);
 
   useEffect(() => {
-    if (selectedUpload) {
-      fetchEntries(selectedUpload.id);
-    }
+    if (selectedUpload) fetchEntries(selectedUpload.id);
   }, [selectedUpload]);
 
+  // ─── Data fetching (unchanged logic) ──────────────────────────────
   const fetchClients = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, company_name')
-      .order('full_name');
+    const { data } = await supabase.from('profiles').select('id, full_name, email, company_name').order('full_name');
     setAvailableClients(data || []);
   };
 
   const fetchAvailableRpis = async () => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-inpi-magazine`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ mode: 'list' }),
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-inpi-magazine`, {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'list' }),
+        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`, 'Content-Type': 'application/json' },
+      });
       if (response.ok) {
         const data = await response.json();
         setRecentRpis(data.recentRpis || []);
         setRpWithXml(data.rpWithXml || []);
         setLatestRpi(data.latestRpi);
-        // Default to latest RPI that has XML available
         const defaultRpi = data.rpWithXml?.[0] || data.latestRpi;
         setSelectedRpiNumber(defaultRpi?.toString() || '');
       }
-    } catch (error) {
-      console.error('Error fetching RPI list:', error);
-    }
+    } catch (error) { console.error('Error fetching RPI list:', error); }
   };
 
   const fetchUploads = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('rpi_uploads')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error('Erro ao carregar uploads');
-      console.error(error);
-    } else {
+    const { data, error } = await supabase.from('rpi_uploads').select('*').order('created_at', { ascending: false });
+    if (error) { toast.error('Erro ao carregar uploads'); console.error(error); }
+    else {
       setUploads(data || []);
-      if (data && data.length > 0 && !selectedUpload) {
-        setSelectedUpload(data[0]);
-      }
+      if (data && data.length > 0 && !selectedUpload) setSelectedUpload(data[0]);
     }
     setLoading(false);
   };
 
   const fetchEntries = async (uploadId: string) => {
-    const { data, error } = await supabase
-      .from('rpi_entries')
-      .select('*')
-      .eq('rpi_upload_id', uploadId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error('Erro ao carregar entradas');
-      console.error(error);
-      return;
-    }
-
-    // Fetch related client and process data
+    const { data, error } = await supabase.from('rpi_entries').select('*').eq('rpi_upload_id', uploadId).order('created_at', { ascending: false });
+    if (error) { toast.error('Erro ao carregar entradas'); return; }
     const entriesWithDetails = await Promise.all(
       (data || []).map(async (entry) => {
-        let client = null;
-        let process = null;
-
+        let client = null, process = null;
         if (entry.matched_client_id) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('full_name, email, company_name')
-            .eq('id', entry.matched_client_id)
-            .single();
-          client = profileData;
+          const { data: p } = await supabase.from('profiles').select('full_name, email, company_name').eq('id', entry.matched_client_id).single();
+          client = p;
         }
-
         if (entry.matched_process_id) {
-          const { data: processData } = await supabase
-            .from('brand_processes')
-            .select('pipeline_stage, status')
-            .eq('id', entry.matched_process_id)
-            .single();
-          process = processData;
+          const { data: pr } = await supabase.from('brand_processes').select('pipeline_stage, status').eq('id', entry.matched_process_id).single();
+          process = pr;
         }
-
         return { ...entry, client, process };
       })
     );
-
     setEntries(entriesWithDetails);
   };
 
   const handleRemoteFetch = async (rpiNumber?: number) => {
     setFetchingRemote(true);
-    
     try {
       const targetRpi = rpiNumber || parseInt(selectedRpiNumber) || latestRpi;
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-inpi-magazine`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ rpiNumber: targetRpi }),
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-inpi-magazine`, {
+        method: 'POST',
+        body: JSON.stringify({ rpiNumber: targetRpi }),
+        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`, 'Content-Type': 'application/json' },
+      });
       const result = await response.json();
-      
       if (!response.ok) {
         if (result.error === 'XML_NOT_AVAILABLE' || result.error === 'XML_NOT_YET_AVAILABLE') {
           toast.info(result.message, { duration: 8000 });
-          // Se houver sugestão de RPI com XML, atualizar a seleção
-          if (result.latestWithXml) {
-            setSelectedRpiNumber(result.latestWithXml.toString());
-            toast.info(`Sugerimos buscar a RPI ${result.latestWithXml} que possui XML disponível.`, { duration: 5000 });
-          }
-        } else {
-          toast.error(result.message || 'Erro ao buscar RPI');
-        }
+          if (result.latestWithXml) { setSelectedRpiNumber(result.latestWithXml.toString()); toast.info(`Sugerimos buscar a RPI ${result.latestWithXml} que possui XML disponível.`, { duration: 5000 }); }
+        } else { toast.error(result.message || 'Erro ao buscar RPI'); }
         return;
       }
-      
-      if (result.totalProcesses === 0) {
-        toast.info(result.message, { duration: 6000 });
-      } else {
-        toast.success(`RPI ${result.rpiNumber} processada! ${result.totalProcesses} processos encontrados, ${result.matchedClients} clientes identificados.`);
-      }
-      
-      // Refresh uploads and select the new one
+      if (result.totalProcesses === 0) { toast.info(result.message, { duration: 6000 }); }
+      else { toast.success(`RPI ${result.rpiNumber} processada! ${result.totalProcesses} processos encontrados, ${result.matchedClients} clientes identificados.`); }
       await fetchUploads();
-      
       if (result.uploadId) {
-        const { data: newUpload } = await supabase
-          .from('rpi_uploads')
-          .select('*')
-          .eq('id', result.uploadId)
-          .single();
-        
-        if (newUpload) {
-          setSelectedUpload(newUpload);
-          await fetchEntries(newUpload.id);
-        }
+        const { data: newUpload } = await supabase.from('rpi_uploads').select('*').eq('id', result.uploadId).single();
+        if (newUpload) { setSelectedUpload(newUpload); await fetchEntries(newUpload.id); }
       }
-      
-    } catch (error) {
-      console.error('Remote fetch error:', error);
-      toast.error('Erro ao buscar RPI do portal INPI');
-    } finally {
-      setFetchingRemote(false);
-    }
+    } catch (error) { console.error('Remote fetch error:', error); toast.error('Erro ao buscar RPI do portal INPI'); }
+    finally { setFetchingRemote(false); }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const allowedExtensions = ['pdf', 'xml', 'xlsx', 'xls'];
     const ext = file.name.split('.').pop()?.toLowerCase();
-
-    if (!ext || !allowedExtensions.includes(ext)) {
-      toast.error('Envie um arquivo .pdf, .xml, .xlsx ou .xls');
-      return;
-    }
-
+    if (!ext || !['pdf', 'xml', 'xlsx', 'xls'].includes(ext)) { toast.error('Envie um arquivo .pdf, .xml, .xlsx ou .xls'); return; }
     setUploading(true);
-
     try {
-      // Upload file to storage
       const fileName = `rpi_${Date.now()}_${file.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(`rpi/${fileName}`, file);
-
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('documents').upload(`rpi/${fileName}`, file);
       if (uploadError) throw uploadError;
-
-      // Get signed URL for the uploaded file (valid for 1 hour)
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(uploadData.path, 3600);
-
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage.from('documents').createSignedUrl(uploadData.path, 3600);
       if (signedUrlError) throw signedUrlError;
-
-      // Create RPI upload record
-      const { data: rpiUpload, error: insertError } = await supabase
-        .from('rpi_uploads')
-        .insert({
-          file_name: file.name,
-          file_path: uploadData.path,
-          status: 'pending',
-        })
-        .select()
-        .single();
-
+      const { data: rpiUpload, error: insertError } = await supabase.from('rpi_uploads').insert({ file_name: file.name, file_path: uploadData.path, status: 'pending' }).select().single();
       if (insertError) throw insertError;
-
       toast.success('Arquivo enviado! Iniciando análise...');
       setSelectedUpload(rpiUpload);
       setUploads(prev => [rpiUpload, ...prev]);
-
-      // Process the file using signed URL
       await processRpi(rpiUpload.id, signedUrlData.signedUrl);
-      
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Erro ao enviar arquivo');
-    } finally {
-      setUploading(false);
-    }
+    } catch (error) { console.error('Upload error:', error); toast.error('Erro ao enviar arquivo'); }
+    finally { setUploading(false); }
   };
 
   const processRpi = async (rpiUploadId: string, fileUrl: string) => {
     setProcessing(true);
-
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-rpi`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ rpiUploadId, fileUrl }),
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response.status === 429) {
-        toast.error('Limite de requisições excedido. Aguarde alguns minutos e tente novamente.');
-        await fetchUploads();
-        return;
-      }
-
-      if (response.status === 402) {
-        toast.error('Créditos de IA esgotados. Adicione créditos para continuar.');
-        await fetchUploads();
-        return;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.details || 'Erro ao processar arquivo');
-      }
-
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-rpi`, {
+        method: 'POST',
+        body: JSON.stringify({ rpiUploadId, fileUrl }),
+        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`, 'Content-Type': 'application/json' },
+      });
+      if (response.status === 429) { toast.error('Limite de requisições excedido.'); await fetchUploads(); return; }
+      if (response.status === 402) { toast.error('Créditos de IA esgotados.'); await fetchUploads(); return; }
+      if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || 'Erro ao processar arquivo'); }
       const result = await response.json();
-      
-      if (result.total_processes === 0) {
-        toast.info(result.summary || 'Nenhum processo do procurador foi encontrado nesta edição.', {
-          duration: 6000,
-        });
-      } else {
-        toast.success(`Análise concluída! ${result.total_processes} processos encontrados, ${result.matched_clients} clientes identificados.`);
-      }
-      
-      // Refresh uploads list
-      const { data: updatedUploads } = await supabase
-        .from('rpi_uploads')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
+      if (result.total_processes === 0) { toast.info(result.summary || 'Nenhum processo encontrado.', { duration: 6000 }); }
+      else { toast.success(`Análise concluída! ${result.total_processes} processos encontrados, ${result.matched_clients} clientes identificados.`); }
+      const { data: updatedUploads } = await supabase.from('rpi_uploads').select('*').order('created_at', { ascending: false });
       if (updatedUploads) {
         setUploads(updatedUploads);
-        // Find the newly processed upload and select it
         const processedUpload = updatedUploads.find(u => u.id === rpiUploadId);
-        if (processedUpload) {
-          setSelectedUpload(processedUpload);
-          // Immediately fetch and display entries
-          await fetchEntries(rpiUploadId);
-        }
+        if (processedUpload) { setSelectedUpload(processedUpload); await fetchEntries(rpiUploadId); }
       }
-      
     } catch (error) {
       console.error('Process error:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao processar revista. Verifique se o arquivo está correto.');
-      
-      // Update status to error
-      await supabase
-        .from('rpi_uploads')
-        .update({ status: 'error' })
-        .eq('id', rpiUploadId);
-      
+      toast.error(error instanceof Error ? error.message : 'Erro ao processar revista.');
+      await supabase.from('rpi_uploads').update({ status: 'error' }).eq('id', rpiUploadId);
       await fetchUploads();
-    } finally {
-      setProcessing(false);
-    }
+    } finally { setProcessing(false); }
   };
 
   const handleOpenUpdateDialog = (entry: RpiEntry) => {
@@ -497,69 +322,24 @@ export default function RevistaINPI() {
 
   const handleUpdateProcess = async () => {
     if (!selectedEntry || !newStage) return;
-
     setUpdating(true);
-
     try {
-      // Update the brand process
       if (selectedEntry.matched_process_id) {
-        const { error: processError } = await supabase
-          .from('brand_processes')
-          .update({
-            pipeline_stage: newStage,
-            status: 'em_andamento',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', selectedEntry.matched_process_id);
-
-        if (processError) throw processError;
+        const { error } = await supabase.from('brand_processes').update({ pipeline_stage: newStage, status: 'em_andamento', updated_at: new Date().toISOString() }).eq('id', selectedEntry.matched_process_id);
+        if (error) throw error;
       }
-
-      // Mark entry as updated
-      const { error: entryError } = await supabase
-        .from('rpi_entries')
-        .update({
-          update_status: 'updated',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedEntry.id);
-
+      const { error: entryError } = await supabase.from('rpi_entries').update({ update_status: 'updated', updated_at: new Date().toISOString() }).eq('id', selectedEntry.id);
       if (entryError) throw entryError;
-
-      // Create notification for client
       if (selectedEntry.matched_client_id) {
-        await supabase.from('notifications').insert({
-          user_id: selectedEntry.matched_client_id,
-          title: 'Atualização do Processo',
-          message: `Seu processo da marca "${selectedEntry.brand_name}" foi atualizado com base na RPI.`,
-          type: 'info',
-          link: '/cliente/processos',
-        });
-
-        // Log activity
+        await supabase.from('notifications').insert({ user_id: selectedEntry.matched_client_id, title: 'Atualização do Processo', message: `Seu processo da marca \"${selectedEntry.brand_name}\" foi atualizado com base na RPI.`, type: 'info', link: '/cliente/processos' });
         const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from('client_activities').insert({
-          user_id: selectedEntry.matched_client_id,
-          admin_id: user?.id,
-          activity_type: 'process_update',
-          description: `Processo atualizado via RPI para etapa: ${PIPELINE_STAGES.find(s => s.value === newStage)?.label}`,
-        });
+        await supabase.from('client_activities').insert({ user_id: selectedEntry.matched_client_id, admin_id: user?.id, activity_type: 'process_update', description: `Processo atualizado via RPI para etapa: ${PIPELINE_STAGES.find(s => s.value === newStage)?.label}` });
       }
-
       toast.success('Processo atualizado com sucesso!');
       setUpdateDialogOpen(false);
-      
-      // Refresh entries
-      if (selectedUpload) {
-        await fetchEntries(selectedUpload.id);
-      }
-      
-    } catch (error) {
-      console.error('Update error:', error);
-      toast.error('Erro ao atualizar processo');
-    } finally {
-      setUpdating(false);
-    }
+      if (selectedUpload) await fetchEntries(selectedUpload.id);
+    } catch (error) { console.error('Update error:', error); toast.error('Erro ao atualizar processo'); }
+    finally { setUpdating(false); }
   };
 
   const handleOpenAssignDialog = (entry: RpiEntry) => {
@@ -572,672 +352,561 @@ export default function RevistaINPI() {
 
   const filteredClients = availableClients.filter(client => {
     if (!clientSearch) return true;
-    const search = clientSearch.toLowerCase();
-    return (
-      client.full_name?.toLowerCase().includes(search) ||
-      client.email?.toLowerCase().includes(search) ||
-      client.company_name?.toLowerCase().includes(search)
-    );
+    const s = clientSearch.toLowerCase();
+    return client.full_name?.toLowerCase().includes(s) || client.email?.toLowerCase().includes(s) || client.company_name?.toLowerCase().includes(s);
   });
 
   const handleAssignClient = async () => {
     if (!assignEntry || !selectedClient) return;
-
     setAssigning(true);
-
     try {
-      // Calculate deadline (60 days from now)
       const deadlineDate = new Date();
       deadlineDate.setDate(deadlineDate.getDate() + 60);
-
-      // Update the RPI entry with client assignment
-      const { error: entryError } = await supabase
-        .from('rpi_entries')
-        .update({
-          matched_client_id: selectedClient.id,
-          update_status: 'pending',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', assignEntry.id);
-
+      const { error: entryError } = await supabase.from('rpi_entries').update({ matched_client_id: selectedClient.id, update_status: 'pending', updated_at: new Date().toISOString() }).eq('id', assignEntry.id);
       if (entryError) throw entryError;
-
-      // Create notification for the client
-      await supabase.from('notifications').insert({
-        user_id: selectedClient.id,
-        title: assignPriority === 'urgent' ? '🚨 URGENTE: Nova Publicação INPI' : 'Nova Publicação INPI',
-        message: `Uma publicação referente ao processo ${assignEntry.process_number} (${assignEntry.brand_name || 'Marca'}) foi vinculada ao seu perfil. Prazo: 60 dias para cumprimento.`,
-        type: assignPriority === 'urgent' ? 'warning' : 'info',
-        link: '/cliente/processos',
-      });
-
-      // Log activity
+      await supabase.from('notifications').insert({ user_id: selectedClient.id, title: assignPriority === 'urgent' ? '🚨 URGENTE: Nova Publicação INPI' : 'Nova Publicação INPI', message: `Uma publicação referente ao processo ${assignEntry.process_number} (${assignEntry.brand_name || 'Marca'}) foi vinculada ao seu perfil. Prazo: 60 dias.`, type: assignPriority === 'urgent' ? 'warning' : 'info', link: '/cliente/processos' });
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('client_activities').insert({
-        user_id: selectedClient.id,
-        admin_id: user?.id,
-        activity_type: 'rpi_publication',
-        description: `Publicação RPI vinculada: ${assignEntry.brand_name} - ${assignEntry.dispatch_type}. Prioridade: ${assignPriority === 'urgent' ? 'Urgente' : 'Média'}. Prazo: 60 dias.`,
-        metadata: {
-          process_number: assignEntry.process_number,
-          dispatch_code: assignEntry.dispatch_code,
-          dispatch_text: assignEntry.dispatch_text,
-          deadline_date: deadlineDate.toISOString(),
-          priority: assignPriority,
-        },
-      });
-
+      await supabase.from('client_activities').insert({ user_id: selectedClient.id, admin_id: user?.id, activity_type: 'rpi_publication', description: `Publicação RPI vinculada: ${assignEntry.brand_name} - ${assignEntry.dispatch_type}. Prioridade: ${assignPriority === 'urgent' ? 'Urgente' : 'Média'}. Prazo: 60 dias.`, metadata: { process_number: assignEntry.process_number, dispatch_code: assignEntry.dispatch_code, dispatch_text: assignEntry.dispatch_text, deadline_date: deadlineDate.toISOString(), priority: assignPriority } });
       toast.success(`Publicação vinculada ao cliente ${selectedClient.full_name || selectedClient.email}!`);
       setAssignDialogOpen(false);
-
-      // Refresh entries
-      if (selectedUpload) {
-        await fetchEntries(selectedUpload.id);
-      }
-
-    } catch (error) {
-      console.error('Assign error:', error);
-      toast.error('Erro ao vincular cliente');
-    } finally {
-      setAssigning(false);
-    }
+      if (selectedUpload) await fetchEntries(selectedUpload.id);
+    } catch (error) { console.error('Assign error:', error); toast.error('Erro ao vincular cliente'); }
+    finally { setAssigning(false); }
   };
 
   const handleUpdateTag = async (entryId: string, newTag: string) => {
     setUpdatingTag(entryId);
     try {
-      const { error } = await supabase
-        .from('rpi_entries')
-        .update({ 
-          tag: newTag,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', entryId);
-
+      const { error } = await supabase.from('rpi_entries').update({ tag: newTag, updated_at: new Date().toISOString() }).eq('id', entryId);
       if (error) throw error;
-
-      toast.success('TAG atualizada com sucesso');
-      
-      // Update local state
-      setEntries(prev => prev.map(e => 
-        e.id === entryId ? { ...e, tag: newTag } : e
-      ));
-    } catch (error) {
-      console.error('Tag update error:', error);
-      toast.error('Erro ao atualizar TAG');
-    } finally {
-      setUpdatingTag(null);
-    }
+      toast.success('TAG atualizada');
+      setEntries(prev => prev.map(e => e.id === entryId ? { ...e, tag: newTag } : e));
+    } catch (error) { toast.error('Erro ao atualizar TAG'); }
+    finally { setUpdatingTag(null); }
   };
 
   const filteredEntries = entries.filter(entry => {
-    const matchesSearch = 
-      entry.brand_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.process_number?.includes(searchTerm) ||
-      entry.holder_name?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesFilter = 
-      filterMatched === 'all' ||
-      (filterMatched === 'matched' && entry.matched_client_id) ||
-      (filterMatched === 'unmatched' && !entry.matched_client_id);
-
+    const matchesSearch = entry.brand_name?.toLowerCase().includes(searchTerm.toLowerCase()) || entry.process_number?.includes(searchTerm) || entry.holder_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = filterMatched === 'all' || (filterMatched === 'matched' && entry.matched_client_id) || (filterMatched === 'unmatched' && !entry.matched_client_id);
     return matchesSearch && matchesFilter;
   });
 
   const matchedEntries = entries.filter(e => e.matched_client_id);
+  const deferimentos = entries.filter(e => (e.dispatch_text || '').toLowerCase().includes('deferid'));
+  const indeferimentos = entries.filter(e => (e.dispatch_text || '').toLowerCase().includes('indeferid'));
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <BookOpen className="h-7 w-7 text-primary" />
-              Revista INPI
-            </h1>
-            <p className="text-muted-foreground">
-              Análise automática da Revista da Propriedade Industrial
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Label
-              htmlFor="pdf-upload"
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer transition-all ${
-                uploading || processing
-                  ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-              }`}
-            >
-              {uploading || processing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              {uploading ? 'Enviando...' : processing ? 'Analisando...' : 'Upload Manual'}
-            </Label>
-            <Input
-              id="pdf-upload"
-              type="file"
-              accept=".pdf,.xml,.xlsx,.xls"
-              onChange={handleFileUpload}
-              disabled={uploading || processing}
-              className="hidden"
-            />
-          </div>
-        </div>
-
-        {/* Remote Fetch Card - Main Feature */}
+      <div className="space-y-8">
+        {/* ═══ HERO HEADER ═══ */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.6 }}
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] p-8 lg:p-10"
         >
-          <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-background to-primary/10 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <CardHeader className="relative">
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-primary" />
-                Busca Remota - Portal INPI
-                <Badge variant="secondary" className="ml-2">
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  Automático
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                Baixe e processe a Revista INPI diretamente do portal oficial com um clique
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="rpi-select">Selecionar edição da RPI</Label>
-                  <div className="flex gap-2">
-                    <Select value={selectedRpiNumber} onValueChange={setSelectedRpiNumber}>
-                      <SelectTrigger className="w-64">
-                        <SelectValue placeholder="Selecione a RPI" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {recentRpis.map(rpi => {
-                          const hasXml = rpWithXml.includes(rpi);
-                          return (
-                            <SelectItem key={rpi} value={rpi.toString()}>
-                              <span className="flex items-center gap-2">
-                                RPI {rpi} 
-                                {rpi === latestRpi && <Badge variant="secondary" className="text-xs">Última</Badge>}
-                                {hasXml ? (
-                                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">XML</Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs text-muted-foreground">Sem XML</Badge>
-                                )}
-                              </span>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                    
-                    <Button
-                      onClick={() => handleRemoteFetch()}
-                      disabled={fetchingRemote || !selectedRpiNumber}
-                      className="gap-2"
-                    >
-                      {fetchingRemote ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CloudDownload className="h-4 w-4" />
-                      )}
-                      Buscar RPI
-                    </Button>
-                  </div>
-                  {!rpWithXml.includes(parseInt(selectedRpiNumber)) && selectedRpiNumber && (
-                    <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Esta RPI ainda não possui arquivo XML de Marcas disponível no INPI
-                    </p>
-                  )}
+          {/* Background effects */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl" />
+            <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-blue-600/15 rounded-full blur-3xl" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
+            {/* Grid pattern */}
+            <div className="absolute inset-0 opacity-[0.03]" style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+              backgroundSize: '40px 40px'
+            }} />
+          </div>
+
+          <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-primary/20 backdrop-blur-sm border border-primary/20">
+                  <Newspaper className="h-7 w-7 text-primary" />
                 </div>
-                
-                <div className="flex-shrink-0">
-                  <Button
-                    onClick={() => handleRemoteFetch(rpWithXml[0] || latestRpi || undefined)}
-                    disabled={fetchingRemote || (!latestRpi && rpWithXml.length === 0)}
-                    size="lg"
-                    className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25"
-                  >
-                    {fetchingRemote ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Zap className="h-5 w-5" />
-                    )}
-                    Buscar Última RPI com XML {rpWithXml[0] && `(${rpWithXml[0]})`}
-                  </Button>
+                <div>
+                  <h1 className="text-2xl lg:text-3xl font-bold text-white tracking-tight">
+                    Revista INPI
+                  </h1>
+                  <p className="text-white/50 text-sm font-medium">
+                    Revista da Propriedade Industrial — Análise Inteligente
+                  </p>
                 </div>
               </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  Sistema Online
+                </Badge>
+                {latestRpi && (
+                  <Badge className="bg-white/10 text-white/70 border-white/10 gap-1.5">
+                    <Hash className="h-3 w-3" />
+                    Última RPI: {latestRpi}
+                  </Badge>
+                )}
+                <Badge className="bg-white/10 text-white/70 border-white/10 gap-1.5">
+                  <Database className="h-3 w-3" />
+                  {uploads.length} edições processadas
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Label
+                htmlFor="pdf-upload"
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl cursor-pointer transition-all text-sm font-medium ${
+                  uploading || processing
+                    ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                    : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
+                }`}
+              >
+                {uploading || processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploading ? 'Enviando...' : processing ? 'Analisando...' : 'Upload Manual'}
+              </Label>
+              <Input id="pdf-upload" type="file" accept=".pdf,.xml,.xlsx,.xls" onChange={handleFileUpload} disabled={uploading || processing} className="hidden" />
               
-              {latestRpi && (
-                <p className="text-xs text-muted-foreground mt-3">
-                  Última RPI publicada: {latestRpi}. 
-                  {rpWithXml.length > 0 && rpWithXml[0] !== latestRpi && (
-                    <span className="text-yellow-600 ml-1">
-                      (O XML de Marcas da RPI {latestRpi} ainda não foi disponibilizado pelo INPI)
-                    </span>
-                  )}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+              <Button
+                onClick={() => handleRemoteFetch(rpWithXml[0] || latestRpi || undefined)}
+                disabled={fetchingRemote || (!latestRpi && rpWithXml.length === 0)}
+                size="lg"
+                className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 rounded-xl"
+              >
+                {fetchingRemote ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
+                Buscar Última RPI
+              </Button>
+            </div>
+          </div>
         </motion.div>
 
-        {/* Processing Indicator */}
-        <AnimatePresence>
-          {(processing || fetchingRemote) && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <Card className="border-primary/50 bg-primary/5">
-                <CardContent className="py-6">
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                      {fetchingRemote ? (
-                        <Cloud className="h-5 w-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                      ) : (
-                        <BookOpen className="h-5 w-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold">
-                        {fetchingRemote ? 'Baixando RPI do portal INPI...' : 'Analisando revista do INPI...'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Extraindo processos do procurador Davilys Danques Oliveira Cunha
-                      </p>
-                      <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                        {fetchingRemote ? (
-                          <>
-                            <p>✓ Conectando ao portal INPI...</p>
-                            <p>✓ Baixando arquivo XML da revista...</p>
-                            <p>✓ Processando dados estruturados...</p>
-                          </>
-                        ) : (
-                          <>
-                            <p>✓ Identificando formato do arquivo (PDF/XML/Excel)</p>
-                            <p>✓ Aplicando OCR se necessário para PDFs digitalizados</p>
-                            <p>✓ Buscando variações do nome do procurador</p>
-                            <p>✓ Extraindo dados completos de cada processo de MARCA</p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Summary Cards */}
+        {/* ═══ STATS ═══ */}
         {selectedUpload && selectedUpload.status === 'completed' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                      <Calendar className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Data da RPI</p>
-                      <p className="text-lg font-semibold">
-                        {selectedUpload.rpi_date 
-                          ? format(new Date(selectedUpload.rpi_date), "dd/MM/yyyy", { locale: ptBR })
-                          : 'Não identificada'}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-full bg-purple-100 text-purple-600">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nº da RPI</p>
-                      <p className="text-lg font-semibold">
-                        {selectedUpload.rpi_number || 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-full bg-green-100 text-green-600">
-                      <CheckCircle className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Processos Encontrados</p>
-                      <p className="text-lg font-semibold">
-                        {selectedUpload.total_processes_found}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-full bg-orange-100 text-orange-600">
-                      <Users className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Clientes WebMarcas</p>
-                      <p className="text-lg font-semibold">
-                        {selectedUpload.total_clients_matched}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <StatCard icon={FileText} label="Nº da RPI" value={selectedUpload.rpi_number || 'N/A'} gradient="bg-gradient-to-br from-violet-600 to-purple-700" delay={0.1} />
+            <StatCard icon={Calendar} label="Data RPI" value={selectedUpload.rpi_date ? format(new Date(selectedUpload.rpi_date), "dd/MM/yy", { locale: ptBR }) : '—'} gradient="bg-gradient-to-br from-blue-600 to-indigo-700" delay={0.15} />
+            <StatCard icon={Search} label="Processos" value={selectedUpload.total_processes_found} gradient="bg-gradient-to-br from-cyan-600 to-teal-700" delay={0.2} />
+            <StatCard icon={Users} label="Clientes" value={matchedEntries.length} gradient="bg-gradient-to-br from-emerald-600 to-green-700" delay={0.25} />
+            <StatCard icon={AlertTriangle} label="Sem Vínculo" value={entries.length - matchedEntries.length} gradient="bg-gradient-to-br from-amber-600 to-orange-700" delay={0.3} />
           </div>
         )}
 
-        {/* Summary Text */}
-        {selectedUpload?.summary && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Resumo da Análise</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{selectedUpload.summary}</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* ═══ MAIN TABS ═══ */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap">
+            <TabsTrigger value="fetch" className="gap-2 rounded-lg data-[state=active]:shadow-sm">
+              <Globe className="h-4 w-4" />
+              Busca Remota
+            </TabsTrigger>
+            <TabsTrigger value="results" className="gap-2 rounded-lg data-[state=active]:shadow-sm">
+              <Layers className="h-4 w-4" />
+              Processos
+              {entries.length > 0 && (
+                <Badge variant="secondary" className="ml-1 text-xs h-5 px-1.5">{entries.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-2 rounded-lg data-[state=active]:shadow-sm">
+              <Clock className="h-4 w-4" />
+              Histórico
+            </TabsTrigger>
+          </TabsList>
 
-        {/* History Selector */}
-        {uploads.length > 1 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Histórico de Revistas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {uploads.map(upload => (
-                  <Button
-                    key={upload.id}
-                    variant={selectedUpload?.id === upload.id ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedUpload(upload)}
-                    className="gap-2"
-                  >
-                    {upload.file_path?.startsWith('remote/') ? (
-                      <Cloud className="h-3 w-3" />
-                    ) : (
-                      <FileText className="h-3 w-3" />
-                    )}
-                    {upload.rpi_number || format(new Date(upload.created_at), "dd/MM/yy")}
-                    {upload.status === 'completed' && (
-                      <Badge variant="secondary" className="ml-1 text-xs">
-                        {upload.total_processes_found}
-                      </Badge>
-                    )}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Entries Table - Show after processing or when upload is completed */}
-        {selectedUpload && (selectedUpload.status === 'completed' || entries.length > 0) && (
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Processos Identificados na RPI
+          {/* ─── TAB: Busca Remota ─── */}
+          <TabsContent value="fetch" className="space-y-6">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="border-primary/20 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-72 h-72 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <CardHeader className="relative">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Globe className="h-5 w-5 text-primary" />
+                    Portal INPI — Busca Automática
+                    <Badge variant="secondary" className="ml-2 gap-1">
+                      <Wifi className="h-3 w-3" />
+                      Live
+                    </Badge>
                   </CardTitle>
                   <CardDescription>
-                    {matchedEntries.length > 0 
-                      ? `${matchedEntries.length} de ${entries.length} processos correspondem a clientes WebMarcas`
-                      : `${entries.length} processos encontrados`}
+                    Selecione a edição da RPI e baixe automaticamente do portal oficial do INPI
                   </CardDescription>
-                </div>
+                </CardHeader>
+                <CardContent className="relative space-y-6">
+                  <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-end">
+                    <div className="flex-1 space-y-2">
+                      <Label>Edição da RPI</Label>
+                      <div className="flex gap-3">
+                        <Select value={selectedRpiNumber} onValueChange={setSelectedRpiNumber}>
+                          <SelectTrigger className="w-72 rounded-xl">
+                            <SelectValue placeholder="Selecione a RPI" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {recentRpis.map(rpi => {
+                              const hasXml = rpWithXml.includes(rpi);
+                              return (
+                                <SelectItem key={rpi} value={rpi.toString()}>
+                                  <span className="flex items-center gap-2">
+                                    RPI {rpi}
+                                    {rpi === latestRpi && <Badge variant="secondary" className="text-xs">Última</Badge>}
+                                    {hasXml ? (
+                                      <Badge className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20">XML ✓</Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-xs text-muted-foreground">Sem XML</Badge>
+                                    )}
+                                  </span>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
 
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar marca, processo..."
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      className="pl-9 w-64"
-                    />
+                        <Button
+                          onClick={() => handleRemoteFetch()}
+                          disabled={fetchingRemote || !selectedRpiNumber}
+                          className="gap-2 rounded-xl"
+                        >
+                          {fetchingRemote ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                          Buscar
+                        </Button>
+                      </div>
+                      {!rpWithXml.includes(parseInt(selectedRpiNumber)) && selectedRpiNumber && (
+                        <p className="text-xs text-amber-600 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          Esta RPI ainda não possui XML de Marcas disponível
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  <Select value={filterMatched} onValueChange={(v: any) => setFilterMatched(v)}>
-                    <SelectTrigger className="w-40">
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="matched">Clientes WebMarcas</SelectItem>
-                      <SelectItem value="unmatched">Não identificados</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[600px] w-full">
-                <div className="min-w-[1100px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[180px]">Marca</TableHead>
-                      <TableHead className="w-[130px]">Nº Processo</TableHead>
-                      <TableHead className="w-[80px]">Classe</TableHead>
-                      <TableHead className="w-[280px]">O que saiu (Despacho)</TableHead>
-                      <TableHead className="w-[180px]">Cliente</TableHead>
-                      <TableHead className="w-[150px]">TAG</TableHead>
-                      <TableHead className="text-right w-[100px]">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredEntries.map((entry, index) => (
-                      <motion.tr
-                        key={entry.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="group hover:bg-muted/50"
-                      >
-                        <TableCell>
-                          <div className="font-semibold text-foreground text-base">{entry.brand_name || '-'}</div>
-                        </TableCell>
-                        <TableCell>
-                          <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
-                            {entry.process_number}
-                          </code>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="font-mono">
-                            {entry.ncl_classes?.join(', ') || '-'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium text-foreground leading-relaxed">
-                              {entry.dispatch_text || entry.dispatch_type || 'Sem descrição'}
-                            </div>
-                            {entry.dispatch_code && (
-                              <span className="text-xs text-muted-foreground/70 font-mono">
-                                Código: {entry.dispatch_code}
-                              </span>
-                            )}
+                  {/* Info banner */}
+                  <div className="rounded-xl bg-muted/50 p-4 flex items-start gap-3">
+                    <Shield className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Como funciona</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        O sistema conecta diretamente ao portal <strong>revistas.inpi.gov.br</strong> e baixa o arquivo XML da seção de Marcas.
+                        Em seguida, identifica automaticamente todos os processos do procurador <strong>Davilys Danques Oliveira Cunha</strong> e 
+                        cruza com sua base de clientes para notificação imediata.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </TabsContent>
+
+          {/* ─── TAB: Processos ─── */}
+          <TabsContent value="results" className="space-y-4">
+            {/* Processing Indicator */}
+            <AnimatePresence>
+              {(processing || fetchingRemote) && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                  <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-transparent overflow-hidden">
+                    <CardContent className="py-8">
+                      <div className="flex items-center gap-6">
+                        <div className="relative">
+                          <div className="absolute inset-0 animate-ping opacity-20 rounded-full bg-primary" />
+                          <div className="relative p-4 rounded-full bg-primary/10">
+                            <Loader2 className="h-8 w-8 text-primary animate-spin" />
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {entry.matched_client_id ? (
-                            <div className="flex items-start gap-2">
-                              <div className="h-2 w-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
-                              <div>
-                                <div className="font-medium text-sm text-foreground">
-                                  {entry.client?.full_name || entry.client?.company_name || 'Cliente'}
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <h3 className="font-semibold text-lg">
+                            {fetchingRemote ? 'Conectando ao Portal INPI...' : 'Analisando Revista...'}
+                          </h3>
+                          <div className="space-y-1.5">
+                            {(fetchingRemote ? [
+                              'Conectando ao portal INPI...',
+                              'Baixando arquivo XML...',
+                              'Processando dados estruturados...',
+                            ] : [
+                              'Identificando formato do arquivo',
+                              'Aplicando OCR para PDFs digitalizados',
+                              'Extraindo processos do procurador',
+                              'Cruzando com base de clientes',
+                            ]).map((step, i) => (
+                              <motion.p
+                                key={i}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: i * 0.3 }}
+                                className="text-sm text-muted-foreground flex items-center gap-2"
+                              >
+                                <Activity className="h-3 w-3 text-primary" />
+                                {step}
+                              </motion.p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Entries Table */}
+            {selectedUpload && (selectedUpload.status === 'completed' || entries.length > 0) && (
+              <Card className="overflow-hidden">
+                <CardHeader className="bg-muted/30">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Layers className="h-5 w-5 text-primary" />
+                        Processos Identificados
+                      </CardTitle>
+                      <CardDescription>
+                        {matchedEntries.length > 0
+                          ? `${matchedEntries.length} de ${entries.length} processos vinculados a clientes`
+                          : `${entries.length} processos encontrados`}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar marca, processo..."
+                          value={searchTerm}
+                          onChange={e => setSearchTerm(e.target.value)}
+                          className="pl-9 w-64 rounded-xl"
+                        />
+                      </div>
+                      <Select value={filterMatched} onValueChange={(v: any) => setFilterMatched(v)}>
+                        <SelectTrigger className="w-44 rounded-xl">
+                          <Filter className="h-4 w-4 mr-2" />
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="matched">Clientes WebMarcas</SelectItem>
+                          <SelectItem value="unmatched">Não identificados</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[600px] w-full">
+                    <div className="min-w-[1100px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/20 hover:bg-muted/20">
+                            <TableHead className="w-[180px] font-semibold">Marca</TableHead>
+                            <TableHead className="w-[130px] font-semibold">Nº Processo</TableHead>
+                            <TableHead className="w-[80px] font-semibold">Classe</TableHead>
+                            <TableHead className="w-[280px] font-semibold">Despacho</TableHead>
+                            <TableHead className="w-[180px] font-semibold">Cliente</TableHead>
+                            <TableHead className="w-[150px] font-semibold">TAG</TableHead>
+                            <TableHead className="text-right w-[100px] font-semibold">Ação</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredEntries.map((entry, index) => (
+                            <motion.tr
+                              key={entry.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: Math.min(index * 0.03, 0.5) }}
+                              className="group hover:bg-primary/[0.02] transition-colors"
+                            >
+                              <TableCell>
+                                <div className="font-semibold text-foreground">{entry.brand_name || '-'}</div>
+                              </TableCell>
+                              <TableCell>
+                                <code className="text-xs font-mono bg-muted px-2 py-1 rounded-md">{entry.process_number}</code>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="font-mono text-xs">{entry.ncl_classes?.join(', ') || '-'}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <div className="text-sm text-foreground leading-relaxed">{entry.dispatch_text || entry.dispatch_type || 'Sem descrição'}</div>
+                                  {entry.dispatch_code && <span className="text-xs text-muted-foreground font-mono">Cód: {entry.dispatch_code}</span>}
                                 </div>
-                                <div className="text-xs text-muted-foreground truncate max-w-[150px]">
-                                  {entry.client?.email}
+                              </TableCell>
+                              <TableCell>
+                                {entry.matched_client_id ? (
+                                  <div className="flex items-start gap-2">
+                                    <div className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0 animate-pulse" />
+                                    <div>
+                                      <div className="font-medium text-sm">{entry.client?.full_name || entry.client?.company_name || 'Cliente'}</div>
+                                      <div className="text-xs text-muted-foreground truncate max-w-[150px]">{entry.client?.email}</div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => handleOpenAssignDialog(entry)} className="gap-1.5 text-xs rounded-lg">
+                                    <UserPlus className="h-3 w-3" />
+                                    Vincular
+                                  </Button>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Select value={entry.tag || 'pending'} onValueChange={(value) => handleUpdateTag(entry.id, value)} disabled={updatingTag === entry.id}>
+                                  <SelectTrigger className="w-[135px] h-8 rounded-lg text-xs">
+                                    {updatingTag === entry.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <SelectValue />}
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {TAG_OPTIONS.map(opt => (
+                                      <SelectItem key={opt.value} value={opt.value}>
+                                        <Badge className={`${opt.color} text-xs border-0`}>{opt.label}</Badge>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  {entry.matched_client_id && entry.update_status !== 'updated' && (
+                                    <Button size="sm" onClick={() => handleOpenUpdateDialog(entry)} className="gap-1.5 rounded-lg">
+                                      <RefreshCw className="h-3 w-3" />
+                                      Atualizar
+                                    </Button>
+                                  )}
+                                  {entry.update_status === 'updated' && (
+                                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
+                                      <CheckCircle className="h-3 w-3" />
+                                      Atualizado
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </motion.tr>
+                          ))}
+                          {filteredEntries.length === 0 && !processing && !fetchingRemote && (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center py-16">
+                                <div className="space-y-3">
+                                  <div className="mx-auto w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
+                                    <Search className="h-8 w-8 text-muted-foreground/40" />
+                                  </div>
+                                  <p className="text-muted-foreground font-medium">Nenhum processo encontrado</p>
+                                  {searchTerm && <p className="text-xs text-muted-foreground">Tente buscar com termos diferentes</p>}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Empty state */}
+            {!loading && entries.length === 0 && !processing && !fetchingRemote && (
+              <Card className="border-dashed border-2">
+                <CardContent className="py-20 text-center">
+                  <div className="mx-auto w-20 h-20 rounded-2xl bg-primary/5 flex items-center justify-center mb-6">
+                    <Newspaper className="h-10 w-10 text-primary/40" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Nenhum processo carregado</h3>
+                  <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                    Busque a RPI mais recente do portal INPI ou faça upload manual para começar a análise.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <Button onClick={() => { setActiveTab('fetch'); }} variant="outline" className="gap-2 rounded-xl">
+                      <Globe className="h-4 w-4" />
+                      Ir para Busca Remota
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ─── TAB: Histórico ─── */}
+          <TabsContent value="history" className="space-y-4">
+            {uploads.length > 0 ? (
+              <div className="grid gap-3">
+                {uploads.map((upload, index) => (
+                  <motion.div
+                    key={upload.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card
+                      className={`cursor-pointer transition-all hover:shadow-md ${
+                        selectedUpload?.id === upload.id
+                          ? 'border-primary/50 bg-primary/[0.02] shadow-sm'
+                          : 'hover:border-primary/20'
+                      }`}
+                      onClick={() => { setSelectedUpload(upload); setActiveTab('results'); }}
+                    >
+                      <CardContent className="py-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-2.5 rounded-xl ${
+                              upload.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' :
+                              upload.status === 'error' ? 'bg-red-500/10 text-red-600' :
+                              'bg-amber-500/10 text-amber-600'
+                            }`}>
+                              {upload.status === 'completed' ? <CheckCircle className="h-5 w-5" /> :
+                               upload.status === 'error' ? <AlertCircle className="h-5 w-5" /> :
+                               <Loader2 className="h-5 w-5 animate-spin" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">RPI {upload.rpi_number || '—'}</span>
+                                {upload.rpi_date && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {format(new Date(upload.rpi_date), "dd/MM/yyyy", { locale: ptBR })}
+                                  </Badge>
+                                )}
+                                <Badge className={
+                                  upload.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                                  upload.status === 'error' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                                  'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                                }>
+                                  {upload.status === 'completed' ? 'Processada' : upload.status === 'error' ? 'Erro' : 'Pendente'}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {upload.file_name} • {format(new Date(upload.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-right">
+                            {upload.status === 'completed' && (
+                              <div className="flex items-center gap-4">
+                                <div>
+                                  <p className="text-lg font-bold">{upload.total_processes_found}</p>
+                                  <p className="text-xs text-muted-foreground">processos</p>
+                                </div>
+                                <div>
+                                  <p className="text-lg font-bold text-emerald-600">{upload.total_clients_matched}</p>
+                                  <p className="text-xs text-muted-foreground">clientes</p>
                                 </div>
                               </div>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenAssignDialog(entry)}
-                              className="gap-1.5 text-xs"
-                            >
-                              <Users className="h-3 w-3" />
-                              Vincular Cliente
-                            </Button>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Select 
-                            value={entry.tag || 'pending'} 
-                            onValueChange={(value) => handleUpdateTag(entry.id, value)}
-                            disabled={updatingTag === entry.id}
-                          >
-                            <SelectTrigger className="w-[140px] h-8">
-                              {updatingTag === entry.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <SelectValue />
-                              )}
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TAG_OPTIONS.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  <Badge className={`${opt.color} text-xs`}>
-                                    {opt.label}
-                                  </Badge>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {entry.matched_client_id && entry.update_status !== 'updated' && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleOpenUpdateDialog(entry)}
-                                className="gap-1.5"
-                              >
-                                <RefreshCw className="h-3 w-3" />
-                                Atualizar
-                              </Button>
                             )}
-                            {entry.update_status === 'updated' && (
-                              <Button size="sm" variant="ghost" disabled className="text-green-600">
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                            )}
+                            <ArrowRight className="h-4 w-4 text-muted-foreground" />
                           </div>
-                        </TableCell>
-                      </motion.tr>
-                    ))}
-                    {filteredEntries.length === 0 && !processing && !fetchingRemote && (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-12">
-                          <AlertCircle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-                          <p className="text-muted-foreground">Nenhum processo encontrado</p>
-                          {searchTerm && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Tente buscar com termos diferentes
-                            </p>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-                </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Empty State */}
-        {!loading && uploads.length === 0 && !processing && !fetchingRemote && (
-          <Card className="border-dashed">
-            <CardContent className="py-16 text-center">
-              <BookOpen className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Nenhuma revista processada</h3>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Use a busca remota para baixar a RPI diretamente do portal INPI ou faça upload manual do arquivo.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <Button
-                  onClick={() => handleRemoteFetch(latestRpi || undefined)}
-                  disabled={!latestRpi}
-                  className="gap-2"
-                >
-                  <CloudDownload className="h-5 w-5" />
-                  Buscar Última RPI
-                </Button>
-                <Label
-                  htmlFor="pdf-upload-empty"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground cursor-pointer hover:bg-secondary/80 transition-colors"
-                >
-                  <Upload className="h-5 w-5" />
-                  Upload Manual
-                </Label>
-                <Input
-                  id="pdf-upload-empty"
-                  type="file"
-                  accept=".pdf,.xml,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <Card className="border-dashed border-2">
+                <CardContent className="py-16 text-center">
+                  <Clock className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Nenhum histórico</h3>
+                  <p className="text-sm text-muted-foreground">As RPIs processadas aparecerão aqui.</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
 
         {/* Loading */}
         {loading && (
           <div className="space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-64 w-full rounded-2xl" />
           </div>
         )}
       </div>
 
+      {/* ═══ DIALOGS ═══ */}
+      
       {/* Update Dialog */}
       <Dialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -1246,22 +915,18 @@ export default function RevistaINPI() {
               <RefreshCw className="h-5 w-5 text-primary" />
               Atualizar Processo
             </DialogTitle>
-            <DialogDescription>
-              Confirme a atualização do processo com base na publicação da RPI.
-            </DialogDescription>
+            <DialogDescription>Confirme a atualização do processo com base na publicação da RPI.</DialogDescription>
           </DialogHeader>
-
           {selectedEntry && (
             <div className="space-y-4">
-              {/* Process Info */}
-              <div className="rounded-lg bg-muted p-4 space-y-3">
+              <div className="rounded-xl bg-muted/50 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Marca</span>
                   <span className="font-semibold">{selectedEntry.brand_name}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Processo</span>
-                  <span className="font-mono">{selectedEntry.process_number}</span>
+                  <span className="font-mono text-sm">{selectedEntry.process_number}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Despacho</span>
@@ -1274,8 +939,6 @@ export default function RevistaINPI() {
                   </div>
                 )}
               </div>
-
-              {/* Stage Selection */}
               <div className="space-y-2">
                 <Label>Etapa do Funil</Label>
                 <div className="flex items-center gap-3">
@@ -1289,40 +952,24 @@ export default function RevistaINPI() {
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   <div className="flex-1">
                     <Select value={newStage} onValueChange={setNewStage}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Nova etapa" />
-                      </SelectTrigger>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Nova etapa" /></SelectTrigger>
                       <SelectContent>
-                        {PIPELINE_STAGES.map(stage => (
-                          <SelectItem key={stage.value} value={stage.value}>
-                            {stage.label}
-                          </SelectItem>
-                        ))}
+                        {PIPELINE_STAGES.map(stage => (<SelectItem key={stage.value} value={stage.value}>{stage.label}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 {suggestStage(selectedEntry.dispatch_code, selectedEntry.dispatch_text) === newStage && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" />
-                    Etapa sugerida automaticamente com base no despacho
-                  </p>
+                  <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="h-3 w-3" />Etapa sugerida automaticamente</p>
                 )}
               </div>
             </div>
           )}
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setUpdateDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleUpdateProcess} disabled={updating || !newStage}>
-              {updating ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <CheckCircle className="h-4 w-4 mr-2" />
-              )}
-              Confirmar Atualização
+            <Button variant="outline" onClick={() => setUpdateDialogOpen(false)} className="rounded-xl">Cancelar</Button>
+            <Button onClick={handleUpdateProcess} disabled={updating || !newStage} className="rounded-xl gap-2">
+              {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1334,24 +981,20 @@ export default function RevistaINPI() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-primary" />
-              Vincular Cliente à Publicação
+              Vincular Cliente
             </DialogTitle>
-            <DialogDescription>
-              Selecione o cliente para vincular a esta publicação RPI. O cliente será notificado com prazo de 60 dias.
-            </DialogDescription>
+            <DialogDescription>Selecione o cliente para vincular a esta publicação RPI. Prazo de 60 dias.</DialogDescription>
           </DialogHeader>
-
           {assignEntry && (
             <div className="space-y-4">
-              {/* Publication Info */}
-              <div className="rounded-lg bg-muted p-4 space-y-2">
+              <div className="rounded-xl bg-muted/50 p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Marca</span>
                   <span className="font-semibold">{assignEntry.brand_name || '-'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Processo</span>
-                  <span className="font-mono">{assignEntry.process_number}</span>
+                  <span className="font-mono text-sm">{assignEntry.process_number}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Titular</span>
@@ -1361,54 +1004,37 @@ export default function RevistaINPI() {
                   <span className="text-sm text-muted-foreground">Despacho</span>
                   <div className="text-right">
                     {getDispatchBadge(assignEntry.dispatch_type)}
-                    <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-                      {assignEntry.dispatch_text}
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">{assignEntry.dispatch_text}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Client Search */}
               <div className="space-y-2">
                 <Label>Buscar Cliente</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Digite nome, email ou empresa..."
-                    value={clientSearch}
-                    onChange={e => setClientSearch(e.target.value)}
-                    className="pl-9"
-                  />
+                  <Input placeholder="Nome, email ou empresa..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="pl-9 rounded-xl" />
                 </div>
               </div>
 
-              {/* Client List */}
               <div className="space-y-2">
                 <Label>Selecionar Cliente</Label>
-                <ScrollArea className="h-[200px] border rounded-lg p-2">
+                <ScrollArea className="h-[200px] border rounded-xl p-2">
                   {filteredClients.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      {clientSearch ? 'Nenhum cliente encontrado' : 'Digite para buscar clientes'}
-                    </div>
+                    <div className="text-center py-8 text-muted-foreground text-sm">{clientSearch ? 'Nenhum cliente encontrado' : 'Digite para buscar'}</div>
                   ) : (
                     <div className="space-y-1">
                       {filteredClients.slice(0, 20).map(client => (
                         <div
                           key={client.id}
                           onClick={() => setSelectedClient(client)}
-                          className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                            selectedClient?.id === client.id
-                              ? 'bg-primary/10 border border-primary'
-                              : 'hover:bg-muted'
+                          className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                            selectedClient?.id === client.id ? 'bg-primary/10 border border-primary' : 'hover:bg-muted'
                           }`}
                         >
-                          <div className="font-medium text-sm">
-                            {client.full_name || client.company_name || 'Sem nome'}
-                          </div>
+                          <div className="font-medium text-sm">{client.full_name || client.company_name || 'Sem nome'}</div>
                           <div className="text-xs text-muted-foreground">{client.email}</div>
-                          {client.company_name && client.full_name && (
-                            <div className="text-xs text-muted-foreground">{client.company_name}</div>
-                          )}
+                          {client.company_name && client.full_name && <div className="text-xs text-muted-foreground">{client.company_name}</div>}
                         </div>
                       ))}
                     </div>
@@ -1416,60 +1042,31 @@ export default function RevistaINPI() {
                 </ScrollArea>
               </div>
 
-              {/* Priority Selection */}
               <div className="space-y-2">
                 <Label>Prioridade</Label>
                 <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    variant={assignPriority === 'medium' ? 'default' : 'outline'}
-                    onClick={() => setAssignPriority('medium')}
-                    className="flex-1 gap-2"
-                  >
-                    <Clock className="h-4 w-4" />
-                    Média
+                  <Button type="button" variant={assignPriority === 'medium' ? 'default' : 'outline'} onClick={() => setAssignPriority('medium')} className="flex-1 gap-2 rounded-xl">
+                    <Clock className="h-4 w-4" />Média
                   </Button>
-                  <Button
-                    type="button"
-                    variant={assignPriority === 'urgent' ? 'destructive' : 'outline'}
-                    onClick={() => setAssignPriority('urgent')}
-                    className="flex-1 gap-2"
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                    Urgente
+                  <Button type="button" variant={assignPriority === 'urgent' ? 'destructive' : 'outline'} onClick={() => setAssignPriority('urgent')} className="flex-1 gap-2 rounded-xl">
+                    <AlertTriangle className="h-4 w-4" />Urgente
                   </Button>
                 </div>
               </div>
 
-              {/* Deadline Info */}
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950 p-3 flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-amber-600" />
+              <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-amber-600 flex-shrink-0" />
                 <div>
-                  <div className="font-medium text-sm text-amber-800 dark:text-amber-200">
-                    Prazo: 60 dias para cumprimento
-                  </div>
-                  <div className="text-xs text-amber-600 dark:text-amber-400">
-                    O cliente será notificado automaticamente
-                  </div>
+                  <div className="font-medium text-sm">Prazo: 60 dias para cumprimento</div>
+                  <div className="text-xs text-muted-foreground">O cliente será notificado automaticamente</div>
                 </div>
               </div>
             </div>
           )}
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleAssignClient} 
-              disabled={assigning || !selectedClient}
-              className="gap-2"
-            >
-              {assigning ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <UserPlus className="h-4 w-4" />
-              )}
+            <Button variant="outline" onClick={() => setAssignDialogOpen(false)} className="rounded-xl">Cancelar</Button>
+            <Button onClick={handleAssignClient} disabled={assigning || !selectedClient} className="gap-2 rounded-xl">
+              {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Vincular Cliente
             </Button>
           </DialogFooter>
