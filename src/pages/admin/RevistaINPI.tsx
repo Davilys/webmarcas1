@@ -142,6 +142,18 @@ function StatCard({ icon: Icon, label, value, gradient, delay = 0 }: {
   );
 }
 
+// ─── Detail row for expanded cards ──────────────────────────────────
+function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{label}</span>
+      <span className={`text-sm font-medium text-foreground truncate text-right ${mono ? 'font-mono text-xs' : ''}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────
 export default function RevistaINPI() {
   const [uploads, setUploads] = useState<RpiUpload[]>([]);
@@ -640,153 +652,307 @@ export default function RevistaINPI() {
               )}
             </AnimatePresence>
 
-            {/* Entries Table */}
+            {/* Entries List */}
             {selectedUpload && (selectedUpload.status === 'completed' || entries.length > 0) && (
-              <Card className="overflow-hidden">
-                <CardHeader className="bg-muted/30">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Layers className="h-5 w-5 text-primary" />
-                        Processos Identificados
-                      </CardTitle>
-                      <CardDescription>
-                        {matchedEntries.length > 0
-                          ? `${matchedEntries.length} de ${entries.length} processos vinculados a clientes`
-                          : `${entries.length} processos encontrados`}
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Buscar marca, processo..."
-                          value={searchTerm}
-                          onChange={e => setSearchTerm(e.target.value)}
-                          className="pl-9 w-64 rounded-xl"
-                        />
-                      </div>
-                      <Select value={filterMatched} onValueChange={(v: any) => setFilterMatched(v)}>
-                        <SelectTrigger className="w-44 rounded-xl">
-                          <Filter className="h-4 w-4 mr-2" />
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos</SelectItem>
-                          <SelectItem value="matched">Clientes WebMarcas</SelectItem>
-                          <SelectItem value="unmatched">Não identificados</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+              <>
+                {/* Search & Filters Bar */}
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold flex items-center gap-2">
+                      <Layers className="h-5 w-5 text-primary" />
+                      Processos Identificados
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {matchedEntries.length > 0
+                        ? `${matchedEntries.length} de ${entries.length} vinculados a clientes`
+                        : `${entries.length} processos encontrados`}
+                    </p>
                   </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ScrollArea className="h-[600px] w-full">
-                    <div className="min-w-[1100px]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/20 hover:bg-muted/20">
-                            <TableHead className="w-[180px] font-semibold">Marca</TableHead>
-                            <TableHead className="w-[130px] font-semibold">Nº Processo</TableHead>
-                            <TableHead className="w-[80px] font-semibold">Classe</TableHead>
-                            <TableHead className="w-[280px] font-semibold">Despacho</TableHead>
-                            <TableHead className="w-[180px] font-semibold">Cliente</TableHead>
-                            <TableHead className="w-[150px] font-semibold">TAG</TableHead>
-                            <TableHead className="text-right w-[100px] font-semibold">Ação</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredEntries.map((entry, index) => (
-                            <motion.tr
-                              key={entry.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: Math.min(index * 0.03, 0.5) }}
-                              className="group hover:bg-primary/[0.02] transition-colors"
-                            >
-                              <TableCell>
-                                <div className="font-semibold text-foreground">{entry.brand_name || '-'}</div>
-                              </TableCell>
-                              <TableCell>
-                                <code className="text-xs font-mono bg-muted px-2 py-1 rounded-md">{entry.process_number}</code>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary" className="font-mono text-xs">{entry.ncl_classes?.join(', ') || '-'}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="text-sm text-foreground leading-relaxed">{entry.dispatch_text || entry.dispatch_type || 'Sem descrição'}</div>
-                                  {entry.dispatch_code && <span className="text-xs text-muted-foreground font-mono">Cód: {entry.dispatch_code}</span>}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {entry.matched_client_id ? (
-                                  <div className="flex items-start gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0 animate-pulse" />
-                                    <div>
-                                      <div className="font-medium text-sm">{entry.client?.full_name || entry.client?.company_name || 'Cliente'}</div>
-                                      <div className="text-xs text-muted-foreground truncate max-w-[150px]">{entry.client?.email}</div>
-                                    </div>
-                                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar marca, processo..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        className="pl-9 w-64 rounded-xl"
+                      />
+                    </div>
+                    <Select value={filterMatched} onValueChange={(v: any) => setFilterMatched(v)}>
+                      <SelectTrigger className="w-44 rounded-xl">
+                        <Filter className="h-4 w-4 mr-2" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="matched">Clientes WebMarcas</SelectItem>
+                        <SelectItem value="unmatched">Não identificados</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Process Cards */}
+                <div className="space-y-3">
+                  <AnimatePresence mode="popLayout">
+                    {filteredEntries.map((entry, index) => {
+                      const isExpanded = selectedEntry?.id === entry.id && !updateDialogOpen && !assignDialogOpen;
+                      const tagOption = TAG_OPTIONS.find(t => t.value === (entry.tag || 'pending'));
+
+                      return (
+                        <motion.div
+                          key={entry.id}
+                          layout
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: Math.min(index * 0.04, 0.4), duration: 0.35 }}
+                        >
+                          <Card
+                            className={`group cursor-pointer transition-all duration-300 overflow-hidden ${
+                              isExpanded
+                                ? 'border-primary/40 shadow-lg shadow-primary/5 ring-1 ring-primary/10'
+                                : 'hover:border-primary/20 hover:shadow-md'
+                            }`}
+                            onClick={() => setSelectedEntry(isExpanded ? null : entry)}
+                          >
+                            {/* Card Header Row */}
+                            <div className="px-5 py-4 flex items-center gap-4">
+                              {/* Status indicator */}
+                              <div className={`relative flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center ${
+                                entry.update_status === 'updated'
+                                  ? 'bg-emerald-500/10'
+                                  : entry.matched_client_id
+                                  ? 'bg-primary/10'
+                                  : 'bg-muted'
+                              }`}>
+                                {entry.update_status === 'updated' ? (
+                                  <CheckCircle className="h-5 w-5 text-emerald-600" />
                                 ) : (
-                                  <Button size="sm" variant="outline" onClick={() => handleOpenAssignDialog(entry)} className="gap-1.5 text-xs rounded-lg">
-                                    <UserPlus className="h-3 w-3" />
-                                    Vincular
-                                  </Button>
+                                  <FileText className="h-5 w-5 text-primary" />
                                 )}
-                              </TableCell>
-                              <TableCell>
-                                <Select value={entry.tag || 'pending'} onValueChange={(value) => handleUpdateTag(entry.id, value)} disabled={updatingTag === entry.id}>
-                                  <SelectTrigger className="w-[135px] h-8 rounded-lg text-xs">
-                                    {updatingTag === entry.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <SelectValue />}
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {TAG_OPTIONS.map(opt => (
-                                      <SelectItem key={opt.value} value={opt.value}>
-                                        <Badge className={`${opt.color} text-xs border-0`}>{opt.label}</Badge>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  {entry.matched_client_id && entry.update_status !== 'updated' && (
-                                    <Button size="sm" onClick={() => handleOpenUpdateDialog(entry)} className="gap-1.5 rounded-lg">
-                                      <RefreshCw className="h-3 w-3" />
-                                      Atualizar
-                                    </Button>
-                                  )}
-                                  {entry.update_status === 'updated' && (
-                                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
-                                      <CheckCircle className="h-3 w-3" />
-                                      Atualizado
+                                {entry.matched_client_id && entry.update_status !== 'updated' && (
+                                  <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-card animate-pulse" />
+                                )}
+                              </div>
+
+                              {/* Brand & Process */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-foreground truncate max-w-[200px]">
+                                    {entry.brand_name || 'Marca não identificada'}
+                                  </span>
+                                  <code className="text-[11px] font-mono bg-muted/70 px-2 py-0.5 rounded-md text-muted-foreground">
+                                    {entry.process_number}
+                                  </code>
+                                  {entry.ncl_classes && entry.ncl_classes.length > 0 && (
+                                    <Badge variant="secondary" className="font-mono text-[10px] h-5">
+                                      NCL {entry.ncl_classes.join(', ')}
                                     </Badge>
                                   )}
                                 </div>
-                              </TableCell>
-                            </motion.tr>
-                          ))}
-                          {filteredEntries.length === 0 && !processing && !fetchingRemote && (
-                            <TableRow>
-                              <TableCell colSpan={7} className="text-center py-16">
-                                <div className="space-y-3">
-                                  <div className="mx-auto w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
-                                    <Search className="h-8 w-8 text-muted-foreground/40" />
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                  {entry.dispatch_text || entry.dispatch_type || 'Sem descrição do despacho'}
+                                </p>
+                              </div>
+
+                              {/* Right side badges */}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {getDispatchBadge(entry.dispatch_type)}
+                                {tagOption && (
+                                  <Badge className={`${tagOption.color} text-[10px] border-0`}>
+                                    {tagOption.label}
+                                  </Badge>
+                                )}
+                                {entry.matched_client_id ? (
+                                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] gap-1">
+                                    <Users className="h-3 w-3" />
+                                    {entry.client?.full_name?.split(' ')[0] || 'Cliente'}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Sem vínculo
+                                  </Badge>
+                                )}
+                                <motion.div
+                                  animate={{ rotate: isExpanded ? 90 : 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                                </motion.div>
+                              </div>
+                            </div>
+
+                            {/* Expanded Detail Panel */}
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                  className="overflow-hidden"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <div className="border-t border-border/50 bg-gradient-to-b from-muted/30 to-transparent">
+                                    <div className="p-5 space-y-5">
+                                      {/* Detail Grid */}
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Column 1: Process Info */}
+                                        <div className="space-y-3">
+                                          <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                                            <FileText className="h-3.5 w-3.5" />
+                                            Dados do Processo
+                                          </h4>
+                                          <div className="space-y-2.5 bg-card rounded-xl p-4 border border-border/50">
+                                            <DetailRow label="Nº Processo" value={entry.process_number} mono />
+                                            <DetailRow label="Marca" value={entry.brand_name || '—'} />
+                                            <DetailRow label="Classe NCL" value={entry.ncl_classes?.join(', ') || '—'} />
+                                            <DetailRow label="Titular" value={entry.holder_name || '—'} />
+                                            {entry.publication_date && (
+                                              <DetailRow label="Publicação" value={format(new Date(entry.publication_date), "dd/MM/yyyy", { locale: ptBR })} />
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Column 2: Dispatch Details */}
+                                        <div className="space-y-3">
+                                          <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            Despacho
+                                          </h4>
+                                          <div className="space-y-2.5 bg-card rounded-xl p-4 border border-border/50">
+                                            <DetailRow label="Tipo" value={entry.dispatch_type || '—'} />
+                                            <DetailRow label="Código" value={entry.dispatch_code || '—'} mono />
+                                            <div>
+                                              <span className="text-[11px] text-muted-foreground">Texto do Despacho</span>
+                                              <p className="text-sm mt-1 leading-relaxed text-foreground">
+                                                {entry.dispatch_text || 'Sem descrição disponível'}
+                                              </p>
+                                            </div>
+                                            <div className="pt-1">
+                                              <span className="text-[11px] text-muted-foreground">Etapa Sugerida</span>
+                                              <div className="mt-1">
+                                                <Badge className="bg-primary/10 text-primary border-primary/20">
+                                                  {PIPELINE_STAGES.find(s => s.value === suggestStage(entry.dispatch_code, entry.dispatch_text))?.label || 'Protocolado'}
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Column 3: Client & Actions */}
+                                        <div className="space-y-3">
+                                          <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
+                                            <Users className="h-3.5 w-3.5" />
+                                            Cliente & Ações
+                                          </h4>
+                                          <div className="space-y-3 bg-card rounded-xl p-4 border border-border/50">
+                                            {entry.matched_client_id ? (
+                                              <div className="space-y-2">
+                                                <div className="flex items-center gap-3">
+                                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                                    <span className="text-sm font-bold text-primary">
+                                                      {(entry.client?.full_name || entry.client?.email || '?')[0].toUpperCase()}
+                                                    </span>
+                                                  </div>
+                                                  <div>
+                                                    <p className="font-semibold text-sm">{entry.client?.full_name || 'Cliente'}</p>
+                                                    <p className="text-xs text-muted-foreground">{entry.client?.email}</p>
+                                                    {entry.client?.company_name && (
+                                                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                        <Building2 className="h-3 w-3" />
+                                                        {entry.client.company_name}
+                                                      </p>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                {entry.process?.pipeline_stage && (
+                                                  <div className="pt-1">
+                                                    <span className="text-[11px] text-muted-foreground">Etapa Atual</span>
+                                                    <div className="mt-1">
+                                                      <Badge variant="outline">
+                                                        {PIPELINE_STAGES.find(s => s.value === entry.process?.pipeline_stage)?.label || entry.process.pipeline_stage}
+                                                      </Badge>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            ) : (
+                                              <div className="text-center py-4 space-y-2">
+                                                <div className="mx-auto w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                                                  <UserPlus className="h-5 w-5 text-muted-foreground" />
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Nenhum cliente vinculado</p>
+                                              </div>
+                                            )}
+
+                                            {/* TAG Selector */}
+                                            <div className="pt-2 border-t border-border/30">
+                                              <span className="text-[11px] text-muted-foreground">TAG</span>
+                                              <Select value={entry.tag || 'pending'} onValueChange={(value) => handleUpdateTag(entry.id, value)} disabled={updatingTag === entry.id}>
+                                                <SelectTrigger className="w-full h-9 rounded-lg text-xs mt-1">
+                                                  {updatingTag === entry.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <SelectValue />}
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {TAG_OPTIONS.map(opt => (
+                                                    <SelectItem key={opt.value} value={opt.value}>
+                                                      <Badge className={`${opt.color} text-xs border-0`}>{opt.label}</Badge>
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          </div>
+
+                                          {/* Action Buttons */}
+                                          <div className="flex flex-col gap-2">
+                                            {entry.matched_client_id && entry.update_status !== 'updated' && (
+                                              <Button size="sm" onClick={() => handleOpenUpdateDialog(entry)} className="gap-2 rounded-xl w-full">
+                                                <RefreshCw className="h-4 w-4" />
+                                                Atualizar Processo
+                                              </Button>
+                                            )}
+                                            {!entry.matched_client_id && (
+                                              <Button size="sm" variant="outline" onClick={() => handleOpenAssignDialog(entry)} className="gap-2 rounded-xl w-full">
+                                                <UserPlus className="h-4 w-4" />
+                                                Vincular Cliente
+                                              </Button>
+                                            )}
+                                            {entry.update_status === 'updated' && (
+                                              <div className="flex items-center justify-center gap-2 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                                                <CheckCircle className="h-4 w-4 text-emerald-600" />
+                                                <span className="text-sm font-medium text-emerald-600">Processo Atualizado</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <p className="text-muted-foreground font-medium">Nenhum processo encontrado</p>
-                                  {searchTerm && <p className="text-xs text-muted-foreground">Tente buscar com termos diferentes</p>}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+
+                  {filteredEntries.length === 0 && !processing && !fetchingRemote && (
+                    <Card className="border-dashed border-2">
+                      <CardContent className="py-16 text-center">
+                        <div className="mx-auto w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+                          <Search className="h-8 w-8 text-muted-foreground/40" />
+                        </div>
+                        <p className="text-muted-foreground font-medium">Nenhum processo encontrado</p>
+                        {searchTerm && <p className="text-xs text-muted-foreground mt-1">Tente buscar com termos diferentes</p>}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </>
             )}
 
             {/* Empty state */}
