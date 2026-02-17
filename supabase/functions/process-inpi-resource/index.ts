@@ -56,7 +56,7 @@ serve(async (req) => {
       );
     }
 
-    const { fileBase64, fileType, resourceType } = await req.json();
+    const { fileBase64, fileType, resourceType, agentStrategy, agentName } = await req.json();
 
     if (!fileBase64 || !fileType || !resourceType) {
       return new Response(
@@ -197,6 +197,10 @@ CPF 393.239.118-79
 Criar SEMPRE o melhor recurso administrativo possível,
 com excelência técnica, jurídica e estratégica,
 apto para defesa real de marcas perante o INPI.
+
+${agentStrategy ? `#estrategia_especifica_do_agente\n\n${agentStrategy}` : ''}
+
+${agentName ? `#agente_responsavel: ${agentName}` : ''}
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
 {
