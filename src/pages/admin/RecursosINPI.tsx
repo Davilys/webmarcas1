@@ -5,17 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   FileText, Upload, Loader2, Edit3, Check, Download, Printer, FileCheck, 
   History, Plus, Eye, Search, X, Calendar, Scale, Shield, Gavel, 
-  AlertTriangle, FileWarning, Sparkles, ArrowRight, Brain, Zap,
-  BarChart3, Clock, CheckCircle2, XCircle
+  AlertTriangle, Sparkles, ArrowRight, Brain, Zap,
+  BarChart3, Clock, CheckCircle2, XCircle, Trash2, MoreVertical,
+  RotateCcw, RefreshCw, Crown, Flame, Target, Sword, BookOpen
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { INPIResourcePDFPreview } from '@/components/admin/INPIResourcePDFPreview';
@@ -45,7 +48,7 @@ interface INPIResource {
   approved_at: string | null;
 }
 
-type Step = 'list' | 'select-type' | 'upload' | 'processing' | 'review' | 'approved';
+type Step = 'list' | 'select-type' | 'select-agent' | 'upload' | 'processing' | 'review' | 'approved';
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   indeferimento: 'Recurso contra Indeferimento',
@@ -74,10 +77,110 @@ const RESOURCE_TYPE_CONFIG: Record<string, { icon: typeof Gavel; color: string; 
   }
 };
 
+// AI Agent profiles inspired by top Brazilian IP lawyers
+const AI_AGENTS = {
+  mazzola: {
+    id: 'mazzola',
+    name: 'Agente Mazzola',
+    subtitle: 'Estratégia Dannemann Siemsen',
+    inspiration: 'Marcelo Mazzola',
+    firm: 'Dannemann Siemsen',
+    icon: Crown,
+    color: 'from-amber-500 to-yellow-600',
+    bgGlow: 'bg-amber-500/20',
+    borderColor: 'border-amber-500/30 hover:border-amber-500/60',
+    badgeColor: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+    style: 'Contencioso Técnico-Acadêmico',
+    description: 'Abordagem fundamentada em 120+ anos de tradição do escritório mais premiado do Brasil. Especialista em contencioso de marcas com argumentação densa, jurisprudência real do STJ/TRF e análise comparativa minuciosa do conjunto marcário.',
+    strengths: [
+      'Jurisprudência consolidada STJ e TRFs',
+      'Análise técnica do conjunto marcário (fonética, visual, ideológica)',
+      'Argumentação densa e acadêmica',
+      'Referência ao Manual de Marcas do INPI (7ª edição vigente)',
+    ],
+    promptExtra: `ESTRATÉGIA INSPIRADA NO ESTILO DANNEMANN SIEMSEN (Marcelo Mazzola):
+- Utilize argumentação EXTREMAMENTE técnica e acadêmica
+- Cite OBRIGATORIAMENTE jurisprudência REAL e consolidada do STJ, TRF-2 e TRF-3 sobre coexistência de marcas
+- Faça análise comparativa minuciosa do conjunto marcário: elemento fonético, visual, ideológico e de mercado
+- Referencie o Manual de Marcas do INPI (edição vigente) com citação de páginas e capítulos específicos
+- Aplique a teoria da "distância suficiente" e "impressão de conjunto" conforme precedentes reais
+- Use linguagem sofisticada, com períodos longos e bem estruturados, típica de peças de escritórios tradicionais
+- Cite a Classificação Internacional de Nice com detalhamento das especificações dos produtos/serviços
+- Referencie casos emblemáticos como: REsp 1.188.105/RJ (coexistência de marcas), REsp 1.315.621/SP (convivência marcária), AgRg no REsp 1.346.089/RJ
+- Aplique os critérios da "impressão de conjunto" conforme a doutrina de Denis Borges Barbosa e Gama Cerqueira`,
+  },
+  guerra: {
+    id: 'guerra',
+    name: 'Agente Guerra',
+    subtitle: 'Estratégia Guerra IP',
+    inspiration: 'Alberto Guerra',
+    firm: 'Guerra IP',
+    icon: Sword,
+    color: 'from-red-500 to-rose-600',
+    bgGlow: 'bg-red-500/20',
+    borderColor: 'border-red-500/30 hover:border-red-500/60',
+    badgeColor: 'bg-red-500/10 text-red-600 border-red-500/30',
+    style: 'Ataque Direto e Assertivo',
+    description: 'Abordagem combativa e estratégica com 30+ anos de experiência em PI. Foco em identificar falhas procedimentais do INPI, demonstrar distinção prática no mercado e usar análise de coexistência com registros análogos já deferidos.',
+    strengths: [
+      'Identificação de falhas procedimentais do INPI',
+      'Análise de coexistência com registros análogos já deferidos',
+      'Demonstração prática de distinção no mercado',
+      'Argumentação combativa e assertiva',
+    ],
+    promptExtra: `ESTRATÉGIA INSPIRADA NO ESTILO GUERRA IP (Alberto Guerra):
+- Utilize abordagem COMBATIVA e ASSERTIVA, desafiando diretamente a decisão do examinador
+- Identifique FALHAS PROCEDIMENTAIS na análise do INPI (falta de fundamentação adequada, análise superficial)
+- Busque e cite REGISTROS ANÁLOGOS já deferidos pelo próprio INPI que demonstrem inconsistência na decisão
+- Demonstre a distinção PRÁTICA no mercado: segmentos diferentes, públicos diferentes, canais de venda diferentes
+- Use a estratégia de "precedentes internos do INPI" — cite decisões anteriores do próprio INPI que favoreçam a tese
+- Aplique o princípio da ESPECIALIDADE com profundidade, detalhando cada especificação da classe NCL
+- Cite jurisprudência combativa: REsp 1.166.498/RJ (distinção suficiente), REsp 862.117/RJ (segmento diverso)
+- Referencie decisões da 2ª Turma Especializada do TRF-2 sobre reforma de indeferimentos do INPI
+- Use linguagem direta, objetiva e incisiva, sem rodeios ou excessos acadêmicos
+- Questione se o examinador aplicou corretamente todos os critérios do Manual de Marcas`,
+  },
+  nascimento: {
+    id: 'nascimento',
+    name: 'Agente Nascimento',
+    subtitle: 'Estratégia David do Nascimento',
+    inspiration: 'Marcello do Nascimento',
+    firm: 'David Do Nascimento Advogados',
+    icon: Target,
+    color: 'from-blue-500 to-indigo-600',
+    bgGlow: 'bg-blue-500/20',
+    borderColor: 'border-blue-500/30 hover:border-blue-500/60',
+    badgeColor: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+    style: 'Estratégia Comercial e Gestão de Marca',
+    description: 'Abordagem estratégica combinando expertise jurídica com visão de negócios. Foco em gestão estratégica de portfólio, análise de mercado relevante e construção de argumentação baseada em convivência comercial e diferenciação de público-alvo.',
+    strengths: [
+      'Gestão estratégica de portfólio de marcas',
+      'Argumentação baseada em convivência comercial',
+      'Análise de mercado relevante e público-alvo',
+      'Construção narrativa persuasiva e estruturada',
+    ],
+    promptExtra: `ESTRATÉGIA INSPIRADA NO ESTILO DAVID DO NASCIMENTO (Marcello do Nascimento):
+- Utilize abordagem ESTRATÉGICA que combine expertise jurídica com VISÃO DE NEGÓCIOS
+- Foque na GESTÃO ESTRATÉGICA DA MARCA: como ela se posiciona no mercado, público-alvo, diferenciação
+- Construa argumentação baseada em CONVIVÊNCIA COMERCIAL: demonstre que as marcas coexistem no mercado sem confusão
+- Analise o MERCADO RELEVANTE: segmentação, canais de distribuição, perfil do consumidor
+- Aplique a teoria da "diluição marcária reversa" quando aplicável
+- Cite jurisprudência que valorize a coexistência: REsp 1.095.362/SP (convivência pacífica), AgRg no REsp 1.255.654/RJ
+- Referencie decisões do CADE sobre mercados relevantes quando pertinente
+- Use linguagem PERSUASIVA e NARRATIVA, construindo um "caso" convincente como um storytelling jurídico
+- Inclua análise de TRADE DRESS quando relevante (art. 124, XIX da LPI)
+- Demonstre o investimento e reputação do titular na marca (prova de uso, publicidade, reconhecimento)
+- Aplique o princípio da proporcionalidade: o indeferimento causa mais dano ao titular do que a eventual coexistência`,
+  },
+};
+
+type AgentId = keyof typeof AI_AGENTS;
+
 const STEPS_FLOW = [
   { key: 'select-type', label: 'Tipo', icon: Gavel },
+  { key: 'select-agent', label: 'Estratégia', icon: Brain },
   { key: 'upload', label: 'Documento', icon: Upload },
-  { key: 'processing', label: 'IA Analisando', icon: Brain },
+  { key: 'processing', label: 'IA Processando', icon: Zap },
   { key: 'review', label: 'Revisão', icon: Edit3 },
   { key: 'approved', label: 'Aprovado', icon: CheckCircle2 },
 ];
@@ -92,6 +195,7 @@ const fadeIn = {
 export default function RecursosINPI() {
   const [step, setStep] = useState<Step>('list');
   const [resourceType, setResourceType] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState<AgentId>('mazzola');
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
@@ -107,20 +211,21 @@ export default function RecursosINPI() {
   const [searchDate, setSearchDate] = useState('');
   const [showLegalChat, setShowLegalChat] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [editingResource, setEditingResource] = useState<INPIResource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchResources(); }, []);
 
-  // Processing animation
   useEffect(() => {
     if (step === 'processing') {
       setProcessingProgress(0);
       const interval = setInterval(() => {
         setProcessingProgress(prev => {
           if (prev >= 95) return prev;
-          return prev + Math.random() * 8;
+          return prev + Math.random() * 6;
         });
-      }, 800);
+      }, 900);
       return () => clearInterval(interval);
     }
   }, [step]);
@@ -139,6 +244,42 @@ export default function RecursosINPI() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDeleteResource = async (id: string) => {
+    try {
+      const { error } = await supabase.from('inpi_resources').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Recurso excluído com sucesso');
+      setShowDeleteConfirm(null);
+      fetchResources();
+    } catch (error) {
+      console.error('Error deleting resource:', error);
+      toast.error('Erro ao excluir recurso');
+    }
+  };
+
+  const handleEditResource = (resource: INPIResource) => {
+    setEditingResource(resource);
+    setDraftContent(resource.final_content || resource.draft_content || '');
+    setExtractedData({
+      process_number: resource.process_number || '',
+      brand_name: resource.brand_name || '',
+      ncl_class: resource.ncl_class || '',
+      holder: resource.holder || '',
+      examiner_or_opponent: '',
+      legal_basis: '',
+    });
+    setResourceType(resource.resource_type);
+    setCurrentResourceId(resource.id);
+    setStep('review');
+  };
+
+  const handleRequestNewStrategy = (resource: INPIResource) => {
+    setEditingResource(resource);
+    setResourceType(resource.resource_type);
+    setCurrentResourceId(resource.id);
+    setStep('select-agent');
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,8 +311,10 @@ export default function RecursosINPI() {
       reader.readAsDataURL(file);
       const fileBase64 = await base64Promise;
 
+      const agent = AI_AGENTS[selectedAgent];
+
       const { data, error } = await supabase.functions.invoke('process-inpi-resource', {
-        body: { fileBase64, fileType: file.type, resourceType }
+        body: { fileBase64, fileType: file.type, resourceType, agentStrategy: agent.promptExtra, agentName: agent.name }
       });
 
       if (error) throw error;
@@ -203,7 +346,7 @@ export default function RecursosINPI() {
       setCurrentResourceId(insertedResource.id);
       setProcessingProgress(100);
       setTimeout(() => setStep('review'), 500);
-      toast.success('Documento processado com sucesso!');
+      toast.success(`Recurso gerado com sucesso pela estratégia ${agent.name}!`);
     } catch (error) {
       console.error('Error processing document:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao processar documento');
@@ -255,7 +398,7 @@ export default function RecursosINPI() {
         .update({ final_content: draftContent, status: 'approved', approved_at: new Date().toISOString() })
         .eq('id', currentResourceId);
       setStep('approved');
-      toast.success('Recurso aprovado! Você pode gerar o PDF agora.');
+      toast.success('Recurso aprovado!');
       fetchResources();
     } catch (error) {
       console.error('Error approving resource:', error);
@@ -266,12 +409,14 @@ export default function RecursosINPI() {
   const resetFlow = () => {
     setStep('list');
     setResourceType('');
+    setSelectedAgent('mazzola');
     setFile(null);
     setExtractedData(null);
     setDraftContent('');
     setAdjustmentNotes('');
     setCurrentResourceId(null);
     setSelectedResource(null);
+    setEditingResource(null);
     setProcessingProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -302,6 +447,7 @@ export default function RecursosINPI() {
   };
 
   const currentStepIndex = STEPS_FLOW.findIndex(s => s.key === step);
+  const agent = AI_AGENTS[selectedAgent];
 
   return (
     <AdminLayout>
@@ -319,7 +465,7 @@ export default function RecursosINPI() {
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Recursos INPI</h1>
                 <p className="text-muted-foreground text-sm md:text-base">
-                  Geração inteligente de recursos administrativos com IA Jurídica Especializada
+                  IA Jurídica com 3 estratégias inspiradas nos maiores advogados do Brasil
                 </p>
               </div>
             </div>
@@ -339,7 +485,7 @@ export default function RecursosINPI() {
           </div>
         </motion.div>
 
-        {/* Stats Cards */}
+        {/* Stats */}
         {step === 'list' && (
           <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -365,13 +511,13 @@ export default function RecursosINPI() {
 
         {/* Step Indicator */}
         {step !== 'list' && (
-          <motion.div {...fadeIn} className="flex items-center justify-center gap-1 md:gap-2 py-2">
+          <motion.div {...fadeIn} className="flex items-center justify-center gap-1 md:gap-2 py-2 overflow-x-auto">
             {STEPS_FLOW.map((s, i) => {
               const isActive = s.key === step;
               const isPast = i < currentStepIndex;
               const Icon = s.icon;
               return (
-                <div key={s.key} className="flex items-center gap-1 md:gap-2">
+                <div key={s.key} className="flex items-center gap-1 md:gap-2 shrink-0">
                   <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     isActive ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' :
                     isPast ? 'bg-primary/15 text-primary' :
@@ -381,9 +527,7 @@ export default function RecursosINPI() {
                     <span className="hidden md:inline">{s.label}</span>
                   </div>
                   {i < STEPS_FLOW.length - 1 && (
-                    <div className={`w-4 md:w-8 h-0.5 rounded-full transition-colors ${
-                      isPast ? 'bg-primary' : 'bg-muted'
-                    }`} />
+                    <div className={`w-4 md:w-8 h-0.5 rounded-full transition-colors ${isPast ? 'bg-primary' : 'bg-muted'}`} />
                   )}
                 </div>
               );
@@ -391,8 +535,8 @@ export default function RecursosINPI() {
           </motion.div>
         )}
 
-        {/* LIST */}
         <AnimatePresence mode="wait">
+          {/* LIST */}
           {step === 'list' && (
             <motion.div key="list" {...fadeIn}>
               <Card className="border-border/50">
@@ -406,12 +550,7 @@ export default function RecursosINPI() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Pesquisar por marca ou processo..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 rounded-xl"
-                      />
+                      <Input placeholder="Pesquisar por marca ou processo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 rounded-xl" />
                       {searchQuery && (
                         <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                           <X className="h-4 w-4" />
@@ -473,10 +612,38 @@ export default function RecursosINPI() {
                               <TableCell>{getStatusBadge(resource.status)}</TableCell>
                               <TableCell className="text-sm">{format(new Date(resource.created_at), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                               <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg" onClick={() => { setSelectedResource(resource); setShowPDFPreview(true); }}>
-                                  <Eye className="h-4 w-4" />
-                                  Visualizar
-                                </Button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button variant="ghost" size="sm" className="gap-1.5 rounded-lg" onClick={() => { setSelectedResource(resource); setShowPDFPreview(true); }}>
+                                    <Eye className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Ver</span>
+                                  </Button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-52">
+                                      <DropdownMenuItem onClick={() => handleEditResource(resource)} className="gap-2">
+                                        <Edit3 className="h-4 w-4" />
+                                        Editar Recurso
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleRequestNewStrategy(resource)} className="gap-2">
+                                        <RefreshCw className="h-4 w-4" />
+                                        Nova Estratégia com IA
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => { setSelectedResource(resource); setShowPDFPreview(true); }} className="gap-2">
+                                        <Download className="h-4 w-4" />
+                                        Gerar PDF Timbrado
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={() => setShowDeleteConfirm(resource.id)} className="gap-2 text-destructive focus:text-destructive">
+                                        <Trash2 className="h-4 w-4" />
+                                        Excluir Recurso
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -494,7 +661,7 @@ export default function RecursosINPI() {
             <motion.div key="select-type" {...fadeIn} className="space-y-4">
               <div className="text-center mb-6">
                 <h2 className="text-xl font-bold">Qual tipo de recurso deseja gerar?</h2>
-                <p className="text-muted-foreground text-sm mt-1">Selecione o tipo e a IA elaborará o recurso administrativo completo</p>
+                <p className="text-muted-foreground text-sm mt-1">Selecione o tipo e avance para escolher a estratégia jurídica</p>
               </div>
               <div className="grid md:grid-cols-3 gap-4">
                 {Object.entries(RESOURCE_TYPE_CONFIG).map(([key, config]) => {
@@ -528,13 +695,132 @@ export default function RecursosINPI() {
               </div>
               <div className="pt-4">
                 <Button 
-                  onClick={() => fileInputRef.current?.click()} 
+                  onClick={() => setStep('select-agent')} 
                   disabled={!resourceType} 
                   size="lg"
                   className="w-full gap-3 rounded-xl shadow-lg shadow-primary/15 h-14 text-base"
                 >
-                  <Upload className="h-5 w-5" />
-                  Continuar e Anexar PDF do INPI
+                  <Brain className="h-5 w-5" />
+                  Escolher Estratégia Jurídica
+                  <ArrowRight className="h-4 w-4 ml-auto" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* SELECT AGENT — THE PREMIUM STEP */}
+          {step === 'select-agent' && (
+            <motion.div key="select-agent" {...fadeIn} className="space-y-6">
+              <div className="text-center space-y-2">
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', duration: 0.6 }}
+                  className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-xl shadow-primary/25 mb-4"
+                >
+                  <Brain className="h-8 w-8 text-primary-foreground" />
+                </motion.div>
+                <h2 className="text-2xl font-bold tracking-tight">Escolha sua Estratégia Jurídica</h2>
+                <p className="text-muted-foreground max-w-xl mx-auto">
+                  Cada agente de IA é inspirado em um dos maiores advogados de Propriedade Industrial do Brasil, com estratégias reais e jurisprudência consolidada.
+                </p>
+              </div>
+
+              <Tabs value={selectedAgent} onValueChange={(v) => setSelectedAgent(v as AgentId)} className="w-full">
+                <TabsList className="w-full h-auto p-1.5 bg-muted/80 rounded-2xl grid grid-cols-3 gap-1">
+                  {Object.values(AI_AGENTS).map((ag) => {
+                    const AgIcon = ag.icon;
+                    return (
+                      <TabsTrigger
+                        key={ag.id}
+                        value={ag.id}
+                        className="rounded-xl py-3 px-2 data-[state=active]:shadow-lg data-[state=active]:bg-background flex flex-col items-center gap-1 text-xs md:text-sm transition-all"
+                      >
+                        <AgIcon className="h-5 w-5" />
+                        <span className="font-semibold truncate">{ag.name}</span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+
+                {Object.values(AI_AGENTS).map((ag) => {
+                  const AgIcon = ag.icon;
+                  return (
+                    <TabsContent key={ag.id} value={ag.id} className="mt-6">
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <Card className={`border-2 ${ag.borderColor} overflow-hidden transition-all`}>
+                          {/* Agent Header */}
+                          <div className={`relative p-6 md:p-8 bg-gradient-to-r ${ag.color} text-white overflow-hidden`}>
+                            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48L3N2Zz4=')] opacity-30" />
+                            <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/10 blur-3xl -translate-y-1/2 translate-x-1/4" />
+                            
+                            <div className="relative flex flex-col md:flex-row items-start md:items-center gap-4">
+                              <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-xl">
+                                <AgIcon className="h-8 w-8" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="text-xl md:text-2xl font-bold">{ag.name}</h3>
+                                  <Badge className="bg-white/20 backdrop-blur-sm text-white border-white/30 text-xs">
+                                    <Flame className="h-3 w-3 mr-1" />
+                                    Elite
+                                  </Badge>
+                                </div>
+                                <p className="text-white/80 text-sm">{ag.subtitle}</p>
+                                <p className="text-white/60 text-xs mt-1">Inspirado em {ag.inspiration} • {ag.firm}</p>
+                              </div>
+                              <Badge className="bg-white/20 backdrop-blur-sm text-white border-white/30">
+                                <BookOpen className="h-3 w-3 mr-1" />
+                                {ag.style}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          <CardContent className="p-6 md:p-8 space-y-6">
+                            <p className="text-muted-foreground leading-relaxed">{ag.description}</p>
+
+                            {/* Strengths */}
+                            <div>
+                              <Label className="flex items-center gap-2 mb-3 font-semibold">
+                                <Zap className="h-4 w-4 text-primary" />
+                                Pontos Fortes desta Estratégia
+                              </Label>
+                              <div className="grid sm:grid-cols-2 gap-2">
+                                {ag.strengths.map((s, i) => (
+                                  <motion.div
+                                    key={i}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.1 }}
+                                    className="flex items-start gap-2 p-3 rounded-xl bg-muted/50 border border-border/50"
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                                    <span className="text-sm">{s}</span>
+                                  </motion.div>
+                                ))}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={() => setStep('select-type')} className="rounded-xl">Voltar</Button>
+                <Button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  size="lg" 
+                  className={`flex-1 gap-3 rounded-xl h-14 text-base shadow-xl bg-gradient-to-r ${agent.color} hover:opacity-90 transition-opacity`}
+                >
+                  <agent.icon className="h-5 w-5" />
+                  Usar {agent.name} e Anexar PDF
                   <ArrowRight className="h-4 w-4 ml-auto" />
                 </Button>
               </div>
@@ -560,6 +846,19 @@ export default function RecursosINPI() {
                     </Badge>
                   </div>
                   
+                  {/* Agent badge */}
+                  <div className={`p-4 rounded-xl border-2 ${agent.borderColor} bg-gradient-to-r ${agent.color}/5`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${agent.color} flex items-center justify-center text-white`}>
+                        <agent.icon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{agent.name}</p>
+                        <p className="text-xs text-muted-foreground">{agent.style} • Inspirado em {agent.inspiration}</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="p-4 bg-muted/50 rounded-xl border">
                     <div className="flex items-start gap-3">
                       <Brain className="h-5 w-5 text-primary mt-0.5 shrink-0" />
@@ -567,19 +866,19 @@ export default function RecursosINPI() {
                         <p className="font-medium mb-1">O que a IA irá fazer:</p>
                         <ul className="space-y-1 text-muted-foreground">
                           <li>• Extrair dados do documento (nº processo, marca, classe NCL)</li>
-                          <li>• Analisar o fundamento legal aplicado pelo INPI</li>
-                          <li>• Elaborar recurso administrativo completo em 7 seções</li>
-                          <li>• Incluir jurisprudência real e fundamentação da LPI</li>
+                          <li>• Aplicar a estratégia {agent.style}</li>
+                          <li>• Elaborar recurso com jurisprudência real (STJ, TRF-2, TRF-3)</li>
+                          <li>• Incluir fundamentação da LPI e Manual de Marcas do INPI</li>
                         </ul>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => setStep('select-type')} className="rounded-xl">Voltar</Button>
-                    <Button onClick={processDocument} className="flex-1 gap-2 rounded-xl h-12 text-base shadow-lg shadow-primary/15">
+                    <Button variant="outline" onClick={() => setStep('select-agent')} className="rounded-xl">Voltar</Button>
+                    <Button onClick={processDocument} className={`flex-1 gap-2 rounded-xl h-12 text-base shadow-lg bg-gradient-to-r ${agent.color} hover:opacity-90`}>
                       <Zap className="h-5 w-5" />
-                      Processar com IA Jurídica
+                      Processar com {agent.name}
                     </Button>
                   </div>
                 </CardContent>
@@ -593,7 +892,7 @@ export default function RecursosINPI() {
               <Card className="border-primary/20 overflow-hidden">
                 <div className="h-1 bg-muted">
                   <motion.div 
-                    className="h-full bg-gradient-to-r from-primary to-primary/70"
+                    className={`h-full bg-gradient-to-r ${agent.color}`}
                     initial={{ width: '0%' }}
                     animate={{ width: `${processingProgress}%` }}
                     transition={{ duration: 0.5 }}
@@ -602,14 +901,14 @@ export default function RecursosINPI() {
                 <CardContent className="py-16">
                   <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto">
                     <div className="relative">
-                      <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
-                      <div className="relative h-20 w-20 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20">
-                        <Brain className="h-10 w-10 text-primary-foreground animate-pulse" />
+                      <div className={`absolute inset-0 ${agent.bgGlow} rounded-full blur-xl animate-pulse`} />
+                      <div className={`relative h-20 w-20 rounded-2xl bg-gradient-to-br ${agent.color} flex items-center justify-center shadow-lg`}>
+                        <agent.icon className="h-10 w-10 text-white animate-pulse" />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold mb-2">IA Jurídica Processando</h3>
-                      <p className="text-muted-foreground">Analisando documento, extraindo dados e elaborando recurso administrativo com fundamentação jurídica...</p>
+                      <h3 className="text-xl font-bold mb-2">{agent.name} Processando</h3>
+                      <p className="text-muted-foreground">Aplicando estratégia "{agent.style}" com jurisprudência real e fundamentação completa...</p>
                     </div>
                     <div className="w-full space-y-2">
                       <div className="flex justify-between text-sm">
@@ -618,15 +917,15 @@ export default function RecursosINPI() {
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <motion.div 
-                          className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full"
+                          className={`h-full bg-gradient-to-r ${agent.color} rounded-full`}
                           style={{ width: `${processingProgress}%` }}
                         />
                       </div>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2 pt-2">
-                      {['Lendo PDF', 'Extraindo dados', 'Analisando fundamentos', 'Elaborando recurso'].map((label, i) => (
-                        <Badge key={i} variant="outline" className={`text-xs ${processingProgress > (i + 1) * 20 ? 'border-primary/50 text-primary' : 'text-muted-foreground'}`}>
-                          {processingProgress > (i + 1) * 20 ? <Check className="h-3 w-3 mr-1" /> : <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                      {['Lendo PDF', 'Extraindo dados', 'Analisando fundamentos', 'Aplicando estratégia', 'Elaborando recurso'].map((label, i) => (
+                        <Badge key={i} variant="outline" className={`text-xs ${processingProgress > (i + 1) * 18 ? 'border-primary/50 text-primary' : 'text-muted-foreground'}`}>
+                          {processingProgress > (i + 1) * 18 ? <Check className="h-3 w-3 mr-1" /> : <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
                           {label}
                         </Badge>
                       ))}
@@ -728,7 +1027,7 @@ export default function RecursosINPI() {
                       <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                     </motion.div>
                     <h3 className="text-xl font-bold">Recurso Aprovado com Sucesso!</h3>
-                    <p className="text-muted-foreground max-w-md mx-auto">O recurso foi aprovado e está pronto para geração do PDF final com papel timbrado oficial da WebMarcas.</p>
+                    <p className="text-muted-foreground max-w-md mx-auto">O recurso foi aprovado e está pronto para geração do PDF final com papel timbrado oficial.</p>
                   </div>
                   
                   <div className="grid sm:grid-cols-3 gap-3">
@@ -787,6 +1086,26 @@ export default function RecursosINPI() {
                 content={selectedResource.final_content || selectedResource.draft_content || draftContent}
               />
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={!!showDeleteConfirm} onOpenChange={() => setShowDeleteConfirm(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <Trash2 className="h-5 w-5" />
+                Excluir Recurso
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">Tem certeza que deseja excluir este recurso? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(null)} className="flex-1 rounded-xl">Cancelar</Button>
+              <Button variant="destructive" onClick={() => showDeleteConfirm && handleDeleteResource(showDeleteConfirm)} className="flex-1 gap-2 rounded-xl">
+                <Trash2 className="h-4 w-4" />
+                Excluir
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
