@@ -73,6 +73,24 @@ function calcPublicacaoPremium(entries: AwardEntry[]): number {
   return totalPubs * rate;
 }
 
+// Bônus de milestone: a cada 10 publicações resolvidas → +R$100
+function calcPublicacaoMilestoneBonus(entries: AwardEntry[]): { bonus: number; milestones: number; nextAt: number } {
+  const totalPubs = entries.reduce((s, e) => s + (e.pub_quantity || 1), 0);
+  const milestones = Math.floor(totalPubs / 10);
+  const bonus = milestones * 100;
+  const nextAt = (milestones + 1) * 10;
+  return { bonus, milestones, nextAt };
+}
+
+// Bônus de milestone: a cada 10 cobranças resolvidas → +R$50
+function calcCobrancaMilestoneBonus(entries: AwardEntry[]): { bonus: number; milestones: number; nextAt: number } {
+  const totalCob = entries.length;
+  const milestones = Math.floor(totalCob / 10);
+  const bonus = milestones * 50;
+  const nextAt = (milestones + 1) * 10;
+  return { bonus, milestones, nextAt };
+}
+
 function calcCobrancaPremium(entries: AwardEntry[]): number {
   let total = 0;
   for (const entry of entries) {
@@ -240,7 +258,10 @@ export default function Premiacao() {
   const totalRegistroPremium = calcRegistroMarcaPremium(registroEntries);
   const totalPublicacaoPremium = calcPublicacaoPremium(publicacaoEntries);
   const totalCobrancaPremium = calcCobrancaPremium(cobrancaEntries);
-  const totalPremium = totalRegistroPremium + totalPublicacaoPremium + totalCobrancaPremium;
+  const pubMilestone = calcPublicacaoMilestoneBonus(publicacaoEntries);
+  const cobMilestone = calcCobrancaMilestoneBonus(cobrancaEntries);
+  const totalMilestoneBonus = pubMilestone.bonus + cobMilestone.bonus;
+  const totalPremium = totalRegistroPremium + totalPublicacaoPremium + totalCobrancaPremium + totalMilestoneBonus;
   const totalBrands = registroEntries.reduce((s, e) => s + (e.brand_quantity || 1), 0);
   const totalPubs = publicacaoEntries.reduce((s, e) => s + (e.pub_quantity || 1), 0);
 
@@ -346,17 +367,22 @@ export default function Premiacao() {
   }
 
   const perUserStats = useMemo(() => {
-    const map = new Map<string, { registro: number; publicacao: number; cobranca: number; premium: number }>();
+    const map = new Map<string, { registro: number; publicacao: number; cobranca: number; premium: number; pubMilestoneBonus: number; cobMilestoneBonus: number }>();
     for (const member of teamMembers) {
       const userEntries = filteredEntries.filter(e => e.responsible_user_id === member.id);
       const reg = userEntries.filter(e => e.entry_type === 'registro_marca');
       const pub = userEntries.filter(e => e.entry_type === 'publicacao');
       const cob = userEntries.filter(e => e.entry_type === 'cobranca');
+      const userPubMilestone = calcPublicacaoMilestoneBonus(pub);
+      const userCobMilestone = calcCobrancaMilestoneBonus(cob);
+      const basePremium = calcRegistroMarcaPremium(reg) + calcPublicacaoPremium(pub) + calcCobrancaPremium(cob);
       map.set(member.id, {
         registro: reg.reduce((s, e) => s + (e.brand_quantity || 1), 0),
         publicacao: pub.reduce((s, e) => s + (e.pub_quantity || 1), 0),
         cobranca: cob.length,
-        premium: calcRegistroMarcaPremium(reg) + calcPublicacaoPremium(pub) + calcCobrancaPremium(cob),
+        premium: basePremium + userPubMilestone.bonus + userCobMilestone.bonus,
+        pubMilestoneBonus: userPubMilestone.bonus,
+        cobMilestoneBonus: userCobMilestone.bonus,
       });
     }
     return map;
@@ -893,6 +919,147 @@ export default function Premiacao() {
               <GoalCard label="Publicação" current={totalPubs} target={50} premium={totalPublicacaoPremium} color="text-purple-500" icon={<Megaphone className="h-4 w-4" />} />
               <GoalCard label="Cobrança" current={cobrancaEntries.length} target={20} premium={totalCobrancaPremium} color="text-orange-500" icon={<CreditCard className="h-4 w-4" />} />
             </div>
+
+            {/* ── Bônus por Milestone (10 em 10) ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.4 }}
+              className="relative overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/8 via-card to-orange-500/8 p-5 shadow-md"
+            >
+              {/* Decorative glow */}
+              <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full blur-3xl bg-amber-500/10 pointer-events-none" />
+              <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full blur-2xl bg-orange-500/8 pointer-events-none" />
+
+              <div className="relative z-10 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/25">
+                      <Sparkles className="h-4.5 w-4.5 text-amber-500" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-foreground">Bônus por Milestone — A cada 10 resolvidas</p>
+                      <p className="text-xs text-muted-foreground">Acumulativo automático · independente de pagamento</p>
+                    </div>
+                  </div>
+                  {totalMilestoneBonus > 0 && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30">
+                      <Trophy className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="font-bold text-sm text-amber-600">{formatCurrency(totalMilestoneBonus)}</span>
+                      <span className="text-xs text-amber-500/80">bônus total</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Two milestone cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Publicação milestone */}
+                  <div className="relative rounded-xl border border-purple-500/20 bg-purple-500/6 p-4 space-y-3 overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-2xl bg-purple-500/10 pointer-events-none" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500/12 border border-purple-500/20">
+                          <Megaphone className="h-4 w-4 text-purple-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Publicações</p>
+                          <p className="text-[11px] text-muted-foreground">A cada 10 → +R$ 100</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-purple-500">{formatCurrency(pubMilestone.bonus)}</p>
+                        <p className="text-[10px] text-muted-foreground">{pubMilestone.milestones} milestone{pubMilestone.milestones !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    {/* Progress to next */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px] text-muted-foreground">
+                        <span>{totalPubs} publicações resolvidas</span>
+                        <span>Próxima em {pubMilestone.nextAt}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-purple-500/12 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${((totalPubs % 10) / 10) * 100}%` }}
+                          transition={{ duration: 0.8, ease: 'easeOut' }}
+                          className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-400"
+                        />
+                      </div>
+                      <p className="text-[10px] text-purple-500/80 font-medium">
+                        {10 - (totalPubs % 10) === 10 ? '🎉 Milestone atingido! Próximo em 10 pub.' : `Faltam ${10 - (totalPubs % 10)} pub. para o próximo milestone`}
+                      </p>
+                    </div>
+                    {pubMilestone.milestones > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from({ length: pubMilestone.milestones }).map((_, i) => (
+                          <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/25 text-[10px] font-bold text-purple-600">
+                            🏅 +R$100
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cobrança milestone */}
+                  <div className="relative rounded-xl border border-orange-500/20 bg-orange-500/6 p-4 space-y-3 overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-2xl bg-orange-500/10 pointer-events-none" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-orange-500/12 border border-orange-500/20">
+                          <CreditCard className="h-4 w-4 text-orange-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Cobranças</p>
+                          <p className="text-[11px] text-muted-foreground">A cada 10 → +R$ 50</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-orange-500">{formatCurrency(cobMilestone.bonus)}</p>
+                        <p className="text-[10px] text-muted-foreground">{cobMilestone.milestones} milestone{cobMilestone.milestones !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    {/* Progress to next */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px] text-muted-foreground">
+                        <span>{cobrancaEntries.length} cobranças resolvidas</span>
+                        <span>Próxima em {cobMilestone.nextAt}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-orange-500/12 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${((cobrancaEntries.length % 10) / 10) * 100}%` }}
+                          transition={{ duration: 0.8, ease: 'easeOut' }}
+                          className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
+                        />
+                      </div>
+                      <p className="text-[10px] text-orange-500/80 font-medium">
+                        {10 - (cobrancaEntries.length % 10) === 10 ? '🎉 Milestone atingido! Próximo em 10 cob.' : `Faltam ${10 - (cobrancaEntries.length % 10)} cob. para o próximo milestone`}
+                      </p>
+                    </div>
+                    {cobMilestone.milestones > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from({ length: cobMilestone.milestones }).map((_, i) => (
+                          <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-orange-500/15 border border-orange-500/25 text-[10px] font-bold text-orange-600">
+                            🏅 +R$50
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Regra explicativa */}
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/40 border border-border/50">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-semibold text-foreground">Regra automática:</span> Independente do tipo de pagamento (à vista, parcelado ou promoção),
+                    cada grupo de 10 publicações resolvidas gera <span className="font-semibold text-purple-500">+R$ 100,00</span> e cada grupo de 10 cobranças resolvidas gera <span className="font-semibold text-orange-500">+R$ 50,00</span> de bônus extra.
+                    O valor é somado automaticamente à premiação total.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
           </TabsContent>
 
           {/* REGISTRO DE MARCA TAB */}
@@ -1102,9 +1269,25 @@ export default function Premiacao() {
                             <p className="text-[10px] text-muted-foreground">Cob.</p>
                           </div>
                         </div>
-                        <div className="pt-2 border-t flex items-center justify-between">
-                          <p className="text-sm font-bold text-emerald-600">{formatCurrency(stats.premium)}</p>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <div className="pt-2 border-t space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-bold text-emerald-600">{formatCurrency(stats.premium)}</p>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          {(stats.pubMilestoneBonus > 0 || stats.cobMilestoneBonus > 0) && (
+                            <div className="flex flex-wrap gap-1">
+                              {stats.pubMilestoneBonus > 0 && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-500/12 border border-purple-500/20 text-[10px] font-bold text-purple-600">
+                                  🏅 Pub +{formatCurrency(stats.pubMilestoneBonus)}
+                                </span>
+                              )}
+                              {stats.cobMilestoneBonus > 0 && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-orange-500/12 border border-orange-500/20 text-[10px] font-bold text-orange-600">
+                                  🏅 Cob +{formatCurrency(stats.cobMilestoneBonus)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
