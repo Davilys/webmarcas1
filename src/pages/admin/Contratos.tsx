@@ -21,7 +21,7 @@ import { EditContractDialog } from '@/components/admin/contracts/EditContractDia
 import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatePeriodFilter, type DateFilterType } from '@/components/admin/clients/DatePeriodFilter';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useCanViewFinancialValues } from '@/hooks/useCanViewFinancialValues';
 import { EyeOff } from 'lucide-react';
 
@@ -708,15 +708,16 @@ export default function AdminContratos() {
                   </TableCell>
                 </TableRow>
               ) : (
-                <AnimatePresence>
+                <>
                   {filteredContracts.map((contract, index) => (
-                    <motion.tr
+                    <TableRow
                       key={contract.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 8 }}
-                      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.5) }}
                       className="group border-b border-border/30 hover:bg-muted/20 transition-colors duration-200"
+                      style={{
+                        animation: `fadeInRow 0.3s ease forwards`,
+                        animationDelay: `${Math.min(index * 0.03, 0.5)}s`,
+                        opacity: 0,
+                      }}
                     >
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {contract.contract_number || '-'}
@@ -832,11 +833,11 @@ export default function AdminContratos() {
                               Excluir
                             </DropdownMenuItem>
                           </DropdownMenuContent>
-                        </DropdownMenu>
+                      </DropdownMenu>
                       </TableCell>
-                    </motion.tr>
+                    </TableRow>
                   ))}
-                </AnimatePresence>
+                </>
               )}
             </TableBody>
           </Table>
