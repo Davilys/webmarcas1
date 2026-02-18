@@ -137,7 +137,7 @@ function ScanLine({ color = 'emerald' }: { color?: string }) {
 // ──────────────────────────────────────────────────────
 // Main component
 // ──────────────────────────────────────────────────────
-export function AdminChatWidget() {
+export function AdminChatWidget({ inlineMode = false }: { inlineMode?: boolean }) {
   const location = useLocation();
   const isChatPage = location.pathname === '/admin/chat-ao-vivo';
   const [open, setOpen] = useState(false);
@@ -460,69 +460,41 @@ export function AdminChatWidget() {
   // ──────────────────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────────────────
+
+  // ── Modo inline: força painel aberto e ocupa o contêiner pai ──
+  useEffect(() => {
+    if (inlineMode) {
+      setOpen(true);
+      setExpanded(true);
+    }
+  }, [inlineMode]);
+
   return (
     <>
-      {/* ── FAB — oculto na página do Chat ao Vivo ───── */}
-      <AnimatePresence>
-        {!open && !isChatPage && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.92 }}
-            onClick={() => { setOpen(true); setExpanded(true); }}
-            className="fixed bottom-6 right-6 z-[90] w-16 h-16 rounded-2xl flex items-center justify-center relative overflow-hidden shadow-2xl"
-            style={{
-              background: 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)',
-              boxShadow: '0 0 0 1px rgba(16,185,129,0.3), 0 20px 60px -10px rgba(16,185,129,0.5), 0 0 30px -5px rgba(16,185,129,0.3)',
-            }}
-          >
-            <motion.div
-              className="absolute inset-0 rounded-2xl"
-              style={{ background: 'conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%)' }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-            />
-            <MessageCircle className="h-7 w-7 text-white relative z-10 drop-shadow-lg" />
-            {unreadTotal > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-2 -right-2 min-w-6 h-6 px-1.5 rounded-full flex items-center justify-center text-[11px] font-bold text-white z-20"
-                style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.5)' }}
-              >
-                {unreadTotal > 99 ? '99+' : unreadTotal}
-              </motion.span>
-            )}
-            <motion.div
-              className="absolute inset-0 rounded-2xl border-2 border-emerald-400/40"
-              animate={{ scale: [1, 1.3, 1.3], opacity: [0.8, 0, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-          </motion.button>
-        )}
-      </AnimatePresence>
-
       {/* ── Chat Panel ───────────────────────────────── */}
       <AnimatePresence>
         {open && (
           <motion.div
             ref={panelRef}
-            initial={{ opacity: 0, x: 60, scale: 0.97 }}
+            initial={{ opacity: 0, x: inlineMode ? 0 : 60, scale: inlineMode ? 1 : 0.97 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 60, scale: 0.97 }}
+            exit={{ opacity: 0, x: inlineMode ? 0 : 60, scale: inlineMode ? 1 : 0.97 }}
             transition={{ type: 'spring', damping: 28, stiffness: 350 }}
             className={cn(
-              "fixed z-[100] flex flex-col overflow-hidden",
-              isFullView
-                ? "top-0 right-0 bottom-0 rounded-l-2xl"
-                : "bottom-6 right-6 w-[440px] h-[600px] rounded-2xl"
+              "flex flex-col overflow-hidden",
+              inlineMode
+                ? "absolute inset-0"
+                : cn(
+                    "fixed z-[100]",
+                    isFullView
+                      ? "top-0 right-0 bottom-0 rounded-l-2xl"
+                      : "bottom-6 right-6 w-[440px] h-[600px] rounded-2xl"
+                  )
             )}
             style={{
-              ...(isFullView ? { width: panelWidth } : {}),
+              ...(!inlineMode && isFullView ? { width: panelWidth } : {}),
               background: ts.panelBg,
-              boxShadow: ts.panelShadow,
+              boxShadow: inlineMode ? 'none' : ts.panelShadow,
             }}
           >
             {/* Resize handle */}

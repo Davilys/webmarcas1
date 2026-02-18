@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { Button } from '@/components/ui/button';
 import {
   MessageCircle,
   ExternalLink,
@@ -11,10 +10,13 @@ import {
   Globe,
   ChevronRight,
   Zap,
+  ArrowLeft,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
+import { AdminChatWidget } from '@/components/admin/AdminChatWidget';
 
 const BOTCONVERSA_URL = 'https://app.botconversa.com.br/8572/live-chat/all';
 
@@ -28,6 +30,15 @@ export default function ChatAoVivo() {
   const [iframeError, setIframeError] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // Abre o chat automaticamente quando entra no modo chatweb
+  useEffect(() => {
+    if (mode === 'chatweb') {
+      window.dispatchEvent(new CustomEvent('open-admin-chat', { detail: { expand: true } }));
+    } else {
+      window.dispatchEvent(new CustomEvent('close-admin-chat'));
+    }
+  }, [mode]);
+
   // Timeout para detectar bloqueio de iframe
   useEffect(() => {
     if (mode !== 'botconversa') return;
@@ -39,13 +50,6 @@ export default function ChatAoVivo() {
     }, 15000);
     return () => clearTimeout(timeout);
   }, [isLoading, mode]);
-
-  const handleSelectChatWeb = () => {
-    setMode('chatweb');
-    // Dispara o evento para o AdminChatWidget abrir no modo expandido (docked)
-    window.dispatchEvent(new CustomEvent('open-admin-chat', { detail: { expand: true } }));
-    toast.success('ChatWeb aberto!');
-  };
 
   const handleSelectBotConversa = () => {
     setMode('botconversa');
@@ -64,47 +68,53 @@ export default function ChatAoVivo() {
 
   const openNewTab = () => {
     window.open(BOTCONVERSA_URL, '_blank');
-    toast.success('BotConversa aberto em nova aba!');
   };
 
   const handleBack = () => {
     setMode('selector');
     setIsLoading(false);
     setIframeError(false);
-    // Fecha o ChatWeb se estiver aberto
-    window.dispatchEvent(new CustomEvent('close-admin-chat'));
   };
 
   return (
     <AdminLayout>
       <div className="h-[calc(100vh-120px)] flex flex-col">
 
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4">
+        {/* ── Header ───────────────────────────────────── */}
+        <div className="flex items-center justify-between pb-4 flex-shrink-0">
           <div className="flex items-center gap-3">
+            {mode !== 'selector' && (
+              <motion.button
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleBack}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                style={{ background: 'hsl(var(--card)/0.6)', borderColor: 'hsl(var(--border)/0.5)' }}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Voltar
+              </motion.button>
+            )}
             <MessageCircle className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">Chat ao Vivo</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {mode === 'selector' ? 'Chat ao Vivo' : mode === 'chatweb' ? 'ChatWeb' : 'BotConversa'}
+            </h1>
           </div>
-          {mode !== 'selector' && (
-            <Button onClick={handleBack} variant="outline" size="sm">
-              ← Voltar
-            </Button>
-          )}
           {mode === 'botconversa' && (
             <div className="flex gap-2">
               <Button onClick={reloadIframe} variant="outline" size="sm">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Recarregar
+                <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
               </Button>
               <Button onClick={openNewTab} variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Nova Aba
+                <ExternalLink className="h-4 w-4 mr-2" /> Nova Aba
               </Button>
             </div>
           )}
         </div>
 
-        {/* Content */}
+        {/* ── Content area ─────────────────────────────── */}
         <div className="flex-1 rounded-xl border overflow-hidden bg-background relative">
           <AnimatePresence mode="wait">
 
@@ -119,7 +129,6 @@ export default function ChatAoVivo() {
                 className="absolute inset-0 flex items-center justify-center"
               >
                 <div className="w-full max-w-2xl px-6 space-y-6">
-                  {/* Title */}
                   <div className="text-center space-y-2">
                     <motion.div
                       animate={{ scale: [1, 1.04, 1] }}
@@ -142,12 +151,12 @@ export default function ChatAoVivo() {
                   </div>
 
                   {/* Cards */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* ChatWeb Card */}
                     <motion.button
                       whileHover={{ scale: 1.03, y: -2 }}
                       whileTap={{ scale: 0.97 }}
-                      onClick={handleSelectChatWeb}
+                      onClick={() => setMode('chatweb')}
                       className="relative flex flex-col items-start gap-4 p-6 rounded-2xl text-left overflow-hidden transition-all duration-200 group"
                       style={{
                         background: isDark
@@ -159,50 +168,26 @@ export default function ChatAoVivo() {
                           : '0 4px 24px -4px rgba(16,185,129,0.12), inset 0 1px 0 rgba(255,255,255,0.8)',
                       }}
                     >
-                      {/* Glow on hover */}
-                      <motion.div
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{
-                          background: 'radial-gradient(circle at 50% 0%, rgba(16,185,129,0.08) 0%, transparent 70%)',
-                        }}
-                      />
-                      {/* Scan line animation */}
-                      <motion.div
-                        className="absolute bottom-0 left-0 right-0 h-px pointer-events-none opacity-0 group-hover:opacity-100"
+                      <motion.div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                        style={{ background: 'radial-gradient(circle at 50% 0%, rgba(16,185,129,0.08) 0%, transparent 70%)' }} />
+                      <motion.div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none opacity-0 group-hover:opacity-100"
                         style={{ background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.5), transparent)' }}
-                        animate={{ x: ['-100%', '100%'] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                      />
+                        animate={{ x: ['-100%', '100%'] }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }} />
 
-                      {/* Icon */}
                       <div className="flex items-center justify-between w-full">
                         <div className="w-12 h-12 rounded-xl flex items-center justify-center relative"
-                          style={{
-                            background: 'linear-gradient(135deg, #059669, #10b981)',
-                            boxShadow: '0 4px 16px rgba(16,185,129,0.35)',
-                          }}
-                        >
+                          style={{ background: 'linear-gradient(135deg, #059669, #10b981)', boxShadow: '0 4px 16px rgba(16,185,129,0.35)' }}>
                           <Globe className="h-6 w-6 text-white" />
-                          <motion.div
-                            className="absolute -inset-0.5 rounded-xl opacity-60"
+                          <motion.div className="absolute -inset-0.5 rounded-xl opacity-60"
                             style={{ background: 'conic-gradient(from 0deg, transparent, rgba(52,211,153,0.4), transparent)' }}
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                          />
+                            animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} />
                         </div>
                         <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold"
-                          style={{
-                            background: 'rgba(16,185,129,0.15)',
-                            border: '1px solid rgba(16,185,129,0.3)',
-                            color: '#10b981',
-                          }}
-                        >
-                          <Zap className="h-3 w-3" />
-                          Nativo
+                          style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}>
+                          <Zap className="h-3 w-3" /> Nativo
                         </div>
                       </div>
 
-                      {/* Text */}
                       <div>
                         <p className="text-lg font-bold text-foreground">ChatWeb</p>
                         <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
@@ -210,16 +195,12 @@ export default function ChatAoVivo() {
                         </p>
                       </div>
 
-                      {/* Features */}
                       <div className="flex flex-wrap gap-1.5">
                         {['IA Integrada', 'Vídeo/Áudio', 'Histórico', 'Tempo Real'].map(f => (
                           <span key={f} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                            style={{
-                              background: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)',
-                              border: '1px solid rgba(16,185,129,0.2)',
-                              color: isDark ? '#86efac' : '#047857',
-                            }}
-                          >{f}</span>
+                            style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: isDark ? '#86efac' : '#047857' }}>
+                            {f}
+                          </span>
                         ))}
                       </div>
 
@@ -244,48 +225,26 @@ export default function ChatAoVivo() {
                           : '0 4px 24px -4px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.8)',
                       }}
                     >
-                      <motion.div
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{
-                          background: 'radial-gradient(circle at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%)',
-                        }}
-                      />
-                      <motion.div
-                        className="absolute bottom-0 left-0 right-0 h-px pointer-events-none opacity-0 group-hover:opacity-100"
+                      <motion.div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                        style={{ background: 'radial-gradient(circle at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%)' }} />
+                      <motion.div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none opacity-0 group-hover:opacity-100"
                         style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent)' }}
-                        animate={{ x: ['-100%', '100%'] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                      />
+                        animate={{ x: ['-100%', '100%'] }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }} />
 
-                      {/* Icon */}
                       <div className="flex items-center justify-between w-full">
                         <div className="w-12 h-12 rounded-xl flex items-center justify-center relative"
-                          style={{
-                            background: 'linear-gradient(135deg, #4f46e5, #818cf8)',
-                            boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
-                          }}
-                        >
+                          style={{ background: 'linear-gradient(135deg, #4f46e5, #818cf8)', boxShadow: '0 4px 16px rgba(99,102,241,0.35)' }}>
                           <Bot className="h-6 w-6 text-white" />
-                          <motion.div
-                            className="absolute -inset-0.5 rounded-xl opacity-60"
+                          <motion.div className="absolute -inset-0.5 rounded-xl opacity-60"
                             style={{ background: 'conic-gradient(from 0deg, transparent, rgba(165,180,252,0.4), transparent)' }}
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                          />
+                            animate={{ rotate: 360 }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} />
                         </div>
                         <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold"
-                          style={{
-                            background: 'rgba(99,102,241,0.15)',
-                            border: '1px solid rgba(99,102,241,0.3)',
-                            color: '#818cf8',
-                          }}
-                        >
-                          <Bot className="h-3 w-3" />
-                          Externo
+                          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }}>
+                          <Bot className="h-3 w-3" /> Externo
                         </div>
                       </div>
 
-                      {/* Text */}
                       <div>
                         <p className="text-lg font-bold text-foreground">BotConversa</p>
                         <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
@@ -293,16 +252,12 @@ export default function ChatAoVivo() {
                         </p>
                       </div>
 
-                      {/* Features */}
                       <div className="flex flex-wrap gap-1.5">
                         {['Automação', 'WhatsApp', 'Chatbot', 'Funis'].map(f => (
                           <span key={f} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                            style={{
-                              background: isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.1)',
-                              border: '1px solid rgba(99,102,241,0.2)',
-                              color: isDark ? '#a5b4fc' : '#4338ca',
-                            }}
-                          >{f}</span>
+                            style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: isDark ? '#a5b4fc' : '#4338ca' }}>
+                            {f}
+                          </span>
                         ))}
                       </div>
 
@@ -315,41 +270,18 @@ export default function ChatAoVivo() {
               </motion.div>
             )}
 
-            {/* ── ChatWeb ──────────────────────────────── */}
+            {/* ── ChatWeb — renderizado inline ─────────── */}
             {mode === 'chatweb' && (
               <motion.div
                 key="chatweb"
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.97 }}
-                transition={{ duration: 0.25 }}
-                className="absolute inset-0 flex items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0"
               >
-                <div className="text-center space-y-4 max-w-sm">
-                  <motion.div
-                    animate={{ y: [0, -8, 0] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                    className="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center"
-                    style={{
-                      background: isDark
-                        ? 'linear-gradient(135deg,rgba(5,150,105,0.25),rgba(16,185,129,0.1))'
-                        : 'linear-gradient(135deg,rgba(5,150,105,0.12),rgba(16,185,129,0.06))',
-                      border: '1px solid rgba(16,185,129,0.25)',
-                      boxShadow: '0 0 40px rgba(16,185,129,0.15)',
-                    }}
-                  >
-                    <Globe className="h-9 w-9 text-emerald-500" />
-                  </motion.div>
-                  <div>
-                    <p className="font-bold text-lg text-foreground">ChatWeb aberto!</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      O painel de chat foi aberto na lateral direita da tela.
-                    </p>
-                  </div>
-                  <p className="text-xs text-muted-foreground/60">
-                    Você pode redimensioná-lo arrastando a borda esquerda.
-                  </p>
-                </div>
+                {/* O AdminChatWidget renderiza em modo inline quando isChatPage=true */}
+                <AdminChatWidget inlineMode />
               </motion.div>
             )}
 
@@ -363,7 +295,6 @@ export default function ChatAoVivo() {
                 transition={{ duration: 0.2 }}
                 className="absolute inset-0"
               >
-                {/* Loading */}
                 {isLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
                     <div className="flex flex-col items-center gap-4">
@@ -372,8 +303,6 @@ export default function ChatAoVivo() {
                     </div>
                   </div>
                 )}
-
-                {/* Fallback */}
                 {iframeError ? (
                   <div className="flex flex-col items-center justify-center h-full bg-muted/30">
                     <AlertCircle className="h-16 w-16 text-amber-500 mb-4" />
@@ -383,8 +312,7 @@ export default function ChatAoVivo() {
                       Você pode acessar em uma nova aba.
                     </p>
                     <Button onClick={openNewTab} size="lg">
-                      <ExternalLink className="h-5 w-5 mr-2" />
-                      Abrir BotConversa
+                      <ExternalLink className="h-5 w-5 mr-2" /> Abrir BotConversa
                     </Button>
                   </div>
                 ) : (
