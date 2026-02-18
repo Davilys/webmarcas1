@@ -63,6 +63,14 @@ export function getPermissionKeyFromPath(path: string): PermissionKey | null {
   return PATH_TO_PERMISSION_KEY[path] || null;
 }
 
+// Master admin email - always has full access, bypasses all permission checks
+const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
+
+// Build a full-access permissions map (all true)
+const FULL_ACCESS_MAP: UserPermissions = Object.fromEntries(
+  CRM_SECTIONS.map(s => [s.key, { can_view: true, can_edit: true, can_delete: true }])
+);
+
 export function useAdminPermissions(userId?: string) {
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
@@ -75,11 +83,17 @@ export function useAdminPermissions(userId?: string) {
   });
 
   const targetUserId = userId || currentUser?.id;
+  const isMasterAdmin = !userId && currentUser?.email === MASTER_ADMIN_EMAIL;
 
   const { data: permissions, isLoading, refetch } = useQuery({
     queryKey: ['admin-permissions', targetUserId],
     queryFn: async () => {
       if (!targetUserId) return null;
+
+      // Master admin always gets full access — skip DB lookup for self
+      if (!userId && currentUser?.email === MASTER_ADMIN_EMAIL) {
+        return FULL_ACCESS_MAP;
+      }
 
       const { data, error } = await supabase
         .from('admin_permissions')
@@ -91,7 +105,7 @@ export function useAdminPermissions(userId?: string) {
       // Convert to map for easy access
       const permissionsMap: UserPermissions = {};
       
-      // Initialize with defaults (users without explicit permissions get full access for backward compatibility)
+      // Initialize with defaults
       CRM_SECTIONS.forEach(section => {
         permissionsMap[section.key] = {
           can_view: true,
@@ -100,9 +114,8 @@ export function useAdminPermissions(userId?: string) {
         };
       });
 
-      // If user has any permissions set, use those instead
+      // If user has any explicit permissions, apply them (restricts non-master admins)
       if (data && data.length > 0) {
-        // Reset to false first when explicit permissions exist
         CRM_SECTIONS.forEach(section => {
           permissionsMap[section.key] = {
             can_view: false,
@@ -110,8 +123,6 @@ export function useAdminPermissions(userId?: string) {
             can_delete: false,
           };
         });
-        
-        // Apply explicit permissions
         data.forEach((perm) => {
           const key = perm.permission_key as PermissionKey;
           permissionsMap[key] = {
@@ -146,6 +157,7 @@ export function useAdminPermissions(userId?: string) {
     canAccessPath,
     refetch,
     userId: targetUserId,
+    isMasterAdmin,
   };
 }
 
