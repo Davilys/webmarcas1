@@ -410,13 +410,13 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="min-h-screen flex w-full bg-background safe-area-top safe-area-bottom">
+      <div className="min-h-screen flex w-full bg-background safe-area-top safe-area-bottom overflow-x-hidden">
         {/* Sidebar — hidden on mobile, visible md+ */}
-        <div className="hidden md:block">
+        <div className="hidden md:block flex-shrink-0">
           <AdminSidebar />
         </div>
         
-        <SidebarInset className="flex-1 flex flex-col min-h-0">
+        <SidebarInset className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden">
           {/* Header */}
           <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 header-frosted flex-shrink-0">
             {/* Sidebar trigger only on desktop */}

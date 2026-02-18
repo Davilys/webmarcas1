@@ -552,12 +552,15 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
-      {/* Outer HUD wrapper — respects light/dark via bg-background */}
-      <div className="relative rounded-2xl overflow-hidden bg-background">
-        <ParticleField />
-        <GridOverlay />
+      {/* HUD wrapper — contido na área do layout, sem escape lateral */}
+      <div className="relative w-full min-w-0 overflow-x-hidden">
+        {/* Partículas e grid ficam no fundo, sem alterar largura */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <ParticleField />
+          <GridOverlay />
+        </div>
 
-        <div className="relative z-10 p-4 md:p-6 space-y-5">
+        <div className="relative z-10 space-y-5">
 
           {/* ── HERO HEADER ─────────────────────── */}
           <motion.div
@@ -645,7 +648,7 @@ export default function AdminDashboard() {
           </motion.div>
 
           {/* ── KPI CARDS GRID ──────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {kpiCards.map(card => (
               <KpiCard key={card.title} {...card} />
             ))}
