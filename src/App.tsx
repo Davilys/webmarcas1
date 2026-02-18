@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { ChatModeProvider } from "@/contexts/ChatModeContext";
 import Index from "./pages/Index";
 import Registro from "./pages/Registro";
 import Registrar from "./pages/Registrar";
@@ -22,7 +23,7 @@ import ClienteProcessos from "./pages/cliente/Processos";
 import ClienteProcessoDetalhe from "./pages/cliente/ProcessoDetalhe";
 import ClienteDocumentos from "./pages/cliente/Documentos";
 import ClienteFinanceiro from "./pages/cliente/Financeiro";
-import ClienteChatSuporte from "./pages/cliente/Suporte";
+import ClienteChatSuporte from "./pages/cliente/ChatSuporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 import ClienteRegistrarMarca from "./pages/cliente/RegistrarMarca";
 import ClienteStatusPedido from "./pages/cliente/StatusPedido";
@@ -53,9 +54,10 @@ import AdminPremiacao from "./pages/admin/Premiacao";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+<QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <LanguageProvider>
+        <ChatModeProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -108,6 +110,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </ChatModeProvider>
       </LanguageProvider>
     </ThemeProvider>
   </QueryClientProvider>
