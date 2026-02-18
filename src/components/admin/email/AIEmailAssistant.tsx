@@ -200,12 +200,8 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      className="h-full flex flex-col bg-card border-l border-border/50 relative"
-    >
+    <div className="flex flex-col bg-card max-h-[90vh]">
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -475,6 +471,6 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
           </div>
         </div>
       </ScrollArea>
-    </motion.div>
+    </div>
   );
 }
