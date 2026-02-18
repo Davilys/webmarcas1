@@ -234,17 +234,24 @@ const handler = async (req: Request): Promise<Response> => {
     // ── MULTICHANNEL HOOK: SMS + WhatsApp (aditivo, nunca bloqueia resposta) ──
     try {
       const eventTypeMap: Record<string, string> = {
-        form_started: 'formulario_preenchido',
+        form_started     : 'formulario_preenchido',
         signature_request: 'link_assinatura_gerado',
-        contract_signed: 'contrato_assinado',
-        payment_received: 'pagamento_confirmado',
-        payment_overdue: 'fatura_vencida',
+        contract_signed  : 'contrato_assinado',
+        payment_received : 'pagamento_confirmado',
+        payment_overdue  : 'fatura_vencida',
       };
-      const mappedEvent = eventTypeMap[trigger_event] || 'manual';
-      const phone = (data as any).phone || '';
+      const mappedEvent = eventTypeMap[trigger_event];
+      // Skip events that don't map to multichannel (user_created, etc.)
+      if (mappedEvent) {
+        const phone = (data as Record<string, unknown>).phone as string || '';
 
-      // Only dispatch if phone available or event is important
-      if (phone || data.email) {
+        // Fetch phone from DB if missing and lead_id provided
+        let resolvedPhone = phone;
+        if (!resolvedPhone && actualLeadId) {
+          const { data: lead } = await supabase.from('leads').select('phone').eq('id', actualLeadId).maybeSingle();
+          resolvedPhone = (lead as Record<string, unknown> | null)?.phone as string || '';
+        }
+
         fetch(`${supabaseUrl}/functions/v1/send-multichannel-notification`, {
           method: 'POST',
           headers: {
@@ -255,21 +262,20 @@ const handler = async (req: Request): Promise<Response> => {
             event_type: mappedEvent,
             channels: ['sms', 'whatsapp'], // Email already sent above — no duplication
             recipient: {
-              nome: data.nome || 'Cliente',
+              nome:  data.nome  || 'Cliente',
               email: data.email || '',
-              phone,
+              phone: resolvedPhone,
             },
             data: {
-              marca: data.marca || '',
-              link: data.link_assinatura || '',
-              mensagem_custom: (data as any).mensagem_custom || '',
+              marca: data.marca         || '',
+              link:  data.link_assinatura || '',
             },
           }),
-        }).catch(e => console.error('[multichannel] SMS/WA dispatch error:', e));
-        console.log(`[multichannel] SMS+WhatsApp dispatched for event: ${mappedEvent}`);
+        }).catch(e => console.error('[trigger-email] SMS/WA dispatch error:', e));
+        console.log(`[trigger-email] SMS+WhatsApp dispatched for event: ${mappedEvent}, phone: ${resolvedPhone || 'N/A'}`);
       }
     } catch (multiErr) {
-      console.error('[multichannel] Error in SMS/WhatsApp hook:', multiErr);
+      console.error('[trigger-email] Error in SMS/WhatsApp hook:', multiErr);
     }
     // ── END MULTICHANNEL HOOK ─────────────────────────────────────────────────
 

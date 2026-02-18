@@ -99,44 +99,59 @@ serve(async (req) => {
       
       console.log(`Updated invoice ${invoice.id} to status ${invoiceStatus}`);
 
-      // If payment is confirmed and invoice has contract_id, update contract too
-      if ((paymentStatus === 'RECEIVED' || paymentStatus === 'CONFIRMED' || paymentStatus === 'RECEIVED_IN_CASH') && invoice.contract_id) {
-        // Trigger email automation for payment received
+      // If payment is confirmed → send email + multichannel notification
+      if ((paymentStatus === 'RECEIVED' || paymentStatus === 'CONFIRMED' || paymentStatus === 'RECEIVED_IN_CASH') && invoice.user_id) {
         try {
-          const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-          const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-          
-          // Get user email for notification
-          if (invoice.user_id) {
-            const { data: profile } = await supabaseAdmin
-              .from('profiles')
-              .select('email, full_name')
-              .eq('id', invoice.user_id)
-              .single();
+          const profile = await supabaseAdmin
+            .from('profiles')
+            .select('email, full_name, phone')
+            .eq('id', invoice.user_id)
+            .single();
 
-            if (profile?.email) {
-              await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                },
-                body: JSON.stringify({
-                  trigger_event: 'payment_received',
-                  data: {
-                    nome: profile.full_name || 'Cliente',
-                    email: profile.email,
-                    valor: invoice.amount,
-                    descricao: invoice.description,
-                    data_pagamento: paymentDate,
-                  }
-                })
-              });
-              console.log('Payment received email triggered for:', profile.email);
-            }
+          const prof = profile.data;
+
+          // Email via trigger-email-automation
+          if (prof?.email) {
+            fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({
+                trigger_event: 'payment_received',
+                data: {
+                  nome: prof.full_name || 'Cliente',
+                  email: prof.email,
+                  valor: String(invoice.amount || ''),
+                  descricao: invoice.description,
+                  data_pagamento: paymentDate,
+                }
+              })
+            }).catch(e => console.error('[webhook] email error:', e));
+            console.log('Payment received email triggered for:', prof.email);
           }
-        } catch (emailError) {
-          console.error('Error sending payment confirmation email:', emailError);
+
+          // SMS + WhatsApp + CRM via multichannel motor
+          fetch(`${SUPABASE_URL}/functions/v1/send-multichannel-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+            body: JSON.stringify({
+              event_type: 'pagamento_confirmado',
+              channels: ['crm', 'sms', 'whatsapp'],
+              recipient: {
+                nome: prof?.full_name || 'Cliente',
+                email: prof?.email   || '',
+                phone: prof?.phone   || '',
+                user_id: invoice.user_id,
+              },
+              data: {
+                valor: String(invoice.amount || ''),
+                marca: invoice.description || '',
+              },
+            }),
+          }).catch(e => console.error('[webhook] multichannel error:', e));
+
+          console.log('[webhook] Multichannel pagamento_confirmado dispatched for user:', invoice.user_id);
+        } catch (notifError) {
+          console.error('Error sending payment confirmation notifications:', notifError);
         }
       }
 
@@ -300,26 +315,58 @@ serve(async (req) => {
         .update({ status: 'overdue', updated_at: new Date().toISOString() })
         .eq('asaas_invoice_id', paymentId);
 
-      // Multichannel notification for overdue
+      // Multichannel notification for overdue (CRM + SMS + WhatsApp + Email)
       try {
-        if (invoice?.user_id) {
-          const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name, phone').eq('id', invoice.user_id).single();
+        const userId = invoice?.user_id;
+        if (userId) {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles').select('email, full_name, phone').eq('id', userId).single();
+
           if (profile) {
-            await fetch(`${SUPABASE_URL}/functions/v1/send-multichannel-notification`, {
+            // Email automation
+            if (profile.email) {
+              fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+                body: JSON.stringify({
+                  trigger_event: 'payment_overdue',
+                  data: {
+                    nome: profile.full_name || 'Cliente',
+                    email: profile.email,
+                    valor: String(invoice.amount || ''),
+                  }
+                })
+              }).catch(e => console.error('[webhook] overdue email error:', e));
+            }
+
+            // SMS + WhatsApp + CRM
+            fetch(`${SUPABASE_URL}/functions/v1/send-multichannel-notification`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
               body: JSON.stringify({
                 event_type: 'fatura_vencida',
                 channels: ['crm', 'sms', 'whatsapp'],
-                recipient: { nome: profile.full_name || 'Cliente', email: profile.email, phone: profile.phone || '', user_id: invoice.user_id },
-                data: { valor: String(invoice.amount || ''), marca: invoice.description || '' },
+                recipient: {
+                  nome: profile.full_name || 'Cliente',
+                  email: profile.email,
+                  phone: profile.phone || '',
+                  user_id: userId,
+                },
+                data: {
+                  valor: String(invoice?.amount || ''),
+                  marca: invoice?.description || '',
+                },
               }),
-            });
+            }).catch(e => console.error('[webhook] overdue multichannel error:', e));
+
+            console.log('[webhook] Multichannel fatura_vencida dispatched for user:', userId);
           }
         }
-      } catch (e) { console.error('Error sending overdue multichannel notification:', e); }
+      } catch (e) {
+        console.error('Error sending overdue notifications:', e);
+      }
 
-      console.log('Payment overdue:', paymentId);
+      console.log('Payment overdue processed:', paymentId);
     }
 
     if (paymentStatus === 'REFUNDED' || paymentStatus === 'REFUND_REQUESTED') {

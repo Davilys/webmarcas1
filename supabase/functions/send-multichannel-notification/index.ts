@@ -6,9 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface NotificationPayload {
   event_type: string;
-  channels: Array<'crm' | 'sms' | 'whatsapp'>;
+  channels?: Array<'crm' | 'sms' | 'whatsapp'>;
   recipient: {
     nome?: string;
     email?: string;
@@ -24,123 +26,153 @@ interface NotificationPayload {
   };
 }
 
-interface ChannelSettings {
-  enabled: boolean;
-  webhook_url?: string;
-  auth_token?: string;
-  api_key?: string;
-  sender_name?: string;
-  from_email?: string;
+interface ChannelResult {
+  success: boolean;
+  response?: string;
+  error?: string;
+  attempts: number;
+  skipped?: boolean;
+  skip_reason?: string;
 }
 
-// ── SMS via Zenvia ──────────────────────────────────────────
+// ─── Message Builder ──────────────────────────────────────────────────────────
+
+function buildMessage(event_type: string, data: NotificationPayload['data'], nome: string): string {
+  if (data.mensagem_custom) return data.mensagem_custom;
+
+  const marca = data.marca || 'sua marca';
+  const link  = data.link  || '';
+  const valor = data.valor ? `R$ ${data.valor}` : '';
+
+  const map: Record<string, string> = {
+    formulario_preenchido : `WebMarcas: Olá ${nome}, recebemos seu formulário para o registro de ${marca}. Em breve entraremos em contato!`,
+    link_assinatura_gerado: `WebMarcas: Olá ${nome}, seu contrato para ${marca} está pronto para assinatura. Acesse: ${link}`,
+    contrato_assinado     : `WebMarcas: Parabéns ${nome}! Seu contrato para ${marca} foi assinado com sucesso.`,
+    cobranca_gerada       : `WebMarcas: Olá ${nome}, nova cobrança de ${valor} gerada para ${marca}. Acesse: ${link}`,
+    fatura_vencida        : `WebMarcas: Atenção ${nome}! Sua fatura de ${valor} para ${marca} está vencida. Regularize em: ${link || 'webmarcas.net'}`,
+    pagamento_confirmado  : `WebMarcas: Olá ${nome}, confirmamos o pagamento de ${valor} para ${marca}. Obrigado!`,
+    manual                : `WebMarcas: ${data.mensagem_custom || 'Você tem uma nova notificação.'}`,
+  };
+
+  return map[event_type] ?? `WebMarcas: Olá ${nome}, você tem uma nova notificação.`;
+}
+
+function getTitulo(event_type: string): string {
+  const map: Record<string, string> = {
+    formulario_preenchido : 'Formulário recebido',
+    link_assinatura_gerado: 'Contrato pronto para assinatura',
+    contrato_assinado     : 'Contrato assinado com sucesso',
+    cobranca_gerada       : 'Nova cobrança gerada',
+    fatura_vencida        : 'Fatura vencida',
+    pagamento_confirmado  : 'Pagamento confirmado',
+    manual                : 'Nova notificação',
+  };
+  return map[event_type] ?? 'Nova notificação';
+}
+
+function getNotifType(event_type: string): string {
+  const map: Record<string, string> = {
+    formulario_preenchido : 'info',
+    link_assinatura_gerado: 'info',
+    contrato_assinado     : 'success',
+    cobranca_gerada       : 'warning',
+    fatura_vencida        : 'error',
+    pagamento_confirmado  : 'success',
+    manual                : 'info',
+  };
+  return map[event_type] ?? 'info';
+}
+
+// ─── Retry Wrapper ─────────────────────────────────────────────────────────────
+
+async function withRetry(
+  fn: () => Promise<{ success: boolean; response?: string; error?: string }>,
+  maxAttempts = 3
+): Promise<ChannelResult> {
+  let last: { success: boolean; response?: string; error?: string } = { success: false, error: 'No attempts' };
+  for (let i = 1; i <= maxAttempts; i++) {
+    last = await fn();
+    if (last.success) return { ...last, attempts: i };
+    if (i < maxAttempts) await new Promise(r => setTimeout(r, 1000 * i));
+  }
+  return { ...last, attempts: maxAttempts };
+}
+
+// ─── SMS via Zenvia ───────────────────────────────────────────────────────────
+
 async function sendSMS(
-  settings: ChannelSettings,
+  settings: Record<string, unknown>,
   phone: string,
   message: string
 ): Promise<{ success: boolean; response?: string; error?: string }> {
-  if (!settings.enabled) return { success: false, error: 'SMS desativado nas configurações' };
-  if (!settings.api_key) return { success: false, error: 'API Key Zenvia não configurada' };
-  if (!phone) return { success: false, error: 'Telefone do destinatário não informado' };
+  if (!settings.enabled) return { success: false, error: 'SMS desativado' };
+  
+  const apiKey = (settings.api_key as string) || '';
+  if (!apiKey) return { success: false, error: 'API Key Zenvia não configurada' };
+  if (!phone)  return { success: false, error: 'Telefone não informado' };
 
-  // Normalize phone: keep only digits, add country code if needed
   const normalized = phone.replace(/\D/g, '').replace(/^0/, '');
-  const finalPhone = normalized.startsWith('55') ? normalized : `55${normalized}`;
+  const finalPhone  = normalized.startsWith('55') ? normalized : `55${normalized}`;
 
   const body = {
-    from: { type: 'CHANNEL', number: settings.sender_name || 'WebMarcas' },
-    to: { type: 'SMS', number: finalPhone },
+    from: { type: 'CHANNEL', number: (settings.sender_name as string) || 'WebMarcas' },
+    to:   { type: 'SMS',     number: finalPhone },
     contents: [{ type: 'text', text: message.substring(0, 160) }],
   };
 
   try {
     const res = await fetch('https://api.zenvia.com/v2/channels/sms/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-TOKEN': settings.api_key,
-      },
+      headers: { 'Content-Type': 'application/json', 'X-API-TOKEN': apiKey },
       body: JSON.stringify(body),
     });
-
     const text = await res.text();
-    if (res.ok) {
-      return { success: true, response: text };
-    } else {
-      return { success: false, error: `Zenvia HTTP ${res.status}: ${text}` };
-    }
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Erro desconhecido ao enviar SMS' };
+    return res.ok
+      ? { success: true, response: text }
+      : { success: false, error: `Zenvia HTTP ${res.status}: ${text}` };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error)?.message ?? 'Erro ao enviar SMS' };
   }
 }
 
-// ── WhatsApp via BotConversa Webhook ───────────────────────
+// ─── WhatsApp via BotConversa ─────────────────────────────────────────────────
+
 async function sendWhatsApp(
-  settings: ChannelSettings,
+  settings: Record<string, unknown>,
   phone: string,
   nome: string,
   message: string,
   extraData: Record<string, string>
 ): Promise<{ success: boolean; response?: string; error?: string }> {
-  if (!settings.enabled) return { success: false, error: 'WhatsApp/BotConversa desativado nas configurações' };
-  if (!settings.webhook_url) return { success: false, error: 'URL do Webhook BotConversa não configurada' };
-  if (!phone) return { success: false, error: 'Telefone do destinatário não informado' };
+  if (!settings.enabled) return { success: false, error: 'WhatsApp desativado' };
+
+  const webhookUrl = (settings.webhook_url as string) || '';
+  if (!webhookUrl) return { success: false, error: 'URL do Webhook BotConversa não configurada' };
+  if (!phone)      return { success: false, error: 'Telefone não informado' };
 
   const normalized = phone.replace(/\D/g, '').replace(/^0/, '');
-  const finalPhone = normalized.startsWith('55') ? normalized : `55${normalized}`;
+  const finalPhone  = normalized.startsWith('55') ? normalized : `55${normalized}`;
 
-  const payload = {
-    telefone: finalPhone,
-    nome: nome || 'Cliente',
-    mensagem: message,
-    ...extraData,
-  };
-
+  const payload = { telefone: finalPhone, nome: nome || 'Cliente', mensagem: message, ...extraData };
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (settings.auth_token) headers['Authorization'] = `Bearer ${settings.auth_token}`;
+  const authToken = (settings.auth_token as string) || '';
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
   try {
-    const res = await fetch(settings.webhook_url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    });
-
+    const res = await fetch(webhookUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
     const text = await res.text();
-    if (res.ok) {
-      return { success: true, response: text };
-    } else {
-      return { success: false, error: `BotConversa HTTP ${res.status}: ${text}` };
-    }
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Erro desconhecido ao enviar WhatsApp' };
+    return res.ok
+      ? { success: true, response: text }
+      : { success: false, error: `BotConversa HTTP ${res.status}: ${text}` };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error)?.message ?? 'Erro ao enviar WhatsApp' };
   }
 }
 
-// ── Mount message from event ────────────────────────────────
-function buildMessage(event_type: string, data: NotificationPayload['data'], nome: string): string {
-  const marca = data.marca || 'sua marca';
-  const link = data.link || '';
-  const valor = data.valor ? `R$ ${data.valor}` : '';
+// ─── Log Dispatch ─────────────────────────────────────────────────────────────
 
-  if (data.mensagem_custom) return data.mensagem_custom;
-
-  const messages: Record<string, string> = {
-    formulario_preenchido: `WebMarcas: Olá ${nome}, recebemos seu formulário para o registro de ${marca}. Em breve entraremos em contato!`,
-    link_assinatura_gerado: `WebMarcas: Olá ${nome}, seu contrato para ${marca} está pronto para assinatura. Acesse: ${link}`,
-    contrato_assinado: `WebMarcas: Parabéns ${nome}! Seu contrato para ${marca} foi assinado com sucesso.`,
-    cobranca_gerada: `WebMarcas: Olá ${nome}, uma nova cobrança de ${valor} foi gerada para ${marca}. Acesse: ${link}`,
-    fatura_vencida: `WebMarcas: Atenção ${nome}! Sua fatura de ${valor} para ${marca} está vencida. Regularize em: ${link || 'webmarcas.net'}`,
-    pagamento_confirmado: `WebMarcas: Olá ${nome}, confirmamos o recebimento do pagamento de ${valor} para ${marca}. Obrigado!`,
-    manual: `WebMarcas: ${data.mensagem_custom || 'Você tem uma nova notificação.'}`,
-  };
-
-  return messages[event_type] || `WebMarcas: Olá ${nome}, você tem uma nova notificação.`;
-}
-
-// ── Log dispatch ────────────────────────────────────────────
 async function logDispatch(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   event_type: string,
   channel: string,
   status: 'sent' | 'failed',
@@ -150,41 +182,25 @@ async function logDispatch(
   recipient_user_id?: string,
   error_message?: string,
   response_body?: string,
-  attempts = 1
+  attempts = 1,
 ) {
   try {
     await supabase.from('notification_dispatch_logs').insert({
-      event_type,
-      channel,
-      status,
-      payload,
-      recipient_phone,
-      recipient_email,
-      recipient_user_id,
-      error_message,
-      response_body,
+      event_type, channel, status, payload,
+      recipient_phone:   recipient_phone   || null,
+      recipient_email:   recipient_email   || null,
+      recipient_user_id: recipient_user_id || null,
+      error_message:     error_message     || null,
+      response_body:     response_body     || null,
       attempts,
     });
   } catch (e) {
-    console.error('Error logging dispatch:', e);
+    console.error('[log-dispatch] Error logging:', e);
   }
 }
 
-// ── Retry wrapper ────────────────────────────────────────────
-async function withRetry<T>(
-  fn: () => Promise<{ success: boolean; response?: string; error?: string }>,
-  maxAttempts = 3
-): Promise<{ success: boolean; response?: string; error?: string; attempts: number }> {
-  let lastResult = { success: false, error: 'No attempts made' } as any;
-  for (let i = 1; i <= maxAttempts; i++) {
-    lastResult = await fn();
-    if (lastResult.success) return { ...lastResult, attempts: i };
-    if (i < maxAttempts) await new Promise(r => setTimeout(r, 1000 * i));
-  }
-  return { ...lastResult, attempts: maxAttempts };
-}
+// ─── Main Handler ─────────────────────────────────────────────────────────────
 
-// ── Main handler ─────────────────────────────────────────────
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -198,111 +214,110 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseUrl        = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase           = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Load channel settings from system_settings
-    const [smsRow, botconversaRow] = await Promise.all([
-      supabase.from('system_settings').select('value').eq('key', 'sms_provider').single(),
-      supabase.from('system_settings').select('value').eq('key', 'botconversa').single(),
+    // ── Load channel settings ──────────────────────────────────────────────────
+    const [smsRow, botRow] = await Promise.all([
+      supabase.from('system_settings').select('value').eq('key', 'sms_provider').maybeSingle(),
+      supabase.from('system_settings').select('value').eq('key', 'botconversa').maybeSingle(),
     ]);
 
-    const smsSettings: ChannelSettings = (smsRow.data?.value as any) || { enabled: false };
-    const botconversaSettings: ChannelSettings = (botconversaRow.data?.value as any) || { enabled: false };
+    const smsSettings = (smsRow.data?.value as Record<string, unknown>) ?? { enabled: false };
+    const botSettings = (botRow.data?.value as Record<string, unknown>) ?? { enabled: false };
 
-    const nome = recipient.nome || 'Cliente';
-    const phone = recipient.phone || '';
+    // ── If user_id provided but phone/nome missing, resolve from profiles ─────
+    const nome  = recipient.nome  || 'Cliente';
+    let   phone = recipient.phone || '';
+
+    if (recipient.user_id && !phone) {
+      const { data: profile } = await supabase
+        .from('profiles').select('phone, full_name').eq('id', recipient.user_id).maybeSingle();
+      if (profile?.phone) phone = profile.phone;
+    }
+
     const message = buildMessage(event_type, data, nome);
+    const results: Record<string, ChannelResult> = {};
+    const rawPayload = payload as unknown as Record<string, unknown>;
 
-    const results: Record<string, any> = {};
-
-    // ── CRM notification ────────────────────────────────────
-    if (channels.includes('crm') && recipient.user_id) {
-      try {
-        const titulo = data.titulo || getTitulo(event_type);
-        const { error } = await supabase.from('notifications').insert({
-          user_id: recipient.user_id,
-          title: titulo,
-          message: message,
-          type: getNotifType(event_type),
-          read: false,
-          link: data.link || null,
-        });
-        const status = error ? 'failed' : 'sent';
-        results.crm = { success: !error, error: error?.message };
-        await logDispatch(supabase, event_type, 'crm', status, payload as any,
-          undefined, recipient.email, recipient.user_id, error?.message);
-      } catch (e: any) {
-        results.crm = { success: false, error: e.message };
-        await logDispatch(supabase, event_type, 'crm', 'failed', payload as any,
-          undefined, recipient.email, recipient.user_id, e.message);
+    // ── CRM ───────────────────────────────────────────────────────────────────
+    if (channels.includes('crm')) {
+      if (recipient.user_id) {
+        try {
+          const titulo = data.titulo || getTitulo(event_type);
+          const { error } = await supabase.from('notifications').insert({
+            user_id: recipient.user_id,
+            title: titulo,
+            message,
+            type: getNotifType(event_type),
+            read: false,
+            link: data.link || null,
+          });
+          const status = error ? 'failed' : 'sent';
+          results.crm = { success: !error, error: error?.message, attempts: 1 };
+          await logDispatch(supabase, event_type, 'crm', status, rawPayload,
+            undefined, recipient.email, recipient.user_id, error?.message);
+        } catch (e: unknown) {
+          results.crm = { success: false, error: (e as Error).message, attempts: 1 };
+          await logDispatch(supabase, event_type, 'crm', 'failed', rawPayload,
+            undefined, recipient.email, recipient.user_id, (e as Error).message);
+        }
+      } else {
+        results.crm = { success: false, error: 'user_id não fornecido', attempts: 0, skipped: true, skip_reason: 'sem user_id' };
       }
     }
 
-    // ── SMS ─────────────────────────────────────────────────
+    // ── SMS ───────────────────────────────────────────────────────────────────
     if (channels.includes('sms')) {
-      const smsResult = await withRetry(() => sendSMS(smsSettings, phone, message));
-      results.sms = smsResult;
-      await logDispatch(supabase, event_type, 'sms',
-        smsResult.success ? 'sent' : 'failed', payload as any,
-        phone, recipient.email, recipient.user_id,
-        smsResult.error, smsResult.response, smsResult.attempts);
+      if (!phone) {
+        results.sms = { success: false, error: 'Telefone não informado', attempts: 0, skipped: true, skip_reason: 'sem phone' };
+        await logDispatch(supabase, event_type, 'sms', 'failed', rawPayload,
+          undefined, recipient.email, recipient.user_id, 'Telefone não informado', undefined, 0);
+      } else {
+        const smsResult = await withRetry(() => sendSMS(smsSettings, phone, message));
+        results.sms = smsResult;
+        await logDispatch(supabase, event_type, 'sms',
+          smsResult.success ? 'sent' : 'failed', rawPayload,
+          phone, recipient.email, recipient.user_id,
+          smsResult.error, smsResult.response, smsResult.attempts);
+      }
     }
 
-    // ── WhatsApp (BotConversa) ───────────────────────────────
+    // ── WhatsApp (BotConversa) ────────────────────────────────────────────────
     if (channels.includes('whatsapp')) {
-      const extraData: Record<string, string> = {
-        tipo_notificacao: event_type,
-        ...(data.link ? { link: data.link } : {}),
-        ...(data.marca ? { marca: data.marca } : {}),
-        ...(data.valor ? { valor: data.valor } : {}),
-      };
-      const waResult = await withRetry(() => sendWhatsApp(botconversaSettings, phone, nome, message, extraData));
-      results.whatsapp = waResult;
-      await logDispatch(supabase, event_type, 'whatsapp',
-        waResult.success ? 'sent' : 'failed', payload as any,
-        phone, recipient.email, recipient.user_id,
-        waResult.error, waResult.response, waResult.attempts);
+      if (!phone) {
+        results.whatsapp = { success: false, error: 'Telefone não informado', attempts: 0, skipped: true, skip_reason: 'sem phone' };
+        await logDispatch(supabase, event_type, 'whatsapp', 'failed', rawPayload,
+          undefined, recipient.email, recipient.user_id, 'Telefone não informado', undefined, 0);
+      } else {
+        const extra: Record<string, string> = {
+          tipo_notificacao: event_type,
+          ...(data.link  ? { link:  data.link  } : {}),
+          ...(data.marca ? { marca: data.marca  } : {}),
+          ...(data.valor ? { valor: data.valor  } : {}),
+        };
+        const waResult = await withRetry(() => sendWhatsApp(botSettings, phone, nome, message, extra));
+        results.whatsapp = waResult;
+        await logDispatch(supabase, event_type, 'whatsapp',
+          waResult.success ? 'sent' : 'failed', rawPayload,
+          phone, recipient.email, recipient.user_id,
+          waResult.error, waResult.response, waResult.attempts);
+      }
     }
 
-    console.log(`[send-multichannel-notification] event=${event_type}`, JSON.stringify(results));
+    console.log(`[multichannel] event=${event_type} phone=${phone || 'N/A'}`, JSON.stringify(results));
 
     return new Response(JSON.stringify({ success: true, event_type, results }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (err: any) {
-    console.error('[send-multichannel-notification] Error:', err);
-    return new Response(JSON.stringify({ error: err.message }), {
+
+  } catch (err: unknown) {
+    console.error('[multichannel] Fatal error:', err);
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 };
-
-function getTitulo(event_type: string): string {
-  const map: Record<string, string> = {
-    formulario_preenchido: 'Formulário recebido',
-    link_assinatura_gerado: 'Contrato pronto para assinatura',
-    contrato_assinado: 'Contrato assinado com sucesso',
-    cobranca_gerada: 'Nova cobrança gerada',
-    fatura_vencida: 'Fatura vencida',
-    pagamento_confirmado: 'Pagamento confirmado',
-    manual: 'Nova notificação',
-  };
-  return map[event_type] || 'Nova notificação';
-}
-
-function getNotifType(event_type: string): string {
-  const map: Record<string, string> = {
-    formulario_preenchido: 'info',
-    link_assinatura_gerado: 'info',
-    contrato_assinado: 'success',
-    cobranca_gerada: 'warning',
-    fatura_vencida: 'error',
-    pagamento_confirmado: 'success',
-    manual: 'info',
-  };
-  return map[event_type] || 'info';
-}
 
 serve(handler);
