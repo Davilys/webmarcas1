@@ -410,7 +410,7 @@ export default function AdminClientes() {
                 <RefreshCw className="h-3.5 w-3.5" /> Atualizar
               </Button>
               <DuplicateClientsDialog
-                onMergeComplete={fetchClients}
+                onMergeComplete={refreshClients}
                 trigger={
                   <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60">
                     <Users className="h-3.5 w-3.5" /> Duplicados
