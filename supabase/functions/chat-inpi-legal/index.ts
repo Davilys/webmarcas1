@@ -1,11 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `#instruction
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// ─────────────────────────────────────────────
+// BASE SYSTEM PROMPT (sempre injetado)
+// ─────────────────────────────────────────────
+
+const BASE_SYSTEM_PROMPT = `#instruction
 
 Você é um AGENTE JURÍDICO ESPECIALISTA EM REGISTRO DE MARCAS NO INPI,
 
@@ -143,30 +154,98 @@ Somente quando o usuário solicitar, você deve:
 
 - Profissional e segura
 
-#valores_inpi
-
-Sempre que perguntado, informe corretamente:
-
-- Taxa de pedido de registro: R$ 142,00 (básica) ou R$ 298,00 (normal)
-
-- Taxa de recurso: R$ 475,00
-
-- Taxa de concessão: R$ 298,00 (básica) ou R$ 745,00 (normal)
-
-- Prazo médio de registro: 12 a 24 meses
-
-- Prazo para recurso: 60 dias
-
-- Prazo para manifestação à oposição: 60 dias
-
-Sem arredondar ou inventar valores.
-
 #objetivo
 
 Resolver o problema real do cliente de forma técnica, estratégica, honesta e ética.
 
 Seja direta, clara e sempre foque na melhor solução possível para o caso concreto.`;
 
+// ─────────────────────────────────────────────
+// DYNAMIC KNOWLEDGE INJECTION
+// ─────────────────────────────────────────────
+
+async function fetchDynamicKnowledge(): Promise<{ context: string; lastSync: string | null }> {
+  try {
+    const { data: items, error } = await supabaseAdmin
+      .from('inpi_knowledge_base')
+      .select('category, title, content, source_date, updated_at, priority')
+      .eq('is_active', true)
+      .order('priority', { ascending: true })
+      .order('updated_at', { ascending: false })
+      .limit(20);
+
+    if (error || !items || items.length === 0) {
+      console.log('[chat-inpi-legal] No dynamic knowledge found, using base prompt only');
+      return { context: '', lastSync: null };
+    }
+
+    // Agrupa por categoria
+    const grouped: Record<string, typeof items> = {};
+    for (const item of items) {
+      if (!grouped[item.category]) grouped[item.category] = [];
+      grouped[item.category].push(item);
+    }
+
+    const categoryOrder = ['taxas', 'prazos', 'manual', 'despachos', 'resolucoes', 'jurisprudencia', 'noticias'];
+    const categoryLabels: Record<string, string> = {
+      taxas: '💰 TAXAS OFICIAIS ATUALIZADAS',
+      prazos: '⏱️ PRAZOS E PROCEDIMENTOS VIGENTES',
+      manual: '📘 MANUAL DE MARCAS INPI',
+      despachos: '📋 CÓDIGOS DE DESPACHO',
+      resolucoes: '📜 RESOLUÇÕES RECENTES',
+      jurisprudencia: '⚖️ JURISPRUDÊNCIA RECENTE',
+      noticias: '📰 NOTÍCIAS E ATUALIZAÇÕES INPI',
+    };
+
+    let context = `\n\n═══════════════════════════════════════
+🔄 BASE DE CONHECIMENTO DINÂMICA DO INPI
+Atualizada automaticamente toda semana com dados oficiais do INPI, STJ e TRF.
+Data desta atualização: ${new Date().toLocaleDateString('pt-BR')}
+═══════════════════════════════════════\n`;
+
+    for (const cat of categoryOrder) {
+      if (!grouped[cat] || grouped[cat].length === 0) continue;
+      const label = categoryLabels[cat] || cat.toUpperCase();
+      context += `\n\n### ${label}\n`;
+
+      for (const item of grouped[cat].slice(0, 3)) {
+        const dateStr = item.source_date
+          ? new Date(item.source_date).toLocaleDateString('pt-BR')
+          : 'data desconhecida';
+        context += `\n[${item.title} – ${dateStr}]\n`;
+        // Limita conteúdo por item para não explodir o prompt
+        context += item.content.substring(0, 2500) + '\n';
+      }
+    }
+
+    context += `\n═══════════════════════════════════════
+INSTRUÇÃO CRÍTICA: Use SEMPRE as informações acima como referência primária.
+Se houver conflito entre seu treinamento e estes dados, PREFIRA estes dados pois são mais recentes.
+═══════════════════════════════════════`;
+
+    // Pega a data do sync mais recente
+    const { data: lastLog } = await supabaseAdmin
+      .from('inpi_sync_logs')
+      .select('finished_at, status')
+      .eq('status', 'success')
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const lastSync = lastLog?.finished_at || null;
+
+    console.log(`[chat-inpi-legal] Dynamic knowledge injected: ${items.length} items, ${context.length} chars`);
+    return { context, lastSync };
+
+  } catch (e) {
+    console.error('[chat-inpi-legal] Error fetching dynamic knowledge:', e);
+    return { context: '', lastSync: null };
+  }
+}
+
+// ─────────────────────────────────────────────
+// PDF HELPERS
+// ─────────────────────────────────────────────
 
 async function extractPdfTextFromBase64(base64: string, maxPages = 50): Promise<string> {
   const startedAt = Date.now();
@@ -206,7 +285,6 @@ async function extractPdfTextFromBase64(base64: string, maxPages = 50): Promise<
   }
 }
 
-// Build multimodal content for GPT-4o with images (OCR for scanned PDFs)
 function buildMultimodalContent(text: string, images: string[], fileName: string): any[] {
   const content: any[] = [];
   
@@ -216,18 +294,18 @@ function buildMultimodalContent(text: string, images: string[], fileName: string
   });
   
   for (const imageData of images) {
-    // imageData should be a data URL like "data:image/jpeg;base64,..."
     content.push({
       type: "image_url",
-      image_url: {
-        url: imageData,
-        detail: "high"
-      }
+      image_url: { url: imageData, detail: "high" }
     });
   }
   
   return content;
 }
+
+// ─────────────────────────────────────────────
+// MAIN HANDLER
+// ─────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -235,12 +313,43 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, getMetadata } = await req.json();
+
+    // Endpoint especial para metadados (usado pelo frontend para exibir status)
+    if (getMetadata) {
+      const { data: lastLog } = await supabaseAdmin
+        .from('inpi_sync_logs')
+        .select('finished_at, status, items_created, items_updated, categories_synced')
+        .in('status', ['success', 'partial'])
+        .order('finished_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const { count } = await supabaseAdmin
+        .from('inpi_knowledge_base')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+
+      return new Response(JSON.stringify({
+        lastSync: lastLog?.finished_at || null,
+        syncStatus: lastLog?.status || 'never',
+        knowledgeItemsCount: count || 0,
+        categoriesSynced: lastLog?.categories_synced || [],
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY não configurada');
     }
+
+    // Busca conhecimento dinâmico do INPI
+    const { context: dynamicContext } = await fetchDynamicKnowledge();
+
+    // Monta system prompt enriquecido
+    const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT + (dynamicContext || '');
 
     // Build messages array
     const apiMessages: any[] = [{ role: 'system', content: SYSTEM_PROMPT }];
@@ -257,10 +366,8 @@ serve(async (req) => {
         const hasPdf = typeof msg.fileBase64 === 'string' && msg.fileBase64.length > 0;
 
         if (hasImages) {
-          // Use multimodal content with images for OCR
           console.log('Using multimodal OCR for PDF:', msg.fileName, 'with', msg.fileImages.length, 'images');
 
-          // If we also have the raw PDF, extract what we can and prepend (helps when OCR misses headers)
           let extractedText = '';
           if (hasPdf) {
             extractedText = await extractPdfTextFromBase64(msg.fileBase64);
@@ -301,7 +408,7 @@ serve(async (req) => {
       }
     }
 
-    console.log('Sending request to OpenAI with', apiMessages.length, 'messages');
+    console.log(`[chat-inpi-legal] Sending to OpenAI: ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -332,7 +439,6 @@ serve(async (req) => {
       throw new Error(`OpenAI API error: ${response.status}`);
     }
 
-    // Stream the response
     return new Response(response.body, {
       headers: {
         ...corsHeaders,

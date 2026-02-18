@@ -11,8 +11,10 @@ import {
   Send, Paperclip, Mic, Square, Loader2, X, FileText, Scale,
   Sparkles, Shield, BookOpen, Zap, Brain, ChevronDown, Copy,
   RotateCcw, CheckCircle2, AlertCircle, Gavel, TrendingUp,
-  AlignLeft, FileSearch, Microscope, ChevronRight,
+  AlignLeft, FileSearch, Microscope, ChevronRight, RefreshCw,
+  Database, Calendar, Wifi, WifiOff,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -225,8 +227,52 @@ Como posso ajudar você hoje?`,
   } | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [knowledgeMeta, setKnowledgeMeta] = useState<{
+    lastSync: string | null;
+    knowledgeItemsCount: number;
+    categoriesSynced: string[];
+    syncStatus: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch knowledge base metadata on open
+  const fetchKnowledgeMeta = useCallback(async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-inpi-legal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({ getMetadata: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKnowledgeMeta(data);
+      }
+    } catch { /* silent */ }
+  }, []);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-inpi-knowledge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({ manual: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`✅ INPI sincronizado! ${data.created + data.updated} itens atualizados.`);
+        await fetchKnowledgeMeta();
+      } else {
+        toast.error('Erro ao sincronizar dados do INPI');
+      }
+    } catch {
+      toast.error('Erro ao sincronizar dados do INPI');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -238,6 +284,10 @@ Como posso ajudar você hoje?`,
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (open) fetchKnowledgeMeta();
+  }, [open, fetchKnowledgeMeta]);
 
   useEffect(() => {
     return () => {
@@ -472,6 +522,19 @@ Como posso ajudar você hoje?`,
                       className="h-1.5 w-1.5 rounded-full bg-emerald-400"
                     />
                     <p className="text-[11px] text-slate-400">Consultora Jurídica INPI • Online</p>
+                    {knowledgeMeta && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Database className="h-2.5 w-2.5 text-cyan-400" />
+                        <span className="text-[10px] text-cyan-400 font-medium">
+                          {knowledgeMeta.knowledgeItemsCount} fontes INPI
+                        </span>
+                        {knowledgeMeta.lastSync && (
+                          <span className="text-[10px] text-slate-500">
+                            • Sync {new Date(knowledgeMeta.lastSync).toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -508,13 +571,24 @@ Como posso ajudar você hoje?`,
                 })()}
               </div>
 
-              <Button
-                variant="ghost" size="icon"
-                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10"
-                onClick={() => onOpenChange(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  title="Sincronizar dados INPI agora"
+                >
+                  <RefreshCw className={cn('h-4 w-4', isSyncing && 'animate-spin')} />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Capability chips */}
