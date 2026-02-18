@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, Plus, RefreshCw, FileSignature, MoreHorizontal, 
   Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer, Edit,
-  TrendingUp, DollarSign, FileText, PenTool
+  TrendingUp, DollarSign, FileText, PenTool, RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, isToday, isThisWeek, isThisMonth } from 'date-fns';
@@ -353,6 +353,51 @@ export default function AdminContratos() {
 
   // Wrapper without args — safe to pass directly to onClick handlers and callbacks
   const refreshContracts = () => fetchContracts(0);
+
+  const handleRevertPromotion = async (contract: Contract) => {
+    // Only allow reverting contracts that are not signed and not paid
+    if (contract.signature_status === 'signed') {
+      toast.error('Não é possível reverter um contrato já assinado.');
+      return;
+    }
+    if (contract.asaas_payment_id) {
+      toast.error('Não é possível reverter um contrato que já possui cobrança gerada.');
+      return;
+    }
+
+    if (!confirm(`Reverter este contrato para o preço promocional de R$ 699,00 (à vista)?\n\nContrato: ${contract.contract_number || contract.id}`)) return;
+
+    try {
+      // Clause 5.1 promotional text
+      const PROMO_CLAUSE_51 = `5.1 Os pagamentos à CONTRATADA serão efetuados conforme a opção escolhida pelo CONTRATANTE:\n\n• Pagamento à vista: R$ 699,00 (seiscentos e noventa e nove reais).\n• Pagamento parcelado via cartão de crédito: 6 (seis) parcelas de R$ 116,50 (cento e dezesseis reais e cinquenta centavos) sem incidência de juros.\n\n`;
+
+      const updatePayload: { contract_value: number; payment_method: string; contract_html?: string } = {
+        contract_value: 699.00,
+        payment_method: 'avista',
+      };
+
+      // Update clause 5.1 in contract_html if it exists
+      if (contract.contract_html) {
+        const clause51Regex = /5\.1 Os pagamentos à CONTRATADA[\s\S]*?(?=5\.2 Taxas do INPI)/;
+        if (clause51Regex.test(contract.contract_html)) {
+          updatePayload.contract_html = contract.contract_html.replace(clause51Regex, PROMO_CLAUSE_51);
+        }
+      }
+
+      const { error } = await supabase
+        .from('contracts')
+        .update(updatePayload)
+        .eq('id', contract.id);
+
+      if (error) throw error;
+
+      toast.success(`Contrato ${contract.contract_number || ''} revertido para R$ 699,00 com sucesso!`);
+      refreshContracts();
+    } catch (error: any) {
+      console.error('Error reverting promotion:', error);
+      toast.error(error.message || 'Erro ao reverter promoção');
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
@@ -764,6 +809,19 @@ export default function AdminContratos() {
                               Download PDF
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+                            {/* Reverter Expiração da Promoção — only shown when contract value is NOT 699 and is not signed/paid */}
+                            {contract.contract_value !== 699 &&
+                              contract.contract_value !== null &&
+                              contract.signature_status !== 'signed' &&
+                              !contract.asaas_payment_id && (
+                              <DropdownMenuItem
+                                onClick={() => handleRevertPromotion(contract)}
+                                className="text-amber-600 focus:text-amber-600 dark:text-amber-400 dark:focus:text-amber-400"
+                              >
+                                <RotateCcw className="h-4 w-4 mr-2" />
+                                Reverter Expiração (R$ 699)
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               onClick={() => handleDelete(contract.id)}
                               className="text-destructive focus:text-destructive"
