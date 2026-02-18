@@ -82,22 +82,26 @@ export default function AdminClientes() {
 
     init();
 
-    // Realtime subscription — auto-refresh when profiles or processes change
+    // Realtime subscription — debounced to avoid cascading refetches
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (!mounted) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (mounted) fetchClients();
+      }, 800);
+    };
+
     const realtimeSub = supabase
       .channel('clients-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        if (mounted) fetchClients();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'brand_processes' }, () => {
-        if (mounted) fetchClients();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, () => {
-        if (mounted) fetchClients();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'brand_processes' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, debouncedFetch)
       .subscribe();
 
     return () => {
       mounted = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
       realtimeSub.unsubscribe();
     };
   }, []);
@@ -142,7 +146,7 @@ export default function AdminClientes() {
   const fetchAllRows = async <T,>(
     table: string,
     select: string,
-    extra?: (q: ReturnType<typeof supabase.from>) => ReturnType<typeof supabase.from>
+    extra?: (q: any) => any
   ): Promise<T[]> => {
     const PAGE_SIZE = 1000;
     const allData: T[] = [];
@@ -151,7 +155,7 @@ export default function AdminClientes() {
 
     while (hasMore) {
       let query = supabase.from(table as any).select(select).range(offset, offset + PAGE_SIZE - 1);
-      if (extra) query = extra(query) as any;
+      if (extra) query = extra(query);
       const { data, error } = await query;
       if (error) throw error;
       if (data && data.length > 0) {
@@ -171,7 +175,6 @@ export default function AdminClientes() {
       // Ensure session is active before querying
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        // Retry up to 3 times if session not yet ready
         if (retryCount < 3) {
           setTimeout(() => fetchClients(retryCount + 1), 600);
         } else {
@@ -180,12 +183,20 @@ export default function AdminClientes() {
         return;
       }
 
-      // Fetch ALL profiles using pagination (avoids silent 1000-row Supabase limit)
-      const profiles = await fetchAllRows<any>(
-        'profiles',
-        '*, client_funnel_type, created_by, assigned_to',
-        (q) => q.order('created_at', { ascending: false })
-      );
+      // ── Parallelizar as 3 queries principais ──────────────────────────
+      const [profiles, processes, contracts] = await Promise.all([
+        fetchAllRows<any>(
+          'profiles',
+          '*, client_funnel_type, created_by, assigned_to',
+          (q) => q.order('created_at', { ascending: false })
+        ),
+        fetchAllRows<any>('brand_processes', 'id, user_id, brand_name, business_area, pipeline_stage, status, process_number'),
+        fetchAllRows<any>(
+          'contracts',
+          'user_id, contract_value, payment_method',
+          (q) => q.order('created_at', { ascending: false })
+        ),
+      ]);
 
       // Retry if empty result on first attempt (can happen during auth hydration)
       if (profiles.length === 0 && retryCount < 2) {
@@ -194,30 +205,19 @@ export default function AdminClientes() {
         return;
       }
 
-      // Fetch all processes using pagination
-      const processes = await fetchAllRows<any>('brand_processes', '*');
-
-      // Fetch contract values to sync (also paginated)
-      const contracts = await fetchAllRows<any>(
-        'contracts',
-        'user_id, contract_value, payment_method',
-        (q) => q.order('created_at', { ascending: false })
-      );
-
-      // Fetch admin profiles for name resolution
+      // Resolve admin names (deduplicated, single query)
       const adminIds = new Set<string>();
-      for (const p of profiles || []) {
-        if ((p as any).created_by) adminIds.add((p as any).created_by);
-        if ((p as any).assigned_to) adminIds.add((p as any).assigned_to);
+      for (const p of profiles) {
+        if (p.created_by) adminIds.add(p.created_by);
+        if (p.assigned_to) adminIds.add(p.assigned_to);
       }
-      
+
       let adminNameMap: Record<string, string> = {};
       if (adminIds.size > 0) {
         const { data: adminProfiles } = await supabase
           .from('profiles')
           .select('id, full_name, email')
           .in('id', Array.from(adminIds));
-        
         if (adminProfiles) {
           adminProfiles.forEach(a => {
             adminNameMap[a.id] = a.full_name || a.email;
