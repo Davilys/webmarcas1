@@ -143,7 +143,7 @@ export function ClientImportExportDialog({
     setImportStep('preview');
   };
 
-  // Handle import
+  // Handle import — delegates to Edge Function (service role bypasses RLS)
   const handleImport = async () => {
     if (selectedRows.length === 0) {
       toast.error('Selecione pelo menos um registro para importar');
@@ -153,95 +153,36 @@ export function ClientImportExportDialog({
     setIsImporting(true);
     try {
       const clientsToImport = selectedRows.map(i => mappedClients[i]);
-      let imported = 0;
-      let updated = 0;
-      let errors = 0;
-      
-      for (const client of clientsToImport) {
-        const email = client.email?.toLowerCase().trim();
-        if (!email) continue;
-        
-        // Check if exists
-        const { data: existing } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
-        
-        if (existing) {
-          if (updateExisting) {
-            const { error } = await supabase
-              .from('profiles')
-              .update({
-                full_name: client.full_name || null,
-                phone: client.phone || null,
-                company_name: client.company_name || null,
-                cpf_cnpj: client.cpf_cnpj || null,
-                address: client.address || null,
-                city: client.city || null,
-                state: client.state || null,
-                zip_code: client.zip_code || null,
-                origin: client.origin || null,
-                priority: client.priority || null,
-                contract_value: client.contract_value || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existing.id);
-            
-            if (error) {
-              console.error('Error updating client:', error);
-              errors++;
-            } else {
-              updated++;
-            }
-          }
-        } else {
-          // Create new profile — always placed in Jurídico > Protocolado
-          const profileId = crypto.randomUUID();
-          const { error } = await supabase
-            .from('profiles')
-            .insert({
-              id: profileId,
-              email: email,
-              full_name: client.full_name || null,
-              phone: client.phone || null,
-              company_name: client.company_name || null,
-              cpf_cnpj: client.cpf_cnpj || null,
-              address: client.address || null,
-              city: client.city || null,
-              state: client.state || null,
-              zip_code: client.zip_code || null,
-              origin: client.origin || 'import',
-              priority: client.priority || 'medium',
-              contract_value: client.contract_value || null,
-              client_funnel_type: 'juridico',
-            });
-          
-          // Create a brand_process entry at pipeline_stage = 'protocolado' so the
-          // client appears in the Jurídico Kanban under "Protocolado"
-          if (!error) {
-            await supabase.from('brand_processes').insert({
-              user_id: profileId,
-              brand_name: client.company_name || client.full_name || email,
-              status: 'em_andamento',
-              pipeline_stage: 'protocolado',
-            });
-          }
-          
-          if (error) {
-            console.error('Error inserting client:', error);
-            errors++;
-          } else {
-            imported++;
-          }
-        }
+
+      const { data, error } = await supabase.functions.invoke('import-clients', {
+        body: { clients: clientsToImport, updateExisting },
+      });
+
+      if (error) {
+        console.error('Import function error:', error);
+        toast.error('Erro ao importar clientes: ' + (error.message || 'Erro desconhecido'));
+        return;
       }
-      
+
+      const { imported = 0, updated = 0, skipped = 0, errors = 0, errorDetails = [] } = data ?? {};
+
+      if (errorDetails.length > 0) {
+        console.warn('Import warnings:', errorDetails);
+      }
+
       let message = `${imported} cliente(s) importado(s)`;
       if (updated > 0) message += `, ${updated} atualizado(s)`;
+      if (skipped > 0) message += `, ${skipped} ignorado(s) (duplicados)`;
       if (errors > 0) message += `, ${errors} erro(s)`;
-      
-      toast.success(message);
+
+      if (imported > 0 || updated > 0) {
+        toast.success(message);
+      } else if (errors > 0) {
+        toast.error(message);
+      } else {
+        toast.info('Nenhum cliente novo para importar (todos já existem)');
+      }
+
       onImportComplete();
       onOpenChange(false);
       resetImport();
