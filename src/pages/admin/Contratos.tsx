@@ -380,7 +380,7 @@ export default function AdminContratos() {
       }
       
       toast.success('Contrato excluído com sucesso');
-      fetchContracts();
+      refreshContracts();
     } catch (error: any) {
       console.error('Error deleting contract:', error);
       toast.error(error.message || 'Erro ao excluir contrato');
@@ -493,7 +493,7 @@ export default function AdminContratos() {
               transition={{ delay: 0.3 }}
               className="flex items-center gap-2"
             >
-              <Button variant="outline" size="icon" onClick={fetchContracts} className="rounded-xl hover:bg-muted/80">
+              <Button variant="outline" size="icon" onClick={refreshContracts} className="rounded-xl hover:bg-muted/80">
                 <RefreshCw className="h-4 w-4" />
               </Button>
               <Button 
