@@ -338,10 +338,44 @@ export default function AdminConfiguracoes() {
           </div>
         </motion.div>
 
-        {/* ── Main Layout: sidebar + content ── */}
+        {/* ── Mobile Nav (< lg) — fora do flex row, largura total ── */}
+        <div className="flex lg:hidden flex-col gap-3 mb-3 relative z-10">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi}>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-muted-foreground/50 px-1 mb-1.5">
+                {group.label}
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      onClick={() => setActiveTab(item.value)}
+                      className={cn(
+                        'flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-semibold border transition-all duration-150 whitespace-nowrap',
+                        isActive ? 'text-white border-transparent' : 'bg-card/60 border-border/40 text-muted-foreground'
+                      )}
+                      style={isActive ? { background: item.color, boxShadow: `0 2px 10px ${item.color}50`, border: 'none' } : {}}
+                    >
+                      <Icon className="h-3 w-3 flex-shrink-0" />
+                      <span>{item.label}</span>
+                      {item.badge && (
+                        <span className="text-[8px] font-black bg-white/20 px-1 rounded-full">{item.badge}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Main Layout: sidebar (desktop) + content ── */}
         <div className="relative z-10 flex gap-4">
 
-          {/* ── Left Sidebar Nav ── */}
+          {/* ── Left Sidebar (desktop only) ── */}
           <motion.aside
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -349,19 +383,15 @@ export default function AdminConfiguracoes() {
             className="w-64 flex-shrink-0 hidden lg:block"
           >
             <div className="sticky top-4 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl overflow-hidden">
-              {/* Sidebar top glow line */}
               <div className="h-[1.5px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-
               <div className="p-3 space-y-1">
                 {NAV_GROUPS.map((group, gi) => (
                   <div key={gi} className={cn(gi > 0 && 'mt-3')}>
-                    {/* Group label */}
                     <div className="px-3 mb-1">
                       <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
                         {group.label}
                       </span>
                     </div>
-                    {/* Items */}
                     <div className="space-y-0.5">
                       {group.items.map(item => (
                         <NavItem
@@ -375,8 +405,6 @@ export default function AdminConfiguracoes() {
                   </div>
                 ))}
               </div>
-
-              {/* Sidebar footer */}
               <div className="border-t border-border/20 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <motion.div
@@ -392,42 +420,14 @@ export default function AdminConfiguracoes() {
             </div>
           </motion.aside>
 
-          {/* ── Mobile Tab Chips ── */}
-          <div className="flex lg:hidden gap-2 flex-wrap mb-1 w-full">
-            {ALL_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.value;
-              return (
-                <motion.button
-                  key={item.value}
-                  onClick={() => setActiveTab(item.value)}
-                  whileTap={{ scale: 0.94 }}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200',
-                    isActive
-                      ? 'text-white border-transparent'
-                      : 'bg-card/50 backdrop-blur-sm border-border/40 text-muted-foreground hover:text-foreground'
-                  )}
-                  style={isActive ? { background: item.color, boxShadow: `0 2px 12px ${item.color}55` } : {}}
-                >
-                  <Icon className="h-3 w-3" />
-                  {item.label}
-                </motion.button>
-              );
-            })}
-          </div>
-
-          {/* ── Right Content Area ── */}
+          {/* ── Content Area ── */}
           <motion.main
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
             className="flex-1 min-w-0"
           >
-            {/* Section header */}
             <SectionHeader item={activeItem} />
-
-            {/* Content */}
             <SettingsContent active={activeTab} />
           </motion.main>
         </div>
