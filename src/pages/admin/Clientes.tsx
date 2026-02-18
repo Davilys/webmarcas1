@@ -7,11 +7,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, LayoutGrid, List, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale, TrendingUp, Star, UserCheck, UserPlus, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Search, LayoutGrid, List, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale, Star, UserCheck, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import * as XLSX from 'xlsx';
+
 import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters, type FunnelType } from '@/components/admin/clients/ClientKanbanBoard';
 import { ClientListView } from '@/components/admin/clients/ClientListView';
 import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
@@ -51,107 +51,8 @@ export default function AdminClientes() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [viewOwnOnly, setViewOwnOnly] = useState(false);
   const [adminUsers, setAdminUsers] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
-  
-  // NEW: Funnel type toggle - default to commercial
   const [funnelType, setFunnelType] = useState<FunnelType>('comercial');
-  const [xlsImporting, setXlsImporting] = useState(false);
 
-  // One-time import from Clientes_3.xls
-  const importFromXLS = async () => {
-    setXlsImporting(true);
-    try {
-      const response = await fetch('/Clientes_3.xls');
-      if (!response.ok) throw new Error('Arquivo não encontrado');
-      const arrayBuffer = await response.arrayBuffer();
-
-      const data = new Uint8Array(arrayBuffer);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
-
-      // Fetch existing for deduplication
-      const { data: existingProfiles } = await supabase
-        .from('profiles')
-        .select('email, cpf_cnpj');
-
-      const existingEmails = new Set(
-        existingProfiles?.map(p => p.email?.toLowerCase().trim()).filter(Boolean) || []
-      );
-      const existingCpfs = new Set(
-        existingProfiles?.map(p => (p.cpf_cnpj || '').replace(/\D/g, '')).filter(Boolean) || []
-      );
-
-      // Deduplicate within the XLS file itself
-      const seenEmails = new Set<string>();
-      const seenCpfs = new Set<string>();
-      const uniqueClients: Record<string, unknown>[] = [];
-
-      for (const row of jsonData) {
-        const email = ((row['Email'] || '') as string).toLowerCase().trim();
-        const cpf = ((row['CPF ou CNPJ'] || '') as string).toString().replace(/\D/g, '');
-
-        // Skip duplicates within the file
-        if (email && seenEmails.has(email)) continue;
-        if (!email && cpf && seenCpfs.has(cpf)) continue;
-
-        // Skip if already in DB
-        if (email && existingEmails.has(email)) continue;
-        if (!email && cpf && existingCpfs.has(cpf)) continue;
-
-        if (email) seenEmails.add(email);
-        if (cpf) seenCpfs.add(cpf);
-
-        uniqueClients.push(row);
-      }
-
-      let imported = 0;
-      let errors = 0;
-
-      for (const row of uniqueClients) {
-        const email = ((row['Email'] || '') as string).toLowerCase().trim();
-        if (!email) continue;
-
-        const cityState = ((row['Cidade'] || '') as string).toString();
-        const city = cityState.split(' - ')[0]?.trim() || null;
-        const numVal = ((row['Número'] || '') as string).toString();
-        const rua = ((row['Rua'] || '') as string).toString();
-        const bairro = ((row['Bairro'] || '') as string).toString();
-        const addressParts = [rua, numVal && numVal !== 'S/N' && numVal !== '0' ? numVal : '', bairro].filter(Boolean);
-
-        const { error } = await supabase.from('profiles').insert({
-          id: crypto.randomUUID(),
-          email,
-          full_name: ((row['Nome'] || '') as string).toString() || null,
-          phone: ((row['Fone'] || '') as string).toString() || null,
-          cpf_cnpj: ((row['CPF ou CNPJ'] || '') as string).toString() || null,
-          address: addressParts.join(', ') || null,
-          city,
-          state: ((row['Estado'] || '') as string).toString() || null,
-          zip_code: ((row['CEP'] || '') as string).toString() || null,
-          origin: 'import',
-          priority: 'medium',
-        });
-
-        if (error) {
-          console.error('Import row error:', error);
-          errors++;
-        } else {
-          imported++;
-        }
-      }
-
-      const skipped = jsonData.length - uniqueClients.length;
-      toast.success(
-        `✅ ${imported} clientes importados${skipped > 0 ? `, ${skipped} duplicados removidos` : ''}${errors > 0 ? `, ${errors} erros` : ''}`
-      );
-      refreshClients();
-    } catch (error) {
-      console.error('XLS import error:', error);
-      toast.error('Erro ao importar arquivo XLS');
-    } finally {
-      setXlsImporting(false);
-    }
-  };
 
   // Wait for auth session before fetching — fixes intermittent "0 clients" bug
   useEffect(() => {
@@ -518,21 +419,6 @@ export default function AdminClientes() {
               />
               <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60" onClick={() => setImportExportOpen(true)}>
                 <Upload className="h-3.5 w-3.5" /> Importar
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5 border-emerald-500/60 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
-                onClick={importFromXLS}
-                disabled={xlsImporting}
-                title="Importar Clientes_3.xls (remove duplicados automaticamente)"
-              >
-                {xlsImporting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="h-3.5 w-3.5" />
-                )}
-                {xlsImporting ? 'Importando...' : 'Clientes_3.xls'}
               </Button>
               <CreateClientDialog onClientCreated={refreshClients} />
             </div>

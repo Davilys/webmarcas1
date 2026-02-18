@@ -196,12 +196,12 @@ export function ClientImportExportDialog({
             }
           }
         } else {
-          // Create new - need to create auth user first or just profile
-          // For now, we'll create a profile with a generated ID
+          // Create new profile — always placed in Jurídico > Protocolado
+          const profileId = crypto.randomUUID();
           const { error } = await supabase
             .from('profiles')
             .insert({
-              id: crypto.randomUUID(),
+              id: profileId,
               email: email,
               full_name: client.full_name || null,
               phone: client.phone || null,
@@ -212,9 +212,21 @@ export function ClientImportExportDialog({
               state: client.state || null,
               zip_code: client.zip_code || null,
               origin: client.origin || 'import',
-              priority: client.priority || null,
+              priority: client.priority || 'medium',
               contract_value: client.contract_value || null,
+              client_funnel_type: 'juridico',
             });
+          
+          // Create a brand_process entry at pipeline_stage = 'protocolado' so the
+          // client appears in the Jurídico Kanban under "Protocolado"
+          if (!error) {
+            await supabase.from('brand_processes').insert({
+              user_id: profileId,
+              brand_name: client.company_name || client.full_name || email,
+              status: 'em_andamento',
+              pipeline_stage: 'protocolado',
+            });
+          }
           
           if (error) {
             console.error('Error inserting client:', error);
