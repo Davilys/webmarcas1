@@ -60,6 +60,13 @@ interface ContractTemplate {
 
 type DocumentType = 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
 
+// Always returns the production domain to avoid broken links when admin is in Lovable preview
+const getProductionBaseUrl = () => {
+  const origin = window.location.origin;
+  const isPreview = origin.includes('lovableproject.com') || origin.includes('localhost');
+  return isPreview ? 'https://webmarcas1.lovable.app' : origin;
+};
+
 // Validation schemas matching public form
 const personalDataSchema = z.object({
   fullName: z.string().min(3, "Nome completo obrigatório"),
@@ -787,7 +794,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId, expiresInDays: 7, baseUrl: window.location.origin }),
+          body: JSON.stringify({ contractId, expiresInDays: 7, baseUrl: getProductionBaseUrl() }),
         }
       );
 
@@ -819,7 +826,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId, expiresInDays: 7, baseUrl: window.location.origin }),
+          body: JSON.stringify({ contractId, expiresInDays: 7, baseUrl: getProductionBaseUrl() }),
         }
       );
 
@@ -843,7 +850,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
           body: JSON.stringify({ 
             contractId, 
             channels: ['email', 'whatsapp'], 
-            baseUrl: window.location.origin,
+            baseUrl: getProductionBaseUrl(),
             // Override contact info for new clients
             overrideContact: newClientContact,
           }),

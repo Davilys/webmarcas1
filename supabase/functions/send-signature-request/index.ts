@@ -74,7 +74,14 @@ serve(async (req) => {
     const recipientPhone = overrideContact?.phone || profile?.phone;
     const recipientName = overrideContact?.name || contract.signatory_name || profile?.full_name || 'Cliente';
     
-    const baseUrl = clientBaseUrl || Deno.env.get('SITE_URL') || 'https://webmarcas.com.br';
+    // Always prefer SITE_URL (production domain). Ignore preview/localhost domains.
+    const siteUrl = Deno.env.get('SITE_URL');
+    const isPreviewDomain = clientBaseUrl && (
+      clientBaseUrl.includes('lovableproject.com') ||
+      clientBaseUrl.includes('lovable.app') ||
+      clientBaseUrl.includes('localhost')
+    );
+    const baseUrl = siteUrl || (!isPreviewDomain ? clientBaseUrl : null) || 'https://webmarcas.com.br';
     const signatureUrl = `${baseUrl}/assinar/${contract.signature_token}`;
     
     const documentTypeName = contract.document_type === 'procuracao' ? 'Procuração' :
