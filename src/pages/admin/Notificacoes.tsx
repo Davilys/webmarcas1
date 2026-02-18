@@ -294,6 +294,7 @@ export default function AdminNotificacoes() {
   const [sending, setSending] = useState(false);
   const [formData, setFormData] = useState({ title: '', message: '', type: 'info', user_id: '', link: '' });
   const [templateForm, setTemplateForm] = useState({ name: '', title: '', message: '', type: 'info', category: 'geral' });
+  const [channels, setChannels] = useState({ crm: true, sms: false, whatsapp: false });
 
   useEffect(() => { fetchNotifications(); fetchClients(); fetchTemplates(); }, []);
 
@@ -330,16 +331,37 @@ export default function AdminNotificacoes() {
     if (!sendToAll && !formData.user_id) { toast.error('Selecione um cliente ou "Enviar para todos"'); return; }
     setSending(true);
     const base = { title: formData.title, message: formData.message, type: formData.type, link: formData.link || null, read: false };
-    if (sendToAll) {
-      const rows = clients.map(c => ({ ...base, user_id: c.id }));
-      const { error } = await supabase.from('notifications').insert(rows);
-      if (error) toast.error('Erro ao enviar');
-      else { toast.success(`Enviado para ${clients.length} clientes`); fetchNotifications(); setDialogOpen(false); resetForm(); }
-    } else {
-      const { error } = await supabase.from('notifications').insert({ ...base, user_id: formData.user_id });
-      if (error) toast.error('Erro ao enviar');
-      else { toast.success('Notificação enviada!'); fetchNotifications(); setDialogOpen(false); resetForm(); }
+
+    // CRM insert
+    if (channels.crm) {
+      if (sendToAll) {
+        const rows = clients.map(c => ({ ...base, user_id: c.id }));
+        const { error } = await supabase.from('notifications').insert(rows);
+        if (error) toast.error('Erro ao enviar no CRM');
+        else toast.success(`CRM: enviado para ${clients.length} clientes`);
+      } else {
+        const { error } = await supabase.from('notifications').insert({ ...base, user_id: formData.user_id });
+        if (error) toast.error('Erro ao enviar no CRM');
+        else toast.success('CRM: notificação enviada!');
+      }
     }
+
+    // SMS + WhatsApp via multichannel engine
+    const extraChannels = (['sms', 'whatsapp'] as const).filter(c => channels[c]);
+    if (extraChannels.length > 0 && !sendToAll && formData.user_id) {
+      const client = clients.find(c => c.id === formData.user_id);
+      await supabase.functions.invoke('send-multichannel-notification', {
+        body: {
+          event_type: 'manual',
+          channels: extraChannels,
+          recipient: { nome: client?.full_name || 'Cliente', email: client?.email, user_id: formData.user_id },
+          data: { titulo: formData.title, mensagem_custom: formData.message, link: formData.link },
+        },
+      });
+      toast.success(`${extraChannels.map(c => c.toUpperCase()).join(' + ')}: enviado!`);
+    }
+
+    fetchNotifications(); setDialogOpen(false); resetForm();
     setSending(false);
   };
 
@@ -367,7 +389,7 @@ export default function AdminNotificacoes() {
     setTemplateDialogOpen(true);
   };
 
-  const resetForm = () => { setFormData({ title: '', message: '', type: 'info', user_id: '', link: '' }); setSendToAll(false); setSelectedTemplate(''); };
+  const resetForm = () => { setFormData({ title: '', message: '', type: 'info', user_id: '', link: '' }); setSendToAll(false); setSelectedTemplate(''); setChannels({ crm: true, sms: false, whatsapp: false }); };
   const resetTemplateForm = () => { setTemplateForm({ name: '', title: '', message: '', type: 'info', category: 'geral' }); setEditingTemplate(null); };
 
   const getCategoryLabel = (cat: string) => templateCategories.find(c => c.value === cat)?.label || cat;
@@ -593,6 +615,31 @@ export default function AdminNotificacoes() {
                             onChange={e => setFormData({ ...formData, link: e.target.value })}
                             placeholder="/cliente/processos" />
                         </div>
+                      </div>
+
+                      {/* Channels */}
+                      <div className="space-y-2 p-3 rounded-xl border" style={{ background: 'hsl(var(--muted)/0.3)', borderColor: 'hsl(var(--border)/0.4)' }}>
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Canais de Envio</p>
+                        <div className="flex flex-wrap gap-3">
+                          {([
+                            { key: 'crm', label: 'CRM (in-app)', color: 'rgb(168,85,247)' },
+                            { key: 'sms', label: 'SMS (Zenvia)', color: 'rgb(99,102,241)' },
+                            { key: 'whatsapp', label: 'WhatsApp (BotConversa)', color: 'rgb(34,197,94)' },
+                          ] as const).map(ch => (
+                            <label key={ch.key} className="flex items-center gap-2 cursor-pointer">
+                              <div
+                                onClick={() => setChannels(prev => ({ ...prev, [ch.key]: !prev[ch.key] }))}
+                                className={cn('w-4 h-4 rounded border-2 flex items-center justify-center transition-all flex-shrink-0',
+                                  channels[ch.key] ? 'border-transparent' : 'border-border bg-card')}
+                                style={channels[ch.key] ? { background: ch.color } : {}}
+                              >
+                                {channels[ch.key] && <CheckCircle2 className="h-2.5 w-2.5 text-white" />}
+                              </div>
+                              <span className="text-xs">{ch.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">SMS e WhatsApp requerem telefone do cliente cadastrado e integração configurada em Configurações → Integrações.</p>
                       </div>
 
                       {/* Recipient */}

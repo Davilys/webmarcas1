@@ -88,6 +88,25 @@ serve(async (req) => {
 
     console.log('Signature link generated:', { contractId, token: token.substring(0, 8) + '...', expiresAt });
 
+    // Multichannel notification: link gerado
+    try {
+      if (contract.user_id) {
+        const { data: profile } = await supabase.from('profiles').select('email, full_name, phone').eq('id', contract.user_id).single();
+        if (profile) {
+          await fetch(`${supabaseUrl}/functions/v1/send-multichannel-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+            body: JSON.stringify({
+              event_type: 'link_assinatura_gerado',
+              channels: ['crm', 'sms', 'whatsapp'],
+              recipient: { nome: profile.full_name || 'Cliente', email: profile.email, phone: profile.phone || '', user_id: contract.user_id },
+              data: { link: signatureUrl, marca: contract.subject || '' },
+            }),
+          });
+        }
+      }
+    } catch (e) { console.error('Error sending signature link multichannel notification:', e); }
+
     return new Response(
       JSON.stringify({
         success: true,
