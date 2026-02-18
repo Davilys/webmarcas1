@@ -37,7 +37,9 @@ interface EmailComposeProps {
   replyTo?: Email | null;
   initialTo?: string;
   initialName?: string;
+  initialBody?: string;
 }
+
 
 interface ClientWithProcess {
   id: string;
@@ -139,7 +141,7 @@ function replaceTemplateVariables(text: string, client: ClientWithProcess | null
     .replace(/\{\{link_portal\}\}/g, 'https://webmarcas1.lovable.app/cliente');
 }
 
-export function EmailCompose({ onClose, replyTo, initialTo, initialName }: EmailComposeProps) {
+export function EmailCompose({ onClose, replyTo, initialTo, initialName, initialBody }: EmailComposeProps) {
   const queryClient = useQueryClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -148,10 +150,13 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName }: Email
   const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '');
   const [body, setBody] = useState(
-    replyTo
+    initialBody
+      ? initialBody
+      : replyTo
       ? `\n\n---\nEm resposta a:\n${replyTo.body_text?.slice(0, 500)}`
       : initialName ? `Prezado(a) ${initialName},\n\n` : ''
   );
+
   const [showCc, setShowCc] = useState(false);
   const [showBcc, setShowBcc] = useState(false);
   const [activeTab, setActiveTab] = useState<'compose' | 'preview'>('compose');
