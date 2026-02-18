@@ -524,71 +524,116 @@ export default function RecursosINPI() {
               ))}
             </motion.div>
 
-            {/* Dispatch Type Summary with Visual Chart */}
-            <motion.div {...fadeIn} transition={{ delay: 0.2 }} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Dispatch Type Summary — Premium Cards */}
+            <motion.div {...fadeIn} transition={{ delay: 0.2 }} className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {[
                 { 
                   label: 'Indeferimentos', 
+                  subtitle: 'Recurso contra decisão',
                   count: dispatchStats.indeferimento, 
                   icon: XCircle, 
-                  color: 'text-red-500', 
-                  bg: 'bg-red-500/10', 
-                  barColor: 'bg-red-500',
-                  borderColor: 'border-red-500/20',
+                  gradient: 'from-red-500 to-rose-600',
+                  glowColor: 'hsla(0, 72%, 51%, 0.15)',
+                  ringColor: 'stroke-red-500',
+                  ringBg: 'stroke-red-500/15',
+                  tagBg: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
                   approved: resources.filter(r => r.resource_type === 'indeferimento' && r.status === 'approved').length,
                 },
                 { 
-                  label: 'Exigências de Mérito', 
+                  label: 'Exigências', 
+                  subtitle: 'Mérito técnico',
                   count: dispatchStats.exigencia_merito, 
                   icon: AlertTriangle, 
-                  color: 'text-amber-500', 
-                  bg: 'bg-amber-500/10', 
-                  barColor: 'bg-amber-500',
-                  borderColor: 'border-amber-500/20',
+                  gradient: 'from-amber-500 to-orange-500',
+                  glowColor: 'hsla(38, 92%, 50%, 0.15)',
+                  ringColor: 'stroke-amber-500',
+                  ringBg: 'stroke-amber-500/15',
+                  tagBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
                   approved: resources.filter(r => r.resource_type === 'exigencia_merito' && r.status === 'approved').length,
                 },
                 { 
                   label: 'Oposições', 
+                  subtitle: 'Manifestação de terceiros',
                   count: dispatchStats.oposicao, 
                   icon: Shield, 
-                  color: 'text-blue-500', 
-                  bg: 'bg-blue-500/10', 
-                  barColor: 'bg-blue-500',
-                  borderColor: 'border-blue-500/20',
+                  gradient: 'from-blue-500 to-indigo-600',
+                  glowColor: 'hsla(210, 100%, 50%, 0.15)',
+                  ringColor: 'stroke-blue-500',
+                  ringBg: 'stroke-blue-500/15',
+                  tagBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
                   approved: resources.filter(r => r.resource_type === 'oposicao' && r.status === 'approved').length,
                 },
-              ].map((item, i) => (
-                <Card key={i} className={`border ${item.borderColor} hover:shadow-md transition-all`}>
-                  <CardContent className="p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-xl ${item.bg} flex items-center justify-center`}>
-                          <item.icon className={`h-5 w-5 ${item.color}`} />
+              ].map((item, i) => {
+                const pct = stats.total > 0 ? Math.round((item.count / stats.total) * 100) : 0;
+                const circumference = 2 * Math.PI * 36;
+                const strokeDash = (pct / 100) * circumference;
+
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.25 + i * 0.12, ease: 'easeOut' }}
+                    className="group relative overflow-hidden rounded-2xl border border-border/50 bg-card backdrop-blur-sm hover:shadow-xl transition-all duration-500"
+                    style={{ boxShadow: `0 8px 32px ${item.glowColor}` }}
+                  >
+                    {/* Background decorative gradient */}
+                    <div className={`absolute -top-12 -right-12 h-32 w-32 rounded-full bg-gradient-to-br ${item.gradient} opacity-[0.07] blur-2xl group-hover:opacity-[0.12] transition-opacity duration-500`} />
+                    <div className={`absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-gradient-to-tr ${item.gradient} opacity-[0.04] blur-xl`} />
+
+                    <div className="relative p-5 flex items-start gap-4">
+                      {/* Animated Ring Chart */}
+                      <div className="relative flex-shrink-0">
+                        <svg width="88" height="88" viewBox="0 0 88 88" className="transform -rotate-90">
+                          <circle cx="44" cy="44" r="36" fill="none" strokeWidth="6" className={item.ringBg} />
+                          <motion.circle
+                            cx="44" cy="44" r="36" fill="none" strokeWidth="6"
+                            className={item.ringColor}
+                            strokeLinecap="round"
+                            strokeDasharray={circumference}
+                            initial={{ strokeDashoffset: circumference }}
+                            animate={{ strokeDashoffset: circumference - strokeDash }}
+                            transition={{ duration: 1.2, delay: 0.4 + i * 0.15, ease: 'easeOut' }}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-lg font-bold leading-none">{item.count}</span>
+                          <span className="text-[10px] text-muted-foreground font-medium">{pct}%</span>
                         </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 space-y-2.5">
                         <div>
-                          <p className="font-semibold text-sm">{item.label}</p>
-                          <p className="text-xs text-muted-foreground">{item.approved} aprovado{item.approved !== 1 ? 's' : ''}</p>
+                          <h3 className="font-semibold text-sm tracking-tight">{item.label}</h3>
+                          <p className="text-[11px] text-muted-foreground leading-tight">{item.subtitle}</p>
+                        </div>
+
+                        {/* Tags */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border ${item.tagBg}`}>
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            {item.approved} aprovado{item.approved !== 1 ? 's' : ''}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-muted text-muted-foreground border border-border/50">
+                            {item.count - item.approved} pendente{item.count - item.approved !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        {/* Mini bar */}
+                        <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
+                          <motion.div
+                            className={`h-full rounded-full bg-gradient-to-r ${item.gradient}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${maxDispatch > 0 ? (item.count / maxDispatch) * 100 : 0}%` }}
+                            transition={{ duration: 0.9, delay: 0.5 + i * 0.15, ease: 'easeOut' }}
+                          />
                         </div>
                       </div>
-                      <span className="text-3xl font-bold">{item.count}</span>
                     </div>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{stats.total > 0 ? Math.round((item.count / stats.total) * 100) : 0}% do total</span>
-                        <span>{item.count}/{stats.total}</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <motion.div 
-                          className={`h-full ${item.barColor} rounded-full`}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${maxDispatch > 0 ? (item.count / maxDispatch) * 100 : 0}%` }}
-                          transition={{ duration: 0.8, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </motion.div>
+                );
+              })}
             </motion.div>
           </>
         )}
