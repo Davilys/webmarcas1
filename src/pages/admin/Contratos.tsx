@@ -800,7 +800,7 @@ export default function AdminContratos() {
         contract={editContract}
         open={editOpen}
         onOpenChange={setEditOpen}
-        onSuccess={fetchContracts}
+        onSuccess={refreshContracts}
       />
     </AdminLayout>
   );
