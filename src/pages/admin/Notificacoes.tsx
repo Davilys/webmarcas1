@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   CheckCircle2, AlertTriangle, Info, Zap, Sparkles, Radio,
   Clock, Search, TrendingUp, Activity,
   RefreshCw, Eye, MessageSquare, Smartphone, Wifi,
-  XCircle, BarChart3, Package, AlertCircle,
+  XCircle, BarChart3, Package, AlertCircle, Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';

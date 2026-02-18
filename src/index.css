@@ -697,3 +697,9 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(214, 32%, 70%);
 }
+
+/* Row fade-in animation for Contratos table */
+@keyframes fadeInRow {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
