@@ -686,7 +686,10 @@ export default function AdminClientes() {
             priority: c.priority,
             contract_value: c.contract_value,
           }))}
-          onImportComplete={refreshClients}
+          onImportComplete={() => {
+            setFunnelType('juridico');   // auto-switch to juridico where imported clients land
+            refreshClients();
+          }}
         />
       </div>
     </AdminLayout>
