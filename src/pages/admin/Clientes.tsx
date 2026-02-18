@@ -420,7 +420,7 @@ export default function AdminClientes() {
               <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60" onClick={() => setImportExportOpen(true)}>
                 <Upload className="h-3.5 w-3.5" /> Importar
               </Button>
-              <CreateClientDialog onClientCreated={fetchClients} />
+              <CreateClientDialog onClientCreated={refreshClients} />
             </div>
           </div>
         </motion.div>
