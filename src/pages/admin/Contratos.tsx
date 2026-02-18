@@ -309,9 +309,20 @@ export default function AdminContratos() {
     };
   }, []);
 
-  const fetchContracts = async () => {
+  const fetchContracts = async (retryCount = 0) => {
     setLoading(true);
     try {
+      // Ensure session is active before querying
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (retryCount < 3) {
+          setTimeout(() => fetchContracts(retryCount + 1), 600);
+        } else {
+          setLoading(false);
+        }
+        return;
+      }
+
       const { data, error } = await supabase
         .from('contracts')
         .select(`
@@ -323,6 +334,14 @@ export default function AdminContratos() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Retry if empty result on first attempt (auth hydration race)
+      if ((!data || data.length === 0) && retryCount < 2) {
+        setTimeout(() => fetchContracts(retryCount + 1), 800);
+        setLoading(false);
+        return;
+      }
+
       setContracts(data || []);
     } catch (error) {
       console.error('Error fetching contracts:', error);
@@ -331,6 +350,9 @@ export default function AdminContratos() {
       setLoading(false);
     }
   };
+
+  // Wrapper without args — safe to pass directly to onClick handlers and callbacks
+  const refreshContracts = () => fetchContracts(0);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
