@@ -45,7 +45,7 @@ export function EmailView({ email, onBack, onReply }: EmailViewProps) {
             <Button variant="ghost" size="icon">
               <Star className={cn(
                 'h-5 w-5',
-                email.is_starred ? 'fill-yellow-400 text-yellow-400' : ''
+                email.is_starred ? 'fill-primary text-primary' : ''
               )} />
             </Button>
             <Button variant="ghost" size="icon" className="text-destructive">
