@@ -787,13 +787,13 @@ export default function AdminContratos() {
         contract={selectedContract}
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        onUpdate={fetchContracts}
+        onUpdate={refreshContracts}
       />
 
       <CreateContractDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onSuccess={fetchContracts}
+        onSuccess={refreshContracts}
       />
 
       <EditContractDialog
