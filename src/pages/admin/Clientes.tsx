@@ -669,7 +669,7 @@ export default function AdminClientes() {
           client={selectedClient}
           open={detailOpen}
           onOpenChange={setDetailOpen}
-          onUpdate={fetchClients}
+          onUpdate={refreshClients}
         />
 
         {/* Import/Export Dialog */}
@@ -686,7 +686,7 @@ export default function AdminClientes() {
             priority: c.priority,
             contract_value: c.contract_value,
           }))}
-          onImportComplete={fetchClients}
+          onImportComplete={refreshClients}
         />
       </div>
     </AdminLayout>
