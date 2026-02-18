@@ -29,6 +29,8 @@ const cleanMarkdown = (text: string): string => {
     .replace(/_([^_]+)_/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/#{1,6}\s*/g, '')
+    // Strip all Unicode box-drawing characters that jsPDF cannot render
+    .replace(/[\u2500-\u257F\u2580-\u259F\u2550-\u256C]/g, '')
     .trim();
 };
 
@@ -37,9 +39,15 @@ const stripClosingFromContent = (text: string): string => {
   // Remove footer address/contact lines that the AI sometimes includes
   let cleaned = text.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
   cleaned = cleaned.replace(/^Tel:?\s*\(11\).*$/gm, '');
-  // Remove duplicate closing blocks (Termos em que / Pede deferimento / São Paulo / signature lines / underscores)
+  // Remove Unicode box-drawing / separator lines (═══, ───, ━━━, etc.) that jsPDF can't render
+  cleaned = cleaned.replace(/^[═─━╌╍┄┅┈┉▬%P\s]{3,}$/gm, '');
+  // Remove lines that are just repeated special chars (catch-all for decorative separators)
+  cleaned = cleaned.replace(/^[\u2500-\u257F\u2580-\u259F\u2550-\u256C]{2,}.*$/gm, '');
+  // Remove duplicate closing blocks (underscores, closing text)
   cleaned = cleaned.replace(/^[_]{3,}$/gm, '');
-  // Remove trailing closing section if it exists (starts with "Protesta provar" or "Nestes termos" or "Termos em que")
+  // Replace "Examinador/Opoente:" with "Oponente:" in the content itself
+  cleaned = cleaned.replace(/Examinador\/Opoe?nte:/gi, 'Oponente:');
+  // Remove trailing closing section if it exists
   const closingPatterns = [
     /\n\s*Protesta provar[\s\S]*$/i,
     /\n\s*Nestes termos[\s\S]*$/i,
