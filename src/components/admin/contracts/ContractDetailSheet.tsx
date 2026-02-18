@@ -183,7 +183,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId: contract.id, expiresInDays: 7, baseUrl: window.location.origin }),
+          body: JSON.stringify({ contractId: contract.id, expiresInDays: 7, baseUrl: getProductionBaseUrl() }),
         }
       );
 
@@ -214,7 +214,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'], baseUrl: window.location.origin }),
+          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'], baseUrl: getProductionBaseUrl() }),
         }
       );
 
@@ -233,9 +233,16 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     }
   };
 
+  // Always use the production domain for signature links (avoids broken links from Lovable preview)
+  const getProductionBaseUrl = () => {
+    const origin = window.location.origin;
+    const isPreview = origin.includes('lovableproject.com') || origin.includes('localhost');
+    return isPreview ? 'https://webmarcas1.lovable.app' : origin;
+  };
+
   const copySignatureLink = () => {
     if (contract?.signature_token) {
-      const url = `${window.location.origin}/assinar/${contract.signature_token}`;
+      const url = `${getProductionBaseUrl()}/assinar/${contract.signature_token}`;
       navigator.clipboard.writeText(url);
       toast.success('Link copiado!');
     }
@@ -475,7 +482,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
   if (!contract) return null;
 
   const signatureUrl = contract.signature_token 
-    ? `${window.location.origin}/assinar/${contract.signature_token}`
+    ? `${getProductionBaseUrl()}/assinar/${contract.signature_token}`
     : null;
 
   const isExpired = contract.signature_expires_at 
