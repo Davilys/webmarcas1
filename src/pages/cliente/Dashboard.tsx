@@ -80,35 +80,31 @@ function AnimatedCount({ target, prefix = '' }: { target: number; prefix?: strin
 }
 
 // ─── Particle Field ─────────────────────────────────────
+// Fixed values to avoid re-render issues with Math.random()
+const CLIENT_PARTICLES = Array.from({ length: 20 }).map((_, i) => ({
+  w: 1 + (i % 3) * 1,
+  h: 1 + (i % 3) * 1,
+  left: (i * 37.3 + 5) % 100,
+  top: (i * 53.7 + 11) % 100,
+  dur: 3 + (i % 4),
+  delay: (i * 0.47) % 5,
+  color: i % 3 === 0
+    ? 'hsl(210 100% 50% / 0.5)'
+    : i % 3 === 1
+    ? 'hsl(152 76% 45% / 0.4)'
+    : 'hsl(220 100% 60% / 0.3)',
+}));
+
 function ParticleField() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 20 }).map((_, i) => (
+      {CLIENT_PARTICLES.map((p, i) => (
         <motion.div
           key={i}
           className="absolute rounded-full"
-          style={{
-            width: Math.random() * 3 + 1,
-            height: Math.random() * 3 + 1,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            background: i % 3 === 0
-              ? 'hsl(210 100% 50% / 0.5)'
-              : i % 3 === 1
-              ? 'hsl(152 76% 45% / 0.4)'
-              : 'hsl(220 100% 60% / 0.3)',
-          }}
-          animate={{
-            y: [0, -30, 0],
-            opacity: [0, 0.8, 0],
-            scale: [0, 1.5, 0],
-          }}
-          transition={{
-            duration: Math.random() * 4 + 3,
-            repeat: Infinity,
-            delay: Math.random() * 5,
-            ease: 'easeInOut',
-          }}
+          style={{ width: p.w, height: p.h, left: `${p.left}%`, top: `${p.top}%`, background: p.color }}
+          animate={{ y: [0, -30, 0], opacity: [0, 0.8, 0], scale: [0, 1.5, 0] }}
+          transition={{ duration: p.dur, repeat: Infinity, delay: p.delay, ease: 'easeInOut' }}
         />
       ))}
     </div>
