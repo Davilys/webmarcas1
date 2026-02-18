@@ -484,7 +484,7 @@ export default function AdminClientes() {
 
             {/* Toolbar Icons */}
             <div className="flex items-center gap-1.5 shrink-0">
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={fetchClients} title="Atualizar">
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={refreshClients} title="Atualizar">
                 <RefreshCw className="h-4 w-4" />
               </Button>
               
