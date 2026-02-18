@@ -143,7 +143,7 @@ export function ClientImportExportDialog({
     setImportStep('preview');
   };
 
-  // Handle import — delegates to Edge Function (service role bypasses RLS)
+  // Handle import — delegates to Edge Function in chunks of 50 to avoid HTTP timeouts
   const handleImport = async () => {
     if (selectedRows.length === 0) {
       toast.error('Selecione pelo menos um registro para importar');
@@ -152,32 +152,73 @@ export function ClientImportExportDialog({
     
     setIsImporting(true);
     try {
-      const clientsToImport = selectedRows.map(i => mappedClients[i]);
+      // ── 1. Get selected clients ──────────────────────────────────────────
+      const allSelected = selectedRows.map(i => mappedClients[i]);
 
-      const { data, error } = await supabase.functions.invoke('import-clients', {
-        body: { clients: clientsToImport, updateExisting },
+      // ── 2. Deduplicate by email within the file (keep first occurrence) ──
+      const seenEmails = new Set<string>();
+      const clientsToImport = allSelected.filter(c => {
+        const email = (c.email || '').toLowerCase().trim();
+        if (!email || seenEmails.has(email)) return false;
+        seenEmails.add(email);
+        return true;
       });
 
-      if (error) {
-        console.error('Import function error:', error);
-        toast.error('Erro ao importar clientes: ' + (error.message || 'Erro desconhecido'));
-        return;
+      const deduped = allSelected.length - clientsToImport.length;
+      if (deduped > 0) {
+        toast.info(`${deduped} e-mail(s) duplicado(s) no arquivo removidos automaticamente`);
       }
 
-      const { imported = 0, updated = 0, skipped = 0, errors = 0, errorDetails = [] } = data ?? {};
-
-      if (errorDetails.length > 0) {
-        console.warn('Import warnings:', errorDetails);
+      // ── 3. Split into chunks of 50 ───────────────────────────────────────
+      const CHUNK_SIZE = 50;
+      const chunks: typeof clientsToImport[] = [];
+      for (let i = 0; i < clientsToImport.length; i += CHUNK_SIZE) {
+        chunks.push(clientsToImport.slice(i, i + CHUNK_SIZE));
       }
 
-      let message = `${imported} cliente(s) importado(s)`;
-      if (updated > 0) message += `, ${updated} atualizado(s)`;
-      if (skipped > 0) message += `, ${skipped} ignorado(s) (duplicados)`;
-      if (errors > 0) message += `, ${errors} erro(s)`;
+      let totalImported = 0;
+      let totalUpdated = 0;
+      let totalSkipped = 0;
+      let totalErrors = 0;
+      const allErrorDetails: string[] = [];
 
-      if (imported > 0 || updated > 0) {
+      // ── 4. Call edge function once per chunk with progress toasts ────────
+      for (let idx = 0; idx < chunks.length; idx++) {
+        if (chunks.length > 1) {
+          toast.info(`Importando lote ${idx + 1} de ${chunks.length}...`);
+        }
+
+        const { data, error } = await supabase.functions.invoke('import-clients', {
+          body: { clients: chunks[idx], updateExisting },
+        });
+
+        if (error) {
+          console.error(`Chunk ${idx + 1} error:`, error);
+          totalErrors += chunks[idx].length;
+          allErrorDetails.push(`Lote ${idx + 1}: ${error.message || 'Erro desconhecido'}`);
+          continue;
+        }
+
+        const { imported = 0, updated = 0, skipped = 0, errors = 0, errorDetails = [] } = data ?? {};
+        totalImported += imported;
+        totalUpdated += updated;
+        totalSkipped += skipped;
+        totalErrors += errors;
+        if (errorDetails.length > 0) allErrorDetails.push(...errorDetails);
+      }
+
+      if (allErrorDetails.length > 0) {
+        console.warn('Import warnings:', allErrorDetails);
+      }
+
+      let message = `${totalImported} cliente(s) importado(s)`;
+      if (totalUpdated > 0) message += `, ${totalUpdated} atualizado(s)`;
+      if (totalSkipped > 0) message += `, ${totalSkipped} ignorado(s) (duplicados)`;
+      if (totalErrors > 0) message += `, ${totalErrors} erro(s)`;
+
+      if (totalImported > 0 || totalUpdated > 0) {
         toast.success(message);
-      } else if (errors > 0) {
+      } else if (totalErrors > 0) {
         toast.error(message);
       } else {
         toast.info('Nenhum cliente novo para importar (todos já existem)');
