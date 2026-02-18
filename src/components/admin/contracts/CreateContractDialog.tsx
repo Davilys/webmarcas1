@@ -253,15 +253,41 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   };
 
   const fetchData = async () => {
-    const [profilesRes, templatesRes] = await Promise.all([
-      supabase.from('profiles').select('*').order('full_name'),
+    // Busca todos os clientes (juridico e comercial) com paginação para ultrapassar limite de 1000 do Supabase
+    const fetchAllProfiles = async (): Promise<Profile[]> => {
+      const allProfiles: Profile[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, phone, company_name, cpf_cnpj, cpf, cnpj, address, neighborhood, city, state, zip_code')
+          .order('full_name')
+          .range(offset, offset + batchSize - 1);
+
+        if (error) break;
+        if (data && data.length > 0) {
+          allProfiles.push(...data);
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      return allProfiles;
+    };
+
+    const [allProfiles, templatesRes] = await Promise.all([
+      fetchAllProfiles(),
       supabase.from('contract_templates')
         .select('id, name, content, variables')
         .eq('is_active', true)
         .order('name'),
     ]);
 
-    setProfiles(profilesRes.data || []);
+    setProfiles(allProfiles);
     setTemplates(templatesRes.data || []);
 
     // Auto-select the standard contract template for new clients
