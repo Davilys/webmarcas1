@@ -455,12 +455,6 @@ export function AdminChatWidget({ inlineMode = false }: { inlineMode?: boolean }
     window.addEventListener('mouseup', onMouseUp);
   }, []);
 
-  if (!isAdmin) return null;
-
-  // ──────────────────────────────────────────────────────
-  // RENDER
-  // ──────────────────────────────────────────────────────
-
   // ── Modo inline: força painel aberto e ocupa o contêiner pai ──
   useEffect(() => {
     if (inlineMode) {
@@ -468,6 +462,12 @@ export function AdminChatWidget({ inlineMode = false }: { inlineMode?: boolean }
       setExpanded(true);
     }
   }, [inlineMode]);
+
+  if (!isAdmin) return null;
+
+  // ──────────────────────────────────────────────────────
+  // RENDER
+  // ──────────────────────────────────────────────────────
 
   return (
     <>
