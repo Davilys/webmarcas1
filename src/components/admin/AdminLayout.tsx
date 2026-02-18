@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
-// AdminChatWidget removido — chat integrado na página Chat ao Vivo
 import { MobileBottomNav } from '@/components/admin/MobileBottomNav';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ChatModeProvider, useChatMode } from '@/contexts/ChatModeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { usePresence } from '@/hooks/usePresence';
 import { toast } from 'sonner';
@@ -26,6 +26,7 @@ import {
   Trophy,
   Moon,
   Sun,
+  ArrowLeft,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import logoIcon from '@/assets/webmarcas-icon.png';
@@ -356,9 +357,10 @@ function AdminSidebar() {
   );
 }
 
-export function AdminLayout({ children }: AdminLayoutProps) {
+function AdminLayoutInner({ children }: AdminLayoutProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { chatMode, setChatMode } = useChatMode();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
 
@@ -404,6 +406,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
+  const isChatActive = chatMode && chatMode !== 'selector';
+
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="min-h-screen flex w-full bg-background safe-area-top safe-area-bottom">
@@ -412,19 +416,56 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <AdminSidebar />
         </div>
         
-        <SidebarInset className="flex-1">
+        <SidebarInset className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
-          <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 header-frosted">
+          <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 header-frosted flex-shrink-0">
             {/* Sidebar trigger only on desktop */}
             <div className="hidden md:block">
               <SidebarTrigger className="-ml-1 hover:bg-accent/60 transition-colors touch-target" />
             </div>
+
+            {/* Botão Voltar — aparece quando está em modo chat ativo */}
+            {isChatActive && (
+              <button
+                onClick={() => setChatMode('selector')}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border/60 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all duration-150"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Voltar
+              </button>
+            )}
+
             <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
               <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-md bg-primary/10">
                 <Shield className="h-3 w-3 md:h-3.5 md:w-3.5 text-primary" />
               </div>
               <span className="font-semibold text-foreground/90 text-xs md:text-sm">CRM WebMarcas</span>
             </div>
+
+            {/* Botões extras quando BotConversa ativo */}
+            {chatMode === 'botconversa' && (
+              <div className="flex items-center gap-1.5 ml-1">
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('botconversa-reload'))}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border/60 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all duration-150"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Recarregar
+                </button>
+                <button
+                  onClick={() => window.open('https://app.botconversa.com.br/8572/live-chat/all', '_blank')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border/60 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all duration-150"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Nova Aba
+                </button>
+              </div>
+            )}
+
             <div className="flex-1" />
             <Button
               variant="ghost"
@@ -441,8 +482,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </Button>
           </header>
           
-          {/* Main content — extra bottom padding on mobile for nav bar */}
-          <main className="p-3 sm:p-5 lg:p-8 animate-page-enter mobile-page-content scroll-smooth-mobile">
+          {/* Main content — sem padding em modo chat para iframe ocupar tudo */}
+          <main className={cn(
+            "flex-1 animate-page-enter mobile-page-content scroll-smooth-mobile",
+            isChatActive
+              ? "overflow-hidden p-0"
+              : "overflow-auto p-3 sm:p-5 lg:p-8"
+          )}>
             {children}
           </main>
         </SidebarInset>
@@ -454,3 +500,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     </SidebarProvider>
   );
 }
+
+export function AdminLayout({ children }: AdminLayoutProps) {
+  return (
+    <ChatModeProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </ChatModeProvider>
+  );
+}
+
