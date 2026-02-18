@@ -35,21 +35,28 @@ export function StatsCard({
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ 
-        duration: 0.5, 
-        delay: index * 0.08,
+        duration: 0.48, 
+        delay: index * 0.07,
         ease: [0.22, 1, 0.36, 1]
       }}
+      whileTap={{ scale: 0.97 }}
       whileHover={{ 
         y: -4, 
         transition: { duration: 0.2, ease: 'easeOut' }
       }}
-      className="group"
+      className="group cursor-pointer"
     >
-      <Card className="relative overflow-hidden border border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
-        {/* Gradient accent line */}
-        <div className={cn("absolute top-0 left-0 right-0 h-1 bg-gradient-to-r", gradient)} />
+      <Card className="relative overflow-hidden border border-border/50 bg-card/80 backdrop-blur-sm hover:shadow-xl hover:shadow-primary/8 transition-all duration-300 kpi-card-mobile">
+        {/* Gradient accent line top */}
+        <div className={cn("absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r", gradient)} />
         
-        <CardContent className="pt-5 pb-4 px-4">
+        {/* Subtle gradient background glow */}
+        <div className={cn(
+          "absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-10 blur-2xl bg-gradient-to-br",
+          gradient
+        )} />
+        
+        <CardContent className="pt-5 pb-4 px-4 relative z-10">
           <div className="flex items-start justify-between mb-3">
             <motion.div 
               className={cn(
@@ -57,13 +64,14 @@ export function StatsCard({
                 gradient
               )}
               whileHover={{ rotate: 8, scale: 1.1 }}
+              whileTap={{ scale: 0.92 }}
               transition={{ type: "spring", stiffness: 400, damping: 15 }}
             >
               <Icon className="h-5 w-5 text-white" />
             </motion.div>
           </div>
 
-          <p className="text-2xl font-bold tracking-tight mb-0.5">
+          <p className="text-2xl font-bold tracking-tight mb-0.5 font-display">
             <AnimatedCounter value={value} prefix={prefix} suffix={suffix} />
           </p>
           
@@ -73,8 +81,8 @@ export function StatsCard({
             <motion.div 
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 + index * 0.08 }}
-              className="flex items-center gap-1 mt-2 pt-2 border-t border-border/50"
+              transition={{ delay: 0.5 + index * 0.07 }}
+              className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40"
             >
               {isPositiveTrend && <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />}
               {isNegativeTrend && <TrendingDown className="h-3.5 w-3.5 text-red-500" />}

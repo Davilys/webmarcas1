@@ -1,5 +1,6 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
 import { AdminChatWidget } from '@/components/admin/AdminChatWidget';
+import { MobileBottomNav } from '@/components/admin/MobileBottomNav';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePresence } from '@/hooks/usePresence';
@@ -406,23 +407,30 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="min-h-screen flex w-full bg-background safe-area-top safe-area-bottom">
-        <AdminSidebar />
+        {/* Sidebar — hidden on mobile, visible md+ */}
+        <div className="hidden md:block">
+          <AdminSidebar />
+        </div>
         
         <SidebarInset className="flex-1">
-          <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 bg-card/80 backdrop-blur-sm">
-            <SidebarTrigger className="-ml-1 hover:bg-accent/60 transition-colors touch-target" />
+          {/* Header */}
+          <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 header-frosted">
+            {/* Sidebar trigger only on desktop */}
+            <div className="hidden md:block">
+              <SidebarTrigger className="-ml-1 hover:bg-accent/60 transition-colors touch-target" />
+            </div>
             <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
               <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-md bg-primary/10">
                 <Shield className="h-3 w-3 md:h-3.5 md:w-3.5 text-primary" />
               </div>
-              <span className="font-medium hidden sm:inline">CRM WebMarcas</span>
+              <span className="font-semibold text-foreground/90 text-xs md:text-sm">CRM WebMarcas</span>
             </div>
             <div className="flex-1" />
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="w-8 h-8 rounded-lg hover:bg-accent/60 transition-all duration-300"
+              className="w-8 h-8 rounded-xl hover:bg-accent/60 transition-all duration-300"
               aria-label="Alternar tema"
             >
               {theme === 'dark' ? (
@@ -433,10 +441,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </Button>
           </header>
           
-          <main className="p-4 sm:p-6 lg:p-8 animate-page-enter">
+          {/* Main content — extra bottom padding on mobile for nav bar */}
+          <main className="p-3 sm:p-5 lg:p-8 animate-page-enter mobile-page-content scroll-smooth-mobile">
             {children}
           </main>
         </SidebarInset>
+
+        {/* Mobile Bottom Navigation — only on mobile */}
+        <MobileBottomNav />
+
+        {/* Chat widget */}
         <AdminChatWidget />
       </div>
     </SidebarProvider>

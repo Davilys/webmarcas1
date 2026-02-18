@@ -491,6 +491,195 @@
   100% { height: 22px; }
 }
 
+/* =====================================================
+   MOBILE PREMIUM 2026 — DESIGN SYSTEM
+   ===================================================== */
+
+/* Ripple animation for buttons */
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.6; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+/* Tab indicator slide */
+@keyframes tab-indicator-slide {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+/* Bottom nav pop */
+@keyframes nav-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* Lift card on touch */
+@keyframes card-lift {
+  0% { transform: translateY(0) scale(1); box-shadow: 0 4px 24px hsla(222,47%,11%,0.08); }
+  100% { transform: translateY(-4px) scale(1.01); box-shadow: 0 16px 48px hsla(210,100%,40%,0.18); }
+}
+
+/* Skeleton pulse */
+@keyframes skeleton-wave {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+/* Reveal from bottom (lazy list) */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Slide tab (page transitions) */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Glow pulse for active item */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsla(210,100%,50%,0); }
+  50% { box-shadow: 0 0 16px 4px hsla(210,100%,50%,0.25); }
+}
+
+/* Bottom nav entrance */
+@keyframes bottom-nav-enter {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Microinteraction — bounce soft */
+@keyframes bounce-soft {
+  0%,100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+  60% { transform: translateY(-3px); }
+}
+
+/* Mobile premium utility classes */
+@layer components {
+  /* Ripple button */
+  .btn-ripple {
+    @apply relative overflow-hidden;
+  }
+  .btn-ripple::after {
+    content: '';
+    @apply absolute inset-0 rounded-inherit pointer-events-none;
+    background: radial-gradient(circle, hsla(0,0%,100%,0.4) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0);
+  }
+  .btn-ripple:active::after {
+    animation: ripple 0.4s ease-out;
+  }
+
+  /* Skeleton loader */
+  .skeleton-wave {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.08) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 400px 100%;
+    animation: skeleton-wave 1.4s ease infinite;
+  }
+
+  /* Lazy reveal for list items */
+  .reveal-item {
+    opacity: 0;
+    animation: reveal-up 0.38s ease-out forwards;
+  }
+  .reveal-item:nth-child(1) { animation-delay: 0.04s; }
+  .reveal-item:nth-child(2) { animation-delay: 0.08s; }
+  .reveal-item:nth-child(3) { animation-delay: 0.12s; }
+  .reveal-item:nth-child(4) { animation-delay: 0.16s; }
+  .reveal-item:nth-child(5) { animation-delay: 0.20s; }
+  .reveal-item:nth-child(6) { animation-delay: 0.24s; }
+  .reveal-item:nth-child(7) { animation-delay: 0.28s; }
+  .reveal-item:nth-child(8) { animation-delay: 0.32s; }
+  .reveal-item:nth-child(n+9) { animation-delay: 0.36s; }
+
+  /* Card lift on active (touch) */
+  .card-touch {
+    @apply transition-all duration-200 ease-out cursor-pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card-touch:active {
+    transform: scale(0.975);
+    box-shadow: 0 2px 8px hsla(210,100%,40%,0.12);
+  }
+  @media (hover: hover) {
+    .card-touch:hover {
+      transform: translateY(-3px) scale(1.005);
+      box-shadow: 0 12px 36px hsla(210,100%,40%,0.15);
+    }
+  }
+
+  /* Glass premium mobile */
+  .glass-mobile {
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    background: hsla(var(--card) / 0.85);
+    border: 1px solid hsla(var(--border) / 0.6);
+  }
+
+  /* Bottom navigation bar */
+  .mobile-bottom-nav {
+    @apply fixed bottom-0 inset-x-0 z-50;
+    animation: bottom-nav-enter 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    backdrop-filter: blur(24px) saturate(2);
+    -webkit-backdrop-filter: blur(24px) saturate(2);
+    background: hsla(var(--card) / 0.92);
+    border-top: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: 0 -8px 32px hsla(0,0%,0%,0.12);
+  }
+
+  /* Nav item active glow */
+  .nav-active-glow {
+    animation: glow-pulse 2.5s ease-in-out infinite;
+  }
+
+  /* Nav pop microinteraction */
+  .nav-pop {
+    animation: nav-pop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  /* Mobile page wrapper with bottom nav clearance */
+  .mobile-page-content {
+    @apply pb-20 md:pb-0;
+  }
+
+  /* Smooth scroll container */
+  .scroll-smooth-mobile {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
+  }
+
+  /* KPI card premium */
+  .kpi-card-mobile {
+    @apply glass-mobile rounded-2xl p-4 card-touch;
+    border-color: hsl(var(--border) / 0.4);
+    transition: all 0.22s cubic-bezier(0.34,1.08,0.64,1);
+  }
+
+  /* Bounce soft utility */
+  .animate-bounce-soft {
+    animation: bounce-soft 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  /* Frosted header mobile */
+  .header-frosted {
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    background: hsla(var(--background) / 0.88);
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

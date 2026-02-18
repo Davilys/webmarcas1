@@ -110,56 +110,54 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
-      <div className="space-y-8 pb-8">
-        {/* Header */}
+      <div className="space-y-4 md:space-y-8 pb-4 md:pb-8">
+        {/* Header — compact on mobile */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border p-6 md:p-8"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border p-4 md:p-8"
         >
-          {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20" />
-          <div className="absolute bottom-0 left-1/2 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl" />
+          <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+          <div className="absolute bottom-0 left-1/2 w-36 h-36 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
           
-          <div className="relative flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div className="relative flex flex-col md:flex-row md:items-end justify-between gap-2 md:gap-4">
             <div>
               <motion.div 
-                className="flex items-center gap-2 mb-2"
+                className="flex items-center gap-1.5 mb-1.5"
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
+                transition={{ delay: 0.15 }}
               >
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-primary">Dashboard</span>
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Dashboard</span>
               </motion.div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+              <h1 className="text-xl md:text-4xl font-bold tracking-tight font-display">
                 {greeting} 👋
               </h1>
-              <p className="text-muted-foreground mt-1.5 text-sm md:text-base">
-                Aqui está um resumo do que está acontecendo no WebMarcas.
+              <p className="text-muted-foreground mt-1 text-xs md:text-base">
+                Resumo em tempo real do WebMarcas.
               </p>
             </div>
             <motion.div 
-              className="text-left md:text-right shrink-0"
+              className="shrink-0"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: 0.3 }}
             >
-              <p className="text-sm font-medium text-foreground/70">
+              <p className="text-xs font-medium text-foreground/60 capitalize">
                 {new Date().toLocaleDateString('pt-BR', { 
-                  weekday: 'long', 
+                  weekday: 'short', 
                   day: 'numeric',
-                  month: 'long', 
-                  year: 'numeric'
+                  month: 'short',
                 })}
               </p>
             </motion.div>
           </div>
         </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Stats Grid — 2 cols mobile, 3 md, 6 xl */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 md:gap-4">
           {statCards.map((stat, index) => (
             <StatsCard
               key={stat.title}
@@ -179,14 +177,14 @@ export default function AdminDashboard() {
         <RevenueChart />
 
         {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
           <GeographicChart />
           <BusinessSectorChart />
           <LeadSourceChart />
         </div>
 
         {/* Bottom Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-6">
           <ConversionFunnel />
           <RecentActivity />
         </div>
