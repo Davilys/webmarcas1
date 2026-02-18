@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, LayoutGrid, List, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale } from 'lucide-react';
+import { Search, LayoutGrid, List, RefreshCw, Users, Filter, X, Upload, Briefcase, Scale, TrendingUp, Star, UserCheck, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import { ClientKanbanBoard, type ClientWithProcess, type KanbanFilters, type FunnelType } from '@/components/admin/clients/ClientKanbanBoard';
 import { ClientListView } from '@/components/admin/clients/ClientListView';
 import { ClientDetailSheet } from '@/components/admin/clients/ClientDetailSheet';
@@ -282,51 +283,111 @@ export default function AdminClientes() {
     client.cpf_cnpj?.includes(search)
   );
 
+  // ── Derived stats ────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const base = funnelFilteredClients;
+    const uniqueIds = new Set(base.map(c => c.id));
+    const total = uniqueIds.size;
+    const high = [...uniqueIds].filter(id => base.find(c => c.id === id)?.priority === 'high').length;
+    const withProcess = [...uniqueIds].filter(id => base.find(c => c.id === id)?.process_id).length;
+    // new this month
+    const now = new Date();
+    const newThisMonth = [...uniqueIds].filter(id => {
+      const ca = base.find(c => c.id === id)?.created_at;
+      if (!ca) return false;
+      const d = parseISO(ca);
+      return isWithinInterval(d, { start: startOfMonth(now), end: endOfMonth(now) });
+    }).length;
+    return { total, high, withProcess, newThisMonth };
+  }, [funnelFilteredClients]);
+
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="space-y-4">
-          {/* Top Row: Title + Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="space-y-5">
+        {/* ── HERO HEADER ──────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-background to-violet-500/5 border border-border/60 p-6"
+        >
+          <div className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-8 left-6 h-28 w-28 rounded-full bg-violet-500/10 blur-2xl" />
+
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-primary/10 rounded-xl">
-                {funnelType === 'comercial' ? (
-                  <Briefcase className="h-5 w-5 text-primary" />
-                ) : (
-                  <Scale className="h-5 w-5 text-primary" />
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className={cn(
+                  'flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg',
+                  funnelType === 'comercial' ? 'bg-primary/20 shadow-primary/20' : 'bg-violet-500/20 shadow-violet-500/20'
                 )}
-              </div>
+              >
+                {funnelType === 'comercial'
+                  ? <Briefcase className="h-6 w-6 text-primary" />
+                  : <Scale className="h-6 w-6 text-violet-500" />
+                }
+              </motion.div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight">
+                <h1 className="text-2xl font-bold tracking-tight">
                   {funnelType === 'comercial' ? 'Clientes Comercial' : 'Clientes Jurídico'}
                 </h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {funnelType === 'comercial' 
-                    ? 'Pipeline de vendas: assinatura, pagamento e taxa' 
+                <p className="text-sm text-muted-foreground">
+                  {funnelType === 'comercial'
+                    ? 'Pipeline de vendas: assinatura, pagamento e taxa'
                     : 'Pipeline jurídico: processos INPI'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <CreateClientDialog onClientCreated={fetchClients} />
-              <DuplicateClientsDialog 
+              <Button variant="outline" size="sm" className="gap-1.5 border-border/60 h-9" onClick={fetchClients}>
+                <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+              </Button>
+              <DuplicateClientsDialog
                 onMergeComplete={fetchClients}
                 trigger={
-                  <Button variant="outline" size="sm" className="h-9">
-                    <Users className="h-4 w-4 mr-1.5" />
-                    Duplicados
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60">
+                    <Users className="h-3.5 w-3.5" /> Duplicados
                   </Button>
                 }
               />
-              <Button variant="outline" size="sm" className="h-9" onClick={() => setImportExportOpen(true)}>
-                <Upload className="h-4 w-4 mr-1.5" />
-                Importar / Exportar
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60" onClick={() => setImportExportOpen(true)}>
+                <Upload className="h-3.5 w-3.5" /> Importar
               </Button>
+              <CreateClientDialog onClientCreated={fetchClients} />
             </div>
           </div>
+        </motion.div>
 
+        {/* ── STAT CARDS ───────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { title: 'Total Clientes',    value: stats.total,        icon: Users,      accent: 'from-primary/20 to-primary/5',          border: 'border-primary/20',        ring: 'bg-primary/15',        color: 'text-primary'       },
+            { title: 'Alta Prioridade',   value: stats.high,         icon: Star,       accent: 'from-red-500/20 to-red-500/5',           border: 'border-red-500/20',        ring: 'bg-red-500/15',        color: 'text-red-500'       },
+            { title: 'Com Processo',      value: stats.withProcess,  icon: UserCheck,  accent: 'from-emerald-500/20 to-emerald-500/5',   border: 'border-emerald-500/20',    ring: 'bg-emerald-500/15',    color: 'text-emerald-500'   },
+            { title: 'Novos no Mês',      value: stats.newThisMonth, icon: UserPlus,   accent: 'from-violet-500/20 to-violet-500/5',     border: 'border-violet-500/20',     ring: 'bg-violet-500/15',     color: 'text-violet-500'    },
+          ].map((s, i) => (
+            <motion.div key={s.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
+              <div className={cn('relative overflow-hidden rounded-2xl border transition-all hover:shadow-lg hover:shadow-black/10 hover:-translate-y-0.5 bg-background', s.border)}>
+                <div className={cn('absolute inset-0 bg-gradient-to-br opacity-60', s.accent)} />
+                <div className="relative p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', s.ring)}>
+                      <s.icon className={cn('h-5 w-5', s.color)} />
+                    </div>
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{s.title}</p>
+                  <p className={cn('text-3xl font-bold', s.color)}>{s.value}</p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* ── CONTROLS ─────────────────────────────────────────────── */}
+        <div className="space-y-3">
           {/* Controls Row: Funnel Toggle + Search + Toolbar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Funnel Toggle */}
