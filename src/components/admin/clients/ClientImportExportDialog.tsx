@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { 
   Upload, Download, FileSpreadsheet, FileText, FileCode, File, 
-  Loader2, ChevronRight, ChevronLeft, Check, X 
+  Loader2, ChevronRight, ChevronLeft, Check 
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -55,7 +55,6 @@ export function ClientImportExportDialog({
   const [mappedClients, setMappedClients] = useState<ParsedClient[]>([]);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [existingEmails, setExistingEmails] = useState<string[]>([]);
-  const [isImporting, setIsImporting] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [updateExisting, setUpdateExisting] = useState(false);
 
@@ -70,7 +69,6 @@ export function ClientImportExportDialog({
     setFieldMapping({});
     setMappedClients([]);
     setSelectedRows([]);
-    setIsImporting(false);
     setIsParsing(false);
   }, []);
 
@@ -143,53 +141,28 @@ export function ClientImportExportDialog({
     setImportStep('preview');
   };
 
-  // Handle import — delegates to Edge Function in chunks of 50 to avoid HTTP timeouts
-  const handleImport = async () => {
-    if (selectedRows.length === 0) {
-      toast.error('Selecione pelo menos um registro para importar');
-      return;
+  // ── Background import runner ─────────────────────────────────────────────
+  const runImportInBackground = async (
+    clientsToImport: ParsedClient[],
+    totalSelected: number,
+    updateExistingFlag: boolean,
+  ) => {
+    const CHUNK_SIZE = 50;
+    const chunks: ParsedClient[][] = [];
+    for (let i = 0; i < clientsToImport.length; i += CHUNK_SIZE) {
+      chunks.push(clientsToImport.slice(i, i + CHUNK_SIZE));
     }
-    
-    setIsImporting(true);
-    try {
-      // ── 1. Get selected clients ──────────────────────────────────────────
-      const allSelected = selectedRows.map(i => mappedClients[i]);
 
-      // ── 2. Deduplicate by email within the file (keep first occurrence) ──
-      const seenEmails = new Set<string>();
-      const clientsToImport = allSelected.filter(c => {
-        const email = (c.email || '').toLowerCase().trim();
-        if (!email || seenEmails.has(email)) return false;
-        seenEmails.add(email);
-        return true;
-      });
+    let totalImported = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+    const allErrorDetails: string[] = [];
 
-      const deduped = allSelected.length - clientsToImport.length;
-      if (deduped > 0) {
-        toast.info(`${deduped} e-mail(s) duplicado(s) no arquivo removidos automaticamente`);
-      }
-
-      // ── 3. Split into chunks of 50 ───────────────────────────────────────
-      const CHUNK_SIZE = 50;
-      const chunks: typeof clientsToImport[] = [];
-      for (let i = 0; i < clientsToImport.length; i += CHUNK_SIZE) {
-        chunks.push(clientsToImport.slice(i, i + CHUNK_SIZE));
-      }
-
-      let totalImported = 0;
-      let totalUpdated = 0;
-      let totalSkipped = 0;
-      let totalErrors = 0;
-      const allErrorDetails: string[] = [];
-
-      // ── 4. Call edge function once per chunk with progress toasts ────────
-      for (let idx = 0; idx < chunks.length; idx++) {
-        if (chunks.length > 1) {
-          toast.info(`Importando lote ${idx + 1} de ${chunks.length}...`);
-        }
-
+    for (let idx = 0; idx < chunks.length; idx++) {
+      try {
         const { data, error } = await supabase.functions.invoke('import-clients', {
-          body: { clients: chunks[idx], updateExisting },
+          body: { clients: chunks[idx], updateExisting: updateExistingFlag },
         });
 
         if (error) {
@@ -205,34 +178,75 @@ export function ClientImportExportDialog({
         totalSkipped += skipped;
         totalErrors += errors;
         if (errorDetails.length > 0) allErrorDetails.push(...errorDetails);
+      } catch (err) {
+        console.error(`Chunk ${idx + 1} exception:`, err);
+        totalErrors += chunks[idx].length;
       }
-
-      if (allErrorDetails.length > 0) {
-        console.warn('Import warnings:', allErrorDetails);
-      }
-
-      let message = `${totalImported} cliente(s) importado(s)`;
-      if (totalUpdated > 0) message += `, ${totalUpdated} atualizado(s)`;
-      if (totalSkipped > 0) message += `, ${totalSkipped} ignorado(s) (duplicados)`;
-      if (totalErrors > 0) message += `, ${totalErrors} erro(s)`;
-
-      if (totalImported > 0 || totalUpdated > 0) {
-        toast.success(message);
-      } else if (totalErrors > 0) {
-        toast.error(message);
-      } else {
-        toast.info('Nenhum cliente novo para importar (todos já existem)');
-      }
-
-      onImportComplete();
-      onOpenChange(false);
-      resetImport();
-    } catch (error) {
-      console.error('Import error:', error);
-      toast.error('Erro ao importar clientes');
-    } finally {
-      setIsImporting(false);
     }
+
+    if (allErrorDetails.length > 0) {
+      console.warn('Import warnings:', allErrorDetails);
+    }
+
+    // ── Completion notification ───────────────────────────────────────────
+    const lines: string[] = [];
+    if (totalImported > 0) lines.push(`✅ ${totalImported} importado(s)`);
+    if (totalUpdated > 0) lines.push(`🔄 ${totalUpdated} atualizado(s)`);
+    if (totalSkipped > 0) lines.push(`⏭️ ${totalSkipped} ignorado(s)`);
+    if (totalErrors > 0) lines.push(`❌ ${totalErrors} erro(s)`);
+
+    const summary = lines.join(' · ') || 'Nenhuma alteração';
+
+    if (totalErrors > 0 && totalImported === 0 && totalUpdated === 0) {
+      toast.error('Importação concluída com erros', {
+        description: summary,
+        duration: 8000,
+      });
+    } else {
+      toast.success('Importação concluída!', {
+        description: summary,
+        duration: 8000,
+      });
+    }
+
+    onImportComplete();
+  };
+
+  // Handle import — fires in background, dialog closes immediately
+  const handleImport = () => {
+    if (selectedRows.length === 0) {
+      toast.error('Selecione pelo menos um registro para importar');
+      return;
+    }
+
+    // ── 1. Get selected clients ────────────────────────────────────────────
+    const allSelected = selectedRows.map(i => mappedClients[i]);
+
+    // ── 2. Deduplicate by email within the file ────────────────────────────
+    const seenEmails = new Set<string>();
+    const clientsToImport = allSelected.filter(c => {
+      const email = (c.email || '').toLowerCase().trim();
+      if (!email || seenEmails.has(email)) return false;
+      seenEmails.add(email);
+      return true;
+    });
+
+    const deduped = allSelected.length - clientsToImport.length;
+
+    // ── 3. Close dialog and start background job ───────────────────────────
+    onOpenChange(false);
+    resetImport();
+
+    const descLines = [`${clientsToImport.length} cliente(s) sendo processado(s)`];
+    if (deduped > 0) descLines.push(`${deduped} duplicado(s) removido(s) do arquivo`);
+
+    toast.info('Importação iniciada em segundo plano', {
+      description: descLines.join(' · '),
+      duration: 5000,
+    });
+
+    // Fire-and-forget — result arrives as a new notification
+    runImportInBackground(clientsToImport, allSelected.length, updateExisting);
   };
 
   // Handle export
@@ -371,20 +385,11 @@ export function ClientImportExportDialog({
 
               {importStep === 'preview' && (
                 <Button 
-                  onClick={handleImport} 
-                  disabled={isImporting || selectedRows.length === 0}
+                  onClick={handleImport}
+                  disabled={selectedRows.length === 0}
                 >
-                  {isImporting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Importando...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Importar {selectedRows.length} cliente(s)
-                    </>
-                  )}
+                  <Check className="h-4 w-4 mr-2" />
+                  Importar {selectedRows.length} cliente(s) em segundo plano
                 </Button>
               )}
             </div>
