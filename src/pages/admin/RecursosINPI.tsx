@@ -454,6 +454,13 @@ export default function RecursosINPI() {
     draft: resources.filter(r => r.status === 'draft').length,
   };
 
+  const dispatchStats = {
+    indeferimento: resources.filter(r => r.resource_type === 'indeferimento').length,
+    exigencia_merito: resources.filter(r => r.resource_type === 'exigencia_merito').length,
+    oposicao: resources.filter(r => r.resource_type === 'oposicao').length,
+  };
+  const maxDispatch = Math.max(dispatchStats.indeferimento, dispatchStats.exigencia_merito, dispatchStats.oposicao, 1);
+
   const currentStepIndex = STEPS_FLOW.findIndex(s => s.key === step);
   const agent = AI_AGENTS[selectedAgent];
 
@@ -495,26 +502,95 @@ export default function RecursosINPI() {
 
         {/* Stats */}
         {step === 'list' && (
-          <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Total de Recursos', value: stats.total, icon: BarChart3, color: 'text-primary', bg: 'bg-primary/10' },
-              { label: 'Aprovados', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-              { label: 'Em Revisão', value: stats.pending, icon: Edit3, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-              { label: 'Rascunhos', value: stats.draft, icon: FileText, color: 'text-muted-foreground', bg: 'bg-muted' },
-            ].map((stat, i) => (
-              <Card key={i} className="border-border/50 hover:border-border transition-colors">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </motion.div>
+          <>
+            <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Total de Recursos', value: stats.total, icon: BarChart3, color: 'text-primary', bg: 'bg-primary/10' },
+                { label: 'Aprovados', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                { label: 'Em Revisão', value: stats.pending, icon: Edit3, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+                { label: 'Rascunhos', value: stats.draft, icon: FileText, color: 'text-muted-foreground', bg: 'bg-muted' },
+              ].map((stat, i) => (
+                <Card key={i} className="border-border/50 hover:border-border transition-colors">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
+                      <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{stat.value}</p>
+                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </motion.div>
+
+            {/* Dispatch Type Summary with Visual Chart */}
+            <motion.div {...fadeIn} transition={{ delay: 0.2 }} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { 
+                  label: 'Indeferimentos', 
+                  count: dispatchStats.indeferimento, 
+                  icon: XCircle, 
+                  color: 'text-red-500', 
+                  bg: 'bg-red-500/10', 
+                  barColor: 'bg-red-500',
+                  borderColor: 'border-red-500/20',
+                  approved: resources.filter(r => r.resource_type === 'indeferimento' && r.status === 'approved').length,
+                },
+                { 
+                  label: 'Exigências de Mérito', 
+                  count: dispatchStats.exigencia_merito, 
+                  icon: AlertTriangle, 
+                  color: 'text-amber-500', 
+                  bg: 'bg-amber-500/10', 
+                  barColor: 'bg-amber-500',
+                  borderColor: 'border-amber-500/20',
+                  approved: resources.filter(r => r.resource_type === 'exigencia_merito' && r.status === 'approved').length,
+                },
+                { 
+                  label: 'Oposições', 
+                  count: dispatchStats.oposicao, 
+                  icon: Shield, 
+                  color: 'text-blue-500', 
+                  bg: 'bg-blue-500/10', 
+                  barColor: 'bg-blue-500',
+                  borderColor: 'border-blue-500/20',
+                  approved: resources.filter(r => r.resource_type === 'oposicao' && r.status === 'approved').length,
+                },
+              ].map((item, i) => (
+                <Card key={i} className={`border ${item.borderColor} hover:shadow-md transition-all`}>
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-xl ${item.bg} flex items-center justify-center`}>
+                          <item.icon className={`h-5 w-5 ${item.color}`} />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">{item.label}</p>
+                          <p className="text-xs text-muted-foreground">{item.approved} aprovado{item.approved !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                      <span className="text-3xl font-bold">{item.count}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{stats.total > 0 ? Math.round((item.count / stats.total) * 100) : 0}% do total</span>
+                        <span>{item.count}/{stats.total}</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <motion.div 
+                          className={`h-full ${item.barColor} rounded-full`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${maxDispatch > 0 ? (item.count / maxDispatch) * 100 : 0}%` }}
+                          transition={{ duration: 0.8, delay: 0.3 + i * 0.15, ease: 'easeOut' }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </motion.div>
+          </>
         )}
 
         {/* Step Indicator */}
