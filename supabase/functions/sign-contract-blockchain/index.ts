@@ -478,12 +478,10 @@ serve(async (req) => {
     console.log('Contract signed successfully:', contractId);
 
     // ── MULTICHANNEL HOOK: contrato_assinado ──────────────────
-    // Fires AFTER all existing logic — strictly additive, never throws
+    // Fire-and-forget — never blocks the main response
     try {
-      const recipientForNotif = recipientEmail || '';
-      const phoneForNotif = recipientPhone || '';
-      if (recipientForNotif || phoneForNotif || userId) {
-        await fetch(`${supabaseUrl}/functions/v1/send-multichannel-notification`, {
+      if (recipientEmail || recipientPhone || userId) {
+        fetch(`${supabaseUrl}/functions/v1/send-multichannel-notification`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -493,21 +491,20 @@ serve(async (req) => {
             event_type: 'contrato_assinado',
             channels: ['crm', 'sms', 'whatsapp'],
             recipient: {
-              nome: recipientName || 'Cliente',
-              email: recipientForNotif,
-              phone: phoneForNotif,
-              user_id: userId || undefined,
+              nome:    recipientName  || 'Cliente',
+              email:   recipientEmail || '',
+              phone:   recipientPhone || '',
+              user_id: userId         || undefined,
             },
             data: {
-              marca: brandName || '',
-              link: verificationUrl,
+              marca: brandName      || '',
+              link:  verificationUrl || '',
             },
           }),
-        });
-        console.log('[multichannel] contrato_assinado dispatched for:', recipientForNotif);
+        }).catch(e => console.error('[multichannel] contrato_assinado dispatch error:', e));
+        console.log('[multichannel] contrato_assinado dispatched for:', recipientEmail || userId);
       }
     } catch (multiErr) {
-      // Never block the main response
       console.error('[multichannel] Error dispatching contrato_assinado:', multiErr);
     }
     // ── END MULTICHANNEL HOOK ─────────────────────────────────
