@@ -299,68 +299,84 @@ export function AdminChatWidget() {
   const isDark = theme === 'dark';
 
   const ts = {
+    // Panel
     panelBg: isDark ? 'linear-gradient(160deg,#08080f 0%,#0a0a1a 40%,#060612 100%)' : 'linear-gradient(160deg,#ffffff 0%,#f8fafc 60%,#f1f5f9 100%)',
     panelShadow: isDark ? '0 0 0 1px rgba(16,185,129,0.15),-20px 0 80px -20px rgba(0,0,0,0.8),0 0 60px -20px rgba(16,185,129,0.12)' : '0 0 0 1px rgba(16,185,129,0.25),-20px 0 60px -20px rgba(0,0,0,0.12)',
+    // Header
     headerBg: isDark ? 'linear-gradient(135deg,#040d08 0%,#061510 50%,#020a06 100%)' : 'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 50%,#f0fdf4 100%)',
     headerBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.3)',
-    titleColor: isDark ? 'white' : '#0f172a',
-    accentText: isDark ? 'rgba(52,211,153,0.7)' : 'rgba(5,150,105,0.85)',
+    titleColor: isDark ? '#ffffff' : '#0f172a',
+    headerSubColor: isDark ? 'rgba(52,211,153,0.7)' : 'rgba(5,150,105,0.9)',
+    headerBtnColor: isDark ? 'rgba(255,255,255,0.5)' : '#475569',
+    headerBtnHoverBg: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)',
+    // Stats HUD
     statsBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.07)',
     statsBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)',
     statsTextColor: isDark ? '#86efac' : '#065f46',
-    btnBg: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
-    btnColor: isDark ? 'rgba(255,255,255,0.5)' : '#475569',
+    statsIconColor: isDark ? '#34d399' : '#059669',
+    // Left panel (contacts)
     leftBorder: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.15)',
     tabBorder: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.15)',
     activeTabBg: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.1)',
     activeTabBorder: isDark ? 'rgba(16,185,129,0.25)' : 'rgba(16,185,129,0.3)',
     activeTabColor: isDark ? '#86efac' : '#047857',
-    inactiveTabColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
-    searchBg: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-    searchBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
-    searchColor: isDark ? 'rgba(255,255,255,0.8)' : '#334155',
+    inactiveTabColor: isDark ? 'rgba(255,255,255,0.4)' : '#64748b',
+    // Search
+    searchBg: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+    searchBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
+    searchColor: isDark ? 'rgba(255,255,255,0.85)' : '#1e293b',
+    searchPlaceholderColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
     searchIconColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    // Contact items
     contactActiveBg: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.08)',
     contactActiveBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.25)',
     contactDefaultBg: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-    contactNameColor: (unread: boolean) => unread ? (isDark ? 'white' : '#0f172a') : (isDark ? 'rgba(255,255,255,0.8)' : '#334155'),
-    contactPreviewColor: (unread: boolean) => unread ? (isDark ? 'rgba(255,255,255,0.7)' : '#475569') : (isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8'),
-    contactTimeColor: (unread: boolean) => unread ? '#34d399' : (isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8'),
-    noContactBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
-    noContactBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.12)',
-    noContactTitle: isDark ? 'rgba(255,255,255,0.3)' : '#64748b',
-    noContactSub: isDark ? 'rgba(255,255,255,0.15)' : '#94a3b8',
-    chatHeaderBg: isDark ? 'linear-gradient(135deg,#040d08 0%,#061510 100%)' : 'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)',
-    chatHeaderBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)',
-    chatNameColor: isDark ? 'white' : '#0f172a',
-    chatBtnBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
-    chatBtnColor: isDark ? 'rgba(255,255,255,0.4)' : '#64748b',
-    inputBg: isDark ? 'rgba(4,13,8,0.98)' : 'rgba(248,250,252,0.98)',
-    inputBorder: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.15)',
+    contactNameUnread: isDark ? '#ffffff' : '#0f172a',
+    contactNameRead: isDark ? 'rgba(255,255,255,0.75)' : '#334155',
+    contactPreviewUnread: isDark ? 'rgba(255,255,255,0.65)' : '#475569',
+    contactPreviewRead: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    contactTimeUnread: '#34d399',
+    contactTimeRead: isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8',
+    // Empty state
     emptyIconBg: isDark ? 'linear-gradient(135deg,rgba(5,150,105,0.2),rgba(16,185,129,0.1))' : 'linear-gradient(135deg,rgba(5,150,105,0.1),rgba(16,185,129,0.05))',
     emptyIconBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)',
     emptyIconShadow: isDark ? '0 0 40px rgba(16,185,129,0.15)' : '0 0 30px rgba(16,185,129,0.08)',
     emptyTitle: isDark ? 'rgba(255,255,255,0.6)' : '#475569',
-    emptySub: isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8',
-    chipBg: isDark ? 'rgba(16,185,129,0.07)' : 'rgba(16,185,129,0.05)',
-    chipBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.12)',
-    chipColor: isDark ? 'rgba(255,255,255,0.3)' : '#475569',
+    emptySub: isDark ? 'rgba(255,255,255,0.25)' : '#64748b',
+    chipBg: isDark ? 'rgba(16,185,129,0.07)' : 'rgba(16,185,129,0.07)',
+    chipBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.15)',
+    chipColor: isDark ? 'rgba(255,255,255,0.35)' : '#475569',
+    // Chat area header
+    chatHeaderBg: isDark ? 'linear-gradient(135deg,#040d08 0%,#061510 100%)' : 'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)',
+    chatHeaderBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.25)',
+    chatNameColor: isDark ? '#ffffff' : '#0f172a',
+    chatSubColor: isDark ? 'rgba(52,211,153,0.6)' : 'rgba(5,150,105,0.85)',
+    chatBtnBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
+    chatBtnColor: isDark ? 'rgba(255,255,255,0.4)' : '#475569',
+    // Input area
+    inputBg: isDark ? 'rgba(4,13,8,0.98)' : 'rgba(248,250,252,0.98)',
+    inputBorder: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.2)',
+    // Right panel (profile details)
     rightBorderL: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.15)',
-    rightBg: isDark ? 'rgba(6,6,18,0.95)' : 'rgba(248,250,252,0.95)',
-    rightHeaderBg: isDark ? 'rgba(4,13,8,0.8)' : 'rgba(240,253,244,0.8)',
-    rightHeaderBorder: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.12)',
+    rightBg: isDark ? 'rgba(6,6,18,0.95)' : 'rgba(248,250,252,0.98)',
+    rightHeaderBg: isDark ? 'rgba(4,13,8,0.8)' : 'rgba(240,253,244,0.9)',
+    rightHeaderBorder: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.15)',
     rightTitle: isDark ? 'rgba(255,255,255,0.6)' : '#475569',
-    rightBtnColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
-    profileName: isDark ? 'white' : '#0f172a',
+    rightBtnColor: isDark ? 'rgba(255,255,255,0.3)' : '#64748b',
+    profileName: isDark ? '#ffffff' : '#0f172a',
     profilePhone: isDark ? 'rgba(255,255,255,0.4)' : '#475569',
     profileDotBorder: isDark ? '#060612' : '#f0fdf4',
-    infoFieldBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-    infoFieldBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-    infoLabel: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
-    infoValue: isDark ? 'rgba(255,255,255,0.7)' : '#334155',
-    assignBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
-    assignBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)',
-    assignLabel: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    profileSectionBorder: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.12)',
+    infoFieldBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
+    infoFieldBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+    infoLabel: isDark ? 'rgba(255,255,255,0.3)' : '#64748b',
+    infoValue: isDark ? 'rgba(255,255,255,0.75)' : '#1e293b',
+    assignBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.07)',
+    assignBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.2)',
+    assignLabel: isDark ? 'rgba(255,255,255,0.3)' : '#64748b',
+    // No contacts empty
+    noContactTitle: isDark ? 'rgba(255,255,255,0.3)' : '#64748b',
+    noContactSub: isDark ? 'rgba(255,255,255,0.15)' : '#94a3b8',
   };
 
   const getDateLabel = (dateStr: string) => {
@@ -545,7 +561,7 @@ export function AdminChatWidget() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-bold text-white tracking-tight">WebMarcas Inbox</h2>
+                    <h2 className="text-sm font-bold tracking-tight" style={{ color: ts.titleColor }}>WebMarcas Inbox</h2>
                     <motion.div
                       className="px-1.5 py-0.5 rounded-full text-[9px] font-bold border"
                       style={{
@@ -563,7 +579,7 @@ export function AdminChatWidget() {
                       animate={{ opacity: [1, 0.3, 1] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
                     />
-                    <span className="text-[10px] text-emerald-400/70">{currentTime} · Sistema ativo</span>
+                    <span className="text-[10px]" style={{ color: ts.headerSubColor }}>{currentTime} · Sistema ativo</span>
                   </div>
                 </div>
               </div>
@@ -577,9 +593,9 @@ export function AdminChatWidget() {
                     { icon: Activity, label: `${onlineUsers.size} online` },
                   ].map(({ icon: Icon, label }, i) => (
                     <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-                      style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                      <Icon className="h-3 w-3 text-emerald-400" />
-                      <span className="text-[10px] text-emerald-300/70 font-medium">{label}</span>
+                      style={{ background: ts.statsBg, border: `1px solid ${ts.statsBorder}` }}>
+                      <Icon className="h-3 w-3" style={{ color: ts.statsIconColor }} />
+                      <span className="text-[10px] font-medium" style={{ color: ts.statsTextColor }}>{label}</span>
                     </div>
                   ))}
                 </div>
@@ -588,15 +604,16 @@ export function AdminChatWidget() {
               <div className="relative flex items-center gap-1">
                 <Button
                   variant="ghost" size="icon"
-                  className="h-8 w-8 rounded-xl text-white/50 hover:text-white transition-colors"
-                  style={{ background: 'rgba(255,255,255,0.04)' }}
+                  className="h-8 w-8 rounded-xl transition-colors"
+                  style={{ background: ts.headerBtnHoverBg, color: ts.headerBtnColor }}
                   onClick={() => setExpanded(!expanded)}
                 >
                   {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                 </Button>
                 <Button
                   variant="ghost" size="icon"
-                  className="h-8 w-8 rounded-xl text-white/50 hover:text-white hover:bg-red-500/20 transition-colors"
+                  className="h-8 w-8 rounded-xl hover:bg-red-500/20 transition-colors"
+                  style={{ color: ts.headerBtnColor }}
                   onClick={() => setOpen(false)}
                 >
                   <X className="h-4 w-4" />
@@ -695,59 +712,58 @@ export function AdminChatWidget() {
                               "w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200",
                             )}
                             style={isActive ? {
-                              background: 'rgba(16,185,129,0.1)',
-                              border: '1px solid rgba(16,185,129,0.2)',
-                            } : { background: 'rgba(255,255,255,0.02)', border: '1px solid transparent' }}
-                          >
-                            <ContactOrb initials={initials} isOnline={isOnline} isActive={!!isActive} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
-                                <p className={cn(
-                                  "text-sm truncate",
-                                  hasUnread ? "font-bold text-white" : "font-medium text-white/80"
-                                )}>{name}</p>
-                                <span className={cn(
-                                  "text-[10px] shrink-0 font-medium",
-                                  hasUnread ? "text-emerald-400" : "text-white/25"
-                                )}>
-                                  {conv ? getConvTimeLabel(conv.last_message_at) : ''}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <p className={cn(
-                                  "text-[11px] truncate flex-1",
-                                  hasUnread ? "text-white/70 font-medium" : "text-white/30"
-                                )}>{preview}</p>
-                                {hasUnread && (
-                                  <motion.span
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    className="min-w-5 h-5 px-1.5 text-[10px] rounded-full flex items-center justify-center font-bold shrink-0 text-white"
-                                    style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}
-                                  >
-                                    {conv?.unread_count}
-                                  </motion.span>
-                                )}
-                              </div>
-                            </div>
-                          </motion.button>
-                        );
-                      })}
+                               background: ts.contactActiveBg,
+                               border: `1px solid ${ts.contactActiveBorder}`,
+                             } : { background: ts.contactDefaultBg, border: '1px solid transparent' }}
+                           >
+                             <ContactOrb initials={initials} isOnline={isOnline} isActive={!!isActive} />
+                             <div className="flex-1 min-w-0">
+                               <div className="flex items-center justify-between gap-1">
+                                 <p className="text-sm truncate" style={{
+                                   fontWeight: hasUnread ? 700 : 500,
+                                   color: hasUnread ? ts.contactNameUnread : ts.contactNameRead,
+                                 }}>{name}</p>
+                                 <span className="text-[10px] shrink-0 font-medium" style={{
+                                   color: hasUnread ? ts.contactTimeUnread : ts.contactTimeRead,
+                                 }}>
+                                   {conv ? getConvTimeLabel(conv.last_message_at) : ''}
+                                 </span>
+                               </div>
+                               <div className="flex items-center gap-1.5 mt-0.5">
+                                 <p className="text-[11px] truncate flex-1" style={{
+                                   color: hasUnread ? ts.contactPreviewUnread : ts.contactPreviewRead,
+                                   fontWeight: hasUnread ? 500 : 400,
+                                 }}>{preview}</p>
+                                 {hasUnread && (
+                                   <motion.span
+                                     initial={{ scale: 0 }}
+                                     animate={{ scale: 1 }}
+                                     className="min-w-5 h-5 px-1.5 text-[10px] rounded-full flex items-center justify-center font-bold shrink-0 text-white"
+                                     style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}
+                                   >
+                                     {conv?.unread_count}
+                                   </motion.span>
+                                 )}
+                               </div>
+                             </div>
+                           </motion.button>
+                         );
+                       })}
 
-                      {unifiedList.length === 0 && (
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="p-10 text-center"
-                        >
-                          <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-                            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                            <MessageCircle className="h-7 w-7 text-emerald-500/40" />
-                          </div>
-                          <p className="text-sm text-white/30 font-medium">Nenhum contato</p>
-                          <p className="text-xs text-white/15 mt-1">Ajuste o filtro de busca</p>
-                        </motion.div>
-                      )}
+                       {unifiedList.length === 0 && (
+                         <motion.div
+                           initial={{ opacity: 0 }}
+                           animate={{ opacity: 1 }}
+                           className="p-10 text-center"
+                         >
+                           <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                             style={{ background: ts.emptyIconBg, border: `1px solid ${ts.emptyIconBorder}` }}>
+                             <MessageCircle className="h-7 w-7 text-emerald-500/40" />
+                           </div>
+                           <p className="text-sm font-medium" style={{ color: ts.noContactTitle }}>Nenhum contato</p>
+                           <p className="text-xs mt-1" style={{ color: ts.noContactSub }}>Ajuste o filtro de busca</p>
+                         </motion.div>
+                       )}
                     </div>
                   </ScrollArea>
                 </div>
@@ -765,15 +781,16 @@ export function AdminChatWidget() {
                       <div
                         className="flex items-center gap-3 px-4 py-3 flex-shrink-0 relative overflow-hidden"
                         style={{
-                          background: 'linear-gradient(135deg, #040d08 0%, #061510 100%)',
-                          borderBottom: '1px solid rgba(16,185,129,0.15)',
+                          background: ts.chatHeaderBg,
+                          borderBottom: `1px solid ${ts.chatHeaderBorder}`,
                         }}
                       >
                         <ScanLine />
                         {!isFullView && (
                           <Button
                             variant="ghost" size="icon"
-                            className="h-8 w-8 rounded-xl text-white/50 hover:text-white flex-shrink-0"
+                            className="h-8 w-8 rounded-xl flex-shrink-0 transition-colors"
+                            style={{ color: ts.chatBtnColor, background: ts.chatBtnBg }}
                             onClick={() => chat.setActiveConversation(null)}
                           >
                             <ChevronLeft className="h-5 w-5" />
@@ -782,7 +799,7 @@ export function AdminChatWidget() {
                         <ContactOrb initials={activeInitials} isOnline={true} isActive size="sm" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-white truncate">{activeName}</p>
+                            <p className="text-sm font-bold truncate" style={{ color: ts.chatNameColor }}>{activeName}</p>
                             {activeTab === 'clients' && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0"
                                 style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}>
@@ -796,7 +813,7 @@ export function AdminChatWidget() {
                               animate={{ opacity: [1, 0.3, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity }}
                             />
-                            <p className="text-[11px] text-emerald-400/60">online</p>
+                            <p className="text-[11px]" style={{ color: ts.chatSubColor }}>online</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -810,8 +827,8 @@ export function AdminChatWidget() {
                             <Button
                               key={i}
                               variant="ghost" size="icon"
-                              className="h-8 w-8 rounded-xl text-white/40 hover:text-white transition-colors"
-                              style={{ background: 'rgba(255,255,255,0.03)' }}
+                              className="h-8 w-8 rounded-xl transition-colors"
+                              style={{ color: ts.chatBtnColor, background: ts.chatBtnBg }}
                               onClick={action}
                               title={title}
                             >
@@ -827,7 +844,7 @@ export function AdminChatWidget() {
                       </div>
 
                       {/* Input premium */}
-                      <div style={{ borderTop: '1px solid rgba(16,185,129,0.12)', background: 'rgba(4,13,8,0.98)' }}>
+                      <div style={{ borderTop: `1px solid ${ts.inputBorder}`, background: ts.inputBg }}>
                         <ChatInput
                           onSend={handleSend}
                           onFileUpload={handleFileUpload}
@@ -851,16 +868,16 @@ export function AdminChatWidget() {
                           transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
                           className="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center"
                           style={{
-                            background: 'linear-gradient(135deg, rgba(5,150,105,0.2), rgba(16,185,129,0.1))',
-                            border: '1px solid rgba(16,185,129,0.2)',
-                            boxShadow: '0 0 40px rgba(16,185,129,0.15)',
+                            background: ts.emptyIconBg,
+                            border: `1px solid ${ts.emptyIconBorder}`,
+                            boxShadow: ts.emptyIconShadow,
                           }}
                         >
                           <MessageCircle className="h-9 w-9 text-emerald-400/60" />
                         </motion.div>
                         <div>
-                          <p className="font-bold text-white/60 text-base">WebMarcas Inbox</p>
-                          <p className="text-sm text-white/25 mt-1">Selecione um contato para conversar</p>
+                          <p className="font-bold text-base" style={{ color: ts.emptyTitle }}>WebMarcas Inbox</p>
+                          <p className="text-sm mt-1" style={{ color: ts.emptySub }}>Selecione um contato para conversar</p>
                         </div>
                         {/* Capability chips */}
                         <div className="flex flex-wrap gap-2 justify-center">
@@ -870,9 +887,9 @@ export function AdminChatWidget() {
                             { icon: Layers, label: 'Arquivos' },
                           ].map(({ icon: Icon, label }, i) => (
                             <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                              style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                              <Icon className="h-3 w-3 text-emerald-400/60" />
-                              <span className="text-[11px] text-white/30">{label}</span>
+                              style={{ background: ts.chipBg, border: `1px solid ${ts.chipBorder}` }}>
+                              <Icon className="h-3 w-3 text-emerald-400/70" />
+                              <span className="text-[11px]" style={{ color: ts.chipColor }}>{label}</span>
                             </div>
                           ))}
                         </div>
@@ -889,18 +906,18 @@ export function AdminChatWidget() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3 }}
                   className="w-[280px] shrink-0 flex flex-col overflow-y-auto"
-                  style={{ borderLeft: '1px solid rgba(16,185,129,0.12)', background: 'rgba(6,6,18,0.95)' }}
+                  style={{ borderLeft: `1px solid ${ts.rightBorderL}`, background: ts.rightBg }}
                 >
                   {/* Right header */}
                   <div className="px-4 py-3 flex items-center justify-between flex-shrink-0 relative overflow-hidden"
-                    style={{ borderBottom: '1px solid rgba(16,185,129,0.1)', background: 'rgba(4,13,8,0.8)' }}>
+                    style={{ borderBottom: `1px solid ${ts.rightHeaderBorder}`, background: ts.rightHeaderBg }}>
                     <ScanLine />
-                    <span className="text-xs font-bold text-white/60 uppercase tracking-widest">Perfil</span>
+                    <span className="text-xs font-bold uppercase tracking-widest" style={{ color: ts.rightTitle }}>Perfil</span>
                     <div className="flex gap-0.5">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-white/30 hover:text-white">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg transition-colors" style={{ color: ts.rightBtnColor }}>
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-white/30 hover:text-white">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg transition-colors" style={{ color: ts.rightBtnColor }}>
                         <MoreVertical className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -908,7 +925,7 @@ export function AdminChatWidget() {
 
                   {/* Avatar & name */}
                   <div className="p-6 text-center"
-                    style={{ borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
+                    style={{ borderBottom: `1px solid ${ts.profileSectionBorder}` }}>
                     <div className="w-20 h-20 mx-auto mb-4 relative">
                       <motion.div
                         className="absolute inset-0 rounded-2xl"
@@ -920,14 +937,15 @@ export function AdminChatWidget() {
                         <span className="text-xl font-bold text-white">{activeInitials}</span>
                       </div>
                       <motion.div
-                        className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-400 border-2 border-[#060612]"
+                        className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-400"
+                        style={{ border: `2px solid ${ts.profileDotBorder}` }}
                         animate={{ scale: [1, 1.4, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
                       />
                     </div>
-                    <p className="font-bold text-white text-sm">{activeName}</p>
+                    <p className="font-bold text-sm" style={{ color: ts.profileName }}>{activeName}</p>
                     {contactProfile.phone && (
-                      <p className="text-xs text-white/40 mt-1">{contactProfile.phone}</p>
+                      <p className="text-xs mt-1" style={{ color: ts.profilePhone }}>{contactProfile.phone}</p>
                     )}
                     {/* Status pill */}
                     <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full"
@@ -943,7 +961,7 @@ export function AdminChatWidget() {
 
                   {/* Info fields */}
                   <div className="px-4 py-4 space-y-3"
-                    style={{ borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
+                    style={{ borderBottom: `1px solid ${ts.profileSectionBorder}` }}>
                     {[
                       { icon: Mail, label: 'E-mail', value: contactProfile.email },
                       contactProfile.phone ? { icon: Phone, label: 'Telefone', value: contactProfile.phone } : null,
@@ -953,14 +971,14 @@ export function AdminChatWidget() {
                       const { icon: Icon, label, value } = field!;
                       return (
                         <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl"
-                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          style={{ background: ts.infoFieldBg, border: `1px solid ${ts.infoFieldBorder}` }}>
                           <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                             style={{ background: 'rgba(16,185,129,0.1)' }}>
                             <Icon className="h-3.5 w-3.5 text-emerald-400" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[9px] text-white/30 uppercase tracking-widest font-semibold">{label}</p>
-                            <p className="text-xs text-white/70 font-medium truncate">{value}</p>
+                            <p className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: ts.infoLabel }}>{label}</p>
+                            <p className="text-xs font-medium truncate" style={{ color: ts.infoValue }}>{value}</p>
                           </div>
                         </div>
                       );
@@ -971,9 +989,9 @@ export function AdminChatWidget() {
                   <div className="px-4 py-4 space-y-3">
                     {contactProfile.assigned_to && (
                       <div className="p-3 rounded-xl"
-                        style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                        <p className="text-[9px] text-white/30 uppercase tracking-widest font-semibold mb-1">Atribuído a</p>
-                        <p className="text-sm font-bold text-emerald-400">
+                        style={{ background: ts.assignBg, border: `1px solid ${ts.assignBorder}` }}>
+                        <p className="text-[9px] uppercase tracking-widest font-semibold mb-1" style={{ color: ts.assignLabel }}>Atribuído a</p>
+                        <p className="text-sm font-bold text-emerald-500">
                           {adminProfiles.get(contactProfile.assigned_to) || 'Admin'}
                         </p>
                       </div>
