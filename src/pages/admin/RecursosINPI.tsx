@@ -962,7 +962,7 @@ export default function RecursosINPI() {
                         { label: 'Marca', value: extractedData.brand_name, icon: '®️' },
                         { label: 'Classe NCL', value: extractedData.ncl_class, icon: '📑' },
                         { label: 'Titular', value: extractedData.holder, icon: '👤' },
-                        { label: 'Examinador/Opoente', value: extractedData.examiner_or_opponent, icon: '⚖️' },
+                        { label: 'Oponente', value: extractedData.examiner_or_opponent, icon: '⚖️' },
                         { label: 'Fundamento Legal', value: extractedData.legal_basis, icon: '📖' },
                       ].map((item, i) => (
                         <div key={i} className="p-3 rounded-xl bg-muted/50 border border-border/50">
