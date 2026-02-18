@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { useLocation } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessageBubble } from '@/components/chat/ChatMessageBubble';
@@ -137,6 +138,8 @@ function ScanLine({ color = 'emerald' }: { color?: string }) {
 // Main component
 // ──────────────────────────────────────────────────────
 export function AdminChatWidget() {
+  const location = useLocation();
+  const isChatPage = location.pathname === '/admin/chat-ao-vivo';
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -212,10 +215,20 @@ export function AdminChatWidget() {
   useEffect(() => {
     const handleOpenChat = async (e: Event) => {
       const clientId = (e as CustomEvent).detail?.clientId;
-      if (clientId) { setOpen(true); setExpanded(true); await chat.openDirectConversation(clientId); }
+      setOpen(true);
+      setExpanded(true);
+      if (clientId) await chat.openDirectConversation(clientId);
+    };
+    const handleCloseChat = () => {
+      setOpen(false);
+      setExpanded(false);
     };
     window.addEventListener('open-admin-chat', handleOpenChat);
-    return () => window.removeEventListener('open-admin-chat', handleOpenChat);
+    window.addEventListener('close-admin-chat', handleCloseChat);
+    return () => {
+      window.removeEventListener('open-admin-chat', handleOpenChat);
+      window.removeEventListener('close-admin-chat', handleCloseChat);
+    };
   }, [chat]);
 
   useEffect(() => {
@@ -449,9 +462,9 @@ export function AdminChatWidget() {
   // ──────────────────────────────────────────────────────
   return (
     <>
-      {/* ── FAB ───────────────────────────────────────── */}
+      {/* ── FAB — oculto na página do Chat ao Vivo ───── */}
       <AnimatePresence>
-        {!open && (
+        {!open && !isChatPage && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -465,7 +478,6 @@ export function AdminChatWidget() {
               boxShadow: '0 0 0 1px rgba(16,185,129,0.3), 0 20px 60px -10px rgba(16,185,129,0.5), 0 0 30px -5px rgba(16,185,129,0.3)',
             }}
           >
-            {/* Rotating ring */}
             <motion.div
               className="absolute inset-0 rounded-2xl"
               style={{ background: 'conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%)' }}
@@ -483,7 +495,6 @@ export function AdminChatWidget() {
                 {unreadTotal > 99 ? '99+' : unreadTotal}
               </motion.span>
             )}
-            {/* Pulse ring */}
             <motion.div
               className="absolute inset-0 rounded-2xl border-2 border-emerald-400/40"
               animate={{ scale: [1, 1.3, 1.3], opacity: [0.8, 0, 0] }}
