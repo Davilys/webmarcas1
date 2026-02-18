@@ -138,6 +138,33 @@ export default function AdminClientes() {
     }
   };
 
+  // Helper to fetch all rows from a table using pagination (bypasses 1000-row Supabase limit)
+  const fetchAllRows = async <T,>(
+    table: string,
+    select: string,
+    extra?: (q: ReturnType<typeof supabase.from>) => ReturnType<typeof supabase.from>
+  ): Promise<T[]> => {
+    const PAGE_SIZE = 1000;
+    const allData: T[] = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      let query = supabase.from(table as any).select(select).range(offset, offset + PAGE_SIZE - 1);
+      if (extra) query = extra(query) as any;
+      const { data, error } = await query;
+      if (error) throw error;
+      if (data && data.length > 0) {
+        allData.push(...(data as T[]));
+        offset += PAGE_SIZE;
+        hasMore = data.length === PAGE_SIZE;
+      } else {
+        hasMore = false;
+      }
+    }
+    return allData;
+  };
+
   const fetchClients = async (retryCount = 0) => {
     setLoading(true);
     try {
@@ -153,33 +180,29 @@ export default function AdminClientes() {
         return;
       }
 
-      // Fetch profiles with their processes
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*, client_funnel_type, created_by, assigned_to')
-        .order('created_at', { ascending: false });
-
-      if (profilesError) throw profilesError;
+      // Fetch ALL profiles using pagination (avoids silent 1000-row Supabase limit)
+      const profiles = await fetchAllRows<any>(
+        'profiles',
+        '*, client_funnel_type, created_by, assigned_to',
+        (q) => q.order('created_at', { ascending: false })
+      );
 
       // Retry if empty result on first attempt (can happen during auth hydration)
-      if ((!profiles || profiles.length === 0) && retryCount < 2) {
+      if (profiles.length === 0 && retryCount < 2) {
         setTimeout(() => fetchClients(retryCount + 1), 800);
         setLoading(false);
         return;
       }
 
-      // Fetch all processes
-      const { data: processes, error: processesError } = await supabase
-        .from('brand_processes')
-        .select('*');
+      // Fetch all processes using pagination
+      const processes = await fetchAllRows<any>('brand_processes', '*');
 
-      if (processesError) throw processesError;
-
-      // Fetch contract values to sync
-      const { data: contracts } = await supabase
-        .from('contracts')
-        .select('user_id, contract_value, payment_method')
-        .order('created_at', { ascending: false });
+      // Fetch contract values to sync (also paginated)
+      const contracts = await fetchAllRows<any>(
+        'contracts',
+        'user_id, contract_value, payment_method',
+        (q) => q.order('created_at', { ascending: false })
+      );
 
       // Fetch admin profiles for name resolution
       const adminIds = new Set<string>();
