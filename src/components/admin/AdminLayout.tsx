@@ -23,6 +23,8 @@ import {
   Mail,
   ChevronRight,
   Trophy,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import logo from '@/assets/webmarcas-logo.png';
 import logoIcon from '@/assets/webmarcas-icon.png';
@@ -42,6 +44,8 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useAdminPermissions, type PermissionKey } from '@/hooks/useAdminPermissions';
 
 interface AdminLayoutProps {
@@ -353,6 +357,7 @@ function AdminSidebar() {
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
 
@@ -412,6 +417,20 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               </div>
               <span className="font-medium hidden sm:inline">CRM WebMarcas</span>
             </div>
+            <div className="flex-1" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-lg hover:bg-accent/60 transition-all duration-300"
+              aria-label="Alternar tema"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-500" />
+              )}
+            </Button>
           </header>
           
           <main className="p-4 sm:p-6 lg:p-8 animate-page-enter">

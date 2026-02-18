@@ -23,6 +23,7 @@ import { whatsappBgStyle, whatsappBgDarkStyle } from '@/components/chat/WhatsApp
 import type { User } from '@supabase/supabase-js';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface ClientProfile {
   id: string;
@@ -107,7 +108,7 @@ function ContactOrb({
       </div>
       {isOnline && (
         <motion.div
-          className={cn('absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-400 border-2 border-[#0a0a1a]', dot)}
+          className={cn('absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-400 border-2 border-background', dot)}
           animate={{ scale: [1, 1.4, 1] }}
           transition={{ duration: 2, repeat: Infinity }}
         />
@@ -294,7 +295,73 @@ export function AdminChatWidget() {
   const activeInitials = activeName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
   const unreadTotal = chat.conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0);
   const isFullView = expanded && open;
-  const isDark = document.documentElement.classList.contains('dark');
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const ts = {
+    panelBg: isDark ? 'linear-gradient(160deg,#08080f 0%,#0a0a1a 40%,#060612 100%)' : 'linear-gradient(160deg,#ffffff 0%,#f8fafc 60%,#f1f5f9 100%)',
+    panelShadow: isDark ? '0 0 0 1px rgba(16,185,129,0.15),-20px 0 80px -20px rgba(0,0,0,0.8),0 0 60px -20px rgba(16,185,129,0.12)' : '0 0 0 1px rgba(16,185,129,0.25),-20px 0 60px -20px rgba(0,0,0,0.12)',
+    headerBg: isDark ? 'linear-gradient(135deg,#040d08 0%,#061510 50%,#020a06 100%)' : 'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 50%,#f0fdf4 100%)',
+    headerBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.3)',
+    titleColor: isDark ? 'white' : '#0f172a',
+    accentText: isDark ? 'rgba(52,211,153,0.7)' : 'rgba(5,150,105,0.85)',
+    statsBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.07)',
+    statsBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)',
+    statsTextColor: isDark ? '#86efac' : '#065f46',
+    btnBg: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
+    btnColor: isDark ? 'rgba(255,255,255,0.5)' : '#475569',
+    leftBorder: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.15)',
+    tabBorder: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.15)',
+    activeTabBg: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.1)',
+    activeTabBorder: isDark ? 'rgba(16,185,129,0.25)' : 'rgba(16,185,129,0.3)',
+    activeTabColor: isDark ? '#86efac' : '#047857',
+    inactiveTabColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    searchBg: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+    searchBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
+    searchColor: isDark ? 'rgba(255,255,255,0.8)' : '#334155',
+    searchIconColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    contactActiveBg: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.08)',
+    contactActiveBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.25)',
+    contactDefaultBg: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+    contactNameColor: (unread: boolean) => unread ? (isDark ? 'white' : '#0f172a') : (isDark ? 'rgba(255,255,255,0.8)' : '#334155'),
+    contactPreviewColor: (unread: boolean) => unread ? (isDark ? 'rgba(255,255,255,0.7)' : '#475569') : (isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8'),
+    contactTimeColor: (unread: boolean) => unread ? '#34d399' : (isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8'),
+    noContactBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
+    noContactBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.12)',
+    noContactTitle: isDark ? 'rgba(255,255,255,0.3)' : '#64748b',
+    noContactSub: isDark ? 'rgba(255,255,255,0.15)' : '#94a3b8',
+    chatHeaderBg: isDark ? 'linear-gradient(135deg,#040d08 0%,#061510 100%)' : 'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)',
+    chatHeaderBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)',
+    chatNameColor: isDark ? 'white' : '#0f172a',
+    chatBtnBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)',
+    chatBtnColor: isDark ? 'rgba(255,255,255,0.4)' : '#64748b',
+    inputBg: isDark ? 'rgba(4,13,8,0.98)' : 'rgba(248,250,252,0.98)',
+    inputBorder: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.15)',
+    emptyIconBg: isDark ? 'linear-gradient(135deg,rgba(5,150,105,0.2),rgba(16,185,129,0.1))' : 'linear-gradient(135deg,rgba(5,150,105,0.1),rgba(16,185,129,0.05))',
+    emptyIconBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)',
+    emptyIconShadow: isDark ? '0 0 40px rgba(16,185,129,0.15)' : '0 0 30px rgba(16,185,129,0.08)',
+    emptyTitle: isDark ? 'rgba(255,255,255,0.6)' : '#475569',
+    emptySub: isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8',
+    chipBg: isDark ? 'rgba(16,185,129,0.07)' : 'rgba(16,185,129,0.05)',
+    chipBorder: isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.12)',
+    chipColor: isDark ? 'rgba(255,255,255,0.3)' : '#475569',
+    rightBorderL: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.15)',
+    rightBg: isDark ? 'rgba(6,6,18,0.95)' : 'rgba(248,250,252,0.95)',
+    rightHeaderBg: isDark ? 'rgba(4,13,8,0.8)' : 'rgba(240,253,244,0.8)',
+    rightHeaderBorder: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.12)',
+    rightTitle: isDark ? 'rgba(255,255,255,0.6)' : '#475569',
+    rightBtnColor: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    profileName: isDark ? 'white' : '#0f172a',
+    profilePhone: isDark ? 'rgba(255,255,255,0.4)' : '#475569',
+    profileDotBorder: isDark ? '#060612' : '#f0fdf4',
+    infoFieldBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+    infoFieldBorder: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    infoLabel: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+    infoValue: isDark ? 'rgba(255,255,255,0.7)' : '#334155',
+    assignBg: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
+    assignBorder: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)',
+    assignLabel: isDark ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+  };
 
   const getDateLabel = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -427,8 +494,8 @@ export function AdminChatWidget() {
             )}
             style={{
               ...(isFullView ? { width: panelWidth } : {}),
-              background: 'linear-gradient(160deg, #08080f 0%, #0a0a1a 40%, #060612 100%)',
-              boxShadow: '0 0 0 1px rgba(16,185,129,0.15), -20px 0 80px -20px rgba(0,0,0,0.8), 0 0 60px -20px rgba(16,185,129,0.12)',
+              background: ts.panelBg,
+              boxShadow: ts.panelShadow,
             }}
           >
             {/* Resize handle */}
@@ -449,8 +516,8 @@ export function AdminChatWidget() {
             <div
               className="flex items-center justify-between px-5 py-3 relative overflow-hidden flex-shrink-0"
               style={{
-                background: 'linear-gradient(135deg, #040d08 0%, #061510 50%, #020a06 100%)',
-                borderBottom: '1px solid rgba(16,185,129,0.15)',
+                background: ts.headerBg,
+                borderBottom: `1px solid ${ts.headerBorder}`,
               }}
             >
               <ParticleField density={10} />
@@ -546,11 +613,11 @@ export function AdminChatWidget() {
                   "flex flex-col overflow-hidden",
                   isFullView ? "w-[300px] shrink-0" : "flex-1"
                 )}
-                  style={{ borderRight: '1px solid rgba(16,185,129,0.12)' }}
+                style={{ borderRight: `1px solid ${ts.leftBorder}` }}
                 >
                   {/* Tabs */}
                   <div className="px-3 pt-3 pb-2 flex items-center gap-1"
-                    style={{ borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
+                    style={{ borderBottom: `1px solid ${ts.tabBorder}` }}>
                     {[
                       { key: 'clients', icon: Users, label: 'Clientes' },
                       { key: 'internal', icon: MessageCircle, label: 'Interno' },
@@ -558,16 +625,12 @@ export function AdminChatWidget() {
                       <button
                         key={key}
                         onClick={() => setActiveTab(key as 'clients' | 'internal')}
-                        className={cn(
-                          "flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200",
-                          activeTab === key
-                            ? "text-emerald-300"
-                            : "text-white/30 hover:text-white/60"
-                        )}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200"
                         style={activeTab === key ? {
-                          background: 'rgba(16,185,129,0.12)',
-                          border: '1px solid rgba(16,185,129,0.25)',
-                        } : { background: 'transparent', border: '1px solid transparent' }}
+                          background: ts.activeTabBg,
+                          border: `1px solid ${ts.activeTabBorder}`,
+                          color: ts.activeTabColor,
+                        } : { background: 'transparent', border: '1px solid transparent', color: ts.inactiveTabColor }}
                       >
                         <Icon className="h-3 w-3" />
                         {label}
@@ -576,16 +639,12 @@ export function AdminChatWidget() {
                     <div className="flex-1" />
                     <button
                       onClick={() => setConvFilter(f => f === 'all' ? 'unread' : 'all')}
-                      className={cn(
-                        "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all",
-                        convFilter === 'unread'
-                          ? "text-emerald-300"
-                          : "text-white/30 hover:text-white/50"
-                      )}
+                      className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all"
                       style={convFilter === 'unread' ? {
-                        background: 'rgba(16,185,129,0.12)',
-                        border: '1px solid rgba(16,185,129,0.2)',
-                      } : { background: 'transparent', border: '1px solid transparent' }}
+                        background: ts.activeTabBg,
+                        border: `1px solid ${ts.activeTabBorder}`,
+                        color: ts.activeTabColor,
+                      } : { background: 'transparent', border: '1px solid transparent', color: ts.inactiveTabColor }}
                     >
                       <Filter className="h-2.5 w-2.5" />
                       {convFilter === 'unread' ? 'Não lidos' : 'Todos'}
@@ -595,15 +654,16 @@ export function AdminChatWidget() {
                   {/* Search */}
                   <div className="px-3 py-2.5">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: ts.searchIconColor }} />
                       <input
                         placeholder="Buscar contato..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full h-9 pl-9 pr-3 text-xs rounded-xl text-white/80 placeholder:text-white/25 outline-none focus:ring-1 focus:ring-emerald-500/40"
+                        className="w-full h-9 pl-9 pr-3 text-xs rounded-xl outline-none focus:ring-1 focus:ring-emerald-500/40"
                         style={{
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid rgba(255,255,255,0.08)',
+                          background: ts.searchBg,
+                          border: `1px solid ${ts.searchBorder}`,
+                          color: ts.searchColor,
                         }}
                       />
                     </div>
