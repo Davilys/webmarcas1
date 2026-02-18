@@ -125,19 +125,19 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
     setDetectedIntent(intent);
 
     try {
-      const { data, error } = await supabase.functions.invoke('chat-support', {
+      const { data, error } = await supabase.functions.invoke('email-ai-assistant', {
         body: {
+          action,
+          systemPrompt: buildSystemPrompt(email, tone),
           messages: [
-            { role: 'system', content: buildSystemPrompt(email, tone) },
-            { role: 'user', content: buildActionPrompt(action, customInput || email.body_text || '', tone) },
+            { role: 'user', content: buildActionPrompt(action, customInput || email.body_text || email.subject || '', tone) },
           ],
-          conversationId: `ai-email-${email.id}`,
         },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message || 'Erro na função IA');
 
-      const aiText = data?.message || data?.content || data?.response || '';
+      const aiText = data?.content || '';
 
       if (!aiText) throw new Error('Resposta vazia da IA');
 
@@ -158,7 +158,9 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
       }
     } catch (err) {
       console.error('AI error:', err);
-      // Fallback with smart template
+      const errMsg = err instanceof Error ? err.message : 'Erro desconhecido';
+      // Show error but also provide intelligent fallback so UX never breaks
+      toast.warning(`IA indisponível: ${errMsg}. Usando template inteligente.`);
       const fallback = generateFallback(action, tone, email);
       if (action === 'summarize') {
         setSummary(fallback);
@@ -168,14 +170,13 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
           id: `${Date.now()}`,
           tone,
           content: fallback,
-          label: TONE_CONFIG[tone].label,
+          label: `${TONE_CONFIG[tone].label} (template)`,
           icon: TONE_CONFIG[tone].icon,
           color: TONE_CONFIG[tone].color,
         };
         setGeneratedReplies(prev => [newReply, ...prev.slice(0, 3)]);
         setExpandedReply(newReply.id);
       }
-      toast.info('Resposta gerada com template inteligente');
     } finally {
       setIsGenerating(false);
     }
