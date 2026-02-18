@@ -22,7 +22,7 @@ import ClienteProcessos from "./pages/cliente/Processos";
 import ClienteProcessoDetalhe from "./pages/cliente/ProcessoDetalhe";
 import ClienteDocumentos from "./pages/cliente/Documentos";
 import ClienteFinanceiro from "./pages/cliente/Financeiro";
-import ClienteChatSuporte from "./pages/cliente/ChatSuporte";
+import ClienteChatSuporte from "./pages/cliente/Suporte";
 import ClienteConfiguracoes from "./pages/cliente/Configuracoes";
 import ClienteRegistrarMarca from "./pages/cliente/RegistrarMarca";
 import ClienteStatusPedido from "./pages/cliente/StatusPedido";

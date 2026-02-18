@@ -2,36 +2,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ClientLayout } from '@/components/cliente/ClientLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { 
-  CreditCard, 
-  Receipt, 
-  AlertCircle, 
-  CheckCircle,
-  ExternalLink,
-  Copy,
-  QrCode,
-  FileText,
-  Clock,
-  Calendar,
-  Download,
-  Eye
+  CreditCard, CheckCircle, AlertCircle, Clock, ExternalLink,
+  Copy, QrCode, FileText, DollarSign, TrendingUp, AlertTriangle,
+  ChevronDown, ChevronUp, RefreshCw, Wallet, Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { User } from '@supabase/supabase-js';
 import { QRCodeSVG } from 'qrcode.react';
+import { format, formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Invoice {
   id: string;
@@ -43,469 +26,373 @@ interface Invoice {
   invoice_url: string | null;
   boleto_code: string | null;
   pix_code: string | null;
+  pix_qr_code: string | null;
   payment_method: string | null;
   created_at: string | null;
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle }> = {
-  pending: { label: 'Pendente', variant: 'secondary', icon: Clock },
-  confirmed: { label: 'Confirmado', variant: 'default', icon: CheckCircle },
-  paid: { label: 'Pago', variant: 'default', icon: CheckCircle },
-  received: { label: 'Pago', variant: 'default', icon: CheckCircle },
-  overdue: { label: 'Vencido', variant: 'destructive', icon: AlertCircle },
-  refunded: { label: 'Reembolsado', variant: 'outline', icon: AlertCircle },
-  canceled: { label: 'Cancelado', variant: 'outline', icon: AlertCircle },
+const PAID_STATUSES = ['paid', 'confirmed', 'received', 'RECEIVED', 'CONFIRMED'];
+
+const normalizeStatus = (s: string | null): 'paid' | 'pending' | 'overdue' | 'cancelled' => {
+  if (!s) return 'pending';
+  if (PAID_STATUSES.includes(s)) return 'paid';
+  if (s === 'overdue' || s === 'OVERDUE') return 'overdue';
+  if (s === 'cancelled' || s === 'CANCELLED' || s === 'canceled') return 'cancelled';
+  return 'pending';
 };
+
+const STATUS_CFG = {
+  paid:      { label: 'Pago',      icon: CheckCircle,   color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/25', rgb: '16,185,129', glow: '0 0 20px rgba(16,185,129,0.3)' },
+  pending:   { label: 'Pendente',  icon: Clock,         color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/25',    rgb: '245,158,11', glow: '0 0 20px rgba(245,158,11,0.25)' },
+  overdue:   { label: 'Vencido',   icon: AlertCircle,   color: 'text-red-500',     bg: 'bg-red-500/10 border-red-500/25',        rgb: '239,68,68',  glow: '0 0 20px rgba(239,68,68,0.3)' },
+  cancelled: { label: 'Cancelado', icon: AlertTriangle, color: 'text-muted-foreground', bg: 'bg-muted/40 border-border',         rgb: '100,116,139',glow: 'none' },
+};
+
+const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+// Fixed particles - no Math.random()
+const PARTICLES = Array.from({ length: 18 }).map((_, i) => ({
+  x: (i * 43.7 + 7) % 100, y: (i * 61.3 + 11) % 100,
+  s: 1.5 + (i % 3) * 0.7,
+  dur: 7 + (i % 5),
+  delay: (i * 0.44) % 6,
+  op: 0.04 + (i % 4) * 0.018,
+}));
+
+function InvoiceCard({ invoice, index }: { invoice: Invoice; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const norm = normalizeStatus(invoice.status);
+  const cfg = STATUS_CFG[norm];
+  const Icon = cfg.icon;
+  const hasPix = !!invoice.pix_code;
+  const hasBoleto = !!invoice.boleto_code;
+  const isActionable = norm === 'pending' || norm === 'overdue';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06, type: 'spring', stiffness: 280, damping: 24 }}
+      className="relative rounded-2xl border overflow-hidden backdrop-blur-sm"
+      style={{
+        background: `linear-gradient(135deg, hsl(var(--card)/0.9) 0%, rgba(${cfg.rgb},0.04) 100%)`,
+        borderColor: `rgba(${cfg.rgb},0.2)`,
+        boxShadow: norm !== 'cancelled' ? `0 0 24px -8px rgba(${cfg.rgb},0.3)` : 'none',
+      }}
+    >
+      {/* Left accent */}
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl"
+        style={{ background: `linear-gradient(180deg, transparent, rgba(${cfg.rgb},0.8), transparent)` }} />
+
+      {/* Main row */}
+      <div className="flex items-start gap-4 p-4 pl-5">
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border"
+          style={{ background: `rgba(${cfg.rgb},0.12)`, borderColor: `rgba(${cfg.rgb},0.25)` }}>
+          <Icon className={cn('h-5 w-5', cfg.color)} />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-1.5">
+            <p className="font-semibold text-sm text-foreground leading-tight">{invoice.description}</p>
+            <span className={cn('inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0', cfg.bg, cfg.color)}>
+              <Icon className="h-2.5 w-2.5" />
+              {cfg.label}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3">
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <DollarSign className="h-3 w-3" />
+              <span className="font-bold" style={{ color: `rgb(${cfg.rgb})` }}>R$ {fmt(invoice.amount)}</span>
+            </span>
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Vence: {format(new Date(invoice.due_date), "dd/MM/yyyy")}
+            </span>
+            {invoice.payment_date && (
+              <span className="text-[11px] text-emerald-500 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Pago: {format(new Date(invoice.payment_date), "dd/MM/yyyy")}
+              </span>
+            )}
+          </div>
+
+          {/* Actions */}
+          {isActionable && (
+            <div className="flex flex-wrap gap-2">
+              {hasPix && (
+                <button
+                  onClick={() => setExpanded(p => !p)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-colors"
+                >
+                  <QrCode className="h-3 w-3" />
+                  PIX {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+              )}
+              {hasBoleto && invoice.invoice_url && (
+                <a
+                  href={invoice.invoice_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500/20 transition-colors"
+                >
+                  <FileText className="h-3 w-3" />
+                  Boleto
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
+              {invoice.invoice_url && !hasBoleto && (
+                <a
+                  href={invoice.invoice_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-violet-500/10 border border-violet-500/20 text-violet-500 hover:bg-violet-500/20 transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Ver Fatura
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* PIX expanded */}
+      <AnimatePresence>
+        {expanded && hasPix && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-5 pb-4 overflow-hidden"
+          >
+            <div className="pt-3 border-t border-border/40 flex flex-col sm:flex-row gap-4 items-start">
+              {/* QR */}
+              <div className="flex-shrink-0 bg-white p-3 rounded-xl border border-border/40">
+                <QRCodeSVG value={invoice.pix_code!} size={100} />
+              </div>
+              {/* Code */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Código PIX Copia e Cola</p>
+                <div className="flex gap-2 items-start">
+                  <p className="text-[10px] font-mono text-foreground/80 break-all flex-1 leading-relaxed bg-muted/40 rounded-lg p-2">
+                    {invoice.pix_code!.slice(0, 80)}...
+                  </p>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(invoice.pix_code!); toast.success('Código PIX copiado!'); }}
+                    className="flex-shrink-0 p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
 
 export default function Financeiro() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue'>('all');
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!session) {
-          navigate('/cliente/login');
-        } else {
-          setUser(session.user);
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate('/cliente/login');
-      } else {
-        setUser(session.user);
-        fetchInvoices(session.user.id);
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      if (!session) navigate('/cliente/login');
+      else { setUser(session.user); fetchInvoices(session.user.id); }
     });
-
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) navigate('/cliente/login');
+      else { setUser(session.user); fetchInvoices(session.user.id); }
+    });
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const fetchInvoices = async (userId: string) => {
-    const { data } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('user_id', userId)
-      .order('due_date', { ascending: false });
-
-    setInvoices((data as Invoice[]) || []);
+  const fetchInvoices = async (uid: string) => {
+    setLoading(true);
+    const { data } = await supabase.from('invoices').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+    setInvoices(data || []);
     setLoading(false);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
+  const stats = {
+    total: invoices.reduce((s, i) => s + Number(i.amount), 0),
+    paid: invoices.filter(i => normalizeStatus(i.status) === 'paid').reduce((s, i) => s + Number(i.amount), 0),
+    pending: invoices.filter(i => normalizeStatus(i.status) === 'pending').reduce((s, i) => s + Number(i.amount), 0),
+    overdue: invoices.filter(i => normalizeStatus(i.status) === 'overdue').reduce((s, i) => s + Number(i.amount), 0),
+    pendingCount: invoices.filter(i => normalizeStatus(i.status) === 'pending').length,
+    overdueCount: invoices.filter(i => normalizeStatus(i.status) === 'overdue').length,
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('pt-BR');
-  };
-
-  const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${type} copiado para a área de transferência`);
-  };
-
-  const pendingInvoices = invoices.filter(i => ['pending', 'overdue'].includes(i.status));
-  const paidInvoices = invoices.filter(i => ['received', 'confirmed', 'paid'].includes(i.status));
-
-  const totalPending = pendingInvoices.reduce((sum, i) => sum + Number(i.amount), 0);
-  const totalPaid = paidInvoices.reduce((sum, i) => sum + Number(i.amount), 0);
-
-  const InvoiceCard = ({ invoice }: { invoice: Invoice }) => {
-    const config = statusConfig[invoice.status] || statusConfig.pending;
-    const StatusIcon = config.icon;
-    const isPending = ['pending', 'overdue'].includes(invoice.status);
-
-    return (
-      <Card 
-        className="overflow-hidden hover:shadow-md transition-all cursor-pointer border-l-4"
-        style={{ borderLeftColor: isPending ? 'hsl(var(--destructive))' : 'hsl(var(--primary))' }}
-        onClick={() => setSelectedInvoice(invoice)}
-      >
-        <CardContent className="p-0">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4">
-            {/* Info Section */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10">
-                  <Receipt className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-sm truncate">{invoice.description}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Vencimento: {formatDate(invoice.due_date)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Amount & Status */}
-            <div className="flex items-center gap-4 sm:gap-6">
-              <div className="text-right">
-                <p className="font-semibold text-lg">{formatCurrency(Number(invoice.amount))}</p>
-                <Badge variant={config.variant} className="mt-1">
-                  <StatusIcon className="h-3 w-3 mr-1" />
-                  {config.label}
-                </Badge>
-              </div>
-              <Eye className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const LoadingSkeleton = () => (
-    <div className="space-y-4">
-      {[1, 2, 3].map((i) => (
-        <Card key={i}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-10 w-10 rounded-xl" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-24" />
-                <Skeleton className="h-5 w-16" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-
-  // Invoice Detail Sheet Content
-  const InvoiceDetailSheet = () => {
-    if (!selectedInvoice) return null;
-    
-    const config = statusConfig[selectedInvoice.status] || statusConfig.pending;
-    const StatusIcon = config.icon;
-    const isPending = ['pending', 'overdue'].includes(selectedInvoice.status);
-    const isPaid = ['received', 'confirmed', 'paid'].includes(selectedInvoice.status);
-
-    return (
-      <Sheet open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader className="pb-4">
-            <SheetTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-primary" />
-              Detalhes da Fatura
-            </SheetTitle>
-            <SheetDescription>
-              {selectedInvoice.description}
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="space-y-6">
-            {/* Status Badge */}
-            <div className="flex items-center justify-between">
-              <Badge variant={config.variant} className="text-sm px-3 py-1">
-                <StatusIcon className="h-4 w-4 mr-2" />
-                {config.label}
-              </Badge>
-              <span className="text-2xl font-bold text-primary">
-                {formatCurrency(Number(selectedInvoice.amount))}
-              </span>
-            </div>
-
-            <Separator />
-
-            {/* Invoice Details */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Vencimento
-                  </p>
-                  <p className="font-medium">{formatDate(selectedInvoice.due_date)}</p>
-                </div>
-                
-                {selectedInvoice.payment_date && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Data do Pagamento
-                    </p>
-                    <p className="font-medium">{formatDate(selectedInvoice.payment_date)}</p>
-                  </div>
-                )}
-
-                {selectedInvoice.created_at && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Criada em</p>
-                    <p className="font-medium">{formatDate(selectedInvoice.created_at)}</p>
-                  </div>
-                )}
-
-                {selectedInvoice.payment_method && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Método</p>
-                    <p className="font-medium capitalize">{selectedInvoice.payment_method}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Payment Options for Pending */}
-            {isPending && (
-              <div className="space-y-4">
-                <h4 className="font-semibold text-sm">Opções de Pagamento</h4>
-                
-                {/* PIX Section */}
-                {selectedInvoice.pix_code && (
-                  <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-                        <QrCode className="h-5 w-5" />
-                        <span className="font-semibold">Pagar com PIX</span>
-                      </div>
-                      
-                      {/* QR Code */}
-                      <div className="flex justify-center bg-white p-4 rounded-lg">
-                        <QRCodeSVG 
-                          value={selectedInvoice.pix_code} 
-                          size={180}
-                          level="H"
-                          includeMargin
-                        />
-                      </div>
-
-                      {/* Pix Code */}
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">Código PIX (Copia e Cola)</p>
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-xs font-mono break-all line-clamp-3">
-                            {selectedInvoice.pix_code}
-                          </p>
-                        </div>
-                        <Button 
-                          className="w-full" 
-                          variant="outline"
-                          onClick={() => copyToClipboard(selectedInvoice.pix_code!, 'Código PIX')}
-                        >
-                          <Copy className="mr-2 h-4 w-4" />
-                          Copiar Código PIX
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Boleto Button */}
-                {selectedInvoice.boleto_code && (
-                  <Button 
-                    className="w-full" 
-                    variant="outline"
-                    asChild
-                  >
-                    <a href={selectedInvoice.boleto_code} target="_blank" rel="noopener noreferrer">
-                      <FileText className="mr-2 h-4 w-4" />
-                      Visualizar Boleto
-                    </a>
-                  </Button>
-                )}
-
-                {/* Main Payment Link */}
-                {selectedInvoice.invoice_url && (
-                  <Button className="w-full" asChild>
-                    <a href={selectedInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Ver Fatura Completa / Pagar
-                    </a>
-                  </Button>
-                )}
-
-                {/* Fallback */}
-                {!selectedInvoice.invoice_url && !selectedInvoice.pix_code && !selectedInvoice.boleto_code && (
-                  <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-                    <CardContent className="p-4">
-                      <p className="text-sm text-amber-700 dark:text-amber-400">
-                        Entre em contato com o suporte para obter o link de pagamento.
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
-
-            {/* Paid Invoice Info */}
-            {isPaid && (
-              <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="font-semibold">Pagamento Confirmado</span>
-                  </div>
-                  {selectedInvoice.payment_date && (
-                    <p className="text-sm text-emerald-600 dark:text-emerald-500">
-                      Pagamento realizado em {formatDate(selectedInvoice.payment_date)}
-                    </p>
-                  )}
-                  
-                  {/* Download/View Receipt */}
-                  {selectedInvoice.invoice_url && (
-                    <Button className="w-full" variant="outline" asChild>
-                      <a href={selectedInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
-                        <Download className="mr-2 h-4 w-4" />
-                        Ver Comprovante
-                      </a>
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    );
-  };
+  const filtered = invoices.filter(i => filter === 'all' || normalizeStatus(i.status) === filter);
 
   return (
     <ClientLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Financeiro</h1>
-          <p className="text-muted-foreground">
-            Gerencie suas faturas e pagamentos. Clique em uma fatura para ver detalhes.
-          </p>
+      <div className="relative space-y-5">
+        {/* Ambient background particles */}
+        <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+          {PARTICLES.map((p, i) => (
+            <motion.div key={i} className="absolute rounded-full"
+              style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.s, height: p.s, background: 'hsl(var(--primary))', opacity: p.op }}
+              animate={{ y: [-8, 8, -8], opacity: [p.op, p.op * 2.5, p.op] }}
+              transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          ))}
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-l-4 border-l-amber-500">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-500" />
-                Total Pendente
-              </CardDescription>
-              <CardTitle className="text-2xl text-amber-600 dark:text-amber-400">
-                {formatCurrency(totalPending)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                {pendingInvoices.length} fatura(s) pendente(s)
-              </p>
-            </CardContent>
-          </Card>
+        <div className="relative z-10 space-y-5">
+          {/* ── Header ─────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-2xl border border-primary/20 bg-card/60 backdrop-blur-xl p-5"
+            style={{ boxShadow: '0 0 40px hsl(var(--primary)/0.06)' }}
+          >
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+            <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl bg-primary/8 pointer-events-none" />
 
-          <Card className="border-l-4 border-l-emerald-500">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-emerald-500" />
-                Total Pago
-              </CardDescription>
-              <CardTitle className="text-2xl text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(totalPaid)}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                {paidInvoices.length} fatura(s) paga(s)
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <motion.div
+                  className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-lg shadow-primary/20"
+                  animate={{ boxShadow: ['0 0 16px hsl(var(--primary)/0.3)', '0 0 32px hsl(var(--primary)/0.5)', '0 0 16px hsl(var(--primary)/0.3)'] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <Wallet className="h-5 w-5 text-white" />
+                </motion.div>
+                <div>
+                  <h1 className="text-xl font-black tracking-tight">Financeiro</h1>
+                  <p className="text-xs text-muted-foreground">{invoices.length} cobranças · {stats.pendingCount} pendentes</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => user && fetchInvoices(user.id)} className="gap-2">
+                <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+                Atualizar
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* ── KPI Cards ─────────────────────────── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Cobrado', value: stats.total, rgb: '59,130,246', icon: DollarSign },
+              { label: 'Total Pago', value: stats.paid, rgb: '16,185,129', icon: CheckCircle },
+              { label: 'A Pagar', value: stats.pending, rgb: '245,158,11', icon: Clock },
+              { label: 'Vencidos', value: stats.overdue, rgb: '239,68,68', icon: AlertCircle },
+            ].map((kpi, i) => (
+              <motion.div
+                key={kpi.label}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + i * 0.07, type: 'spring', stiffness: 280 }}
+                className="relative rounded-2xl border p-4 overflow-hidden"
+                style={{
+                  background: `linear-gradient(135deg,rgba(${kpi.rgb},0.08) 0%,rgba(${kpi.rgb},0.02) 100%)`,
+                  borderColor: `rgba(${kpi.rgb},0.22)`,
+                  boxShadow: `0 0 20px -8px rgba(${kpi.rgb},0.25)`,
+                }}
+              >
+                <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full pointer-events-none"
+                  style={{ background: `radial-gradient(circle,rgba(${kpi.rgb},0.15) 0%,transparent 70%)` }} />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3"
+                  style={{ background: `rgba(${kpi.rgb},0.15)`, border: `1px solid rgba(${kpi.rgb},0.3)` }}>
+                  <kpi.icon className="h-4 w-4" style={{ color: `rgb(${kpi.rgb})` }} />
+                </div>
+                <p className="text-xl font-black tabular-nums" style={{ color: `rgb(${kpi.rgb})` }}>
+                  R$ {fmt(kpi.value)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{kpi.label}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* ── Alert Overdue ──────────────────────── */}
+          <AnimatePresence>
+            {stats.overdueCount > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="relative flex items-center gap-3 p-4 rounded-2xl border border-red-500/30 bg-red-500/8 overflow-hidden"
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1], opacity: [1, 0.6, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-bold text-red-500">
+                    {stats.overdueCount} fatura{stats.overdueCount > 1 ? 's' : ''} vencida{stats.overdueCount > 1 ? 's' : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Entre em contato para regularizar sua situação</p>
+                </div>
+                <a
+                  href="https://wa.me/5511911120225"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+                >
+                  Regularizar <ExternalLink className="h-3 w-3" />
+                </a>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── Filter Tabs ───────────────────────── */}
+          <div className="flex gap-2 flex-wrap">
+            {(['all', 'pending', 'paid', 'overdue'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border',
+                  filter === f
+                    ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
+                    : 'bg-card/60 text-muted-foreground border-border/50 hover:border-primary/30'
+                )}
+              >
+                {f === 'all' ? `Todas (${invoices.length})`
+                  : f === 'pending' ? `Pendentes (${invoices.filter(i => normalizeStatus(i.status) === 'pending').length})`
+                  : f === 'paid' ? `Pagas (${invoices.filter(i => normalizeStatus(i.status) === 'paid').length})`
+                  : `Vencidas (${stats.overdueCount})`}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Invoices List ──────────────────────── */}
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-24 rounded-2xl bg-muted/50 animate-pulse" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-16 gap-3 text-center"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
+                <CreditCard className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="font-semibold text-muted-foreground">Nenhuma fatura encontrada</p>
+              <p className="text-xs text-muted-foreground/60">
+                {filter !== 'all' ? 'Tente outro filtro' : 'Suas faturas aparecerão aqui'}
               </p>
-            </CardContent>
-          </Card>
+            </motion.div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((inv, i) => (
+                <InvoiceCard key={inv.id} invoice={inv} index={i} />
+              ))}
+            </div>
+          )}
         </div>
-
-        {/* Invoices Tabs */}
-        <Tabs defaultValue="pending" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="pending" className="gap-2">
-              <Clock className="h-4 w-4" />
-              Pendentes
-              {pendingInvoices.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{pendingInvoices.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="paid" className="gap-2">
-              <CheckCircle className="h-4 w-4" />
-              Pagas
-            </TabsTrigger>
-            <TabsTrigger value="all" className="gap-2">
-              <CreditCard className="h-4 w-4" />
-              Todas
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="pending" className="space-y-4">
-            {loading ? (
-              <LoadingSkeleton />
-            ) : pendingInvoices.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <CheckCircle className="h-12 w-12 text-emerald-500 mb-4" />
-                  <h3 className="font-medium text-lg">Tudo em dia!</h3>
-                  <p className="text-muted-foreground text-center">
-                    Você não possui faturas pendentes no momento.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              pendingInvoices.map((invoice) => (
-                <InvoiceCard key={invoice.id} invoice={invoice} />
-              ))
-            )}
-          </TabsContent>
-
-          <TabsContent value="paid" className="space-y-4">
-            {loading ? (
-              <LoadingSkeleton />
-            ) : paidInvoices.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium text-lg">Nenhuma fatura paga</h3>
-                  <p className="text-muted-foreground text-center">
-                    Suas faturas pagas aparecerão aqui.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              paidInvoices.map((invoice) => (
-                <InvoiceCard key={invoice.id} invoice={invoice} />
-              ))
-            )}
-          </TabsContent>
-
-          <TabsContent value="all" className="space-y-4">
-            {loading ? (
-              <LoadingSkeleton />
-            ) : invoices.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-medium text-lg">Nenhuma fatura encontrada</h3>
-                  <p className="text-muted-foreground text-center">
-                    Suas faturas aparecerão aqui quando disponíveis.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              invoices.map((invoice) => (
-                <InvoiceCard key={invoice.id} invoice={invoice} />
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
-
-        {/* Invoice Detail Sheet */}
-        <InvoiceDetailSheet />
       </div>
     </ClientLayout>
   );
