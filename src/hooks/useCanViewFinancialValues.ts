@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+// The master admin email - this user always has full access to everything including financial values
+const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
+
 /**
- * Returns true only for the "master admin":
- * an admin that has NO explicit permission rows (full access = master).
- * Secondary admins have explicit permission rows and cannot see financial values.
+ * Returns true for the "master admin" (identified by email).
+ * The master admin always has access to financial values.
+ * Secondary admins never see financial values regardless of their permissions.
  */
 export function useCanViewFinancialValues() {
-  const { data: currentUser } = useQuery({
+  const { data: currentUser, isLoading } = useQuery({
     queryKey: ['current-user-fin'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -16,30 +19,11 @@ export function useCanViewFinancialValues() {
     staleTime: 60000,
   });
 
-  const { data: canView, isLoading } = useQuery({
-    queryKey: ['can-view-financial-values', currentUser?.id],
-    queryFn: async () => {
-      if (!currentUser?.id) return false;
-
-      // Check if this user has any explicit permission rows
-      const { data, error } = await supabase
-        .from('admin_permissions')
-        .select('id')
-        .eq('user_id', currentUser.id)
-        .limit(1);
-
-      if (error) return true; // On error, default to showing (fail open for master)
-
-      // No permission rows = master admin = can view all financial values
-      const isMaster = !data || data.length === 0;
-      return isMaster;
-    },
-    enabled: !!currentUser?.id,
-    staleTime: 30000,
-  });
+  const isMaster = currentUser?.email === MASTER_ADMIN_EMAIL;
 
   return {
-    canViewFinancialValues: isLoading ? false : (canView ?? false),
+    canViewFinancialValues: isLoading ? false : isMaster,
     isLoading,
+    isMasterAdmin: isMaster,
   };
 }
