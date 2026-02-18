@@ -22,6 +22,8 @@ import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/con
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatePeriodFilter, type DateFilterType } from '@/components/admin/clients/DatePeriodFilter';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCanViewFinancialValues } from '@/hooks/useCanViewFinancialValues';
+import { EyeOff } from 'lucide-react';
 
 interface Contract {
   id: string;
@@ -391,6 +393,7 @@ export default function AdminContratos() {
     return matchesSearch && matchesSignature && matchesTab && matchesDate;
   });
 
+  const { canViewFinancialValues } = useCanViewFinancialValues();
   const totalValue = filteredContracts.reduce((sum, c) => sum + (c.contract_value || 0), 0);
   const signedCount = filteredContracts.filter(c => c.signature_status === 'signed').length;
   const pendingCount = filteredContracts.filter(c => c.signature_status !== 'signed').length;
@@ -492,10 +495,13 @@ export default function AdminContratos() {
             ring={pendingPct}
           />
           <StatCard
-            icon={DollarSign}
+            icon={canViewFinancialValues ? DollarSign : EyeOff}
             label="Valor Total"
-            value={`R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-            subtitle="soma dos contratos filtrados"
+            value={canViewFinancialValues
+              ? `R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              : '—— ——'
+            }
+            subtitle={canViewFinancialValues ? "soma dos contratos filtrados" : "restrito ao admin master"}
             color="hsl(210, 100%, 40%)"
             gradient="bg-gradient-to-br from-blue-500 to-indigo-600"
             delay={0.4}
@@ -657,9 +663,12 @@ export default function AdminContratos() {
                         </Badge>
                       </TableCell>
                       <TableCell className="font-semibold text-sm">
-                        {contract.contract_value
-                          ? `R$ ${contract.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                          : '-'}
+                        {canViewFinancialValues
+                          ? (contract.contract_value
+                              ? `R$ ${contract.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                              : '-')
+                          : <span className="flex items-center gap-1 text-muted-foreground/50 text-xs"><EyeOff className="h-3 w-3" /> Restrito</span>
+                        }
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {contract.start_date
