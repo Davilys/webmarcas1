@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +11,10 @@ import {
   Bell, Plus, Send, Users, FileText, Trash2, Edit, Copy,
   CheckCircle2, AlertTriangle, Info, Zap, Sparkles, Radio,
   Clock, Search, TrendingUp, Activity,
-  RefreshCw, Eye, MessageSquare, Smartphone, Wifi,
-  XCircle, BarChart3, Package, AlertCircle, Mail,
+  RefreshCw, Eye, MessageSquare, Smartphone,
+  BarChart3,
 } from 'lucide-react';
+import { ReportsTab } from '@/components/admin/notifications/ReportsTab';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -58,10 +59,11 @@ interface DispatchLog {
   status: string;
   recipient_phone: string | null;
   recipient_email: string | null;
+  recipient_user_id: string | null;
   error_message: string | null;
+  response_body: string | null;
   attempts: number;
   created_at: string;
-  response_body: string | null;
 }
 
 /* ─────────────────────────────────────────────────────── */
@@ -302,8 +304,8 @@ export default function AdminNotificacoes() {
   const [activeTab, setActiveTab] = useState<'history' | 'templates' | 'relatorios'>('history');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [logsChannelFilter, setLogsChannelFilter] = useState<string>('all');
-  const [logsStatusFilter, setLogsStatusFilter] = useState<string>('all');
+
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<NotificationTemplate | null>(null);
@@ -864,249 +866,11 @@ export default function AdminNotificacoes() {
           )}
           {/* ── REPORTS TAB ──────────────────────────────── */}
           {activeTab === 'relatorios' && (
-            <motion.div key="relatorios" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}
-              className="space-y-5">
-
-              {/* Channel metric cards */}
-              {(() => {
-                const channelDefs = [
-                  { key: 'crm',      label: 'CRM',      icon: Bell,          color: '#a855f7', colorRgb: '168,85,247' },
-                  { key: 'sms',      label: 'SMS',       icon: Smartphone,    color: '#6366f1', colorRgb: '99,102,241' },
-                  { key: 'whatsapp', label: 'WhatsApp',  icon: MessageSquare, color: '#22c55e', colorRgb: '34,197,94' },
-                  { key: 'email',    label: 'E-mail',    icon: Wifi,          color: '#3b82f6', colorRgb: '59,130,246' },
-                ];
-                return (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {channelDefs.map((ch, i) => {
-                      const total  = dispatchLogs.filter(l => l.channel === ch.key).length;
-                      const sent   = dispatchLogs.filter(l => l.channel === ch.key && l.status === 'sent').length;
-                      const failed = dispatchLogs.filter(l => l.channel === ch.key && l.status === 'failed').length;
-                      const rate   = total > 0 ? Math.round((sent / total) * 100) : 0;
-                      const Icon   = ch.icon;
-                      return (
-                        <motion.div key={ch.key}
-                          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
-                          className="relative rounded-2xl border p-4 overflow-hidden"
-                          style={{ background: `rgba(${ch.colorRgb},0.05)`, borderColor: `rgba(${ch.colorRgb},0.2)`, boxShadow: total > 0 ? `0 0 24px -8px rgba(${ch.colorRgb},0.3)` : 'none' }}
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center border" style={{ background: `rgba(${ch.colorRgb},0.12)`, borderColor: `rgba(${ch.colorRgb},0.25)` }}>
-                              <Icon className="h-4 w-4" style={{ color: ch.color }} />
-                            </div>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                              style={{ color: ch.color, background: `rgba(${ch.colorRgb},0.1)`, borderColor: `rgba(${ch.colorRgb},0.2)` }}>
-                              {total > 0 ? `${rate}%` : '—'}
-                            </span>
-                          </div>
-                          <p className="text-xs font-semibold text-muted-foreground mb-1">{ch.label}</p>
-                          <p className="text-2xl font-bold" style={{ color: ch.color }}>{total}</p>
-                          <div className="flex gap-3 mt-2 text-[10px] text-muted-foreground">
-                            <span className="flex items-center gap-1"><CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />{sent} ok</span>
-                            <span className="flex items-center gap-1"><XCircle className="h-2.5 w-2.5 text-red-400" />{failed} falha</span>
-                          </div>
-                          {/* Progress bar */}
-                          {total > 0 && (
-                            <div className="mt-3 h-1 rounded-full overflow-hidden bg-muted/50">
-                              <motion.div className="h-full rounded-full" style={{ background: ch.color }}
-                                initial={{ width: 0 }} animate={{ width: `${rate}%` }} transition={{ delay: i * 0.07 + 0.3, duration: 0.6 }} />
-                            </div>
-                          )}
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
-              {/* Summary stats row */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: 'Total disparos', value: dispatchLogs.length, icon: Activity, color: '#a855f7' },
-                  { label: 'Taxa geral entrega', value: dispatchLogs.length > 0 ? `${Math.round((dispatchLogs.filter(l => l.status === 'sent').length / dispatchLogs.length) * 100)}%` : '—', icon: TrendingUp, color: '#10b981' },
-                  { label: 'Com erros', value: dispatchLogs.filter(l => l.status === 'failed').length, icon: AlertCircle, color: '#ef4444' },
-                ].map((s, i) => {
-                  const Icon = s.icon;
-                  return (
-                    <motion.div key={i} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 + i * 0.05 }}
-                      className="rounded-2xl border p-4 text-center"
-                      style={{ background: 'hsl(var(--card)/0.5)', borderColor: 'hsl(var(--border)/0.5)' }}>
-                      <Icon className="h-4 w-4 mx-auto mb-2" style={{ color: s.color }} />
-                      <p className="text-xl font-bold text-foreground">{s.value}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Dispatch log table */}
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-                className="rounded-2xl border overflow-hidden"
-                style={{ background: 'hsl(var(--card)/0.5)', borderColor: 'hsl(var(--border)/0.5)' }}>
-
-                {/* Table header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'hsl(var(--border)/0.4)' }}>
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-violet-400" />
-                    <span className="text-sm font-semibold">Histórico de Disparos</span>
-                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{dispatchLogs.length} registros</span>
-                  </div>
-                  <div className="flex gap-2">
-                    {/* Channel filter */}
-                    <Select value={logsChannelFilter} onValueChange={setLogsChannelFilter}>
-                      <SelectTrigger className="h-7 text-xs rounded-lg px-2 border-border/50 bg-card/60 w-28">
-                        <SelectValue placeholder="Canal" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos canais</SelectItem>
-                        <SelectItem value="crm">CRM</SelectItem>
-                        <SelectItem value="sms">SMS</SelectItem>
-                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                        <SelectItem value="email">E-mail</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {/* Status filter */}
-                    <Select value={logsStatusFilter} onValueChange={setLogsStatusFilter}>
-                      <SelectTrigger className="h-7 text-xs rounded-lg px-2 border-border/50 bg-card/60 w-24">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="sent">Enviado</SelectItem>
-                        <SelectItem value="failed">Falha</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <motion.button whileTap={{ scale: 0.95 }} onClick={fetchDispatchLogs}
-                      className="h-7 w-7 rounded-lg border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                      style={{ borderColor: 'hsl(var(--border)/0.5)', background: 'hsl(var(--card)/0.6)' }}>
-                      <RefreshCw className={cn('h-3 w-3', logsLoading && 'animate-spin')} />
-                    </motion.button>
-                  </div>
-                </div>
-
-                {/* Table body */}
-                {logsLoading ? (
-                  <div className="space-y-2 p-4">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="h-10 rounded-xl bg-muted/40 animate-pulse" />
-                    ))}
-                  </div>
-                ) : (() => {
-                  const filtered = dispatchLogs.filter(l => {
-                    const chOk = logsChannelFilter === 'all' || l.channel === logsChannelFilter;
-                    const stOk = logsStatusFilter === 'all' || l.status === logsStatusFilter;
-                    return chOk && stOk;
-                  });
-
-                  if (filtered.length === 0) return (
-                    <div className="flex flex-col items-center justify-center py-14 gap-3">
-                      <BarChart3 className="h-10 w-10 text-muted-foreground/30" />
-                      <p className="text-sm text-muted-foreground">Nenhum disparo registrado</p>
-                      <p className="text-xs text-muted-foreground/60">Os disparos aparecerão aqui após o primeiro envio multicanal</p>
-                    </div>
-                  );
-
-                  const channelIcons: Record<string, { icon: React.ElementType; color: string }> = {
-                    crm:      { icon: Bell,          color: '#a855f7' },
-                    sms:      { icon: Smartphone,    color: '#6366f1' },
-                    whatsapp: { icon: MessageSquare, color: '#22c55e' },
-                    email:    { icon: Wifi,          color: '#3b82f6' },
-                  };
-
-                  const eventLabels: Record<string, string> = {
-                    formulario_preenchido:   'Formulário',
-                    link_assinatura_gerado:  'Link Assinatura',
-                    contrato_assinado:       'Contrato Assinado',
-                    cobranca_gerada:         'Cobrança Gerada',
-                    fatura_vencida:          'Fatura Vencida',
-                    pagamento_confirmado:    'Pagamento Confirmado',
-                    manual:                  'Manual',
-                  };
-
-                  return (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b text-muted-foreground" style={{ borderColor: 'hsl(var(--border)/0.3)' }}>
-                            <th className="text-left px-5 py-3 font-medium">Canal</th>
-                            <th className="text-left px-3 py-3 font-medium">Evento</th>
-                            <th className="text-left px-3 py-3 font-medium">Destinatário</th>
-                            <th className="text-left px-3 py-3 font-medium">Status</th>
-                            <th className="text-left px-3 py-3 font-medium">Tentativas</th>
-                            <th className="text-left px-3 py-3 font-medium">Data</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <AnimatePresence>
-                            {filtered.slice(0, 100).map((log, i) => {
-                              const ch = channelIcons[log.channel] || { icon: Bell, color: '#a855f7' };
-                              const ChIcon = ch.icon;
-                              const isSent = log.status === 'sent';
-                              const recipient = log.recipient_email || log.recipient_phone || '—';
-                              return (
-                                <motion.tr key={log.id}
-                                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                                  className={cn('border-b transition-colors group', isSent ? 'hover:bg-emerald-500/3' : 'hover:bg-red-500/3')}
-                                  style={{ borderColor: 'hsl(var(--border)/0.2)' }}>
-                                  <td className="px-5 py-3">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: `${ch.color}18` }}>
-                                        <ChIcon className="h-3 w-3" style={{ color: ch.color }} />
-                                      </div>
-                                      <span className="font-medium capitalize" style={{ color: ch.color }}>{log.channel}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-3 text-muted-foreground">
-                                    {eventLabels[log.event_type] || log.event_type}
-                                  </td>
-                                  <td className="px-3 py-3 text-muted-foreground max-w-[140px] truncate">
-                                    {recipient}
-                                  </td>
-                                  <td className="px-3 py-3">
-                                    {isSent ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                        <CheckCircle2 className="h-2.5 w-2.5" /> Enviado
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
-                                        <XCircle className="h-2.5 w-2.5" /> Falha
-                                      </span>
-                                    )}
-                                    {!isSent && log.error_message && (
-                                      <p className="text-[9px] text-red-400/70 mt-1 max-w-[180px] truncate" title={log.error_message}>
-                                        {log.error_message}
-                                      </p>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-3 text-center">
-                                    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded',
-                                      log.attempts > 1 ? 'text-amber-400 bg-amber-500/10' : 'text-muted-foreground')}>
-                                      {log.attempts}x
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="h-2.5 w-2.5" />
-                                      {log.created_at
-                                        ? formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: ptBR })
-                                        : '—'}
-                                    </div>
-                                  </td>
-                                </motion.tr>
-                              );
-                            })}
-                          </AnimatePresence>
-                        </tbody>
-                      </table>
-                      {filtered.length > 100 && (
-                        <p className="text-center text-xs text-muted-foreground py-3">
-                          Exibindo 100 de {filtered.length} registros
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-              </motion.div>
-            </motion.div>
+            <ReportsTab
+              dispatchLogs={dispatchLogs}
+              logsLoading={logsLoading}
+              onRefresh={fetchDispatchLogs}
+            />
           )}
         </AnimatePresence>
       </div>
