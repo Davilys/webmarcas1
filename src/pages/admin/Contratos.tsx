@@ -273,8 +273,40 @@ export default function AdminContratos() {
     }
   };
 
+  // Wait for auth session before fetching — fixes intermittent "0 contracts" bug
   useEffect(() => {
-    fetchContracts();
+    let mounted = true;
+
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (session) {
+        fetchContracts();
+      } else {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+          if (sess && mounted) {
+            fetchContracts();
+            subscription.unsubscribe();
+          }
+        });
+      }
+    };
+
+    init();
+
+    // Realtime subscription — auto-refresh when contracts change
+    const realtimeSub = supabase
+      .channel('contracts-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, () => {
+        if (mounted) fetchContracts();
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      realtimeSub.unsubscribe();
+    };
   }, []);
 
   const fetchContracts = async () => {
