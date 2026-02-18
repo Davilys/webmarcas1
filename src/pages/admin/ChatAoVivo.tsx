@@ -16,6 +16,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useChatMode } from '@/contexts/ChatModeContext';
 import { AdminChatWidget } from '@/components/admin/AdminChatWidget';
 
+// v2 — layout sem header próprio, conteúdo 100% no quadrado
 const BOTCONVERSA_URL = 'https://app.botconversa.com.br/8572/live-chat/all';
 
 function ChatAoVivoContent() {
@@ -67,10 +68,8 @@ function ChatAoVivoContent() {
     window.open(BOTCONVERSA_URL, '_blank');
   };
 
-  // Altura total disponível = 100vh - header (56px)
   return (
-    <div className="h-[calc(100vh-56px)] flex flex-col">
-      {/* Container principal — ocupa tudo sem padding */}
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-hidden relative">
         <AnimatePresence mode="wait">
 

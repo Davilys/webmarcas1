@@ -482,11 +482,11 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
             </Button>
           </header>
           
-          {/* Main content — sem padding em modo chat para iframe ocupar tudo */}
+          {/* Main content — sem padding em modo chat para conteúdo ocupar tudo */}
           <main className={cn(
             "flex-1 animate-page-enter mobile-page-content scroll-smooth-mobile",
             isChatActive
-              ? "overflow-hidden p-0"
+              ? "overflow-hidden p-0 flex flex-col"
               : "overflow-auto p-3 sm:p-5 lg:p-8"
           )}>
             {children}
