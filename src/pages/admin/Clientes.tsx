@@ -54,10 +54,52 @@ export default function AdminClientes() {
   // NEW: Funnel type toggle - default to commercial
   const [funnelType, setFunnelType] = useState<FunnelType>('comercial');
 
+  // Wait for auth session before fetching — fixes intermittent "0 clients" bug
   useEffect(() => {
-    fetchCurrentUserAndPermissions();
-    fetchClients();
-    fetchAdminUsers();
+    let mounted = true;
+
+    const init = async () => {
+      // Ensure we have a valid session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (session) {
+        fetchCurrentUserAndPermissions();
+        fetchClients();
+        fetchAdminUsers();
+      } else {
+        // Session not ready yet — wait for it
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+          if (sess && mounted) {
+            fetchCurrentUserAndPermissions();
+            fetchClients();
+            fetchAdminUsers();
+            subscription.unsubscribe();
+          }
+        });
+      }
+    };
+
+    init();
+
+    // Realtime subscription — auto-refresh when profiles or processes change
+    const realtimeSub = supabase
+      .channel('clients-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        if (mounted) fetchClients();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'brand_processes' }, () => {
+        if (mounted) fetchClients();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, () => {
+        if (mounted) fetchClients();
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      realtimeSub.unsubscribe();
+    };
   }, []);
 
   const fetchCurrentUserAndPermissions = async () => {
@@ -96,9 +138,21 @@ export default function AdminClientes() {
     }
   };
 
-  const fetchClients = async () => {
+  const fetchClients = async (retryCount = 0) => {
     setLoading(true);
     try {
+      // Ensure session is active before querying
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Retry up to 3 times if session not yet ready
+        if (retryCount < 3) {
+          setTimeout(() => fetchClients(retryCount + 1), 600);
+        } else {
+          setLoading(false);
+        }
+        return;
+      }
+
       // Fetch profiles with their processes
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
@@ -106,6 +160,13 @@ export default function AdminClientes() {
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
+
+      // Retry if empty result on first attempt (can happen during auth hydration)
+      if ((!profiles || profiles.length === 0) && retryCount < 2) {
+        setTimeout(() => fetchClients(retryCount + 1), 800);
+        setLoading(false);
+        return;
+      }
 
       // Fetch all processes
       const { data: processes, error: processesError } = await supabase
@@ -219,6 +280,9 @@ export default function AdminClientes() {
       setLoading(false);
     }
   };
+
+  // Wrapper without args — safe to pass directly to onClick handlers and callbacks
+  const refreshClients = () => fetchClients(0);
 
   const handleClientClick = (client: ClientWithProcess) => {
     setSelectedClient(client);
@@ -342,11 +406,11 @@ export default function AdminClientes() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <Button variant="outline" size="sm" className="gap-1.5 border-border/60 h-9" onClick={fetchClients}>
+              <Button variant="outline" size="sm" className="gap-1.5 border-border/60 h-9" onClick={refreshClients}>
                 <RefreshCw className="h-3.5 w-3.5" /> Atualizar
               </Button>
               <DuplicateClientsDialog
-                onMergeComplete={fetchClients}
+                onMergeComplete={refreshClients}
                 trigger={
                   <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60">
                     <Users className="h-3.5 w-3.5" /> Duplicados
@@ -356,7 +420,7 @@ export default function AdminClientes() {
               <Button variant="outline" size="sm" className="h-9 gap-1.5 border-border/60" onClick={() => setImportExportOpen(true)}>
                 <Upload className="h-3.5 w-3.5" /> Importar
               </Button>
-              <CreateClientDialog onClientCreated={fetchClients} />
+              <CreateClientDialog onClientCreated={refreshClients} />
             </div>
           </div>
         </motion.div>
@@ -420,7 +484,7 @@ export default function AdminClientes() {
 
             {/* Toolbar Icons */}
             <div className="flex items-center gap-1.5 shrink-0">
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={fetchClients} title="Atualizar">
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={refreshClients} title="Atualizar">
                 <RefreshCw className="h-4 w-4" />
               </Button>
               
@@ -586,7 +650,7 @@ export default function AdminClientes() {
           <ClientKanbanBoard
             clients={filteredClients}
             onClientClick={handleClientClick}
-            onRefresh={fetchClients}
+            onRefresh={refreshClients}
             filters={filters}
             funnelType={funnelType}
             adminUsers={adminUsers}
@@ -605,7 +669,7 @@ export default function AdminClientes() {
           client={selectedClient}
           open={detailOpen}
           onOpenChange={setDetailOpen}
-          onUpdate={fetchClients}
+          onUpdate={refreshClients}
         />
 
         {/* Import/Export Dialog */}
@@ -622,7 +686,7 @@ export default function AdminClientes() {
             priority: c.priority,
             contract_value: c.contract_value,
           }))}
-          onImportComplete={fetchClients}
+          onImportComplete={refreshClients}
         />
       </div>
     </AdminLayout>

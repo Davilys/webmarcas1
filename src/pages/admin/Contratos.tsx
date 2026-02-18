@@ -173,7 +173,7 @@ export default function AdminContratos() {
         toast.info('Nenhum contrato elegível para atualização');
       }
       
-      fetchContracts();
+      refreshContracts();
     } catch (error) {
       console.error('Error expiring promotions:', error);
       toast.error('Erro ao expirar promoções');
@@ -273,13 +273,56 @@ export default function AdminContratos() {
     }
   };
 
+  // Wait for auth session before fetching — fixes intermittent "0 contracts" bug
   useEffect(() => {
-    fetchContracts();
+    let mounted = true;
+
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (session) {
+        fetchContracts();
+      } else {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+          if (sess && mounted) {
+            fetchContracts();
+            subscription.unsubscribe();
+          }
+        });
+      }
+    };
+
+    init();
+
+    // Realtime subscription — auto-refresh when contracts change
+    const realtimeSub = supabase
+      .channel('contracts-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, () => {
+        if (mounted) fetchContracts();
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      realtimeSub.unsubscribe();
+    };
   }, []);
 
-  const fetchContracts = async () => {
+  const fetchContracts = async (retryCount = 0) => {
     setLoading(true);
     try {
+      // Ensure session is active before querying
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (retryCount < 3) {
+          setTimeout(() => fetchContracts(retryCount + 1), 600);
+        } else {
+          setLoading(false);
+        }
+        return;
+      }
+
       const { data, error } = await supabase
         .from('contracts')
         .select(`
@@ -291,6 +334,14 @@ export default function AdminContratos() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Retry if empty result on first attempt (auth hydration race)
+      if ((!data || data.length === 0) && retryCount < 2) {
+        setTimeout(() => fetchContracts(retryCount + 1), 800);
+        setLoading(false);
+        return;
+      }
+
       setContracts(data || []);
     } catch (error) {
       console.error('Error fetching contracts:', error);
@@ -299,6 +350,9 @@ export default function AdminContratos() {
       setLoading(false);
     }
   };
+
+  // Wrapper without args — safe to pass directly to onClick handlers and callbacks
+  const refreshContracts = () => fetchContracts(0);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
@@ -326,7 +380,7 @@ export default function AdminContratos() {
       }
       
       toast.success('Contrato excluído com sucesso');
-      fetchContracts();
+      refreshContracts();
     } catch (error: any) {
       console.error('Error deleting contract:', error);
       toast.error(error.message || 'Erro ao excluir contrato');
@@ -439,7 +493,7 @@ export default function AdminContratos() {
               transition={{ delay: 0.3 }}
               className="flex items-center gap-2"
             >
-              <Button variant="outline" size="icon" onClick={fetchContracts} className="rounded-xl hover:bg-muted/80">
+              <Button variant="outline" size="icon" onClick={refreshContracts} className="rounded-xl hover:bg-muted/80">
                 <RefreshCw className="h-4 w-4" />
               </Button>
               <Button 
@@ -733,20 +787,20 @@ export default function AdminContratos() {
         contract={selectedContract}
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        onUpdate={fetchContracts}
+        onUpdate={refreshContracts}
       />
 
       <CreateContractDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onSuccess={fetchContracts}
+        onSuccess={refreshContracts}
       />
 
       <EditContractDialog
         contract={editContract}
         open={editOpen}
         onOpenChange={setEditOpen}
-        onSuccess={fetchContracts}
+        onSuccess={refreshContracts}
       />
     </AdminLayout>
   );
