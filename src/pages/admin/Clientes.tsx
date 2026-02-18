@@ -281,6 +281,9 @@ export default function AdminClientes() {
     }
   };
 
+  // Wrapper without args — safe to pass directly to onClick handlers and callbacks
+  const refreshClients = () => fetchClients(0);
+
   const handleClientClick = (client: ClientWithProcess) => {
     setSelectedClient(client);
     setDetailOpen(true);
