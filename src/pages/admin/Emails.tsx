@@ -46,6 +46,8 @@ export default function Emails() {
   const [replyTo, setReplyTo] = useState<Email | null>(null);
   const [initialTo, setInitialTo] = useState('');
   const [initialName, setInitialName] = useState('');
+  const [aiDraftBody, setAiDraftBody] = useState('');
+
 
   // Read URL params to auto-open compose with client data
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function Emails() {
   const handleCloseCompose = () => {
     setIsComposing(false);
     setReplyTo(null);
+    setAiDraftBody('');
   };
 
   const handleSelectEmail = (email: Email) => {
@@ -112,6 +115,16 @@ export default function Emails() {
   };
 
   const handleBack = () => {
+    setSelectedEmail(null);
+  };
+
+  // Called when AI assistant generates a draft → open compose with the text pre-filled
+  const handleAiDraft = (text: string, email: Email) => {
+    setAiDraftBody(text);
+    setReplyTo(email);
+    setInitialTo(email.from_email);
+    setInitialName(email.from_name || '');
+    setIsComposing(true);
     setSelectedEmail(null);
   };
 
@@ -129,6 +142,7 @@ export default function Emails() {
           replyTo={replyTo}
           initialTo={initialTo}
           initialName={initialName}
+          initialBody={aiDraftBody || undefined}
         />
       );
     }
@@ -139,9 +153,11 @@ export default function Emails() {
           email={selectedEmail}
           onBack={handleBack}
           onReply={() => handleReply(selectedEmail)}
+          onUseDraftFromAI={(text) => handleAiDraft(text, selectedEmail)}
         />
       );
     }
+
 
     const listFolder = currentFolder.startsWith('filter-') ? 'inbox' : currentFolder;
     const validListFolders: EmailFolder[] = ['inbox', 'sent', 'drafts', 'starred', 'archived', 'trash', 'scheduled', 'automated'];

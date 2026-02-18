@@ -55,12 +55,25 @@ const AI_ACTIONS: { key: AIAction; label: string; icon: React.ElementType; descr
   { key: 'correct', label: 'Corrigir Ortografia', icon: CheckCircle2, description: 'Correção automática' },
 ];
 
+const WEBMARCAS_FOOTER = `
+
+---
+🌐 www.webmarcas.net  |  📱 WhatsApp: (11) 91112-0225
+Equipe WebMarcas | Propriedade Intelectual`;
+
+const appendFooter = (text: string): string => {
+  // Avoid duplicating footer if already present
+  if (text.includes('www.webmarcas.net')) return text;
+  return text + WEBMARCAS_FOOTER;
+};
+
 const SMART_REPLIES = [
   'Vou verificar e já te atualizo em breve.',
   'Olá! Seu processo está em andamento. Posso ajudar com mais detalhes?',
   'Obrigado pelo contato. Estou verificando as informações e retorno em breve.',
   'Entendi sua solicitação. Vou encaminhar para a equipe responsável.',
 ];
+
 
 function buildSystemPrompt(email: Email, tone: ToneMode): string {
   const toneInstructions = TONE_CONFIG[tone].prompt;
@@ -251,7 +264,7 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  onClick={() => { onUseDraft(reply); toast.success('✅ Resposta rápida inserida!'); }}
+                  onClick={() => { onUseDraft(appendFooter(reply)); toast.success('✅ Resposta rápida aberta no editor!'); }}
                   className="w-full text-left text-xs p-2.5 rounded-lg border border-border/50 hover:bg-primary/5 hover:border-primary/30 transition-all group"
                 >
                   <div className="flex items-start gap-2">
@@ -440,7 +453,10 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
                             <div className="flex gap-1.5 p-2.5 border-t border-border/20 bg-background/50">
                               <Button
                                 size="sm" className="flex-1 h-7 text-xs gap-1 shadow-sm shadow-primary/20"
-                                onClick={() => { onUseDraft(reply.content); toast.success('✅ Rascunho inserido no editor!'); }}
+                                onClick={() => {
+                                  onUseDraft(appendFooter(reply.content));
+                                  toast.success('✅ Rascunho aberto no editor!');
+                                }}
                               >
                                 <CheckCircle2 className="h-3 w-3" />
                                 Usar Esta
@@ -452,6 +468,7 @@ export function AIEmailAssistant({ email, onUseDraft, onClose }: AIEmailAssistan
                                 <RotateCcw className="h-3 w-3" />
                               </Button>
                             </div>
+
                           </motion.div>
                         )}
                       </AnimatePresence>

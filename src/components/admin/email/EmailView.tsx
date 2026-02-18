@@ -48,12 +48,15 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
 
   const handleUseDraft = (text: string) => {
     setDraftText(text);
-    if (onUseDraftFromAI) onUseDraftFromAI(text);
-    else {
+    setShowAI(false); // Close the AI modal
+    if (onUseDraftFromAI) {
+      onUseDraftFromAI(text);
+    } else {
       onReply();
       toast.success('✅ Rascunho pronto! Clique em Responder para editar.');
     }
   };
+
 
   const handleToggleStar = async () => {
     setIsStarred(prev => !prev);
