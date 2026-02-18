@@ -343,7 +343,7 @@ const SocialProofNotification = () => {
           : "opacity-0 -translate-x-4 -translate-y-2 pointer-events-none"
       )}
     >
-      <div className="glass-card p-3 md:p-4 flex items-start gap-3 border-l-4 border-l-primary shadow-lg">
+      <div className="p-3 md:p-4 flex items-start gap-3 border-l-4 border-l-primary shadow-lg rounded-2xl border border-border bg-background/95 dark:bg-card/95" style={{ WebkitBackdropFilter: 'none', backdropFilter: 'none' }}>
         <div className="flex-shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-full bg-primary/10 flex items-center justify-center">
           <IconComponent className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
         </div>
