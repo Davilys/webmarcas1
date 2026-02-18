@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
-import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { RevenueChart } from '@/components/admin/dashboard/RevenueChart';
 import { GeographicChart } from '@/components/admin/dashboard/GeographicChart';
@@ -10,15 +10,14 @@ import { RecentActivity } from '@/components/admin/dashboard/RecentActivity';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Users, FileText, TrendingUp, Target, CreditCard,
-  CheckCircle, Sparkles, Zap, Shield, Globe, Activity,
-  ArrowUpRight, ArrowDownRight, Clock, Star, Award,
-  BarChart3, Layers, RefreshCw, AlertCircle, ChevronRight,
-  Cpu, Database, Lock, Eye, Waves
+  CheckCircle, Zap, Activity,
+  ArrowUpRight, ArrowDownRight,
+  Layers, Database, Lock, Cpu, Globe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ─────────────────────────────────────────────────
-// Fixed particles (no Math.random to avoid re-render flicker)
+// Fixed particles (deterministic — no Math.random)
 // ─────────────────────────────────────────────────
 const PARTICLES = Array.from({ length: 40 }).map((_, i) => ({
   id: i,
@@ -69,7 +68,7 @@ function RingMetric({ value, max, color, size = 80 }: {
 
   return (
     <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={6} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={6} className="text-border opacity-40" />
       <motion.circle
         cx={size / 2} cy={size / 2} r={r}
         fill="none" stroke={color} strokeWidth={6}
@@ -84,7 +83,7 @@ function RingMetric({ value, max, color, size = 80 }: {
 }
 
 // ─────────────────────────────────────────────────
-// Particle Field
+// Particle Field — themed opacity
 // ─────────────────────────────────────────────────
 function ParticleField() {
   return (
@@ -98,7 +97,7 @@ function ParticleField() {
             top: `${p.y}%`,
             width: p.size,
             height: p.size,
-            background: `radial-gradient(circle, rgba(99,102,241,${p.op}) 0%, rgba(59,130,246,${p.op * 0.4}) 100%)`,
+            background: `radial-gradient(circle, hsl(var(--primary) / ${p.op * 0.7}) 0%, transparent 100%)`,
           }}
           animate={{ y: [0, -22, 0], x: [0, 8, -8, 0], opacity: [p.op, p.op * 3, p.op] }}
           transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
@@ -107,7 +106,7 @@ function ParticleField() {
       {/* Scan line */}
       <motion.div
         className="absolute left-0 right-0 h-[1px]"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent)' }}
+        style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.25), transparent)' }}
         animate={{ top: ['0%', '100%', '0%'] }}
         transition={{ duration: 16, repeat: Infinity, ease: 'linear' }}
       />
@@ -116,22 +115,23 @@ function ParticleField() {
 }
 
 // ─────────────────────────────────────────────────
-// Grid overlay
+// Grid overlay — themed
 // ─────────────────────────────────────────────────
 function GridOverlay() {
   return (
     <div
-      className="absolute inset-0 opacity-[0.025] pointer-events-none"
+      className="absolute inset-0 pointer-events-none"
       style={{
-        backgroundImage: 'linear-gradient(rgba(99,102,241,1) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,1) 1px, transparent 1px)',
+        backgroundImage: 'linear-gradient(hsl(var(--border)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px)',
         backgroundSize: '48px 48px',
+        opacity: 0.018,
       }}
     />
   );
 }
 
 // ─────────────────────────────────────────────────
-// KPI HUD Card
+// KPI HUD Card — themed glass
 // ─────────────────────────────────────────────────
 interface KpiCardProps {
   title: string;
@@ -139,9 +139,9 @@ interface KpiCardProps {
   prefix?: string;
   suffix?: string;
   icon: React.ElementType;
-  color: string;        // hex or rgb for glow
-  gradient: string;     // tailwind gradient classes
-  accentColor: string;  // css color for ring
+  color: string;
+  gradient: string;
+  accentColor: string;
   trend?: number;
   trendLabel?: string;
   index: number;
@@ -165,34 +165,25 @@ function KpiCard({
       whileHover={{ y: -6, transition: { duration: 0.22 } }}
       className="group relative"
     >
-      {/* Glow behind card */}
+      {/* Glow behind card on hover */}
       <div
         className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"
-        style={{ background: `radial-gradient(ellipse at center, ${color}30 0%, transparent 70%)` }}
+        style={{ background: `radial-gradient(ellipse at center, ${color}25 0%, transparent 70%)` }}
       />
 
-      <div
-        className="relative rounded-2xl overflow-hidden border"
-        style={{
-          background: 'rgba(255,255,255,0.03)',
-          backdropFilter: 'blur(20px)',
-          borderColor: 'rgba(255,255,255,0.08)',
-          boxShadow: `0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.08)`,
-        }}
-      >
-        {/* Top accent */}
+      <div className="relative rounded-2xl overflow-hidden border bg-card/60 backdrop-blur-xl border-border/50 shadow-[0_4px_24px_hsl(var(--foreground)/0.06),inset_0_1px_0_hsl(var(--background)/0.8)]">
+        {/* Top accent line */}
         <div className={cn('absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r', gradient)} />
 
         {/* Corner glow */}
         <div
-          className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl opacity-20"
+          className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl opacity-10"
           style={{ background: color }}
         />
 
         <div className="relative p-4 flex flex-col gap-3">
           {/* Header row */}
           <div className="flex items-start justify-between">
-            {/* Icon */}
             <motion.div
               className={cn('w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-lg', gradient)}
               whileHover={{ rotate: 10, scale: 1.15 }}
@@ -201,7 +192,6 @@ function KpiCard({
               <Icon className="h-5 w-5 text-white" />
             </motion.div>
 
-            {/* Ring */}
             {ringMax !== undefined && (
               <div className="relative flex items-center justify-center">
                 <RingMetric value={value} max={ringMax} color={accentColor} size={44} />
@@ -211,7 +201,6 @@ function KpiCard({
               </div>
             )}
 
-            {/* Tag badge */}
             {tag && (
               <span
                 className="text-[9px] font-bold px-2 py-0.5 rounded-full border"
@@ -224,24 +213,24 @@ function KpiCard({
 
           {/* Value */}
           <div>
-            <p className="text-2xl font-black tracking-tight text-white leading-none">
+            <p className="text-2xl font-black tracking-tight text-foreground leading-none">
               <AnimCount to={value} prefix={prefix} decimals={prefix === 'R$ ' ? 0 : 0} />
               {suffix}
             </p>
-            <p className="text-[11px] font-medium text-white/50 mt-1">{title}</p>
+            <p className="text-[11px] font-medium text-muted-foreground mt-1">{title}</p>
           </div>
 
           {/* Trend */}
           {trend !== undefined && (
-            <div className="flex items-center gap-1.5 pt-2 border-t border-white/[0.06]">
-              {isPos && <ArrowUpRight className="h-3 w-3 text-emerald-400" />}
-              {isNeg && <ArrowDownRight className="h-3 w-3 text-rose-400" />}
+            <div className="flex items-center gap-1.5 pt-2 border-t border-border/40">
+              {isPos && <ArrowUpRight className="h-3 w-3 text-emerald-500" />}
+              {isNeg && <ArrowDownRight className="h-3 w-3 text-rose-500" />}
               <span className={cn('text-[11px] font-bold',
-                isPos ? 'text-emerald-400' : isNeg ? 'text-rose-400' : 'text-white/40'
+                isPos ? 'text-emerald-500' : isNeg ? 'text-rose-500' : 'text-muted-foreground'
               )}>
                 {isPos && '+'}{trend}%
               </span>
-              {trendLabel && <span className="text-[10px] text-white/30">{trendLabel}</span>}
+              {trendLabel && <span className="text-[10px] text-muted-foreground">{trendLabel}</span>}
             </div>
           )}
         </div>
@@ -251,7 +240,7 @@ function KpiCard({
 }
 
 // ─────────────────────────────────────────────────
-// Live status ticker
+// Live status ticker — themed
 // ─────────────────────────────────────────────────
 function LiveTicker({ stats }: { stats: Stats }) {
   const items = [
@@ -266,17 +255,15 @@ function LiveTicker({ stats }: { stats: Stats }) {
 
   return (
     <div className="overflow-hidden relative flex items-center h-7">
-      <div className="absolute left-0 top-0 bottom-0 w-10 z-10"
-        style={{ background: 'linear-gradient(90deg, rgba(8,8,24,1), transparent)' }} />
-      <div className="absolute right-0 top-0 bottom-0 w-10 z-10"
-        style={{ background: 'linear-gradient(-90deg, rgba(8,8,24,1), transparent)' }} />
+      <div className="absolute left-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-r from-card/80 to-transparent" />
+      <div className="absolute right-0 top-0 bottom-0 w-10 z-10 bg-gradient-to-l from-card/80 to-transparent" />
       <motion.div
         className="flex gap-8 whitespace-nowrap"
         animate={{ x: ['0%', '-50%'] }}
         transition={{ duration: 22, repeat: Infinity, ease: 'linear' }}
       >
         {doubled.map((item, i) => (
-          <span key={i} className="text-[10px] font-semibold tracking-widest text-indigo-300/60 uppercase">
+          <span key={i} className="text-[10px] font-semibold tracking-widest text-primary/50 uppercase">
             {item}
           </span>
         ))}
@@ -286,7 +273,7 @@ function LiveTicker({ stats }: { stats: Stats }) {
 }
 
 // ─────────────────────────────────────────────────
-// System status panel
+// System status panel — themed
 // ─────────────────────────────────────────────────
 function SystemStatus() {
   const nodes = [
@@ -301,20 +288,15 @@ function SystemStatus() {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, delay: 0.5 }}
-      className="rounded-2xl p-4 border relative overflow-hidden"
-      style={{
-        background: 'rgba(255,255,255,0.03)',
-        backdropFilter: 'blur(20px)',
-        borderColor: 'rgba(255,255,255,0.08)',
-      }}
+      className="rounded-2xl p-4 border bg-card/60 backdrop-blur-xl border-border/50 relative overflow-hidden"
     >
       <div className="flex items-center gap-2 mb-3">
         <motion.div
           animate={{ scale: [1, 1.3, 1], opacity: [1, 0.6, 1] }}
           transition={{ duration: 2, repeat: Infinity }}
-          className="w-2 h-2 rounded-full bg-emerald-400"
+          className="w-2 h-2 rounded-full bg-emerald-500"
         />
-        <span className="text-[11px] font-bold text-white/70 uppercase tracking-widest">Status do Sistema</span>
+        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status do Sistema</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {nodes.map((n, i) => {
@@ -325,15 +307,14 @@ function SystemStatus() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.6 + i * 0.1 }}
-              className="flex items-center gap-2 p-2 rounded-xl"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+              className="flex items-center gap-2 p-2 rounded-xl bg-muted/50 border border-border/40"
             >
-              <Icon className="h-3.5 w-3.5 text-indigo-400" />
+              <Icon className="h-3.5 w-3.5 text-primary" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-white/70">{n.label}</p>
-                <p className="text-[9px] text-white/30">{n.lat}</p>
+                <p className="text-[10px] font-semibold text-foreground">{n.label}</p>
+                <p className="text-[9px] text-muted-foreground">{n.lat}</p>
               </div>
-              <div className={cn('w-1.5 h-1.5 rounded-full', n.ok ? 'bg-emerald-400' : 'bg-rose-400')} />
+              <div className={cn('w-1.5 h-1.5 rounded-full', n.ok ? 'bg-emerald-500' : 'bg-rose-500')} />
             </motion.div>
           );
         })}
@@ -343,7 +324,7 @@ function SystemStatus() {
 }
 
 // ─────────────────────────────────────────────────
-// Quick Access HUD buttons
+// Quick Access HUD buttons — themed
 // ─────────────────────────────────────────────────
 function QuickAccess() {
   const actions = [
@@ -360,16 +341,11 @@ function QuickAccess() {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.4 }}
-      className="rounded-2xl p-4 border relative overflow-hidden"
-      style={{
-        background: 'rgba(255,255,255,0.03)',
-        backdropFilter: 'blur(20px)',
-        borderColor: 'rgba(255,255,255,0.08)',
-      }}
+      className="rounded-2xl p-4 border bg-card/60 backdrop-blur-xl border-border/50 relative overflow-hidden"
     >
       <div className="flex items-center gap-2 mb-3">
-        <Zap className="h-3.5 w-3.5 text-indigo-400" />
-        <span className="text-[11px] font-bold text-white/70 uppercase tracking-widest">Acesso Rápido</span>
+        <Zap className="h-3.5 w-3.5 text-primary" />
+        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Acesso Rápido</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {actions.map((a, i) => {
@@ -388,11 +364,11 @@ function QuickAccess() {
             >
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: `${a.color}25`, boxShadow: `0 0 12px ${a.color}30` }}
+                style={{ background: `${a.color}20`, boxShadow: `0 0 12px ${a.color}25` }}
               >
-                <Icon className="h-4 w-4 text-white" style={{ filter: `drop-shadow(0 0 4px ${a.color})` }} />
+                <Icon className="h-4 w-4" style={{ color: a.color }} />
               </div>
-              <span className="text-[9px] font-semibold text-white/60">{a.label}</span>
+              <span className="text-[9px] font-semibold text-muted-foreground">{a.label}</span>
             </motion.a>
           );
         })}
@@ -402,7 +378,7 @@ function QuickAccess() {
 }
 
 // ─────────────────────────────────────────────────
-// Performance bar
+// Performance bar — themed
 // ─────────────────────────────────────────────────
 function PerformanceBar({ label, value, color, delay }: {
   label: string; value: number; color: string; delay: number;
@@ -410,10 +386,10 @@ function PerformanceBar({ label, value, color, delay }: {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-white/50 font-medium">{label}</span>
+        <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
         <span className="text-[10px] font-bold" style={{ color }}>{value}%</span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
         <motion.div
           className="h-full rounded-full"
           style={{ background: `linear-gradient(90deg, ${color}80, ${color})` }}
@@ -456,7 +432,6 @@ export default function AdminDashboard() {
   const [greeting, setGreeting] = useState('');
   const [adminName, setAdminName] = useState('');
   const [currentTime, setCurrentTime] = useState('');
-  const [loaded, setLoaded] = useState(false);
 
   // Clock
   useEffect(() => {
@@ -514,8 +489,7 @@ export default function AdminDashboard() {
     const conversionRate = totalLeads > 0 ? Math.round((totalClients / totalLeads) * 100) : 0;
 
     setStats({
-      totalClients,
-      totalLeads,
+      totalClients, totalLeads,
       activeProcesses: processes.filter(p => p.status === 'em_andamento').length,
       pendingInvoices: invoices.filter(i => i.status === 'pending').length,
       totalRevenue,
@@ -526,7 +500,6 @@ export default function AdminDashboard() {
       totalProcesses: processes.length,
       conversionRate,
     });
-    setLoaded(true);
   };
 
   const kpiCards: KpiCardProps[] = [
@@ -579,11 +552,8 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
-      {/* Outer HUD wrapper */}
-      <div
-        className="min-h-screen relative rounded-2xl overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #080818 0%, #0c0c22 35%, #090914 65%, #060612 100%)' }}
-      >
+      {/* Outer HUD wrapper — respects light/dark via bg-background */}
+      <div className="min-h-screen relative rounded-2xl overflow-hidden bg-background">
         <ParticleField />
         <GridOverlay />
 
@@ -594,20 +564,16 @@ export default function AdminDashboard() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="relative rounded-2xl overflow-hidden"
-            style={{
-              background: 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.06) 50%, rgba(59,130,246,0.04) 100%)',
-              border: '1px solid rgba(99,102,241,0.2)',
-              boxShadow: '0 0 60px rgba(99,102,241,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
-            }}
+            className="relative rounded-2xl overflow-hidden border border-primary/20 bg-card/60 backdrop-blur-xl"
+            style={{ boxShadow: '0 0 60px hsl(var(--primary) / 0.06), inset 0 1px 0 hsl(var(--background) / 0.8)' }}
           >
             {/* Corner accent lines */}
-            <div className="absolute top-0 left-0 w-16 h-16 border-l-2 border-t-2 border-indigo-500/30 rounded-tl-2xl pointer-events-none" />
-            <div className="absolute bottom-0 right-0 w-16 h-16 border-r-2 border-b-2 border-indigo-500/30 rounded-br-2xl pointer-events-none" />
+            <div className="absolute top-0 left-0 w-16 h-16 border-l-2 border-t-2 border-primary/25 rounded-tl-2xl pointer-events-none" />
+            <div className="absolute bottom-0 right-0 w-16 h-16 border-r-2 border-b-2 border-primary/25 rounded-br-2xl pointer-events-none" />
 
             {/* Glow orbs */}
-            <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl" style={{ background: 'rgba(99,102,241,0.15)' }} />
-            <div className="absolute -bottom-10 left-1/3 w-32 h-32 rounded-full blur-3xl" style={{ background: 'rgba(139,92,246,0.1)' }} />
+            <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl bg-primary/10" />
+            <div className="absolute -bottom-10 left-1/3 w-32 h-32 rounded-full blur-3xl bg-primary/6" />
 
             <div className="relative p-5 md:p-8">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -619,26 +585,23 @@ export default function AdminDashboard() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 }}
                   >
-                    <div
-                      className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase"
-                      style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }}
-                    >
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase bg-primary/15 border border-primary/25 text-primary">
                       <motion.div
                         animate={{ opacity: [1, 0.3, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity }}
-                        className="w-1.5 h-1.5 rounded-full bg-indigo-400"
+                        className="w-1.5 h-1.5 rounded-full bg-primary"
                       />
                       CRM WebMarcas · Sistema Operacional
                     </div>
                   </motion.div>
 
                   <motion.h1
-                    className="text-2xl md:text-4xl font-black tracking-tight text-white"
+                    className="text-2xl md:text-4xl font-black tracking-tight text-foreground"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
                   >
-                    {greeting}{adminName ? `, ${adminName}` : ''} 
+                    {greeting}{adminName ? `, ${adminName}` : ''}
                     <motion.span
                       animate={{ rotate: [0, 15, -10, 15, 0] }}
                       transition={{ duration: 1.5, delay: 1 }}
@@ -649,7 +612,7 @@ export default function AdminDashboard() {
                   </motion.h1>
 
                   <motion.p
-                    className="text-white/40 mt-1.5 text-sm"
+                    className="text-muted-foreground mt-1.5 text-sm"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.4 }}
@@ -665,20 +628,17 @@ export default function AdminDashboard() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.35 }}
                 >
-                  <div
-                    className="px-4 py-2 rounded-xl font-mono text-xl font-black tracking-widest text-white"
-                    style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)' }}
-                  >
+                  <div className="px-4 py-2 rounded-xl font-mono text-xl font-black tracking-widest text-foreground bg-primary/10 border border-primary/20">
                     {currentTime}
                   </div>
-                  <p className="text-[11px] text-white/40 capitalize">
+                  <p className="text-[11px] text-muted-foreground capitalize">
                     {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </motion.div>
               </div>
 
               {/* Live ticker */}
-              <div className="mt-4 pt-4 border-t border-white/[0.06]">
+              <div className="mt-4 pt-4 border-t border-border/40">
                 <LiveTicker stats={stats} />
               </div>
             </div>
@@ -698,16 +658,11 @@ export default function AdminDashboard() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="rounded-2xl p-5 border relative overflow-hidden flex flex-col gap-4"
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                backdropFilter: 'blur(20px)',
-                borderColor: 'rgba(255,255,255,0.08)',
-              }}
+              className="rounded-2xl p-5 border bg-card/60 backdrop-blur-xl border-border/50 relative overflow-hidden flex flex-col gap-4"
             >
               <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-indigo-400" />
-                <span className="text-[11px] font-bold text-white/70 uppercase tracking-widest">Performance</span>
+                <Activity className="h-4 w-4 text-primary" />
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Performance</span>
               </div>
 
               {/* Big ring */}
@@ -715,18 +670,18 @@ export default function AdminDashboard() {
                 <div className="relative">
                   <RingMetric value={stats.conversionRate} max={100} color="#6366f1" size={80} />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-base font-black text-white">{stats.conversionRate}%</span>
+                    <span className="text-base font-black text-foreground">{stats.conversionRate}%</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-white/50 mb-0.5">Taxa de Conversão</p>
-                  <p className="text-lg font-bold text-white">{stats.totalClients} / {stats.totalLeads}</p>
-                  <p className="text-[10px] text-white/30">leads → clientes</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">Taxa de Conversão</p>
+                  <p className="text-lg font-bold text-foreground">{stats.totalClients} / {stats.totalLeads}</p>
+                  <p className="text-[10px] text-muted-foreground">leads → clientes</p>
                 </div>
               </div>
 
               {/* Performance bars */}
-              <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <div className="space-y-2 pt-2 border-t border-border/40">
                 <PerformanceBar label="Processos concluídos"
                   value={stats.totalProcesses > 0 ? Math.round((stats.completedProcesses / stats.totalProcesses) * 100) : 0}
                   color="#10b981" delay={0.8} />
@@ -749,8 +704,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* ── REVENUE CHART ─────────────────── */}
-          <div className="rounded-2xl overflow-hidden border"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
+          <div className="rounded-2xl overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl">
             <RevenueChart />
           </div>
 
@@ -762,8 +716,7 @@ export default function AdminDashboard() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, delay: 0.3 + i * 0.1 }}
-                className="rounded-2xl overflow-hidden border"
-                style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}
+                className="rounded-2xl overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl"
               >
                 <Comp />
               </motion.div>
@@ -778,8 +731,7 @@ export default function AdminDashboard() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, delay: 0.5 + i * 0.1 }}
-                className="rounded-2xl overflow-hidden border"
-                style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}
+                className="rounded-2xl overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl"
               >
                 <Comp />
               </motion.div>
@@ -791,25 +743,28 @@ export default function AdminDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1 }}
-            className="flex items-center justify-between px-4 py-2.5 rounded-xl"
-            style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}
+            className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/15"
           >
             <div className="flex items-center gap-3">
               <motion.div
                 animate={{ opacity: [1, 0.3, 1] }}
                 transition={{ duration: 1.8, repeat: Infinity }}
-                className="w-2 h-2 rounded-full bg-emerald-400"
+                className="w-2 h-2 rounded-full bg-emerald-500"
               />
-              <span className="text-[10px] text-white/40 font-mono">SISTEMA OPERACIONAL · v2026.1</span>
+              <span className="text-[10px] text-muted-foreground font-mono">SISTEMA OPERACIONAL · v2026.1</span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-[10px] text-white/30 font-mono hidden md:block">
+              <span className="text-[10px] text-muted-foreground font-mono hidden md:block">
                 Último sync: {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
               </span>
-              <div className="flex items-center gap-1.5">
-                <Shield className="h-3 w-3 text-emerald-400" />
-                <span className="text-[10px] text-emerald-400/70 font-semibold">SEGURO</span>
-              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={fetchStats}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors"
+              >
+                Atualizar
+              </motion.button>
             </div>
           </motion.div>
 
