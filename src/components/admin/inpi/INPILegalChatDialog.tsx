@@ -11,6 +11,7 @@ import {
   Send, Paperclip, Mic, Square, Loader2, X, FileText, Scale,
   Sparkles, Shield, BookOpen, Zap, Brain, ChevronDown, Copy,
   RotateCcw, CheckCircle2, AlertCircle, Gavel, TrendingUp,
+  AlignLeft, FileSearch, Microscope, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -35,6 +36,42 @@ interface INPILegalChatDialogProps {
 }
 
 type PdfProgressStage = 'reading' | 'rendering';
+
+// ── Response level types ──
+type ResponseLevel = 'resumida' | 'completa' | 'tecnica';
+
+const RESPONSE_LEVELS: { id: ResponseLevel; label: string; shortLabel: string; icon: React.ElementType; color: string; glow: string; description: string; suffix: string }[] = [
+  {
+    id: 'resumida',
+    label: 'Resumida',
+    shortLabel: 'Resumo',
+    icon: AlignLeft,
+    color: 'text-emerald-400',
+    glow: 'shadow-emerald-500/30',
+    description: 'Resposta direta e objetiva em até 3 parágrafos',
+    suffix: '\n\n⚡ INSTRUÇÃO DE FORMATO: Responda de forma RESUMIDA e objetiva, em no máximo 3 parágrafos. Seja direto ao ponto, sem introduções longas.',
+  },
+  {
+    id: 'completa',
+    label: 'Completa',
+    shortLabel: 'Completa',
+    icon: FileSearch,
+    color: 'text-violet-400',
+    glow: 'shadow-violet-500/30',
+    description: 'Análise detalhada com fundamentos e estratégia',
+    suffix: '\n\n📋 INSTRUÇÃO DE FORMATO: Forneça uma análise COMPLETA com: (1) diagnóstico do caso, (2) fundamento legal detalhado, (3) estratégia recomendada, (4) próximos passos práticos.',
+  },
+  {
+    id: 'tecnica',
+    label: 'Técnica Avançada',
+    shortLabel: 'Técnica',
+    icon: Microscope,
+    color: 'text-amber-400',
+    glow: 'shadow-amber-500/30',
+    description: 'Parecer jurídico completo com jurisprudência',
+    suffix: '\n\n🔬 INSTRUÇÃO DE FORMATO: Elabore um PARECER JURÍDICO TÉCNICO AVANÇADO contendo: (1) Relatório dos fatos, (2) Enquadramento legal (LPI, Manual INPI, tratados internacionais), (3) Análise jurisprudencial com decisões reais do STJ/TRF-2/TRF-3, (4) Fundamentação doutrinária, (5) Estratégia processual detalhada, (6) Conclusão e recomendações técnicas. Use linguagem jurídica profissional.',
+  },
+];
 
 async function convertPdfToImages(
   base64Data: string,
@@ -175,6 +212,8 @@ Como posso ajudar você hoje?`,
     },
   ]);
   const [input, setInput] = useState('');
+  const [responseLevel, setResponseLevel] = useState<ResponseLevel>('completa');
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -321,10 +360,21 @@ Como posso ajudar você hoje?`,
     setAttachedFile(null);
     setIsLoading(true);
     try {
+      const level = RESPONSE_LEVELS.find(l => l.id === responseLevel)!;
+      // Inject level suffix only into the last (current) user message for the API
       const apiMessages = messages
         .filter(m => !(m.role === 'assistant' && m.id === '1'))
         .concat(userMessage)
-        .map(m => ({ role: m.role, content: m.content, fileImages: m.fileImages, fileBase64: m.fileBase64, fileName: m.fileName }));
+        .map((m, idx, arr) => {
+          const isLast = idx === arr.length - 1 && m.role === 'user';
+          return {
+            role: m.role,
+            content: isLast ? (m.content + level.suffix) : m.content,
+            fileImages: m.fileImages,
+            fileBase64: m.fileBase64,
+            fileName: m.fileName,
+          };
+        });
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-inpi-legal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
@@ -427,15 +477,35 @@ Como posso ajudar você hoje?`,
               </div>
 
               {/* HUD stats */}
-              <div className="hidden sm:flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2">
                 <div className="text-center px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest">Msgs</p>
                   <p className="text-sm font-bold text-white">{messages.length}</p>
                 </div>
-                <div className="text-center px-3 py-1.5 rounded-xl bg-violet-500/10 border border-violet-500/20">
-                  <p className="text-[9px] text-violet-400 uppercase tracking-widest">Modo</p>
-                  <p className="text-sm font-bold text-violet-300">Jurídico</p>
-                </div>
+                {/* Dynamic level badge */}
+                {(() => {
+                  const lvl = RESPONSE_LEVELS.find(l => l.id === responseLevel)!;
+                  const Icon = lvl.icon;
+                  return (
+                    <motion.div
+                      key={responseLevel}
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-xl border',
+                        responseLevel === 'resumida' ? 'bg-emerald-500/10 border-emerald-500/30' :
+                        responseLevel === 'completa' ? 'bg-violet-500/10 border-violet-500/20' :
+                        'bg-amber-500/10 border-amber-500/30'
+                      )}
+                    >
+                      <Icon className={cn('h-3 w-3', lvl.color)} />
+                      <div>
+                        <p className={cn('text-[9px] uppercase tracking-widest', lvl.color)}>Resposta</p>
+                        <p className={cn('text-xs font-bold', lvl.color)}>{lvl.shortLabel}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })()}
               </div>
 
               <Button
@@ -658,6 +728,124 @@ Como posso ajudar você hoje?`,
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* ── RESPONSE LEVEL PICKER ── */}
+            <div className="space-y-1.5">
+              {/* Trigger row */}
+              <motion.button
+                onClick={() => setShowLevelPicker(p => !p)}
+                disabled={isLoading}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                className={cn(
+                  'w-full flex items-center justify-between px-3 py-2 rounded-xl border transition-all text-xs',
+                  showLevelPicker
+                    ? 'bg-violet-500/15 border-violet-500/40'
+                    : 'bg-white/5 border-white/10 hover:bg-white/8 hover:border-white/20'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const lvl = RESPONSE_LEVELS.find(l => l.id === responseLevel)!;
+                    const Icon = lvl.icon;
+                    return (
+                      <>
+                        <div className={cn('h-6 w-6 rounded-lg flex items-center justify-center', 
+                          responseLevel === 'resumida' ? 'bg-emerald-500/15' :
+                          responseLevel === 'completa' ? 'bg-violet-500/15' : 'bg-amber-500/15'
+                        )}>
+                          <Icon className={cn('h-3.5 w-3.5', lvl.color)} />
+                        </div>
+                        <div className="text-left">
+                          <span className="text-slate-300 font-medium">Resposta: </span>
+                          <span className={cn('font-semibold', lvl.color)}>{lvl.label}</span>
+                          <span className="text-slate-600 ml-2 text-[10px]">· {lvl.description}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                <motion.div animate={{ rotate: showLevelPicker ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
+                </motion.div>
+              </motion.button>
+
+              {/* Expanded level cards */}
+              <AnimatePresence>
+                {showLevelPicker && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: -4 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -4 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      {RESPONSE_LEVELS.map((lvl) => {
+                        const Icon = lvl.icon;
+                        const isActive = responseLevel === lvl.id;
+                        return (
+                          <motion.button
+                            key={lvl.id}
+                            onClick={() => { setResponseLevel(lvl.id); setShowLevelPicker(false); }}
+                            whileHover={{ scale: 1.03, y: -1 }}
+                            whileTap={{ scale: 0.97 }}
+                            className={cn(
+                              'relative flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center overflow-hidden',
+                              isActive
+                                ? lvl.id === 'resumida' ? 'bg-emerald-500/15 border-emerald-500/50'
+                                  : lvl.id === 'completa' ? 'bg-violet-500/15 border-violet-500/50'
+                                  : 'bg-amber-500/15 border-amber-500/50'
+                                : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                            )}
+                          >
+                            {/* Active glow */}
+                            {isActive && (
+                              <motion.div
+                                className="absolute inset-0 rounded-xl"
+                                animate={{ opacity: [0.3, 0.6, 0.3] }}
+                                transition={{ repeat: Infinity, duration: 2 }}
+                                style={{
+                                  background: lvl.id === 'resumida'
+                                    ? 'radial-gradient(circle at center, rgba(16,185,129,0.15) 0%, transparent 70%)'
+                                    : lvl.id === 'completa'
+                                    ? 'radial-gradient(circle at center, rgba(139,92,246,0.15) 0%, transparent 70%)'
+                                    : 'radial-gradient(circle at center, rgba(245,158,11,0.15) 0%, transparent 70%)',
+                                }}
+                              />
+                            )}
+                            <div className={cn(
+                              'h-8 w-8 rounded-xl flex items-center justify-center relative z-10',
+                              lvl.id === 'resumida' ? 'bg-emerald-500/20' :
+                              lvl.id === 'completa' ? 'bg-violet-500/20' : 'bg-amber-500/20'
+                            )}>
+                              <Icon className={cn('h-4 w-4', lvl.color)} />
+                            </div>
+                            <div className="relative z-10">
+                              <p className={cn('text-[11px] font-bold', isActive ? lvl.color : 'text-slate-300')}>{lvl.label}</p>
+                              <p className="text-[9px] text-slate-500 leading-tight mt-0.5 hidden sm:block">{lvl.description}</p>
+                            </div>
+                            {isActive && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className={cn(
+                                  'absolute top-1.5 right-1.5 h-3.5 w-3.5 rounded-full flex items-center justify-center',
+                                  lvl.id === 'resumida' ? 'bg-emerald-500' :
+                                  lvl.id === 'completa' ? 'bg-violet-500' : 'bg-amber-500'
+                                )}
+                              >
+                                <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                              </motion.div>
+                            )}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Main input row */}
             <div className="flex items-end gap-2">
