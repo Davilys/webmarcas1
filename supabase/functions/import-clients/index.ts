@@ -26,7 +26,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify the calling user is an admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -35,32 +34,31 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Service role client — bypasses RLS
+    // Service role — bypasses RLS, can create Auth users
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // Regular client to verify the caller's role
+    // Verify caller is an admin
     const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user } } = await supabaseAuth.auth.getUser();
-    if (!user) {
+    const { data: { user: callerUser } } = await supabaseAuth.auth.getUser();
+    if (!callerUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Check if user has admin role
     const { data: roleData } = await supabaseAdmin
       .from('user_roles')
       .select('role')
-      .eq('user_id', user.id)
+      .eq('user_id', callerUser.id)
       .eq('role', 'admin')
       .maybeSingle();
 
@@ -71,7 +69,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { clients, updateExisting = false }: { clients: ClientToImport[], updateExisting: boolean } = await req.json();
+    const body = await req.json();
+    const clients: ClientToImport[] = body.clients;
+    const updateExisting: boolean = body.updateExisting ?? false;
 
     if (!clients || !Array.isArray(clients)) {
       return new Response(JSON.stringify({ error: 'Invalid payload: clients array required' }), {
@@ -88,37 +88,32 @@ Deno.serve(async (req) => {
 
     for (const client of clients) {
       const email = client.email?.toLowerCase().trim();
-      if (!email) {
-        skipped++;
-        continue;
-      }
+      if (!email) { skipped++; continue; }
 
-      // Check if a profile with this email already exists
-      const { data: existing } = await supabaseAdmin
+      // ── Deduplication: check by email ──────────────────────────────────────
+      const { data: existingProfile } = await supabaseAdmin
         .from('profiles')
-        .select('id')
+        .select('id, email')
         .eq('email', email)
         .maybeSingle();
 
-      if (existing) {
+      if (existingProfile) {
         if (updateExisting) {
+          // Only update profile fields — never touch contracts/invoices
           const { error } = await supabaseAdmin
             .from('profiles')
             .update({
-              full_name: client.full_name || null,
-              phone: client.phone || null,
-              company_name: client.company_name || null,
-              cpf_cnpj: client.cpf_cnpj || null,
-              address: client.address || null,
-              city: client.city || null,
-              state: client.state || null,
-              zip_code: client.zip_code || null,
-              origin: client.origin || null,
-              priority: client.priority || null,
-              contract_value: client.contract_value || null,
+              full_name: client.full_name || undefined,
+              phone: client.phone || undefined,
+              company_name: client.company_name || undefined,
+              cpf_cnpj: client.cpf_cnpj || undefined,
+              address: client.address || undefined,
+              city: client.city || undefined,
+              state: client.state || undefined,
+              zip_code: client.zip_code || undefined,
               updated_at: new Date().toISOString(),
             })
-            .eq('id', existing.id);
+            .eq('id', existingProfile.id);
 
           if (error) {
             errors++;
@@ -127,17 +122,34 @@ Deno.serve(async (req) => {
             updated++;
           }
         } else {
+          // Duplicate — skip silently
           skipped++;
         }
         continue;
       }
 
-      // Insert new profile using service role (bypasses RLS)
-      const profileId = crypto.randomUUID();
-      const { error: insertError } = await supabaseAdmin
+      // ── New client: same flow as "Novo Cliente" button ────────────────────
+      // 1. Create Auth user with fixed password (same as CreateClientDialog)
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: '123Mudar@',
+        email_confirm: true,
+        user_metadata: { full_name: client.full_name || email },
+      });
+
+      if (authError || !authData?.user) {
+        errors++;
+        errorDetails.push(`Erro ao criar usuário auth para ${email}: ${authError?.message}`);
+        continue;
+      }
+
+      const userId = authData.user.id;
+
+      // 2. Upsert profile (trigger handle_new_user may have auto-created it)
+      const { error: profileError } = await supabaseAdmin
         .from('profiles')
-        .insert({
-          id: profileId,
+        .upsert({
+          id: userId,
           email,
           full_name: client.full_name || null,
           phone: client.phone || null,
@@ -147,30 +159,55 @@ Deno.serve(async (req) => {
           city: client.city || null,
           state: client.state || null,
           zip_code: client.zip_code || null,
-          origin: client.origin || 'import',
+          origin: 'import',
           priority: client.priority || 'medium',
-          contract_value: client.contract_value || null,
           client_funnel_type: 'juridico',
+          created_by: callerUser.id,
+          assigned_to: callerUser.id,
         });
 
-      if (insertError) {
-        errors++;
-        errorDetails.push(`Erro ao inserir ${email}: ${insertError.message}`);
-        continue;
+      if (profileError) {
+        // Trigger may have already inserted — try update as fallback
+        await supabaseAdmin
+          .from('profiles')
+          .update({
+            full_name: client.full_name || null,
+            phone: client.phone || null,
+            company_name: client.company_name || null,
+            cpf_cnpj: client.cpf_cnpj || null,
+            address: client.address || null,
+            city: client.city || null,
+            state: client.state || null,
+            zip_code: client.zip_code || null,
+            origin: 'import',
+            priority: client.priority || 'medium',
+            client_funnel_type: 'juridico',
+            created_by: callerUser.id,
+            assigned_to: callerUser.id,
+          })
+          .eq('id', userId);
       }
 
-      // Create brand_process entry → Jurídico > Protocolado
+      // 3. Assign 'user' role so they can log in to the client portal
+      await supabaseAdmin
+        .from('user_roles')
+        .insert({ user_id: userId, role: 'user' })
+        .throwOnError()
+        .then(() => {/* ok */})
+        .catch(() => {/* ignore duplicate */});
+
+      // 4. Create brand_process → Jurídico > Protocolado (no contract, no invoice)
+      const brandName = client.company_name || client.full_name || email;
       const { error: processError } = await supabaseAdmin
         .from('brand_processes')
         .insert({
-          user_id: profileId,
-          brand_name: client.company_name || client.full_name || email,
+          user_id: userId,
+          brand_name: brandName,
           status: 'em_andamento',
           pipeline_stage: 'protocolado',
         });
 
       if (processError) {
-        // Non-fatal: profile was created, just log the process error
         errorDetails.push(`Aviso: processo não criado para ${email}: ${processError.message}`);
       }
 
