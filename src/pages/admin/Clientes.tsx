@@ -138,9 +138,21 @@ export default function AdminClientes() {
     }
   };
 
-  const fetchClients = async () => {
+  const fetchClients = async (retryCount = 0) => {
     setLoading(true);
     try {
+      // Ensure session is active before querying
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Retry up to 3 times if session not yet ready
+        if (retryCount < 3) {
+          setTimeout(() => fetchClients(retryCount + 1), 600);
+        } else {
+          setLoading(false);
+        }
+        return;
+      }
+
       // Fetch profiles with their processes
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
@@ -148,6 +160,13 @@ export default function AdminClientes() {
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
+
+      // Retry if empty result on first attempt (can happen during auth hydration)
+      if ((!profiles || profiles.length === 0) && retryCount < 2) {
+        setTimeout(() => fetchClients(retryCount + 1), 800);
+        setLoading(false);
+        return;
+      }
 
       // Fetch all processes
       const { data: processes, error: processesError } = await supabase
