@@ -22,7 +22,8 @@ export function useCanViewFinancialValues() {
   const isMaster = currentUser?.email === MASTER_ADMIN_EMAIL;
 
   return {
-    canViewFinancialValues: isLoading ? false : isMaster,
+    // While loading we keep previous value (undefined/null treated as loading, not restricted)
+    canViewFinancialValues: isMaster,
     isLoading,
     isMasterAdmin: isMaster,
   };
