@@ -105,7 +105,7 @@ Processo INPI nº: [número extraído]
 Marca: [nome + natureza (nominativa/mista/figurativa)]
 Classe NCL (12ª Ed.): [classe + especificação completa dos produtos/serviços]
 Titular/Requerente: [nome completo]
-Examinador/Opoente: [quando identificável no documento]
+Oponente: [quando identificável no documento]
 Procurador: Davilys Danques de Oliveira Cunha – CPF 393.239.118-79
 
 ══════════════════════════════════════════════════════════
@@ -236,7 +236,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
     "brand_name": "nome da marca",
     "ncl_class": "classe NCL com descrição completa dos produtos/serviços",
     "holder": "nome do titular completo",
-    "examiner_or_opponent": "examinador ou opoente",
+    "examiner_or_opponent": "oponente (não incluir nome do examinador)",
     "legal_basis": "fundamento legal completo utilizado pelo INPI (artigo, inciso, alínea)"
   },
   "resource_content": "CONTEÚDO COMPLETO DO RECURSO COM TODAS AS 8 SEÇÕES DESENVOLVIDAS (texto extenso, profundo e formatado)"

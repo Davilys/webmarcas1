@@ -32,11 +32,57 @@ const cleanMarkdown = (text: string): string => {
     .trim();
 };
 
+/** Strip AI-generated closing/signature/footer lines from content to avoid duplication */
+const stripClosingFromContent = (text: string): string => {
+  // Remove footer address/contact lines that the AI sometimes includes
+  let cleaned = text.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
+  cleaned = cleaned.replace(/^Tel:?\s*\(11\).*$/gm, '');
+  // Remove duplicate closing blocks (Termos em que / Pede deferimento / São Paulo / signature lines / underscores)
+  cleaned = cleaned.replace(/^[_]{3,}$/gm, '');
+  // Remove trailing closing section if it exists (starts with "Protesta provar" or "Nestes termos" or "Termos em que")
+  const closingPatterns = [
+    /\n\s*Protesta provar[\s\S]*$/i,
+    /\n\s*Nestes termos[\s\S]*$/i,
+  ];
+  for (const pattern of closingPatterns) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+  // Remove standalone "Termos em que" closing block at the end
+  cleaned = cleaned.replace(/\n\s*Termos em que,?\s*\n\s*Pede deferimento\.?\s*\n[\s\S]*$/i, '');
+  return cleaned.trim();
+};
+
+const isHeadingLine = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (trimmed.length >= 100) return false;
+  return /^(I{1,4}V?\s*[–—-]|V?I{0,4}\s*[–—-]|[A-Z][A-Z\s–—-]{5,}$|DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT|RECURSO|EXCELENT)/i.test(trimmed);
+};
+
+/** Convert image URL/import to base64 for jsPDF embedding */
+const imageToBase64 = (src: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject('No canvas context'); return; }
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+};
+
 export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPreviewProps) {
   const printRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const cleanedContent = cleanMarkdown(content);
+  const bodyContent = stripClosingFromContent(cleanedContent);
 
   const approvalDate = resource.approved_at 
     ? format(new Date(resource.approved_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
@@ -88,54 +134,115 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
       const contentWidth = pageWidth - (margin * 2);
       let yPos = margin;
 
-      // Header - dark blue bar (matching contract identity)
-      pdf.setFillColor(30, 58, 95); // #1e3a5f
+      // Load images as base64
+      let logoBase64: string | null = null;
+      let signBase64: string | null = null;
+      try { logoBase64 = await imageToBase64(logoWebmarcas); } catch { /* skip */ }
+      try { signBase64 = await imageToBase64(signatureImage); } catch { /* skip */ }
+
+      // ── Header Bar ──
+      pdf.setFillColor(30, 58, 95);
       pdf.rect(0, 0, pageWidth, 6, 'F');
-      pdf.setFillColor(20, 45, 75);
+      pdf.setFillColor(200, 175, 55);
       pdf.rect(0, 6, pageWidth, 2, 'F');
       yPos = 18;
 
-      // Company name with identity colors
+      // ── Letterhead (logo + company) ──
+      if (logoBase64) {
+        pdf.addImage(logoBase64, 'PNG', margin, yPos - 2, 18, 18);
+      }
+      const textX = logoBase64 ? margin + 22 : margin;
       pdf.setFontSize(22);
       pdf.setTextColor(30, 58, 95);
-      pdf.text('WEBMARCAS', margin, yPos + 8);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('WEBMARCAS', textX, yPos + 6);
+      pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(10);
       pdf.setTextColor(100, 100, 100);
-      pdf.text('Propriedade Intelectual e Registro de Marcas', margin, yPos + 15);
-      
+      pdf.text('Propriedade Intelectual e Registro de Marcas', textX, yPos + 12);
+
       // Right side info
       pdf.setFontSize(8);
-      pdf.setTextColor(130, 130, 130);
-      pdf.text('CNPJ: 39.528.012/0001-29', pageWidth - margin, yPos + 4, { align: 'right' });
-      pdf.text('OAB/SP: Davilys D. O. Cunha', pageWidth - margin, yPos + 9, { align: 'right' });
-      pdf.text('www.webmarcas.net', pageWidth - margin, yPos + 14, { align: 'right' });
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(30, 58, 95);
+      pdf.text('CNPJ: 39.528.012/0001-29', pageWidth - margin, yPos + 2, { align: 'right' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(150, 150, 150);
+      pdf.text('Av. Brigadeiro Luiz Antônio, 2696', pageWidth - margin, yPos + 7, { align: 'right' });
+      pdf.text('Centro — São Paulo/SP', pageWidth - margin, yPos + 11, { align: 'right' });
+      pdf.text('juridico@webmarcas.net', pageWidth - margin, yPos + 15, { align: 'right' });
 
-      // Separator
-      yPos = 45;
+      // ── Double Separator ──
+      yPos = 42;
       pdf.setDrawColor(30, 58, 95);
       pdf.setLineWidth(0.8);
       pdf.line(margin, yPos, pageWidth - margin, yPos);
-      pdf.setDrawColor(200, 175, 55); // Gold accent
+      pdf.setDrawColor(200, 175, 55);
       pdf.setLineWidth(0.3);
       pdf.line(margin, yPos + 1.5, pageWidth - margin, yPos + 1.5);
-      yPos = 55;
+      yPos = 50;
 
-      // Content
+      // ── Document Title Badge ──
+      const badgeText = 'RECURSO ADMINISTRATIVO';
       pdf.setFontSize(11);
-      pdf.setTextColor(30, 30, 30);
+      const badgeWidth = pdf.getTextWidth(badgeText) + 16;
+      const badgeX = (pageWidth - badgeWidth) / 2;
+      pdf.setFillColor(30, 58, 95);
+      pdf.roundedRect(badgeX, yPos - 4, badgeWidth, 10, 1, 1, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(badgeText, pageWidth / 2, yPos + 2.5, { align: 'center' });
+      yPos += 12;
+
+      if (resource.brand_name) {
+        pdf.setFontSize(12);
+        pdf.setTextColor(30, 58, 95);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`Marca: ${resource.brand_name}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 6;
+      }
+      if (resource.process_number) {
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 100, 100);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(`Processo INPI nº ${resource.process_number}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 6;
+      }
+      yPos += 6;
+
+      // ── Content Body ──
+      pdf.setFont('helvetica', 'normal');
+      const paragraphs = bodyContent.split('\n\n').filter(p => p.trim());
       
-      const paragraphs = cleanedContent.split('\n\n').filter(p => p.trim());
-      
+      const addFooter = (pageNum: number, totalPages: number) => {
+        const footerY = pageHeight - 12;
+        pdf.setDrawColor(30, 58, 95);
+        pdf.setLineWidth(0.5);
+        pdf.line(margin, footerY - 8, pageWidth - margin, footerY - 8);
+        pdf.setDrawColor(200, 175, 55);
+        pdf.setLineWidth(0.3);
+        pdf.line(margin, footerY - 6.5, pageWidth - margin, footerY - 6.5);
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Av. Brigadeiro Luiz Antônio, 2696, Centro — São Paulo/SP — CEP 01402-000', pageWidth / 2, footerY - 2, { align: 'center' });
+        pdf.text('Tel: (11) 9 1112-0225  |  juridico@webmarcas.net  |  www.webmarcas.net', pageWidth / 2, footerY + 2, { align: 'center' });
+        pdf.setFontSize(8);
+        pdf.setTextColor(130, 130, 130);
+        pdf.text(`${pageNum}/${totalPages}`, pageWidth - margin, footerY - 2, { align: 'right' });
+      };
+
+      const bottomLimit = pageHeight - 30;
+
       for (const paragraph of paragraphs) {
-        if (yPos > pageHeight - 60) {
-          pdf.addPage();
-          yPos = margin;
-        }
-        
         const trimmedParagraph = paragraph.trim();
-        const isHeading = /^(I{1,4}V?\.?\s|V?I{0,4}\.?\s|[A-Z][A-Z\s]{5,}$|DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT|RECURSO)/i.test(trimmedParagraph);
+        if (!trimmedParagraph) continue;
         
-        if (isHeading && trimmedParagraph.length < 100) {
+        // Skip lines that look like footer address/tel leftovers
+        if (/^(Av\.\s*Brigadeiro|Tel:\s*\(11\))/.test(trimmedParagraph)) continue;
+
+        const heading = isHeadingLine(trimmedParagraph);
+        
+        if (heading) {
           if (yPos > margin + 10) yPos += 4;
           pdf.setFontSize(12);
           pdf.setFont('helvetica', 'bold');
@@ -143,13 +250,13 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
           
           const headingLines = pdf.splitTextToSize(trimmedParagraph, contentWidth);
           for (const line of headingLines) {
-            if (yPos > pageHeight - 30) { pdf.addPage(); yPos = margin; }
+            if (yPos > bottomLimit) { pdf.addPage(); yPos = margin; }
             pdf.text(line, margin, yPos);
             yPos += 7;
           }
           
-          // Underline for main headings
-          if (trimmedParagraph.length < 60) {
+          // Gold underline
+          if (trimmedParagraph.length < 80) {
             pdf.setDrawColor(200, 175, 55);
             pdf.setLineWidth(0.3);
             pdf.line(margin, yPos - 2, margin + 40, yPos - 2);
@@ -160,28 +267,48 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
         } else {
           pdf.setFontSize(11);
           pdf.setTextColor(30, 30, 30);
-          const lines = pdf.splitTextToSize(trimmedParagraph, contentWidth);
+          pdf.setFont('helvetica', 'normal');
+
+          // Handle list items (- a), - b), etc.)
+          const isList = /^[-–•]\s/.test(trimmedParagraph);
+          const indent = isList ? margin + 5 : margin;
+          const lineWidth = isList ? contentWidth - 5 : contentWidth;
+          
+          const lines = pdf.splitTextToSize(trimmedParagraph, lineWidth);
           
           for (const line of lines) {
-            if (yPos > pageHeight - 30) { pdf.addPage(); yPos = margin; }
-            pdf.text(line, margin, yPos);
+            if (yPos > bottomLimit) { pdf.addPage(); yPos = margin; }
+            pdf.text(line, indent, yPos);
             yPos += 6;
           }
-          yPos += 4;
+          yPos += 3;
         }
       }
 
-      // Signature block
-      if (yPos > pageHeight - 80) { pdf.addPage(); yPos = margin; }
+      // ── Closing / Signature Block ──
+      if (yPos > pageHeight - 90) { pdf.addPage(); yPos = margin; }
       
-      yPos += 15;
+      yPos += 10;
       pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(60, 60, 60);
       pdf.text('Termos em que,', pageWidth / 2, yPos, { align: 'center' });
-      pdf.text('Pede deferimento.', pageWidth / 2, yPos + 8, { align: 'center' });
-      pdf.text(`São Paulo, ${approvalDate}`, pageWidth / 2, yPos + 20, { align: 'center' });
+      yPos += 8;
+      pdf.text('Pede deferimento.', pageWidth / 2, yPos, { align: 'center' });
+      yPos += 12;
+      pdf.text(`São Paulo, ${approvalDate}`, pageWidth / 2, yPos, { align: 'center' });
       
-      yPos += 40;
+      yPos += 16;
+
+      // Signature image
+      if (signBase64) {
+        const sigW = 40;
+        const sigH = 16;
+        pdf.addImage(signBase64, 'PNG', (pageWidth - sigW) / 2, yPos, sigW, sigH);
+        yPos += sigH + 2;
+      }
+
+      // Signature line
       pdf.setDrawColor(30, 58, 95);
       pdf.setLineWidth(0.5);
       pdf.line(pageWidth / 2 - 35, yPos, pageWidth / 2 + 35, yPos);
@@ -197,29 +324,11 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
       pdf.text('Procurador', pageWidth / 2, yPos + 6, { align: 'center' });
       pdf.text('CPF 393.239.118-79', pageWidth / 2, yPos + 12, { align: 'center' });
 
-      // Footer on each page
+      // ── Footers on all pages ──
       const totalPages = pdf.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
-        const footerY = pageHeight - 12;
-        
-        // Double line footer
-        pdf.setDrawColor(30, 58, 95);
-        pdf.setLineWidth(0.5);
-        pdf.line(margin, footerY - 8, pageWidth - margin, footerY - 8);
-        pdf.setDrawColor(200, 175, 55);
-        pdf.setLineWidth(0.3);
-        pdf.line(margin, footerY - 6.5, pageWidth - margin, footerY - 6.5);
-        
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(100, 100, 100);
-        pdf.text('Av. Brigadeiro Luiz Antônio, 2696, Centro — São Paulo/SP — CEP 01402-000', pageWidth / 2, footerY - 2, { align: 'center' });
-        pdf.text('Tel: (11) 9 1112-0225  |  juridico@webmarcas.net  |  www.webmarcas.net', pageWidth / 2, footerY + 2, { align: 'center' });
-        
-        // Page number
-        pdf.setFontSize(8);
-        pdf.setTextColor(130, 130, 130);
-        pdf.text(`${i}/${totalPages}`, pageWidth - margin, footerY - 2, { align: 'right' });
+        addFooter(i, totalPages);
       }
 
       pdf.save(`Recurso_${resource.brand_name?.replace(/\s+/g, '_') || 'INPI'}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
@@ -232,19 +341,27 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
   };
 
   const renderContent = () => {
-    return cleanedContent.split('\n\n').filter(p => p.trim()).map((paragraph, idx) => {
+    return bodyContent.split('\n\n').filter(p => p.trim()).map((paragraph, idx) => {
       const trimmed = paragraph.trim();
-      const isHeading = /^(I{1,4}V?\.?\s|V?I{0,4}\.?\s|[A-Z][A-Z\s]{5,}$|DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT|RECURSO)/i.test(trimmed);
       
-      if (isHeading && trimmed.length < 100) {
+      // Skip footer lines
+      if (/^(Av\.\s*Brigadeiro|Tel:\s*\(11\))/.test(trimmed)) return null;
+      
+      if (isHeadingLine(trimmed)) {
         return (
           <h2 key={idx} className="text-base font-semibold mt-6 mb-3 pb-1" style={{ color: '#1e3a5f', borderBottom: '2px solid #c8af37' }}>
             {trimmed}
           </h2>
         );
       }
+      
+      const isList = /^[-–•]\s/.test(trimmed);
+      if (isList) {
+        return <p key={idx} className="mb-3 pl-6" style={{ textIndent: '0' }}>{trimmed}</p>;
+      }
+      
       return <p key={idx} className="mb-4 text-justify" style={{ textIndent: '2cm' }}>{trimmed}</p>;
-    });
+    }).filter(Boolean);
   };
 
   return (
@@ -301,7 +418,7 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
             </div>
           </div>
 
-          {/* Double separator matching contract style */}
+          {/* Double separator */}
           <div className="w-full mb-8">
             <div style={{ height: '2px', background: 'linear-gradient(90deg, #1e3a5f, #2a5080, #1e3a5f)' }} />
             <div style={{ height: '1px', marginTop: '2px', background: 'linear-gradient(90deg, transparent, #c8af37, transparent)' }} />
@@ -338,7 +455,6 @@ export function INPIResourcePDFPreview({ resource, content }: INPIResourcePDFPre
             <p className="mb-8" style={{ color: '#374151' }}>São Paulo, {approvalDate}</p>
             
             <div className="mt-6">
-              {/* Signature image */}
               <div className="flex justify-center mb-2">
                 <img 
                   src={signatureImage} 
