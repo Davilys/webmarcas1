@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft, Reply, Forward, Trash2, Star, Clock, Sparkles,
-  User, MoreHorizontal, Archive, Tag, Eye, Printer, ChevronDown
+  MoreHorizontal, Archive, Eye, ChevronDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -61,13 +62,21 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
   };
 
   return (
-    <div className="h-full flex">
-      {/* Main Email View */}
-      <motion.div
-        layout
-        className={cn("flex flex-col transition-all duration-300", showAI ? "flex-1 min-w-0" : "w-full")}
-      >
-        <Card className="h-full flex flex-col rounded-none border-0 border-r border-border/50 shadow-none">
+    <>
+      {/* AI Assistant as Dialog/Modal */}
+      <Dialog open={showAI} onOpenChange={setShowAI}>
+        <DialogContent className="max-w-2xl w-full p-0 gap-0 overflow-hidden max-h-[90vh]">
+          <AIEmailAssistant
+            email={email}
+            onUseDraft={handleUseDraft}
+            onClose={() => setShowAI(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Main Email View — always full width */}
+      <div className="h-full flex flex-col w-full">
+        <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
           {/* Top Toolbar */}
           <CardHeader className="pb-0 pt-3 px-4 flex-shrink-0">
             <div className="flex items-center gap-2 mb-3">
@@ -81,7 +90,7 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
                   size="sm"
                   className={cn(
                     "gap-1.5 text-xs h-8 transition-all",
-                  showAI ? "shadow-lg" : ""
+                    showAI ? "shadow-lg" : ""
                   )}
                   onClick={() => setShowAI(prev => !prev)}
                 >
@@ -211,36 +220,17 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
             </Button>
             <div className="flex-1" />
             <Button
-              variant={showAI ? 'default' : 'outline'}
+              variant="outline"
               size="sm"
               className="gap-1.5 h-9 text-xs"
-              onClick={() => setShowAI(prev => !prev)}
+              onClick={() => setShowAI(true)}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {showAI ? 'Fechar IA' : '✨ IA'}
+              ✨ IA
             </Button>
           </div>
         </Card>
-      </motion.div>
-
-      {/* AI Assistant Panel */}
-      <AnimatePresence>
-        {showAI && (
-          <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 320, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="flex-shrink-0 overflow-hidden"
-          >
-            <AIEmailAssistant
-              email={email}
-              onUseDraft={handleUseDraft}
-              onClose={() => setShowAI(false)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      </div>
+    </>
   );
 }
