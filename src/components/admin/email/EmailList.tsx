@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface EmailListProps {
-  folder: EmailFolder;
+  folder: 'inbox' | 'sent' | 'drafts';
   onSelectEmail: (email: Email) => void;
 }
 
@@ -154,7 +154,7 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
                     <div className="flex-shrink-0 mt-1">
                       <Star className={cn(
                         'h-4 w-4',
-                        email.is_starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'
+                        email.is_starred ? 'fill-primary text-primary' : 'text-muted-foreground'
                       )} />
                     </div>
                     <div className="flex-1 min-w-0">
