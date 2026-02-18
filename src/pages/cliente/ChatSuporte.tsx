@@ -28,16 +28,19 @@ type ChatMode = 'select' | 'ai' | 'human';
 // ──────────────────────────────────────────────
 // Particle Field
 // ──────────────────────────────────────────────
+// Partículas fixas para evitar re-render com valores aleatórios diferentes a cada ciclo
+const FIXED_PARTICLES = Array.from({ length: 28 }).map((_, i) => ({
+  id: i,
+  x: (i * 37.3) % 100,
+  y: (i * 53.7 + 11) % 100,
+  size: 1.5 + (i % 5) * 0.5,
+  duration: 6 + (i % 10),
+  delay: (i * 0.3) % 8,
+  opacity: 0.08 + (i % 4) * 0.04,
+}));
+
 function ParticleField() {
-  const particles = Array.from({ length: 28 }).map((_, i) => ({
-    id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: 1.5 + Math.random() * 2.5,
-    duration: 6 + Math.random() * 10,
-    delay: Math.random() * 8,
-    opacity: 0.08 + Math.random() * 0.18,
-  }));
+  const particles = FIXED_PARTICLES;
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -272,15 +275,24 @@ export default function ChatSuporte() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    let isMounted = true;
+
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
       if (!session) { navigate('/cliente/login'); return; }
+
       setUser(session.user);
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, assigned_to, created_by')
         .eq('id', session.user.id)
         .single();
+
+      if (!isMounted) return;
       if (profile?.full_name) setUserName(profile.full_name.split(' ')[0]);
+
       const adminId = profile?.assigned_to || profile?.created_by;
       if (adminId) {
         const { data: admin } = await supabase
@@ -288,9 +300,13 @@ export default function ChatSuporte() {
           .select('id, full_name')
           .eq('id', adminId)
           .single();
+        if (!isMounted) return;
         if (admin) setAssignedAdmin(admin);
       }
-    });
+    };
+
+    init();
+    return () => { isMounted = false; };
   }, [navigate]);
 
   useEffect(() => {

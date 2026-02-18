@@ -129,32 +129,56 @@ export function useChat(user: User | null) {
     }
   }, []);
 
-  // Subscribe to realtime messages
+  // Subscribe to realtime messages — com deduplicação robusta
   useEffect(() => {
     if (!activeConversation) return;
 
+    let isMounted = true;
+
     channelRef.current = supabase
-      .channel(`conv-${activeConversation.id}`)
+      .channel(`conv-${activeConversation.id}-${Date.now()}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'conversation_messages',
         filter: `conversation_id=eq.${activeConversation.id}`,
       }, async (payload) => {
+        if (!isMounted) return;
+
+        if (payload.eventType === 'DELETE') {
+          const oldId = (payload.old as { id?: string })?.id;
+          if (oldId) setMessages(prev => prev.filter(m => m.id !== oldId));
+          return;
+        }
+
         const newMsg = payload.new as ChatMessage;
+        if (!newMsg?.id) return;
+
+        // Busca perfil do remetente
         if (newMsg.sender_id) {
           const { data: profile } = await supabase
             .from('profiles')
             .select('id, full_name, email')
             .eq('id', newMsg.sender_id)
             .single();
-          newMsg.sender_profile = profile || undefined;
+          if (isMounted && profile) newMsg.sender_profile = profile;
         }
+
+        // Deduplicação: remove qualquer registro com mesmo id antes de inserir
         setMessages(prev => {
-          if (prev.find(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
+          const filtered = prev.filter(m => m.id !== newMsg.id);
+          if (payload.eventType === 'UPDATE') {
+            return filtered.map(m => m.id === newMsg.id ? newMsg : m).concat(
+              filtered.find(m => m.id === newMsg.id) ? [] : [newMsg]
+            );
+          }
+          // INSERT — só adiciona se ainda não existe
+          return [...filtered, newMsg].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
         });
-        // Mark as read
+
+        // Marca como lida
         if (newMsg.sender_id !== user?.id) {
           await supabase.from('conversation_messages')
             .update({ is_read: true, read_at: new Date().toISOString() })
@@ -164,6 +188,7 @@ export function useChat(user: User | null) {
       .subscribe();
 
     return () => {
+      isMounted = false;
       channelRef.current?.unsubscribe();
     };
   }, [activeConversation, user]);
