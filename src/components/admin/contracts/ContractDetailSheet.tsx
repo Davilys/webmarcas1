@@ -236,8 +236,8 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
   // Always use the production domain for signature links (avoids broken links from Lovable preview)
   const getProductionBaseUrl = () => {
     const origin = window.location.origin;
-    const isPreview = origin.includes('lovableproject.com') || origin.includes('localhost');
-    return isPreview ? 'https://webmarcas1.lovable.app' : origin;
+    const isPreview = origin.includes('lovableproject.com') || origin.includes('lovable.app') || origin.includes('localhost');
+    return isPreview ? 'https://webmarcas.net' : origin;
   };
 
   const copySignatureLink = () => {

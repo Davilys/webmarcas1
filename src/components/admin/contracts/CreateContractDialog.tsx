@@ -63,8 +63,8 @@ type DocumentType = 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem
 // Always returns the production domain to avoid broken links when admin is in Lovable preview
 const getProductionBaseUrl = () => {
   const origin = window.location.origin;
-  const isPreview = origin.includes('lovableproject.com') || origin.includes('localhost');
-  return isPreview ? 'https://webmarcas1.lovable.app' : origin;
+  const isPreview = origin.includes('lovableproject.com') || origin.includes('lovable.app') || origin.includes('localhost');
+  return isPreview ? 'https://webmarcas.net' : origin;
 };
 
 // Validation schemas matching public form
