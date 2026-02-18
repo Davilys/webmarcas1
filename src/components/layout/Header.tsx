@@ -55,11 +55,13 @@ const Header = () => {
         <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
           {/* Logo */}
           <a href="/" className="flex items-center gap-1.5 md:gap-2">
-            <img
-              src={webmarcasLogo}
-              alt="WebMarcas"
-              className="h-8 md:h-10 w-auto dark:mix-blend-screen mix-blend-multiply"
-            />
+            <span className="inline-flex items-center justify-center bg-white rounded-xl p-0.5 shadow-sm">
+              <img
+                src={webmarcasLogo}
+                alt="WebMarcas"
+                className="h-7 md:h-9 w-auto"
+              />
+            </span>
             <span className="font-display text-lg md:text-xl font-bold hidden sm:inline">
               Web<span className="gradient-text">Marcas</span>
             </span>
