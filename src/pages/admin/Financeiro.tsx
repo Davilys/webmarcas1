@@ -11,7 +11,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Plus, CreditCard, TrendingUp, Clock, CheckCircle, Wallet, QrCode, FileText, Loader2, ExternalLink, Copy } from 'lucide-react';
+import { Search, Plus, CreditCard, TrendingUp, Clock, CheckCircle, Wallet, QrCode, FileText, Loader2, ExternalLink, Copy, EyeOff } from 'lucide-react';
+import { useCanViewFinancialValues } from '@/hooks/useCanViewFinancialValues';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -93,6 +94,7 @@ export default function AdminFinanceiro() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { canViewFinancialValues } = useCanViewFinancialValues();
   
   // Form state
   const [formData, setFormData] = useState({
@@ -669,9 +671,15 @@ export default function AdminFinanceiro() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">{stat.title}</p>
-                      <p className="text-xl font-bold mt-1">
-                        R$ {stat.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
+                      {canViewFinancialValues ? (
+                        <p className="text-xl font-bold mt-1">
+                          R$ {stat.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                      ) : (
+                        <p className="text-xl font-bold mt-1 flex items-center gap-1 text-muted-foreground/50">
+                          <EyeOff className="h-4 w-4" /> Restrito
+                        </p>
+                      )}
                     </div>
                     <stat.icon className={`h-8 w-8 ${stat.color}`} />
                   </div>
@@ -717,7 +725,10 @@ export default function AdminFinanceiro() {
                       <TableCell className="font-medium">{invoice.description}</TableCell>
                       <TableCell>{(invoice.profiles as any)?.full_name || (invoice.profiles as any)?.email || '-'}</TableCell>
                       <TableCell className="hidden md:table-cell">
-                        R$ {Number(invoice.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {canViewFinancialValues
+                          ? `R$ ${Number(invoice.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                          : <span className="flex items-center gap-1 text-muted-foreground/50 text-xs"><EyeOff className="h-3 w-3" /> Restrito</span>
+                        }
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <Badge variant="outline" className="text-xs">
