@@ -171,6 +171,7 @@ export default function RevistaINPI() {
   const [selectedRpiNumber, setSelectedRpiNumber] = useState<string>('');
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<RpiEntry | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const [newStage, setNewStage] = useState('');
   const [updating, setUpdating] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -326,7 +327,8 @@ export default function RevistaINPI() {
     } finally { setProcessing(false); }
   };
 
-  const handleOpenUpdateDialog = (entry: RpiEntry) => {
+  const handleOpenUpdateDialog = (entry: RpiEntry, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setSelectedEntry(entry);
     setNewStage(suggestStage(entry.dispatch_code, entry.dispatch_text));
     setUpdateDialogOpen(true);
@@ -354,7 +356,8 @@ export default function RevistaINPI() {
     finally { setUpdating(false); }
   };
 
-  const handleOpenAssignDialog = (entry: RpiEntry) => {
+  const handleOpenAssignDialog = (entry: RpiEntry, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setAssignEntry(entry);
     setClientSearch('');
     setSelectedClient(null);
@@ -696,7 +699,7 @@ export default function RevistaINPI() {
                 <div className="space-y-3">
                   <AnimatePresence mode="popLayout">
                     {filteredEntries.map((entry, index) => {
-                      const isExpanded = selectedEntry?.id === entry.id && !updateDialogOpen && !assignDialogOpen;
+                      const isExpanded = expandedEntryId === entry.id;
                       const tagOption = TAG_OPTIONS.find(t => t.value === (entry.tag || 'pending'));
 
                       return (
@@ -714,7 +717,7 @@ export default function RevistaINPI() {
                                 ? 'border-primary/40 shadow-lg shadow-primary/5 ring-1 ring-primary/10'
                                 : 'hover:border-primary/20 hover:shadow-md'
                             }`}
-                            onClick={() => setSelectedEntry(isExpanded ? null : entry)}
+                            onClick={() => setExpandedEntryId(isExpanded ? null : entry.id)}
                           >
                             {/* Card Header Row */}
                             <div className="px-5 py-4 flex items-center gap-4">
@@ -770,10 +773,15 @@ export default function RevistaINPI() {
                                     {entry.client?.full_name?.split(' ')[0] || 'Cliente'}
                                   </Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-[10px] text-muted-foreground gap-1">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    Sem vínculo
-                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs gap-1.5 rounded-lg border-primary/30 text-primary hover:bg-primary/10"
+                                    onClick={(e) => handleOpenAssignDialog(entry, e)}
+                                  >
+                                    <UserPlus className="h-3 w-3" />
+                                    Vincular
+                                  </Button>
                                 )}
                                 <motion.div
                                   animate={{ rotate: isExpanded ? 90 : 0 }}
@@ -909,13 +917,13 @@ export default function RevistaINPI() {
                                           {/* Action Buttons */}
                                           <div className="flex flex-col gap-2">
                                             {entry.matched_client_id && entry.update_status !== 'updated' && (
-                                              <Button size="sm" onClick={() => handleOpenUpdateDialog(entry)} className="gap-2 rounded-xl w-full">
+                                              <Button size="sm" onClick={(e) => handleOpenUpdateDialog(entry, e)} className="gap-2 rounded-xl w-full">
                                                 <RefreshCw className="h-4 w-4" />
                                                 Atualizar Processo
                                               </Button>
                                             )}
                                             {!entry.matched_client_id && (
-                                              <Button size="sm" variant="outline" onClick={() => handleOpenAssignDialog(entry)} className="gap-2 rounded-xl w-full">
+                                              <Button size="sm" variant="outline" onClick={(e) => handleOpenAssignDialog(entry, e)} className="gap-2 rounded-xl w-full">
                                                 <UserPlus className="h-4 w-4" />
                                                 Vincular Cliente
                                               </Button>
