@@ -246,6 +246,27 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName }: Email
     if (!subject) { toast.error('Adicione um assunto para gerar com IA'); return; }
     setIsAIGenerating(true);
     try {
+      const { data, error } = await supabase.functions.invoke('email-ai-assistant', {
+        body: {
+          action: 'compose',
+          messages: [{
+            role: 'user',
+            content: `Escreva um email profissional com o seguinte assunto: "${subject}". ${selectedClient ? `Cliente: ${selectedClient.full_name}. Marca: ${selectedClient.brand_name || 'N/A'}. Processo: ${selectedClient.process_number || 'N/A'}.` : ''} ${body ? `Contexto atual: ${body.slice(0, 300)}` : ''}. Responda apenas com o corpo do email, pronto para uso.`,
+          }],
+        },
+      });
+      if (error) throw new Error(error.message);
+      const aiText = data?.content || '';
+      if (!aiText) throw new Error('Resposta vazia');
+      setBody(aiText);
+      toast.success('✨ Email gerado com IA!');
+    } catch (err) {
+      toast.error('Erro ao gerar com IA. Verifique sua conexão.');
+      console.error('AI compose error:', err);
+    } finally {
+      setIsAIGenerating(false);
+    }
+    try {
       const context = selectedClient
         ? `Cliente: ${selectedClient.full_name}, Marca: ${selectedClient.brand_name || 'N/A'}, Processo: ${selectedClient.process_number || 'N/A'}`
         : 'Email genérico para cliente de escritório de marcas e patentes';
