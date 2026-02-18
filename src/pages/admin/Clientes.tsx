@@ -54,10 +54,52 @@ export default function AdminClientes() {
   // NEW: Funnel type toggle - default to commercial
   const [funnelType, setFunnelType] = useState<FunnelType>('comercial');
 
+  // Wait for auth session before fetching — fixes intermittent "0 clients" bug
   useEffect(() => {
-    fetchCurrentUserAndPermissions();
-    fetchClients();
-    fetchAdminUsers();
+    let mounted = true;
+
+    const init = async () => {
+      // Ensure we have a valid session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (session) {
+        fetchCurrentUserAndPermissions();
+        fetchClients();
+        fetchAdminUsers();
+      } else {
+        // Session not ready yet — wait for it
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+          if (sess && mounted) {
+            fetchCurrentUserAndPermissions();
+            fetchClients();
+            fetchAdminUsers();
+            subscription.unsubscribe();
+          }
+        });
+      }
+    };
+
+    init();
+
+    // Realtime subscription — auto-refresh when profiles or processes change
+    const realtimeSub = supabase
+      .channel('clients-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        if (mounted) fetchClients();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'brand_processes' }, () => {
+        if (mounted) fetchClients();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, () => {
+        if (mounted) fetchClients();
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      realtimeSub.unsubscribe();
+    };
   }, []);
 
   const fetchCurrentUserAndPermissions = async () => {
