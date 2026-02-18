@@ -553,7 +553,7 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       {/* Outer HUD wrapper — respects light/dark via bg-background */}
-      <div className="min-h-screen relative rounded-2xl overflow-hidden bg-background">
+      <div className="relative rounded-2xl overflow-hidden bg-background">
         <ParticleField />
         <GridOverlay />
 

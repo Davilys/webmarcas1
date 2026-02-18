@@ -656,7 +656,6 @@
   .scroll-smooth-mobile {
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
-    overscroll-behavior-y: contain;
   }
 
   /* KPI card premium */

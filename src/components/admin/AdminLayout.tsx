@@ -416,7 +416,7 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
           <AdminSidebar />
         </div>
         
-        <SidebarInset className="flex-1 flex flex-col overflow-hidden">
+        <SidebarInset className="flex-1 flex flex-col min-h-0">
           {/* Header */}
           <header className="sticky top-0 z-50 flex items-center gap-2 md:gap-4 h-12 md:h-14 px-3 md:px-4 border-b border-border/50 header-frosted flex-shrink-0">
             {/* Sidebar trigger only on desktop */}
@@ -482,13 +482,15 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
             </Button>
           </header>
           
-          {/* Main content — sem padding em modo chat para conteúdo ocupar tudo */}
+          {/* Main content */}
           <main className={cn(
-            "flex-1 animate-page-enter mobile-page-content scroll-smooth-mobile",
+            "flex-1 animate-page-enter mobile-page-content",
             isChatActive
-              ? "overflow-hidden p-0 flex flex-col"
-              : "overflow-auto p-3 sm:p-5 lg:p-8"
-          )}>
+              ? "overflow-hidden p-0 flex flex-col min-h-0"
+              : "overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-8"
+          )}
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {children}
           </main>
         </SidebarInset>
