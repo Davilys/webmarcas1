@@ -406,7 +406,7 @@ export default function AdminClientes() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <Button variant="outline" size="sm" className="gap-1.5 border-border/60 h-9" onClick={fetchClients}>
+              <Button variant="outline" size="sm" className="gap-1.5 border-border/60 h-9" onClick={refreshClients}>
                 <RefreshCw className="h-3.5 w-3.5" /> Atualizar
               </Button>
               <DuplicateClientsDialog
