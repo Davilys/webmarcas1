@@ -1,5 +1,8 @@
 project_id = "afuqrzecokubogopgfgt"
 
+[functions.send-multichannel-notification]
+verify_jwt = false
+
 [functions.process-rpi]
 verify_jwt = false
 

@@ -1703,6 +1703,51 @@ export type Database = {
           },
         ]
       }
+      notification_dispatch_logs: {
+        Row: {
+          attempts: number | null
+          channel: string
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          recipient_email: string | null
+          recipient_phone: string | null
+          recipient_user_id: string | null
+          response_body: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number | null
+          channel: string
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          recipient_email?: string | null
+          recipient_phone?: string | null
+          recipient_user_id?: string | null
+          response_body?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number | null
+          channel?: string
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          recipient_email?: string | null
+          recipient_phone?: string | null
+          recipient_user_id?: string | null
+          response_body?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       notification_logs: {
         Row: {
           channel: string

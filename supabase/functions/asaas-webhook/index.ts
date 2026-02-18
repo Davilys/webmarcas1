@@ -295,13 +295,30 @@ serve(async (req) => {
 
     // Handle other status changes
     if (paymentStatus === 'OVERDUE') {
-      // Update invoice and contract status
       await supabaseAdmin
         .from('invoices')
         .update({ status: 'overdue', updated_at: new Date().toISOString() })
         .eq('asaas_invoice_id', paymentId);
 
-      // Create notification for admins
+      // Multichannel notification for overdue
+      try {
+        if (invoice?.user_id) {
+          const { data: profile } = await supabaseAdmin.from('profiles').select('email, full_name, phone').eq('id', invoice.user_id).single();
+          if (profile) {
+            await fetch(`${SUPABASE_URL}/functions/v1/send-multichannel-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+              body: JSON.stringify({
+                event_type: 'fatura_vencida',
+                channels: ['crm', 'sms', 'whatsapp'],
+                recipient: { nome: profile.full_name || 'Cliente', email: profile.email, phone: profile.phone || '', user_id: invoice.user_id },
+                data: { valor: String(invoice.amount || ''), marca: invoice.description || '' },
+              }),
+            });
+          }
+        }
+      } catch (e) { console.error('Error sending overdue multichannel notification:', e); }
+
       console.log('Payment overdue:', paymentId);
     }
 

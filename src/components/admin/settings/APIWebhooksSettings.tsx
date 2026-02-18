@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Key, Webhook, Zap, Box, Brain, Plus, Trash2, Edit, Copy, 
-  RefreshCw, CheckCircle2, Loader2, Save, ExternalLink, Eye, EyeOff 
+  RefreshCw, CheckCircle2, Loader2, Save, ExternalLink, Eye, EyeOff,
+  CreditCard, Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,13 +34,19 @@ interface WebhookConfig {
   enabled: boolean;
 }
 
+const ASAAS_WEBHOOK_URL = 'https://afuqrzecokubogopgfgt.supabase.co/functions/v1/asaas-webhook';
+
 const webhookEvents = [
   { value: 'lead.created', label: 'Novo Lead' },
   { value: 'lead.converted', label: 'Lead Convertido' },
   { value: 'contract.signed', label: 'Contrato Assinado' },
+  { value: 'contract.link_generated', label: 'Link de Assinatura Gerado' },
   { value: 'payment.received', label: 'Pagamento Recebido' },
   { value: 'process.updated', label: 'Processo Atualizado' },
   { value: 'invoice.overdue', label: 'Fatura Vencida' },
+  { value: 'sms.sent', label: 'SMS Enviado' },
+  { value: 'whatsapp.sent', label: 'WhatsApp Enviado' },
+  { value: 'notification.sent', label: 'Notificação Enviada' },
 ];
 
 export function APIWebhooksSettings() {
@@ -331,6 +338,45 @@ export function APIWebhooksSettings() {
             </div>
           )}
         </AnimatePresence>
+      </SettingsCard>
+
+      {/* Asaas Incoming Webhook */}
+      <SettingsCard
+        icon={CreditCard}
+        iconColor="text-emerald-500"
+        title="Webhook de Entrada — Asaas"
+        description="Configure esta URL no painel do Asaas para receber notificações de pagamento automaticamente"
+        badge="Configuração necessária"
+        badgeVariant="secondary"
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 p-3 rounded-xl border bg-muted/30">
+            <Info className="h-4 w-4 text-sky-500 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Cole esta URL em <strong>Asaas → Integrações → Webhooks</strong> para receber eventos de pagamento (confirmado, vencido, estornado) diretamente no CRM.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>URL do Webhook</Label>
+            <div className="flex gap-2">
+              <Input
+                value={ASAAS_WEBHOOK_URL}
+                readOnly
+                className="font-mono text-xs bg-muted/40"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => copyToClipboard(ASAAS_WEBHOOK_URL)}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Eventos suportados: <strong>PAYMENT_RECEIVED</strong>, <strong>PAYMENT_CONFIRMED</strong>, <strong>PAYMENT_OVERDUE</strong>, <strong>PAYMENT_REFUNDED</strong>
+          </p>
+        </div>
       </SettingsCard>
 
       {/* External Integrations */}
