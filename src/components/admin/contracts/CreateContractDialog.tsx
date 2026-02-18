@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,6 +113,12 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   const [isLoadingCEP, setIsLoadingCEP] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [currentTab, setCurrentTab] = useState('personal');
+
+  // Client search autocomplete state
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientSearchRef = useRef<HTMLInputElement>(null);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
   
   // New client personal data - matching public form exactly
   const [personalData, setPersonalData] = useState({
@@ -210,6 +216,40 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       }));
     }
   }, [selectedProfile]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node) &&
+        clientSearchRef.current && !clientSearchRef.current.contains(e.target as Node)
+      ) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filtered clients for autocomplete
+  const filteredProfileOptions = clientSearch.trim().length === 0
+    ? profiles.slice(0, 10)
+    : profiles.filter(p => {
+        const term = clientSearch.toLowerCase();
+        return (
+          p.full_name?.toLowerCase().includes(term) ||
+          p.email.toLowerCase().includes(term) ||
+          p.company_name?.toLowerCase().includes(term) ||
+          p.cpf_cnpj?.includes(term)
+        );
+      }).slice(0, 15);
+
+  const handleSelectClient = (profile: Profile) => {
+    setSelectedProfile(profile);
+    setFormData(prev => ({ ...prev, user_id: profile.id }));
+    setClientSearch(profile.full_name || profile.email);
+    setClientDropdownOpen(false);
+  };
 
   const fetchData = async () => {
     const [profilesRes, templatesRes] = await Promise.all([
@@ -845,6 +885,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       penalty_installments: '1',
     });
     setSelectedProfile(null);
+    setClientSearch('');
+    setClientDropdownOpen(false);
     setGeneratedLink(null);
     setCreatedContractId(null);
     setIsNewClient(false);
@@ -1744,22 +1786,64 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2 col-span-2">
                         <Label>Cliente *</Label>
-                        <Select 
-                          value={formData.user_id}
-                          onValueChange={handleProfileChange}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o cliente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {profiles.map(profile => (
-                              <SelectItem key={profile.id} value={profile.id}>
-                                {profile.full_name || profile.email}
-                                {profile.company_name && ` - ${profile.company_name}`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                            <Input
+                              ref={clientSearchRef}
+                              value={clientSearch}
+                              onChange={(e) => {
+                                setClientSearch(e.target.value);
+                                setClientDropdownOpen(true);
+                                if (!e.target.value) {
+                                  setSelectedProfile(null);
+                                  setFormData(prev => ({ ...prev, user_id: '' }));
+                                }
+                              }}
+                              onFocus={() => setClientDropdownOpen(true)}
+                              placeholder="Digite para buscar cliente..."
+                              className="pl-9"
+                            />
+                            {selectedProfile && (
+                              <button
+                                type="button"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  setSelectedProfile(null);
+                                  setClientSearch('');
+                                  setFormData(prev => ({ ...prev, user_id: '' }));
+                                  clientSearchRef.current?.focus();
+                                }}
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                          {clientDropdownOpen && filteredProfileOptions.length > 0 && (
+                            <div
+                              ref={clientDropdownRef}
+                              className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover shadow-lg"
+                            >
+                              {filteredProfileOptions.map(profile => (
+                                <button
+                                  key={profile.id}
+                                  type="button"
+                                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors border-b border-border/40 last:border-0"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault(); // prevent blur before click
+                                    handleSelectClient(profile);
+                                  }}
+                                >
+                                  <span className="font-medium">{profile.full_name || profile.email}</span>
+                                  {profile.company_name && (
+                                    <span className="text-muted-foreground ml-1">— {profile.company_name}</span>
+                                  )}
+                                  <div className="text-xs text-muted-foreground mt-0.5">{profile.email}</div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-2 col-span-2">
