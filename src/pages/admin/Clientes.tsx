@@ -650,7 +650,7 @@ export default function AdminClientes() {
           <ClientKanbanBoard
             clients={filteredClients}
             onClientClick={handleClientClick}
-            onRefresh={fetchClients}
+            onRefresh={refreshClients}
             filters={filters}
             funnelType={funnelType}
             adminUsers={adminUsers}
