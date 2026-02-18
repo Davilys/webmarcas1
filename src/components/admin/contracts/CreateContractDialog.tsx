@@ -231,16 +231,17 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filtered clients for autocomplete
+  // Filtered clients for autocomplete — busca por nome, email ou telefone
   const filteredProfileOptions = clientSearch.trim().length === 0
     ? profiles.slice(0, 10)
     : profiles.filter(p => {
         const term = clientSearch.toLowerCase();
+        const phone = (p.phone || '').replace(/\D/g, '');
+        const termDigits = term.replace(/\D/g, '');
         return (
           p.full_name?.toLowerCase().includes(term) ||
           p.email.toLowerCase().includes(term) ||
-          p.company_name?.toLowerCase().includes(term) ||
-          p.cpf_cnpj?.includes(term)
+          (termDigits.length >= 3 && phone.includes(termDigits))
         );
       }).slice(0, 15);
 
