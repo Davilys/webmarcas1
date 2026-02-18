@@ -9,7 +9,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Search, Plus, RefreshCw, FileSignature, MoreHorizontal, 
-  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer, Edit 
+  Eye, Trash2, Download, Send, Filter, CheckCircle, XCircle, Loader2, Timer, Edit,
+  TrendingUp, DollarSign, FileText, PenTool
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, isToday, isThisWeek, isThisMonth } from 'date-fns';
@@ -20,6 +21,7 @@ import { EditContractDialog } from '@/components/admin/contracts/EditContractDia
 import { generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatePeriodFilter, type DateFilterType } from '@/components/admin/clients/DatePeriodFilter';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Contract {
   id: string;
@@ -43,6 +45,91 @@ interface Contract {
   contract_template?: { name: string } | null;
   profile?: { full_name: string | null; phone: string | null } | null;
 }
+
+// --- Animated Ring Component ---
+const AnimatedRing = ({ percentage, color, size = 64 }: { percentage: number; color: string; size?: number }) => {
+  const radius = (size - 8) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDash = (percentage / 100) * circumference;
+
+  return (
+    <svg width={size} height={size} className="transform -rotate-90">
+      <circle
+        cx={size / 2} cy={size / 2} r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="4"
+        className="text-muted/30"
+      />
+      <motion.circle
+        cx={size / 2} cy={size / 2} r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        initial={{ strokeDashoffset: circumference }}
+        animate={{ strokeDashoffset: circumference - strokeDash }}
+        transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+      />
+    </svg>
+  );
+};
+
+// --- Stat Card Component ---
+const StatCard = ({ 
+  icon: Icon, label, value, subtitle, color, gradient, delay, ring 
+}: { 
+  icon: any; label: string; value: string | number; subtitle?: string; 
+  color: string; gradient: string; delay: number; ring?: number;
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 24, scale: 0.95 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    transition={{ duration: 0.5, delay, ease: [0.16, 1, 0.3, 1] }}
+    whileHover={{ y: -4, scale: 1.02 }}
+    className="relative overflow-hidden rounded-2xl border border-border/50 bg-card p-5 group cursor-default"
+  >
+    {/* Decorative bg */}
+    <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-[0.07] ${gradient}`} />
+    <div className={`absolute -bottom-8 -left-8 w-24 h-24 rounded-full opacity-[0.04] ${gradient}`} />
+
+    <div className="relative flex items-center justify-between">
+      <div className="flex-1">
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`p-2 rounded-xl ${gradient} shadow-lg`}>
+            <Icon className="h-4 w-4 text-white" />
+          </div>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        </div>
+        <motion.p
+          className="text-3xl font-bold tracking-tight"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, delay: delay + 0.2 }}
+        >
+          {value}
+        </motion.p>
+        {subtitle && (
+          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+        )}
+      </div>
+      {ring !== undefined && (
+        <div className="relative">
+          <AnimatedRing percentage={ring} color={color} size={56} />
+          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold">
+            {Math.round(ring)}%
+          </span>
+        </div>
+      )}
+    </div>
+
+    {/* Hover glow */}
+    <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
+      style={{ boxShadow: `inset 0 0 40px ${color}15, 0 0 30px ${color}08` }}
+    />
+  </motion.div>
+);
 
 export default function AdminContratos() {
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -134,7 +221,6 @@ export default function AdminContratos() {
         logoBase64
       );
 
-      // Inject floating action buttons
       const enhancedHtml = printHtml
         .replace('</head>', `
           <style>
@@ -216,7 +302,6 @@ export default function AdminContratos() {
     if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
     
     try {
-      // Delete related data first (cascade should handle most, but ensure clean deletion)
       await supabase.from('contract_attachments').delete().eq('contract_id', id);
       await supabase.from('contract_comments').delete().eq('contract_id', id);
       await supabase.from('contract_notes').delete().eq('contract_id', id);
@@ -225,7 +310,6 @@ export default function AdminContratos() {
       await supabase.from('signature_audit_log').delete().eq('contract_id', id);
       await supabase.from('documents').delete().eq('contract_id', id);
 
-      // Now delete the contract and verify it was deleted
       const { data, error } = await supabase
         .from('contracts')
         .delete()
@@ -249,9 +333,22 @@ export default function AdminContratos() {
 
   const getSignatureBadge = (status: string | null) => {
     if (status === 'signed') {
-      return <Badge className="bg-emerald-600 text-white">Assinado</Badge>;
+      return (
+        <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-medium gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          Assinado
+        </Badge>
+      );
     }
-    return <Badge variant="destructive">Não assinado</Badge>;
+    return (
+      <Badge className="bg-destructive/10 text-destructive border-destructive/20 font-medium gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-destructive/60"></span>
+        Pendente
+      </Badge>
+    );
   };
 
   const CONTRACT_TABS = [
@@ -278,7 +375,6 @@ export default function AdminContratos() {
       activeTab === 'all' || 
       contract.contract_template?.name === activeTab;
 
-    // Date filter
     let matchesDate = true;
     if (dateFilter !== 'all' && contract.created_at) {
       const contractDate = new Date(contract.created_at);
@@ -295,60 +391,135 @@ export default function AdminContratos() {
     return matchesSearch && matchesSignature && matchesTab && matchesDate;
   });
 
+  const totalValue = filteredContracts.reduce((sum, c) => sum + (c.contract_value || 0), 0);
+  const signedCount = filteredContracts.filter(c => c.signature_status === 'signed').length;
+  const pendingCount = filteredContracts.filter(c => c.signature_status !== 'signed').length;
+  const signedPct = filteredContracts.length > 0 ? (signedCount / filteredContracts.length) * 100 : 0;
+  const pendingPct = filteredContracts.length > 0 ? (pendingCount / filteredContracts.length) * 100 : 0;
+
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FileSignature className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Contratos</h1>
-              <p className="text-sm text-muted-foreground">
-                Gerencie contratos e assinaturas
-              </p>
-            </div>
-          </div>
+        {/* Hero Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6"
+        >
+          {/* Decorative elements */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-accent/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4" />
           
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={fetchContracts}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleExpirePromotions}
-              disabled={expiringPromotion}
-              className="text-amber-600 border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
+                className="p-3 rounded-2xl bg-gradient-to-br from-primary to-primary/80 shadow-lg"
+                style={{ boxShadow: '0 8px 32px hsla(210, 100%, 40%, 0.3)' }}
+              >
+                <FileSignature className="h-7 w-7 text-primary-foreground" />
+              </motion.div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Contratos</h1>
+                <p className="text-sm text-muted-foreground">
+                  Gestão completa de contratos e assinaturas digitais
+                </p>
+              </div>
+            </div>
+            
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex items-center gap-2"
             >
-              {expiringPromotion ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Timer className="h-4 w-4 mr-2" />
-              )}
-              Expirar Promoções
-            </Button>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Contrato
-            </Button>
+              <Button variant="outline" size="icon" onClick={fetchContracts} className="rounded-xl hover:bg-muted/80">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExpirePromotions}
+                disabled={expiringPromotion}
+                className="rounded-xl text-amber-600 border-amber-500/30 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              >
+                {expiringPromotion ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Timer className="h-4 w-4 mr-2" />
+                )}
+                Expirar Promoções
+              </Button>
+              <Button onClick={() => setCreateOpen(true)} className="rounded-xl bg-gradient-to-r from-primary to-primary/80 shadow-lg hover:shadow-xl transition-shadow">
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Contrato
+              </Button>
+            </motion.div>
           </div>
+        </motion.div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            icon={FileText}
+            label="Total"
+            value={filteredContracts.length}
+            subtitle="contratos encontrados"
+            color="hsl(210, 100%, 40%)"
+            gradient="bg-gradient-to-br from-primary to-primary/70"
+            delay={0.1}
+          />
+          <StatCard
+            icon={CheckCircle}
+            label="Assinados"
+            value={signedCount}
+            subtitle={`de ${filteredContracts.length} contratos`}
+            color="hsl(152, 76%, 45%)"
+            gradient="bg-gradient-to-br from-emerald-500 to-emerald-600"
+            delay={0.2}
+            ring={signedPct}
+          />
+          <StatCard
+            icon={PenTool}
+            label="Pendentes"
+            value={pendingCount}
+            subtitle="aguardando assinatura"
+            color="hsl(0, 72%, 51%)"
+            gradient="bg-gradient-to-br from-destructive to-red-600"
+            delay={0.3}
+            ring={pendingPct}
+          />
+          <StatCard
+            icon={DollarSign}
+            label="Valor Total"
+            value={`R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            subtitle="soma dos contratos filtrados"
+            color="hsl(210, 100%, 40%)"
+            gradient="bg-gradient-to-br from-blue-500 to-indigo-600"
+            delay={0.4}
+          />
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-wrap">
+        {/* Filters Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+          className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap p-4 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm"
+        >
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por número, assunto ou cliente..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
+              className="pl-10 rounded-xl border-border/50 bg-background/50"
             />
           </div>
           <Select value={signatureFilter} onValueChange={setSignatureFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] rounded-xl border-border/50">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Filtrar assinatura" />
             </SelectTrigger>
@@ -364,201 +535,191 @@ export default function AdminContratos() {
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
           />
-        </div>
+        </motion.div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full justify-start overflow-x-auto">
-            {CONTRACT_TABS.map(tab => (
-              <TabsTrigger key={tab.value} value={tab.value} className="text-xs sm:text-sm">
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Total</p>
-            <p className="text-2xl font-bold">{filteredContracts.length}</p>
-          </div>
-          <div className="bg-card border rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
-              <p className="text-sm text-muted-foreground">Assinados</p>
-            </div>
-            <p className="text-2xl font-bold text-emerald-600">
-              {filteredContracts.filter(c => c.signature_status === 'signed').length}
-            </p>
-          </div>
-          <div className="bg-card border rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-destructive" />
-              <p className="text-sm text-muted-foreground">Não assinados</p>
-            </div>
-            <p className="text-2xl font-bold text-destructive">
-              {filteredContracts.filter(c => c.signature_status !== 'signed').length}
-            </p>
-          </div>
-          <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Valor Total</p>
-            <p className="text-2xl font-bold">
-              R$ {filteredContracts.reduce((sum, c) => sum + (c.contract_value || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="w-full justify-start overflow-x-auto rounded-xl bg-muted/50 p-1">
+              {CONTRACT_TABS.map(tab => (
+                <TabsTrigger key={tab.value} value={tab.value} className="text-xs sm:text-sm rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </motion.div>
 
         {/* Table */}
-        <div className="border rounded-lg overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55, duration: 0.5 }}
+          className="rounded-2xl border border-border/50 overflow-hidden bg-card"
+        >
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Assunto</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Tipo de Contrato</TableHead>
-                <TableHead>Valor do Contrato</TableHead>
-                <TableHead>Data de Início</TableHead>
-                <TableHead>Data Final</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Assinatura</TableHead>
-                <TableHead className="w-[100px]">Ações</TableHead>
+              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">#</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Assunto</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Cliente</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Tipo</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Valor</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Início</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Final</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Telefone</TableHead>
+                <TableHead className="font-semibold text-xs uppercase tracking-wider">Status</TableHead>
+                <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Carregando...
+                  <TableCell colSpan={10} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      >
+                        <Loader2 className="h-8 w-8 text-primary" />
+                      </motion.div>
+                      <span className="text-sm text-muted-foreground">Carregando contratos...</span>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : filteredContracts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                    Nenhum contrato encontrado
+                  <TableCell colSpan={10} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-4 rounded-full bg-muted/50">
+                        <FileText className="h-8 w-8 text-muted-foreground/50" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">Nenhum contrato encontrado</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredContracts.map((contract) => (
-                  <TableRow key={contract.id} className="group">
-                    <TableCell className="font-medium">
-                      {contract.contract_number || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{contract.subject || 'Sem assunto'}</p>
-                        <div className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            className="hover:underline mr-2"
-                            onClick={() => {
-                              setSelectedContract(contract);
-                              setDetailOpen(true);
-                            }}
-                          >
-                            Ver
-                          </button>
-                          <button 
-                            className="hover:underline mr-2 text-primary"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log('Edit clicked for contract:', contract.id, contract.signature_status);
-                              if (contract.signature_status === 'signed') {
-                                toast.error('Contratos assinados não podem ser editados');
-                                return;
-                              }
-                              setEditContract(contract);
-                              setEditOpen(true);
-                            }}
-                          >
-                            Editar
-                          </button>
-                          <button 
-                            className="hover:underline text-destructive"
-                            onClick={() => handleDelete(contract.id)}
-                          >
-                            Deletar
-                          </button>
+                <AnimatePresence>
+                  {filteredContracts.map((contract, index) => (
+                    <motion.tr
+                      key={contract.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 8 }}
+                      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.5) }}
+                      className="group border-b border-border/30 hover:bg-muted/20 transition-colors duration-200"
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {contract.contract_number || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm">{contract.subject || 'Sem assunto'}</p>
+                          <div className="flex gap-2 mt-0.5 text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <button 
+                              className="text-primary hover:underline"
+                              onClick={() => { setSelectedContract(contract); setDetailOpen(true); }}
+                            >
+                              Ver
+                            </button>
+                            <button 
+                              className="text-primary hover:underline"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (contract.signature_status === 'signed') {
+                                  toast.error('Contratos assinados não podem ser editados');
+                                  return;
+                                }
+                                setEditContract(contract);
+                                setEditOpen(true);
+                              }}
+                            >
+                              Editar
+                            </button>
+                            <button 
+                              className="text-destructive hover:underline"
+                              onClick={() => handleDelete(contract.id)}
+                            >
+                              Deletar
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{contract.profile?.full_name || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {contract.contract_type?.name || contract.contract_template?.name || 'Não definido'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {contract.contract_value
-                        ? `R$ ${contract.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {contract.start_date
-                        ? format(new Date(contract.start_date), 'dd-MM-yyyy', { locale: ptBR })
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {contract.end_date
-                        ? format(new Date(contract.end_date), 'dd-MM-yyyy', { locale: ptBR })
-                        : '-'}
-                    </TableCell>
-                    <TableCell>{contract.profile?.phone || '-'}</TableCell>
-                    <TableCell>{getSignatureBadge(contract.signature_status)}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedContract(contract);
-                            setDetailOpen(true);
-                          }}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            Visualizar Contrato
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Send className="h-4 w-4 mr-2" />
-                            Enviar para Assinatura
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDownloadPDF(contract.id)}
-                            disabled={downloadingId === contract.id}
-                          >
-                            {downloadingId === contract.id ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4 mr-2" />
-                            )}
-                            Download PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(contract.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className="text-sm">{contract.profile?.full_name || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="rounded-lg text-xs font-normal border-border/50">
+                          {contract.contract_type?.name || contract.contract_template?.name || 'N/D'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm">
+                        {contract.contract_value
+                          ? `R$ ${contract.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {contract.start_date
+                          ? format(new Date(contract.start_date), 'dd/MM/yy', { locale: ptBR })
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {contract.end_date
+                          ? format(new Date(contract.end_date), 'dd/MM/yy', { locale: ptBR })
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{contract.profile?.phone || '-'}</TableCell>
+                      <TableCell>{getSignatureBadge(contract.signature_status)}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="rounded-xl h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-xl">
+                            <DropdownMenuItem onClick={() => { setSelectedContract(contract); setDetailOpen(true); }}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Visualizar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Send className="h-4 w-4 mr-2" />
+                              Enviar para Assinatura
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDownloadPDF(contract.id)}
+                              disabled={downloadingId === contract.id}
+                            >
+                              {downloadingId === contract.id ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4 mr-2" />
+                              )}
+                              Download PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleDelete(contract.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               )}
             </TableBody>
           </Table>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Contract Detail Sheet */}
       <ContractDetailSheet
         contract={selectedContract}
         open={detailOpen}
@@ -566,14 +727,12 @@ export default function AdminContratos() {
         onUpdate={fetchContracts}
       />
 
-      {/* Create Contract Dialog */}
       <CreateContractDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={fetchContracts}
       />
 
-      {/* Edit Contract Dialog */}
       <EditContractDialog
         contract={editContract}
         open={editOpen}
