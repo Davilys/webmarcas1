@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { Link } from "react-router-dom";
-import webmarcasLogo from "@/assets/webmarcas-logo-new.png";
+import webmarcasLogo from "@/assets/webmarcas-icon-transparent.png";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,17 +55,10 @@ const Header = () => {
         <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
           {/* Logo */}
           <a href="/" className="flex items-center gap-1.5 md:gap-2">
-            {/* 
-              IMPORTANT: Do NOT use overflow-hidden on a wrapper here.
-              overflow-hidden forces a GPU compositing layer in Safari iOS,
-              which renders as a black rectangle on mobile.
-              Use clip-path on the img directly instead.
-            */}
             <img
               src={webmarcasLogo}
               alt="WebMarcas"
               className="h-9 md:h-11 w-auto shrink-0"
-              style={{ clipPath: "circle(50% at 50% 50%)" }}
             />
             <span className="font-display text-lg md:text-xl font-bold hidden sm:inline">
               Web<span className="gradient-text">Marcas</span>
