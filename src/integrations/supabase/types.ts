@@ -1264,6 +1264,54 @@ export type Database = {
         }
         Relationships: []
       }
+      inpi_knowledge_base: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          id: string
+          is_active: boolean
+          priority: number | null
+          raw_html: string | null
+          source_date: string | null
+          source_url: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          category: string
+          content: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          priority?: number | null
+          raw_html?: string | null
+          source_date?: string | null
+          source_url?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          priority?: number | null
+          raw_html?: string | null
+          source_date?: string | null
+          source_url?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       inpi_resources: {
         Row: {
           adjustments_history: Json | null
@@ -1324,6 +1372,51 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      inpi_sync_logs: {
+        Row: {
+          categories_synced: string[] | null
+          details: Json | null
+          duration_ms: number | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          items_created: number | null
+          items_failed: number | null
+          items_updated: number | null
+          started_at: string
+          status: string
+          sync_type: string
+        }
+        Insert: {
+          categories_synced?: string[] | null
+          details?: Json | null
+          duration_ms?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          items_created?: number | null
+          items_failed?: number | null
+          items_updated?: number | null
+          started_at?: string
+          status?: string
+          sync_type?: string
+        }
+        Update: {
+          categories_synced?: string[] | null
+          details?: Json | null
+          duration_ms?: number | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          items_created?: number | null
+          items_failed?: number | null
+          items_updated?: number | null
+          started_at?: string
+          status?: string
+          sync_type?: string
         }
         Relationships: []
       }
