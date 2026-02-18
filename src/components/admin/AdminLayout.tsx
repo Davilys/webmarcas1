@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
-import { AdminChatWidget } from '@/components/admin/AdminChatWidget';
+// AdminChatWidget removido — chat integrado na página Chat ao Vivo
 import { MobileBottomNav } from '@/components/admin/MobileBottomNav';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -450,8 +450,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Mobile Bottom Navigation — only on mobile */}
         <MobileBottomNav />
 
-        {/* Chat widget */}
-        <AdminChatWidget />
       </div>
     </SidebarProvider>
   );
