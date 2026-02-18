@@ -173,7 +173,7 @@ export default function AdminContratos() {
         toast.info('Nenhum contrato elegível para atualização');
       }
       
-      fetchContracts();
+      refreshContracts();
     } catch (error) {
       console.error('Error expiring promotions:', error);
       toast.error('Erro ao expirar promoções');
