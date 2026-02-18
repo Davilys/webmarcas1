@@ -435,12 +435,42 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
               </button>
             )}
 
-            <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
-              <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-md bg-primary/10">
-                <Shield className="h-3 w-3 md:h-3.5 md:w-3.5 text-primary" />
+            {/* Brand identity — HUD style */}
+            <Link to="/admin/dashboard" className="flex items-center gap-2 group select-none">
+              {/* Icon orb */}
+              <div className="relative flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-xl bg-gradient-to-br from-primary to-primary/60 shadow-[0_0_12px_hsl(var(--primary)/0.35)] group-hover:shadow-[0_0_18px_hsl(var(--primary)/0.5)] transition-shadow duration-300">
+                <Shield className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary-foreground drop-shadow-sm" />
+                {/* Pulse ring */}
+                <span className="absolute inset-0 rounded-xl ring-1 ring-primary/40 group-hover:ring-primary/70 transition-all duration-300" />
               </div>
-              <span className="font-semibold text-foreground/90 text-xs md:text-sm">CRM WebMarcas</span>
-            </div>
+
+              {/* Text stack */}
+              <div className="flex flex-col leading-none">
+                <span
+                  className="font-black text-[11px] md:text-[13px] tracking-widest uppercase"
+                  style={{
+                    background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.7))',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  WebMarcas
+                </span>
+                <span className="text-[8px] md:text-[9px] font-semibold tracking-[0.2em] uppercase text-muted-foreground/60">
+                  CRM · v2026
+                </span>
+              </div>
+
+              {/* Live dot */}
+              <div className="hidden md:flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                </span>
+                <span className="text-[8px] font-bold tracking-widest uppercase text-emerald-600 dark:text-emerald-400">live</span>
+              </div>
+            </Link>
 
             {/* Botões extras quando BotConversa ativo */}
             {chatMode === 'botconversa' && (
