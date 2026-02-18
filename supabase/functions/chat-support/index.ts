@@ -149,7 +149,14 @@ serve(async (req) => {
       );
     }
 
-    const { messages, userName } = await req.json();
+    const { messages = [], userName } = await req.json();
+
+    if (!Array.isArray(messages)) {
+      return new Response(
+        JSON.stringify({ error: "messages deve ser um array" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     
     if (!OPENAI_API_KEY) {
