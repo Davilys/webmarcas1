@@ -492,7 +492,7 @@ export default function AdminContratos() {
     return matchesSearch && matchesSignature && matchesTab && matchesDate;
   });
 
-  const { canViewFinancialValues } = useCanViewFinancialValues();
+  const { canViewFinancialValues, isLoading: finLoading } = useCanViewFinancialValues();
   const totalValue = filteredContracts.reduce((sum, c) => sum + (c.contract_value || 0), 0);
   const signedCount = filteredContracts.filter(c => c.signature_status === 'signed').length;
   const pendingCount = filteredContracts.filter(c => c.signature_status !== 'signed').length;
@@ -762,21 +762,23 @@ export default function AdminContratos() {
                         </Badge>
                       </TableCell>
                       <TableCell className="font-semibold text-sm">
-                        {canViewFinancialValues
-                          ? (contract.contract_value
-                              ? `R$ ${contract.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                              : '-')
-                          : <span className="flex items-center gap-1 text-muted-foreground/50 text-xs"><EyeOff className="h-3 w-3" /> Restrito</span>
+                        {finLoading
+                          ? <span className="inline-block h-4 w-20 animate-pulse rounded bg-muted" />
+                          : canViewFinancialValues
+                            ? (contract.contract_value
+                                ? `R$ ${contract.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                : '-')
+                            : <span className="flex items-center gap-1 text-muted-foreground/50 text-xs"><EyeOff className="h-3 w-3" /> Restrito</span>
                         }
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {contract.start_date
-                          ? format(new Date(contract.start_date), 'dd/MM/yy', { locale: ptBR })
+                          ? (() => { const [y,m,d] = contract.start_date.split('-').map(Number); return format(new Date(y, m-1, d), 'dd/MM/yy', { locale: ptBR }); })()
                           : '-'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {contract.end_date
-                          ? format(new Date(contract.end_date), 'dd/MM/yy', { locale: ptBR })
+                          ? (() => { const [y,m,d] = contract.end_date.split('-').map(Number); return format(new Date(y, m-1, d), 'dd/MM/yy', { locale: ptBR }); })()
                           : '-'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{contract.profile?.phone || '-'}</TableCell>
