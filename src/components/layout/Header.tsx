@@ -55,11 +55,14 @@ const Header = () => {
         <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
           {/* Logo */}
           <a href="/" className="flex items-center gap-1.5 md:gap-2">
-            <img
-              src={webmarcasLogo}
-              alt="WebMarcas"
-              className="h-8 md:h-10 w-auto mix-blend-multiply dark:mix-blend-normal"
-            />
+            {/* Logo container matches its own background so the white PNG bg is invisible */}
+            <span className="inline-flex shrink-0 rounded-lg overflow-hidden bg-white dark:bg-[hsl(240,10%,8%)] shadow-sm ring-1 ring-border/30">
+              <img
+                src={webmarcasLogo}
+                alt="WebMarcas"
+                className="h-8 md:h-10 w-auto"
+              />
+            </span>
             <span className="font-display text-lg md:text-xl font-bold hidden sm:inline">
               Web<span className="gradient-text">Marcas</span>
             </span>
