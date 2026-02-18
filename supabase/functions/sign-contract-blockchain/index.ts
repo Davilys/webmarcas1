@@ -477,6 +477,41 @@ serve(async (req) => {
 
     console.log('Contract signed successfully:', contractId);
 
+    // ── MULTICHANNEL HOOK: contrato_assinado ──────────────────
+    // Fires AFTER all existing logic — strictly additive, never throws
+    try {
+      const recipientForNotif = recipientEmail || '';
+      const phoneForNotif = recipientPhone || '';
+      if (recipientForNotif || phoneForNotif || userId) {
+        await fetch(`${supabaseUrl}/functions/v1/send-multichannel-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_type: 'contrato_assinado',
+            channels: ['crm', 'sms', 'whatsapp'],
+            recipient: {
+              nome: recipientName || 'Cliente',
+              email: recipientForNotif,
+              phone: phoneForNotif,
+              user_id: userId || undefined,
+            },
+            data: {
+              marca: brandName || '',
+              link: verificationUrl,
+            },
+          }),
+        });
+        console.log('[multichannel] contrato_assinado dispatched for:', recipientForNotif);
+      }
+    } catch (multiErr) {
+      // Never block the main response
+      console.error('[multichannel] Error dispatching contrato_assinado:', multiErr);
+    }
+    // ── END MULTICHANNEL HOOK ─────────────────────────────────
+
     return new Response(
       JSON.stringify({
         success: true,

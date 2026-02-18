@@ -231,6 +231,48 @@ const handler = async (req: Request): Promise<Response> => {
       console.error('Error logging email:', logError);
     }
 
+    // ── MULTICHANNEL HOOK: SMS + WhatsApp (aditivo, nunca bloqueia resposta) ──
+    try {
+      const eventTypeMap: Record<string, string> = {
+        form_started: 'formulario_preenchido',
+        signature_request: 'link_assinatura_gerado',
+        contract_signed: 'contrato_assinado',
+        payment_received: 'pagamento_confirmado',
+        payment_overdue: 'fatura_vencida',
+      };
+      const mappedEvent = eventTypeMap[trigger_event] || 'manual';
+      const phone = (data as any).phone || '';
+
+      // Only dispatch if phone available or event is important
+      if (phone || data.email) {
+        fetch(`${supabaseUrl}/functions/v1/send-multichannel-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_type: mappedEvent,
+            channels: ['sms', 'whatsapp'], // Email already sent above — no duplication
+            recipient: {
+              nome: data.nome || 'Cliente',
+              email: data.email || '',
+              phone,
+            },
+            data: {
+              marca: data.marca || '',
+              link: data.link_assinatura || '',
+              mensagem_custom: (data as any).mensagem_custom || '',
+            },
+          }),
+        }).catch(e => console.error('[multichannel] SMS/WA dispatch error:', e));
+        console.log(`[multichannel] SMS+WhatsApp dispatched for event: ${mappedEvent}`);
+      }
+    } catch (multiErr) {
+      console.error('[multichannel] Error in SMS/WhatsApp hook:', multiErr);
+    }
+    // ── END MULTICHANNEL HOOK ─────────────────────────────────────────────────
+
     return new Response(
       JSON.stringify({ 
         success: true, 
