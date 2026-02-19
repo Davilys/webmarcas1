@@ -74,14 +74,22 @@ serve(async (req) => {
     const recipientPhone = overrideContact?.phone || profile?.phone;
     const recipientName = overrideContact?.name || contract.signatory_name || profile?.full_name || 'Cliente';
     
-    // Always prefer SITE_URL (production domain). Ignore preview/localhost domains.
-    const siteUrl = Deno.env.get('SITE_URL');
-    const isPreviewDomain = clientBaseUrl && (
-      clientBaseUrl.includes('lovableproject.com') ||
-      clientBaseUrl.includes('lovable.app') ||
-      clientBaseUrl.includes('localhost')
-    );
-    const baseUrl = siteUrl || (!isPreviewDomain ? clientBaseUrl : null) || 'https://webmarcas.com.br';
+    // Production domain — always use this to avoid broken links from preview environments
+    const PRODUCTION_DOMAIN = 'https://webmarcas.net';
+
+    const isPreviewUrl = (url: string) =>
+      url.includes('lovableproject.com') ||
+      url.includes('lovable.app') ||
+      url.includes('localhost');
+
+    const rawSiteUrl = Deno.env.get('SITE_URL') || '';
+    const siteUrlIsValid = rawSiteUrl && !isPreviewUrl(rawSiteUrl);
+    const clientBaseUrlIsValid = clientBaseUrl && !isPreviewUrl(clientBaseUrl);
+
+    const resolvedBase = siteUrlIsValid ? rawSiteUrl : (clientBaseUrlIsValid ? clientBaseUrl : PRODUCTION_DOMAIN);
+
+    // Strip trailing slash to prevent double-slash (e.g. https://domain.com//assinar/)
+    const baseUrl = resolvedBase.replace(/\/+$/, '');
     const signatureUrl = `${baseUrl}/assinar/${contract.signature_token}`;
     
     const documentTypeName = contract.document_type === 'procuracao' ? 'Procuração' :
