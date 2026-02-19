@@ -50,24 +50,21 @@ function isPartialHtml(content: string): boolean {
  * Renderiza documentos HTML completos via iframe sandboxed.
  * Isso garante que o CSS do documento não vaze para fora como texto visível.
  */
-function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
+function FullHtmlDocumentViewer({ htmlContent, blockchainSignature }: { htmlContent: string; blockchainSignature?: BlockchainSignature }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState(900);
   const [resolvedHtml, setResolvedHtml] = useState<string | null>(null);
 
   // Pre-load all images referenced in the HTML as base64 so they render inside the sandboxed iframe
+  // Also inject blockchain certification if present
   useEffect(() => {
     const resolveImages = async (html: string): Promise<string> => {
-      // Find all src="..." and url(...) references that are relative or same-origin
       const imgRegex = /src="([^"]+)"/g;
-      const urlRegex = /url\(["']?([^"')]+)["']?\)/g;
-
       const origin = window.location.origin;
 
       const toAbsolute = (src: string): string | null => {
-        if (src.startsWith('data:')) return null; // already base64
+        if (src.startsWith('data:')) return null;
         if (src.startsWith('http://') || src.startsWith('https://')) {
-          // only resolve same-origin
           if (!src.startsWith(origin)) return null;
           return src;
         }
@@ -86,28 +83,17 @@ function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
             reader.onerror = () => resolve(null);
             reader.readAsDataURL(blob);
           });
-        } catch {
-          return null;
-        }
+        } catch { return null; }
       };
 
-      // Collect unique URLs
       const urlMap = new Map<string, string | null>();
       let match: RegExpExecArray | null;
-
       const imgRegexCopy = new RegExp(imgRegex.source, imgRegex.flags);
       while ((match = imgRegexCopy.exec(html)) !== null) {
         const abs = toAbsolute(match[1]);
         if (abs && !urlMap.has(match[1])) urlMap.set(match[1], abs);
       }
 
-      const urlRegexCopy = new RegExp(urlRegex.source, urlRegex.flags);
-      while ((match = urlRegexCopy.exec(html)) !== null) {
-        const abs = toAbsolute(match[1]);
-        if (abs && !urlMap.has(match[1])) urlMap.set(match[1], abs);
-      }
-
-      // Fetch all in parallel
       await Promise.all(
         Array.from(urlMap.entries()).map(async ([original, absolute]) => {
           if (!absolute) return;
@@ -116,19 +102,22 @@ function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
         })
       );
 
-      // Replace in HTML
       let resolved = html;
       urlMap.forEach((b64, original) => {
-        if (b64) {
-          resolved = resolved.split(original).join(b64);
-        }
+        if (b64) resolved = resolved.split(original).join(b64);
       });
+
+      // Inject blockchain certification if signed and not already present
+      if (blockchainSignature?.hash && !resolved.includes('CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA') && resolved.includes('</body>')) {
+        const certSection = buildBlockchainCertificationHtml(blockchainSignature, origin);
+        resolved = resolved.replace('</body>', `${certSection}</body>`);
+      }
 
       return resolved;
     };
 
     resolveImages(htmlContent).then(setResolvedHtml);
-  }, [htmlContent]);
+  }, [htmlContent, blockchainSignature]);
 
   useEffect(() => {
     if (!resolvedHtml) return;
@@ -227,9 +216,9 @@ export function DocumentRenderer({
   const verificationUrl = blockchainSignature?.hash ? getVerificationUrl(blockchainSignature.hash) : '';
   const showCertSection = (showCertificationSection || !!blockchainSignature?.hash) && !!blockchainSignature;
 
-  // CASO 1: Documento HTML completo → renderizar via iframe (evita CSS visível como texto)
+  // CASO 1: Documento HTML completo → renderizar via iframe (injeta certificação se assinado)
   if (isFullHtml) {
-    return <FullHtmlDocumentViewer htmlContent={formattedContent} />;
+    return <FullHtmlDocumentViewer htmlContent={formattedContent} blockchainSignature={blockchainSignature} />;
   }
 
   // CASO 2: Contrato em texto puro → usar ContractRenderer (renderização React nativa, visual perfeito)
@@ -453,6 +442,49 @@ export async function getLogoBase64ForPDF(): Promise<string> {
 // Embedded fallback logo SVG
 const WEBMARCAS_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgNTAiPjxyZWN0IGZpbGw9IiMxZTNhNWYiIHdpZHRoPSIyMDAiIGhlaWdodD0iNTAiLz48dGV4dCB4PSIxMCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmYiPldlYk1hcmNhczwvdGV4dD48L3N2Zz4=';
 
+/** Gera o bloco HTML de certificação blockchain para injetar em qualquer contrato */
+function buildBlockchainCertificationHtml(sig: BlockchainSignature, verificationBase: string): string {
+  const verifyUrl = `${verificationBase}/verificar-contrato?hash=${sig.hash}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`;
+  return `
+  <div style="margin-top:32px;page-break-inside:avoid;">
+    <div style="text-align:center;padding:16px 0;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280;">
+      <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
+      <p>www.webmarcas.net | juridico@webmarcas.net</p>
+      <p>Data e hora da geração: ${new Date().toLocaleString('pt-BR')}</p>
+    </div>
+    <div style="height:4px;background:#0284c7;margin:16px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+    <div style="padding:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+        <div style="width:32px;height:32px;background:#0284c7;border-radius:50%;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        </div>
+        <h3 style="font-size:18px;font-weight:bold;color:#0284c7;margin:0;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
+      </div>
+      <div style="display:flex;gap:24px;align-items:flex-start;">
+        <div style="flex:1;">
+          <p style="font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:#1e293b;margin-bottom:6px;">HASH SHA-256</p>
+          <div style="background:white;padding:12px;border-radius:4px;border:1px solid #e2e8f0;font-family:monospace;font-size:10px;word-break:break-all;color:#1e293b;margin-bottom:16px;">${sig.hash}</div>
+          ${sig.timestamp ? `<p style="font-size:11px;font-weight:bold;text-transform:uppercase;color:#1e293b;margin-bottom:4px;">DATA/HORA DA ASSINATURA</p><p style="font-size:13px;color:#1e293b;margin-bottom:16px;">${sig.timestamp}</p>` : ''}
+          ${sig.txId ? `<p style="font-size:11px;font-weight:bold;text-transform:uppercase;color:#1e293b;margin-bottom:4px;">ID DA TRANSAÇÃO</p><p style="font-size:12px;font-family:monospace;color:#1e293b;word-break:break-all;margin-bottom:16px;">${sig.txId}</p>` : ''}
+          <p style="font-size:11px;font-weight:bold;text-transform:uppercase;color:#1e293b;margin-bottom:4px;">REDE BLOCKCHAIN</p>
+          <p style="font-size:13px;color:#1e293b;margin-bottom:16px;">${sig.network || 'Bitcoin (OpenTimestamps via a.pool.opentimestamps.org)'}</p>
+          ${sig.ipAddress ? `<p style="font-size:11px;font-weight:bold;text-transform:uppercase;color:#1e293b;margin-bottom:4px;">IP DO SIGNATÁRIO</p><p style="font-size:13px;color:#1e293b;">${sig.ipAddress}</p>` : ''}
+        </div>
+        <div style="flex-shrink:0;text-align:center;padding:16px;background:white;border-radius:8px;border:1px solid #e2e8f0;">
+          <p style="font-size:11px;font-weight:bold;text-transform:uppercase;color:#1e293b;margin-bottom:12px;">QR CODE DE VERIFICAÇÃO</p>
+          <img src="${qrUrl}" alt="QR Code" style="width:140px;height:140px;" />
+          <p style="font-size:10px;color:#64748b;margin-top:8px;">Escaneie para verificar</p>
+        </div>
+      </div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;">
+        <p style="font-size:11px;color:#64748b;font-style:italic;">Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.</p>
+        <p style="font-size:11px;color:#0284c7;margin-top:8px;">Verifique a autenticidade em: ${verifyUrl}</p>
+      </div>
+    </div>
+  </div>`;
+}
+
 export function generateDocumentPrintHTML(
   documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' | 'contract',
   content: string,
@@ -465,10 +497,19 @@ export function generateDocumentPrintHTML(
   baseUrl?: string,
   logoBase64?: string
 ): string {
-  // Se for um HTML completo salvo, retorná-lo diretamente (já é o PDF pronto)
+  const verificationBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.net');
+
+  // Se for um HTML completo salvo, injetar a seção de certificação se o contrato estiver assinado
   const trimmed = content.trim();
   if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<HTML')) {
-    return content;
+    if (blockchainSignature?.hash) {
+      const certificationSection = buildBlockchainCertificationHtml(blockchainSignature, verificationBase);
+      // Check if certification already exists in the HTML to avoid duplicates
+      if (!trimmed.includes('CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA') && trimmed.includes('</body>')) {
+        return trimmed.replace('</body>', `${certificationSection}</body>`);
+      }
+    }
+    return trimmed;
   }
 
   let documentTitle = 'DOCUMENTO';
@@ -518,7 +559,6 @@ export function generateDocumentPrintHTML(
 
   const htmlContent = isHtmlContent ? cleanedContent : formatAsHtml(cleanedContent);
   const logoSrc = logoBase64 || WEBMARCAS_LOGO_FALLBACK;
-  const verificationBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.net');
 
   const contractTitleBox = documentType === 'contract'
     ? `<div class="contract-title-box"><p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p></div>`
@@ -568,24 +608,7 @@ export function generateDocumentPrintHTML(
   <div class="content">
     ${htmlContent}
   </div>
-  ${blockchainSignature?.hash ? `
-  <div style="margin-top:32px;">
-    <div style="text-align:center;padding:16px 0;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280;">
-      <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
-      <p>www.webmarcas.net | juridico@webmarcas.net</p>
-    </div>
-    <div style="height:4px;background:#0284c7;margin:16px 0;"></div>
-    <div style="padding:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
-      <h3 style="font-size:18px;font-weight:bold;color:#0284c7;margin-bottom:20px;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
-      <p style="font-size:11px;font-weight:bold;color:#1e293b;margin-bottom:6px;">HASH SHA-256</p>
-      <div style="background:white;padding:10px;border:1px solid #e2e8f0;font-family:monospace;font-size:10px;word-break:break-all;margin-bottom:12px;">${blockchainSignature.hash}</div>
-      <p style="font-size:11px;color:#1e293b;margin-bottom:6px;"><strong>Rede Blockchain:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</p>
-      ${blockchainSignature.ipAddress ? `<p style="font-size:11px;color:#1e293b;margin-bottom:6px;"><strong>IP do Signatário:</strong> ${blockchainSignature.ipAddress}</p>` : ''}
-      <p style="font-size:10px;color:#64748b;margin-top:16px;font-style:italic;text-align:center;">Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.</p>
-      <p style="font-size:10px;color:#0284c7;text-align:center;">Verifique em: ${verificationBase}/verificar-contrato</p>
-    </div>
-  </div>
-  ` : `
+  ${blockchainSignature?.hash ? buildBlockchainCertificationHtml(blockchainSignature, verificationBase) : `
   <div class="footer">
     <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
     <p>Av. Brigadeiro Luís Antônio, 2696 - São Paulo - SP | Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
