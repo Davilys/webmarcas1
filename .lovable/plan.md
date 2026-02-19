@@ -1,249 +1,170 @@
 
-# Plano: Central de Integrações Unificada — API, Webhooks, SMS e BotConversa
+# IA de Resumo Automático para SMS — Plano Técnico
 
-## Diagnóstico Honesto do Estado Atual
+## Entendimento do Problema
 
-Após análise completa do projeto, o estado real é:
+O sistema atual envia a **mesma mensagem** para todos os canais. O SMS tem limitação de **160 caracteres** e atualmente apenas corta o texto com `.substring(0, 160)`, o que quebra o conteúdo de forma abrupta e pode cortar links importantes.
 
-**O que já existe e funciona:**
-- `system_settings` tabela com chaves: `api_keys`, `webhooks`, `asaas`, `whatsapp`, `inpi` etc.
-- Secrets já configurados no backend: `ASAAS_API_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `SITE_URL`
-- Página Configurações > Integrações (Asaas) e API e Webhooks (chave do sistema + Zapier/n8n/Make/OpenAI)
-- Edge functions: `trigger-email-automation`, `asaas-webhook`, `generate-signature-link`, `sign-contract-blockchain`
-- Central de Notificações (CRM) funcionando com templates e envio manual
+**Regra de negócio:**
+- CRM (in-app), WhatsApp, Email → mensagem completa, sem alteração
+- **SMS apenas** → IA resume automaticamente, preservando todos os links intactos
 
-**O problema central identificado:**
-A UI de configurações NÃO centraliza todas as credenciais necessárias para o projeto funcionar. O admin não tem onde configurar ASAAS_API_KEY, BOTCONVERSA_WEBHOOK, ZENVIA_API_KEY etc. Cada uma está "escondida" ou inexistente na interface.
+## Arquitetura da Solução
 
-**Resposta sincera:** Sim, é 100% realizável e ficará funcionando corretamente, pois a base está sólida.
+A modificação será feita **exclusivamente** na Edge Function `send-multichannel-notification/index.ts`, que é o ponto central por onde passa todo o fluxo. Nenhuma alteração no frontend é necessária — a IA atua de forma invisível, automática e silenciosa.
 
----
+```text
+Payload chega na Edge Function
+         │
+         ├─── CRM  ──→ mensagem ORIGINAL enviada
+         ├─── WhatsApp ──→ mensagem ORIGINAL enviada  
+         ├─── Email ──→ mensagem ORIGINAL enviada
+         │
+         └─── SMS ──→ [IA Resumidora] ──→ mensagem RESUMIDA enviada
+                              │
+                              ├── extrai links do texto
+                              ├── envia texto para IA resumir (sem os links)
+                              ├── IA retorna texto curto (≤120 chars)
+                              └── reinsere links no final do resumo
+```
 
-## O Que Será Criado (Modo 100% Aditivo)
+## Lógica de Preservação de Links
 
-### BLOCO 1 — Melhorar a aba "Integrações" (IntegrationSettings.tsx)
+A IA não pode resumir links pois eles são funcionais e podem mudar se truncados. A estratégia é:
 
-Atualmente só mostra Asaas. Será expandida com cards para cada integração principal:
+1. **Extrair** todos os links do texto original com regex antes de enviar para a IA
+2. **Resumir** apenas o texto sem os links (a IA recebe texto limpo)
+3. **Reinserir** os links extraídos no final do texto resumido
 
-**Card 1 — Asaas (já existe, só melhora)**
-- Adicionar campo de API Key (salva em `system_settings` chave `asaas`, campo `api_key`)
-- Botão "Testar Conexão" já funciona
-- Toggle Sandbox/Produção já funciona
+```typescript
+// Regex para extrair qualquer URL do texto
+const URL_REGEX = /https?:\/\/[^\s]+/g;
 
-**Card 2 — Resend (E-mail Transacional)**
-- Campo: API Key do Resend (salva em `system_settings` > `email_provider`)
-- Campo: E-mail remetente padrão
-- Botão: Testar conexão (envia e-mail de teste)
-- Status: Configurado / Não configurado
+function extractLinks(text: string): { cleanText: string; links: string[] } {
+  const links = text.match(URL_REGEX) || [];
+  const cleanText = text.replace(URL_REGEX, '').replace(/\s+/g, ' ').trim();
+  return { cleanText, links };
+}
+```
 
-**Card 3 — BotConversa (WhatsApp)**
-- Campo: URL do Webhook de saída do BotConversa
-- Campo: Token de autenticação (opcional, para verificação)
-- Toggle: Ativar/desativar envio via BotConversa
-- Botão: Testar webhook (envia payload de teste)
-- Status: Configurado / Não configurado
+## O que vai ser criado/modificado
 
-**Card 4 — SMS via Zenvia**
-- Campo: API Key Zenvia
-- Campo: Nome do remetente (SenderName)
-- Toggle: Ativar/desativar envio SMS
-- Botão: Testar (envia SMS de teste para número configurado)
-- Status: Configurado / Não configurado
+### Arquivo modificado: `supabase/functions/send-multichannel-notification/index.ts`
 
-**Card 5 — OpenAI**
-- Campo: API Key (já existe em api_keys > openai_key, migrar para cá)
-- Toggle: Ativar para chat de suporte / respostas automáticas
-- Status
+**Nova função: `summarizeForSMS(message, link_data)`**
 
-**Card 6 — INPI (monitoramento)**
-- Usuário e senha INPI (já existe como secret, exibir status)
-- Toggle: Sincronização automática
-- Informação de última sincronização
+Essa função será inserida antes do bloco de envio de SMS. Ela:
 
----
+1. Verifica se a mensagem já cabe em 160 caracteres — se sim, **não chama a IA** (economiza recursos)
+2. Extrai links do texto com regex
+3. Chama a Lovable AI (`LOVABLE_API_KEY`) via `https://ai.gateway.lovable.dev/v1/chat/completions`
+4. Usa o modelo `google/gemini-2.5-flash-lite` (mais rápido e barato para tarefas simples)
+5. Prompt específico instrui a IA a:
+   - Resumir em no máximo **100 caracteres** (reserva espaço para links)
+   - Manter o prefixo `WebMarcas:` 
+   - Manter o nome do destinatário
+   - Preservar informações de valor (R$) e nome da marca
+   - Não adicionar pontuação desnecessária
+6. Reinsere os links no final: `resumo + " " + links.join(" ")`
+7. Aplica fallback: se a IA falhar, usa o `.substring(0, 160)` original (sem quebrar o sistema)
 
-### BLOCO 2 — Melhorar a aba "API e Webhooks" (APIWebhooksSettings.tsx)
-
-Expandir o que já existe com melhorias:
-
-**Seção 1 — Chave de API WebMarcas** (já existe, mantém)
-
-**Seção 2 — Webhooks de Saída** (já existe, mantém)
-- Expandir lista de eventos: adicionar `sms.sent`, `whatsapp.sent`, `notification.sent`
-
-**Seção 3 — Webhook de Entrada Asaas** (NOVO)
-- Exibe a URL do webhook para o admin copiar e colar no painel Asaas
-- URL: `https://afuqrzecokubogopgfgt.supabase.co/functions/v1/asaas-webhook`
-- Instrução de configuração com botão "Copiar URL"
-
-**Seção 4 — Integrações de Automação** (Zapier/n8n/Make — já existem, mantém)
-
----
-
-### BLOCO 3 — Nova Edge Function: `send-multichannel-notification`
-
-Motor central de notificações multicanal. Recebe um payload e dispara simultaneamente para os canais configurados.
-
-**Entrada:**
-```json
-{
-  "event_type": "formulario_preenchido | link_assinatura_gerado | contrato_assinado | cobranca_gerada | fatura_vencida | pagamento_confirmado | manual",
-  "channels": ["crm", "sms", "whatsapp"],
-  "recipient": {
-    "nome": "João Silva",
-    "email": "joao@email.com",
-    "phone": "5511999999999",
-    "user_id": "uuid-opcional"
-  },
-  "data": {
-    "link": "https://webmarcas.net/assinar/token",
-    "valor": "1500.00",
-    "marca": "MINHA MARCA",
-    "mensagem_custom": "Texto personalizado"
+**Novo sistema de retry com fallback:**
+```typescript
+async function summarizeForSMS(message: string): Promise<string> {
+  // Se já é curto, não precisa de IA
+  if (message.length <= 160) return message;
+  
+  // Extrai links para preservar
+  const { cleanText, links } = extractLinks(message);
+  
+  // Calcula espaço disponível para resumo
+  const linkSpace = links.reduce((acc, l) => acc + l.length + 1, 0);
+  const targetLen = Math.max(60, 155 - linkSpace);
+  
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) throw new Error('sem chave');
+    
+    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um compressor de SMS profissional. 
+Resuma a mensagem em no máximo ${targetLen} caracteres.
+REGRAS OBRIGATÓRIAS:
+- Mantenha sempre "WebMarcas:" no início
+- Preserve o nome do destinatário
+- Preserve valores monetários (R$)
+- Preserve nomes de marcas/produtos
+- Não use abreviações que dificultem entendimento
+- Não adicione comentários, apenas o texto resumido
+- Responda SOMENTE o texto resumido, sem aspas`
+          },
+          { role: 'user', content: cleanText }
+        ],
+        max_tokens: 80,
+        temperature: 0.2,
+      }),
+    });
+    
+    if (!res.ok) throw new Error(`AI error ${res.status}`);
+    
+    const json = await res.json();
+    const summary = json.choices?.[0]?.message?.content?.trim() || '';
+    
+    if (!summary) throw new Error('resposta vazia');
+    
+    // Reinsere links preservados
+    const final = links.length > 0
+      ? `${summary} ${links.join(' ')}`
+      : summary;
+    
+    // Garante limite máximo do SMS
+    return final.substring(0, 160);
+    
+  } catch (err) {
+    console.warn('[sms-ai] Resumo falhou, usando fallback:', err);
+    // Fallback: preserva links manualmente no truncamento
+    if (links.length > 0) {
+      const link = links[0];
+      const spaceForLink = 160 - link.length - 1;
+      return `${cleanText.substring(0, spaceForLink)} ${link}`;
+    }
+    return message.substring(0, 160);
   }
 }
 ```
 
-**Lógica interna:**
-1. Lê `system_settings` para verificar quais canais estão ativos e suas credenciais
-2. Executa os canais em paralelo (`Promise.allSettled`)
-3. **CRM:** insere em `notifications` (se `user_id` fornecido)
-4. **SMS (Zenvia):** POST para `https://api.zenvia.com/v2/channels/sms/messages`
-5. **WhatsApp (BotConversa):** POST para o webhook configurado
-6. Registra resultado de cada canal em `notification_dispatch_logs`
-7. Retry automático (até 3 tentativas) em caso de falha temporária
-8. Nunca cancela um canal por falha de outro (isolamento de erros)
+**Modificação no bloco SMS (linha ~278):**
+```typescript
+// ANTES:
+const smsResult = await withRetry(() => sendSMS(smsSettings, phone, message));
 
----
-
-### BLOCO 4 — Nova Tabela: `notification_dispatch_logs`
-
-Migration para registrar todos os disparos:
-
-```sql
-CREATE TABLE notification_dispatch_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_type text NOT NULL,
-  channel text NOT NULL,          -- 'crm', 'email', 'sms', 'whatsapp'
-  recipient_phone text,
-  recipient_email text,
-  recipient_user_id uuid,
-  status text NOT NULL,           -- 'sent', 'failed', 'retry'
-  payload jsonb,
-  response_body text,
-  error_message text,
-  attempts integer DEFAULT 1,
-  created_at timestamptz DEFAULT now()
-);
-
--- RLS: apenas admins leem
-ALTER TABLE notification_dispatch_logs ENABLE ROW LEVEL SECURITY;
+// DEPOIS:
+const smsMessage = await summarizeForSMS(message); // ← IA resume aqui
+const smsResult = await withRetry(() => sendSMS(smsSettings, phone, smsMessage));
 ```
 
----
+O log de dispatch também registrará `sms_message_summarized: true` quando o resumo for aplicado, para rastreabilidade.
 
-### BLOCO 5 — Disparos Automáticos (Hooks em funções existentes)
+## Comportamento Esperado por Cenário
 
-**Regra absoluta: apenas ADICIONAR chamadas ao final das funções, sem alterar a lógica existente.**
+| Mensagem original | Tamanho | O que a IA faz |
+|---|---|---|
+| Texto curto (≤160 chars) | OK | Não chama IA, envia original |
+| Texto longo sem link | >160 | Resume para ≤155 chars |
+| Texto longo + link | >160 | Resume texto, preserva link no final |
+| IA falha (timeout, erro) | — | Fallback: trunca preservando link |
 
-**5a. `trigger-email-automation`** — após enviar e-mail com sucesso:
-- Chama `send-multichannel-notification` com `channels: ["crm", "sms", "whatsapp"]`
-- Não duplica e-mail (e-mail já foi enviado pela função original)
-- Condicional: só dispara se os canais estiverem ativos no `system_settings`
+## Arquivos a serem editados
 
-**5b. `asaas-webhook`** — nos eventos `OVERDUE` e `RECEIVED/CONFIRMED`:
-- `OVERDUE`: chama motor com `event_type: "fatura_vencida"` + `channels: ["crm", "sms", "whatsapp"]`
-- `CONFIRMED`: chama motor com `event_type: "pagamento_confirmado"` + mesmos canais
+- `supabase/functions/send-multichannel-notification/index.ts` — único arquivo a modificar
 
-**5c. `generate-signature-link`** — após gerar o link:
-- Chama motor com `event_type: "link_assinatura_gerado"` + `channels: ["crm", "sms", "whatsapp"]`
-- Passa `data.link = signatureUrl`
-
-**5d. `sign-contract-blockchain`** — após assinar:
-- Chama motor com `event_type: "contrato_assinado"` + todos os canais
-
----
-
-### BLOCO 6 — Melhorar o Dialog "Nova Notificação" em Notificacoes.tsx
-
-Adicionar seção de canais multicanal **abaixo** do campo de destinatário atual (sem alterar o que já existe):
-
-```
-── Canais de Envio ──────────────────────
-[ ✓ ] CRM (in-app)
-[ ✓ ] SMS (Zenvia)      → mostra "inativo" se não configurado
-[ ✓ ] WhatsApp          → mostra "inativo" se não configurado
-─────────────────────────────────────────
-```
-
-Ao submeter, se houver canais extras além do CRM, chama `send-multichannel-notification` além de inserir na tabela `notifications`.
-
----
-
-## Sequência de Implementação
-
-```
-FASE 1 — Backend
-  1. Migration: criar tabela notification_dispatch_logs
-  2. Criar edge function: send-multichannel-notification
-  3. Adicionar system_settings para botconversa e sms (upsert)
-
-FASE 2 — UI de Configurações
-  4. Reescrever IntegrationSettings.tsx com todos os cards
-  5. Melhorar APIWebhooksSettings.tsx (URL de entrada Asaas + eventos SMS/WhatsApp)
-
-FASE 3 — Automatizar disparos
-  6. Hook em trigger-email-automation
-  7. Hook em asaas-webhook (OVERDUE + CONFIRMED)
-  8. Hook em generate-signature-link
-  9. Hook em sign-contract-blockchain (se existir)
-
-FASE 4 — UI de Notificações
-  10. Adicionar checkboxes de canais no dialog Nova Notificação
-  11. Mostrar status dos canais (ativo/inativo) baseado no system_settings
-
-FASE 5 — Credenciais
-  12. Solicitar ZENVIA_API_KEY e BOTCONVERSA_WEBHOOK_URL via secrets
-```
-
----
-
-## O Que NÃO Será Alterado
-
-- Tabela `notifications` (continua igual)
-- Tabela `notification_templates` (continua igual)
-- Lógica de contratos, funil, pagamentos, INPI
-- Visual da Central de Notificações (só acrescenta checkboxes no dialog)
-- Qualquer permissão ou política RLS existente
-- Edge functions existentes (apenas recebem um hook ao final)
-
----
-
-## Credenciais que Você Precisará
-
-Para o SMS e BotConversa funcionar após implementação:
-
-**Zenvia (SMS):**
-1. Acesse `zenvia.com` → Crie conta gratuita
-2. Vá em API → Tokens → Gere um token
-3. Cole o token na tela Configurações > Integrações > SMS
-
-**BotConversa (WhatsApp):**
-1. Acesse seu painel BotConversa
-2. Crie um novo fluxo com gatilho "Webhook externo"
-3. Copie a URL do webhook gerada
-4. Cole em Configurações > Integrações > BotConversa
-
-Não precisa me passar nada agora. Após implementar, a tela de configurações vai pedir essas informações diretamente.
-
----
-
-## Resultado Final
-
-Ao aprovar este plano, o admin terá uma **Central de Integrações** unificada em Configurações onde pode:
-
-- Configurar e testar Asaas, Resend, BotConversa, Zenvia, OpenAI, INPI em uma tela só
-- Ver o status de cada integração (Ativo/Inativo/Não configurado)
-- Copiar a URL do webhook Asaas para colar no painel Asaas
-- Ao enviar uma "Nova Notificação", escolher quais canais usar (CRM + SMS + WhatsApp)
-- Tudo disparando automaticamente nos eventos do sistema
+Nenhuma mudança em banco de dados, sem migrações, sem alteração de frontend. A feature é 100% aditiva e isolada no backend.
