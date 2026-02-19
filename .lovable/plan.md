@@ -1,170 +1,119 @@
 
-# IA de Resumo Automático para SMS — Plano Técnico
+# Atribuição Automática de Responsável ao Assinar Contrato
 
-## Entendimento do Problema
+## O que será feito
 
-O sistema atual envia a **mesma mensagem** para todos os canais. O SMS tem limitação de **160 caracteres** e atualmente apenas corta o texto com `.substring(0, 160)`, o que quebra o conteúdo de forma abrupta e pode cortar links importantes.
+O objetivo é garantir que, em qualquer fluxo onde um admin crie um contrato ou um cliente novo, esse admin fique automaticamente salvo como `assigned_to` no perfil do cliente. Isso inclui:
 
-**Regra de negócio:**
-- CRM (in-app), WhatsApp, Email → mensagem completa, sem alteração
-- **SMS apenas** → IA resume automaticamente, preservando todos os links intactos
+1. Admin cria contrato para cliente existente → admin fica como responsável
+2. Admin cria contrato com novo cliente → admin fica como responsável
+3. Cliente assina contrato enviado pelo admin → admin criador é preservado como responsável
 
-## Arquitetura da Solução
+---
 
-A modificação será feita **exclusivamente** na Edge Function `send-multichannel-notification/index.ts`, que é o ponto central por onde passa todo o fluxo. Nenhuma alteração no frontend é necessária — a IA atua de forma invisível, automática e silenciosa.
+## Diagnóstico Completo
 
-```text
-Payload chega na Edge Function
-         │
-         ├─── CRM  ──→ mensagem ORIGINAL enviada
-         ├─── WhatsApp ──→ mensagem ORIGINAL enviada  
-         ├─── Email ──→ mensagem ORIGINAL enviada
-         │
-         └─── SMS ──→ [IA Resumidora] ──→ mensagem RESUMIDA enviada
-                              │
-                              ├── extrai links do texto
-                              ├── envia texto para IA resumir (sem os links)
-                              ├── IA retorna texto curto (≤120 chars)
-                              └── reinsere links no final do resumo
+### O que já funciona
+- `CreateClientDialog` → ao criar cliente manualmente, o admin logado já é salvo em `created_by` e `assigned_to` no perfil. Correto.
+
+### O que está faltando
+
+**Problema 1: Tabela `contracts` não tem coluna `created_by`**
+- Quando um admin cria um contrato (via `CreateContractDialog`), não há como saber qual admin o criou
+- Sem essa informação, a Edge Function de assinatura não consegue saber quem deve ser o `assigned_to`
+
+**Problema 2: `CreateContractDialog` não salva o admin como responsável**
+- Ao inserir o contrato no banco, o admin logado (`auth.uid()`) não é salvo em lugar nenhum
+- O perfil do cliente (`profiles`) não recebe `assigned_to` durante a criação do contrato
+
+**Problema 3: Edge Function `sign-contract-blockchain` não atribui responsável**
+- Quando o cliente assina, a função cria/atualiza o perfil mas não seta `assigned_to`
+- Para contratos vindos do site (sem admin), o `assigned_to` ficaria nulo — aceitável
+- Para contratos criados pelo admin, o `assigned_to` deveria ser o admin que criou o contrato
+
+---
+
+## Solução em 3 Camadas
+
+### Camada 1 — Banco de Dados (Migração)
+Adicionar coluna `created_by` na tabela `contracts` para registrar qual admin criou cada contrato.
+
+```sql
+ALTER TABLE public.contracts 
+ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
 ```
 
-## Lógica de Preservação de Links
-
-A IA não pode resumir links pois eles são funcionais e podem mudar se truncados. A estratégia é:
-
-1. **Extrair** todos os links do texto original com regex antes de enviar para a IA
-2. **Resumir** apenas o texto sem os links (a IA recebe texto limpo)
-3. **Reinserir** os links extraídos no final do texto resumido
+### Camada 2 — Frontend: `CreateContractDialog.tsx`
+No momento da inserção do contrato (linha ~729), adicionar o `user_id` do admin logado como `created_by`:
 
 ```typescript
-// Regex para extrair qualquer URL do texto
-const URL_REGEX = /https?:\/\/[^\s]+/g;
+// Antes de chamar supabase.from('contracts').insert(...)
+const { data: { user: adminUser } } = await supabase.auth.getUser();
 
-function extractLinks(text: string): { cleanText: string; links: string[] } {
-  const links = text.match(URL_REGEX) || [];
-  const cleanText = text.replace(URL_REGEX, '').replace(/\s+/g, ' ').trim();
-  return { cleanText, links };
+// No objeto de inserção:
+created_by: adminUser?.id || null,
+```
+
+E logo após criar o contrato com sucesso, atualizar o perfil do cliente para definir o admin como responsável (se ainda não tiver um):
+
+```typescript
+if (adminUser?.id && userId) {
+  await supabase
+    .from('profiles')
+    .update({ assigned_to: adminUser.id })
+    .eq('id', userId)
+    .is('assigned_to', null); // Só atribui se ainda não tiver responsável
 }
 ```
 
-## O que vai ser criado/modificado
+### Camada 3 — Edge Function: `sign-contract-blockchain`
+Após a assinatura do contrato, buscar o `created_by` do contrato e atribuí-lo como `assigned_to` no perfil do cliente:
 
-### Arquivo modificado: `supabase/functions/send-multichannel-notification/index.ts`
-
-**Nova função: `summarizeForSMS(message, link_data)`**
-
-Essa função será inserida antes do bloco de envio de SMS. Ela:
-
-1. Verifica se a mensagem já cabe em 160 caracteres — se sim, **não chama a IA** (economiza recursos)
-2. Extrai links do texto com regex
-3. Chama a Lovable AI (`LOVABLE_API_KEY`) via `https://ai.gateway.lovable.dev/v1/chat/completions`
-4. Usa o modelo `google/gemini-2.5-flash-lite` (mais rápido e barato para tarefas simples)
-5. Prompt específico instrui a IA a:
-   - Resumir em no máximo **100 caracteres** (reserva espaço para links)
-   - Manter o prefixo `WebMarcas:` 
-   - Manter o nome do destinatário
-   - Preservar informações de valor (R$) e nome da marca
-   - Não adicionar pontuação desnecessária
-6. Reinsere os links no final: `resumo + " " + links.join(" ")`
-7. Aplica fallback: se a IA falhar, usa o `.substring(0, 160)` original (sem quebrar o sistema)
-
-**Novo sistema de retry com fallback:**
 ```typescript
-async function summarizeForSMS(message: string): Promise<string> {
-  // Se já é curto, não precisa de IA
-  if (message.length <= 160) return message;
-  
-  // Extrai links para preservar
-  const { cleanText, links } = extractLinks(message);
-  
-  // Calcula espaço disponível para resumo
-  const linkSpace = links.reduce((acc, l) => acc + l.length + 1, 0);
-  const targetLen = Math.max(60, 155 - linkSpace);
-  
-  try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('sem chave');
-    
-    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [
-          {
-            role: 'system',
-            content: `Você é um compressor de SMS profissional. 
-Resuma a mensagem em no máximo ${targetLen} caracteres.
-REGRAS OBRIGATÓRIAS:
-- Mantenha sempre "WebMarcas:" no início
-- Preserve o nome do destinatário
-- Preserve valores monetários (R$)
-- Preserve nomes de marcas/produtos
-- Não use abreviações que dificultem entendimento
-- Não adicione comentários, apenas o texto resumido
-- Responda SOMENTE o texto resumido, sem aspas`
-          },
-          { role: 'user', content: cleanText }
-        ],
-        max_tokens: 80,
-        temperature: 0.2,
-      }),
-    });
-    
-    if (!res.ok) throw new Error(`AI error ${res.status}`);
-    
-    const json = await res.json();
-    const summary = json.choices?.[0]?.message?.content?.trim() || '';
-    
-    if (!summary) throw new Error('resposta vazia');
-    
-    // Reinsere links preservados
-    const final = links.length > 0
-      ? `${summary} ${links.join(' ')}`
-      : summary;
-    
-    // Garante limite máximo do SMS
-    return final.substring(0, 160);
-    
-  } catch (err) {
-    console.warn('[sms-ai] Resumo falhou, usando fallback:', err);
-    // Fallback: preserva links manualmente no truncamento
-    if (links.length > 0) {
-      const link = links[0];
-      const spaceForLink = 160 - link.length - 1;
-      return `${cleanText.substring(0, spaceForLink)} ${link}`;
-    }
-    return message.substring(0, 160);
-  }
+// Após identificar o userId do cliente
+const { data: contractWithAdmin } = await supabase
+  .from('contracts')
+  .select('created_by')
+  .eq('id', contractId)
+  .single();
+
+// Se o contrato tem um admin criador, atribuir como responsável
+if (contractWithAdmin?.created_by && userId) {
+  await supabase
+    .from('profiles')
+    .update({ 
+      assigned_to: contractWithAdmin.created_by,
+      created_by: contractWithAdmin.created_by // se ainda não tiver
+    })
+    .eq('id', userId)
+    .is('assigned_to', null); // Só atribui se ainda não tiver responsável
 }
 ```
 
-**Modificação no bloco SMS (linha ~278):**
-```typescript
-// ANTES:
-const smsResult = await withRetry(() => sendSMS(smsSettings, phone, message));
+---
 
-// DEPOIS:
-const smsMessage = await summarizeForSMS(message); // ← IA resume aqui
-const smsResult = await withRetry(() => sendSMS(smsSettings, phone, smsMessage));
-```
+## Fluxos cobertos após a implementação
 
-O log de dispatch também registrará `sms_message_summarized: true` quando o resumo for aplicado, para rastreabilidade.
+| Fluxo | Comportamento esperado |
+|---|---|
+| Admin cria cliente manualmente (Novo Cliente) | Admin → `created_by` + `assigned_to` do perfil (já funciona) |
+| Admin cria contrato para cliente existente | Admin → `created_by` do contrato + `assigned_to` do perfil (novo) |
+| Admin cria contrato para novo cliente | Admin → `created_by` do contrato + `assigned_to` do perfil (novo) |
+| Cliente assina via link enviado pelo admin | Admin (via `contracts.created_by`) → `assigned_to` do perfil (novo) |
+| Cliente assina via formulário do site (sem admin) | `assigned_to` permanece nulo — sem admin para atribuir |
 
-## Comportamento Esperado por Cenário
+---
 
-| Mensagem original | Tamanho | O que a IA faz |
-|---|---|---|
-| Texto curto (≤160 chars) | OK | Não chama IA, envia original |
-| Texto longo sem link | >160 | Resume para ≤155 chars |
-| Texto longo + link | >160 | Resume texto, preserva link no final |
-| IA falha (timeout, erro) | — | Fallback: trunca preservando link |
+## Arquivos que serão modificados
 
-## Arquivos a serem editados
+1. **Migração SQL** — adicionar `created_by` na tabela `contracts`
+2. **`src/components/admin/contracts/CreateContractDialog.tsx`** — salvar admin logado no contrato e no perfil
+3. **`supabase/functions/sign-contract-blockchain/index.ts`** — buscar `created_by` do contrato e atribuir ao perfil no momento da assinatura
 
-- `supabase/functions/send-multichannel-notification/index.ts` — único arquivo a modificar
+---
 
-Nenhuma mudança em banco de dados, sem migrações, sem alteração de frontend. A feature é 100% aditiva e isolada no backend.
+## Observações importantes
+
+- A lógica usa `.is('assigned_to', null)` para não sobrescrever um responsável já atribuído manualmente
+- Para contratos do site (sem admin), o campo `created_by` ficará nulo — comportamento esperado
+- A coluna `created_by` na tabela `contracts` usa `ON DELETE SET NULL` para manter integridade referencial caso o admin seja removido
