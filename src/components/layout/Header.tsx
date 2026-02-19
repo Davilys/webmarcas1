@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { Link } from "react-router-dom";
-import webmarcasLogo from "@/assets/webmarcas-icon-transparent.png";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,12 +55,7 @@ const Header = () => {
         <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
           {/* Logo */}
           <a href="/" className="flex items-center gap-1.5 md:gap-2">
-            <img
-              src={webmarcasLogo}
-              alt="WebMarcas"
-              className="h-9 md:h-11 w-auto shrink-0"
-            />
-            <span className="font-display text-lg md:text-xl font-bold hidden sm:inline">
+            <span className="font-display text-lg md:text-xl font-bold">
               Web<span className="gradient-text">Marcas</span>
             </span>
           </a>
