@@ -53,8 +53,86 @@ function isPartialHtml(content: string): boolean {
 function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState(900);
+  const [resolvedHtml, setResolvedHtml] = useState<string | null>(null);
+
+  // Pre-load all images referenced in the HTML as base64 so they render inside the sandboxed iframe
+  useEffect(() => {
+    const resolveImages = async (html: string): Promise<string> => {
+      // Find all src="..." and url(...) references that are relative or same-origin
+      const imgRegex = /src="([^"]+)"/g;
+      const urlRegex = /url\(["']?([^"')]+)["']?\)/g;
+
+      const origin = window.location.origin;
+
+      const toAbsolute = (src: string): string | null => {
+        if (src.startsWith('data:')) return null; // already base64
+        if (src.startsWith('http://') || src.startsWith('https://')) {
+          // only resolve same-origin
+          if (!src.startsWith(origin)) return null;
+          return src;
+        }
+        if (src.startsWith('/')) return `${origin}${src}`;
+        return null;
+      };
+
+      const fetchAsBase64 = async (url: string): Promise<string | null> => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const blob = await res.blob();
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          return null;
+        }
+      };
+
+      // Collect unique URLs
+      const urlMap = new Map<string, string | null>();
+      let match: RegExpExecArray | null;
+
+      const imgRegexCopy = new RegExp(imgRegex.source, imgRegex.flags);
+      while ((match = imgRegexCopy.exec(html)) !== null) {
+        const abs = toAbsolute(match[1]);
+        if (abs && !urlMap.has(match[1])) urlMap.set(match[1], abs);
+      }
+
+      const urlRegexCopy = new RegExp(urlRegex.source, urlRegex.flags);
+      while ((match = urlRegexCopy.exec(html)) !== null) {
+        const abs = toAbsolute(match[1]);
+        if (abs && !urlMap.has(match[1])) urlMap.set(match[1], abs);
+      }
+
+      // Fetch all in parallel
+      await Promise.all(
+        Array.from(urlMap.entries()).map(async ([original, absolute]) => {
+          if (!absolute) return;
+          const b64 = await fetchAsBase64(absolute);
+          urlMap.set(original, b64);
+        })
+      );
+
+      // Replace in HTML
+      let resolved = html;
+      urlMap.forEach((b64, original) => {
+        if (b64) {
+          resolved = resolved.split(original).join(b64);
+        }
+      });
+
+      return resolved;
+    };
+
+    resolveImages(htmlContent).then(setResolvedHtml);
+  }, [htmlContent]);
 
   useEffect(() => {
+    if (!resolvedHtml) return;
+
     const iframe = iframeRef.current;
     if (!iframe) return;
 
@@ -62,7 +140,7 @@ function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
     if (!doc) return;
 
     doc.open();
-    doc.write(htmlContent);
+    doc.write(resolvedHtml);
     doc.close();
 
     const adjustHeight = () => {
@@ -79,15 +157,24 @@ function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
 
     iframe.onload = adjustHeight;
     setTimeout(adjustHeight, 400);
-    setTimeout(adjustHeight, 1000);
-  }, [htmlContent]);
+    setTimeout(adjustHeight, 1200);
+  }, [resolvedHtml]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+      {!resolvedHtml && (
+        <div className="flex items-center justify-center py-12 text-gray-400">
+          <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+          </svg>
+          <span className="text-sm">Carregando documento...</span>
+        </div>
+      )}
       <iframe
         ref={iframeRef}
         title="Visualização do Documento"
-        style={{ width: '100%', height: `${iframeHeight}px`, border: 'none', display: 'block' }}
+        style={{ width: '100%', height: resolvedHtml ? `${iframeHeight}px` : '0px', border: 'none', display: 'block' }}
         sandbox="allow-same-origin"
       />
     </div>
