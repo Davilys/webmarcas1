@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { Link } from "react-router-dom";
-import webmarcasLogo from "@/assets/webmarcas-icon-transparent.png";
+import webmarcasLogo from "@/assets/webmarcas-logo-circular.png";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,11 +45,12 @@ const Header = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 safe-area-top ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-background/80 backdrop-blur-xl border-b border-border"
-          : "bg-transparent"
+          ? "bg-background/90 backdrop-blur-xl border-b border-border shadow-sm"
+          : "bg-background/75 backdrop-blur-md"
       }`}
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       <div className="container mx-auto px-3 md:px-4">
         <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
@@ -58,7 +59,7 @@ const Header = () => {
             <img
               src={webmarcasLogo}
               alt="WebMarcas"
-              className="h-9 md:h-11 w-auto shrink-0"
+              className="h-9 md:h-11 w-auto shrink-0 rounded-full"
             />
             <span className="font-display text-lg md:text-xl font-bold hidden sm:inline">
               Web<span className="gradient-text">Marcas</span>
