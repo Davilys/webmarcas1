@@ -27,23 +27,29 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Determine base URL: always prefer SITE_URL secret (production domain)
-    // Ignore clientBaseUrl if it's a Lovable preview domain to avoid broken links
-    const siteUrl = Deno.env.get('SITE_URL');
-    const isPreviewDomain = clientBaseUrl && (
-      clientBaseUrl.includes('lovableproject.com') ||
-      clientBaseUrl.includes('lovable.app') ||
-      clientBaseUrl.includes('localhost')
-    );
-    const baseUrl = siteUrl || (!isPreviewDomain ? clientBaseUrl : null);
-    if (!baseUrl) {
-      console.error('No baseUrl resolved. SITE_URL secret not configured and clientBaseUrl is a preview domain.');
-      return new Response(
-        JSON.stringify({ error: 'SITE_URL not configured. Please set the SITE_URL secret.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    console.log('Using base URL:', baseUrl, '| clientBaseUrl was:', clientBaseUrl);
+    // Production domain — always use this to avoid broken links from preview environments
+    const PRODUCTION_DOMAIN = 'https://webmarcas.net';
+
+    // Determine base URL with multiple safeguards:
+    // 1. Use SITE_URL only if it's NOT a preview/lovable domain (admin may have misconfigured it)
+    // 2. Use clientBaseUrl only if it's NOT a preview domain
+    // 3. Always fall back to the hardcoded production domain
+    const isPreviewUrl = (url: string) =>
+      url.includes('lovableproject.com') ||
+      url.includes('lovable.app') ||
+      url.includes('localhost');
+
+    const rawSiteUrl = Deno.env.get('SITE_URL') || '';
+    const siteUrlIsValid = rawSiteUrl && !isPreviewUrl(rawSiteUrl);
+
+    const clientBaseUrlIsValid = clientBaseUrl && !isPreviewUrl(clientBaseUrl);
+
+    const resolvedBase = siteUrlIsValid ? rawSiteUrl : (clientBaseUrlIsValid ? clientBaseUrl : PRODUCTION_DOMAIN);
+
+    // Strip trailing slash to prevent double-slash in URLs (e.g. https://domain.com//assinar/)
+    const baseUrl = resolvedBase.replace(/\/+$/, '');
+
+    console.log('Using base URL:', baseUrl, '| rawSiteUrl:', rawSiteUrl, '| clientBaseUrl was:', clientBaseUrl);
 
     // Generate unique token
     const token = crypto.randomUUID();
