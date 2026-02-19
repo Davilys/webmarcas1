@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
-import { ArrowLeft, Loader2, Download, Printer, Check } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowLeft, Loader2, Download, Printer, Check, Shield, FileText, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,7 @@ import { downloadUnifiedContractPDF, printUnifiedContract } from "@/hooks/useUni
 import type { PersonalData } from "./PersonalDataStep";
 import type { BrandData } from "./BrandDataStep";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ContractStepProps {
   personalData: PersonalData;
@@ -33,30 +34,18 @@ export function ContractStep({
 }: ContractStepProps) {
   const [accepted, setAccepted] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  // Busca o template "Contrato Padrão - Registro de Marca INPI" do banco de dados
   const { template, isLoading, documentType } = useContractTemplate('Contrato Padrão - Registro de Marca INPI');
 
   const getProcessedContract = useCallback(() => {
     if (!template) return '';
-    return replaceContractVariables(template.content, {
-      personalData,
-      brandData,
-      paymentMethod
-    });
+    return replaceContractVariables(template.content, { personalData, brandData, paymentMethod });
   }, [template, personalData, brandData, paymentMethod]);
 
   const printContract = async () => {
     try {
       const contractContent = getProcessedContract();
-      await printUnifiedContract({
-        content: contractContent,
-        documentType,
-        subject: brandData.brandName,
-        signatoryName: personalData.fullName,
-        signatoryCpf: personalData.cpf,
-      });
+      await printUnifiedContract({ content: contractContent, documentType, subject: brandData.brandName, signatoryName: personalData.fullName, signatoryCpf: personalData.cpf });
     } catch (error) {
-      console.error('Error printing contract:', error);
       toast.error("Não foi possível abrir a janela de impressão.");
     }
   };
@@ -65,16 +54,8 @@ export function ContractStep({
     setIsDownloading(true);
     try {
       const contractContent = getProcessedContract();
-      await downloadUnifiedContractPDF({
-        content: contractContent,
-        documentType,
-        subject: brandData.brandName,
-        signatoryName: personalData.fullName,
-        signatoryCpf: personalData.cpf,
-      });
-      // Print dialog opened - no success toast needed
+      await downloadUnifiedContractPDF({ content: contractContent, documentType, subject: brandData.brandName, signatoryName: personalData.fullName, signatoryCpf: personalData.cpf });
     } catch (error) {
-      console.error('Error downloading PDF:', error);
       toast.error("Erro ao abrir visualização do contrato.");
     } finally {
       setIsDownloading(false);
@@ -86,156 +67,174 @@ export function ContractStep({
       toast.error("Por favor, leia e aceite o contrato para continuar.");
       return;
     }
-    // Generate the full contract HTML with all data
     const contractContent = getProcessedContract();
-    const fullContractHtml = generateContractPrintHTML(
-      contractContent,
-      brandData.brandName,
-      personalData.fullName,
-      personalData.cpf,
-      undefined,
-      true,
-      documentType
-    );
+    const fullContractHtml = generateContractPrintHTML(contractContent, brandData.brandName, personalData.fullName, personalData.cpf, undefined, true, documentType);
     onSubmit(fullContractHtml);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const getPaymentDescription = () => {
+  const getPaymentLabel = () => {
     switch (paymentMethod) {
-      case 'avista':
-        return 'À Vista (PIX)';
-      case 'cartao6x':
-        return 'Cartão 6x de R$ 199,00';
-      case 'boleto3x':
-        return 'Boleto 3x de R$ 399,00';
-      default:
-        return 'Pagamento';
+      case 'avista': return 'PIX — À Vista';
+      case 'cartao6x': return 'Cartão de Crédito (6x)';
+      case 'boleto3x': return 'Boleto Parcelado (3x)';
+      default: return 'Pagamento';
     }
   };
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">Carregando contrato...</p>
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-full border-4 border-muted" />
+          <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+        <div className="text-center">
+          <p className="font-medium">Preparando seu contrato...</p>
+          <p className="text-sm text-muted-foreground mt-1">Aguarde um momento</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold mb-2">Contrato Digital</h2>
-        <p className="text-muted-foreground">
-          Revise e aceite o contrato para finalizar o registro.
-        </p>
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.35 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="text-center space-y-2">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium">
+          <FileText className="w-3.5 h-3.5" />
+          Contrato Digital
+        </div>
+        <h2 className="text-2xl font-bold">Revise e Assine</h2>
+        <p className="text-muted-foreground text-sm">Leia o contrato completo antes de confirmar.</p>
       </div>
 
-      {/* Summary */}
-      <Card className="bg-muted/50">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Marca</p>
-              <p className="font-semibold">{brandData.brandName}</p>
+      {/* Summary Card */}
+      <div className="rounded-2xl border border-border bg-muted/20 overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/30">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Resumo do Pedido</p>
+        </div>
+        <div className="grid grid-cols-2 gap-0 divide-x divide-border">
+          {[
+            { label: "Marca", value: brandData.brandName, highlight: false },
+            { label: "Titular", value: personalData.fullName, highlight: false },
+            { label: "Pagamento", value: getPaymentLabel(), highlight: false },
+            { label: "Total", value: formatCurrency(paymentValue), highlight: true },
+          ].map((item, i) => (
+            <div key={i} className={cn("p-4", i >= 2 && "border-t border-border")}>
+              <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
+              <p className={cn("text-sm font-semibold truncate", item.highlight && "text-primary text-base")}>
+                {item.value}
+              </p>
             </div>
-            <div>
-              <p className="text-muted-foreground">Titular</p>
-              <p className="font-semibold">{personalData.fullName}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Pagamento</p>
-              <p className="font-semibold">{getPaymentDescription()}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Total</p>
-              <p className="font-semibold text-primary">{formatCurrency(paymentValue)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      </div>
 
       {/* Contract Actions */}
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={printContract} className="flex-1">
-          <Printer className="w-4 h-4 mr-2" />
+        <Button variant="outline" size="sm" onClick={printContract} className="flex-1 h-9 rounded-lg text-xs">
+          <Printer className="w-3.5 h-3.5 mr-1.5" />
           Imprimir
         </Button>
-        <Button variant="outline" size="sm" onClick={downloadContract} disabled={isDownloading} className="flex-1">
+        <Button variant="outline" size="sm" onClick={downloadContract} disabled={isDownloading} className="flex-1 h-9 rounded-lg text-xs">
           {isDownloading ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
           ) : (
-            <Download className="w-4 h-4 mr-2" />
+            <Download className="w-3.5 h-3.5 mr-1.5" />
           )}
           Baixar PDF
         </Button>
       </div>
 
       {/* Contract Content */}
-      <Card className="overflow-hidden border-2">
-        <ScrollArea className="h-[400px]">
-          <div className="p-4">
-            <ContractRenderer 
-              content={getProcessedContract()} 
+      <div className="rounded-2xl border-2 border-border overflow-hidden shadow-sm">
+        <div className="bg-muted/40 px-4 py-3 border-b border-border flex items-center gap-2">
+          <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground">Contrato de Prestação de Serviços</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Shield className="w-3 h-3 text-emerald-500" />
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Protegido</span>
+          </div>
+        </div>
+        <ScrollArea className="h-[360px]">
+          <div className="p-5">
+            <ContractRenderer
+              content={getProcessedContract()}
               showLetterhead={true}
               showCertificationSection={false}
               documentType={documentType}
             />
           </div>
         </ScrollArea>
-      </Card>
+      </div>
 
       {/* Accept Checkbox */}
-      <div className="flex items-start space-x-3 p-4 bg-muted/50 rounded-lg border">
+      <motion.div
+        className={cn(
+          "flex items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200",
+          accepted
+            ? "border-primary/30 bg-primary/5"
+            : "border-border bg-muted/20"
+        )}
+        whileTap={{ scale: 0.99 }}
+      >
         <Checkbox
           id="accept"
           checked={accepted}
           onCheckedChange={(checked) => setAccepted(!!checked)}
+          className="mt-0.5 shrink-0"
         />
         <Label htmlFor="accept" className="text-sm leading-relaxed cursor-pointer">
-          Li e aceito os termos do contrato de prestação de serviços.
-          Declaro que todas as informações fornecidas são verdadeiras e que
-          autorizo a WebMarcas a prosseguir com o registro da marca junto ao INPI.
+          <span className="font-semibold">Li e aceito os termos do contrato</span> de prestação de serviços.
+          Declaro que todas as informações fornecidas são verdadeiras e autorizo a
+          WebMarcas a prosseguir com o registro da marca junto ao INPI.
         </Label>
-      </div>
+      </motion.div>
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onBack}
-          className="flex-1"
-          disabled={isSubmitting}
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar
-        </Button>
+      {/* Submit */}
+      <div className="space-y-3">
         <Button
           onClick={handleSubmit}
-          className="flex-1"
+          className="w-full h-14 text-base font-semibold rounded-xl shadow-[var(--shadow-button)]"
           disabled={!accepted || isSubmitting}
+          size="lg"
         >
           {isSubmitting ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Processando...
-            </>
+            <motion.div
+              className="flex items-center gap-3"
+              animate={{ opacity: [1, 0.6, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Processando pagamento...
+            </motion.div>
           ) : (
             <>
-              <Check className="w-4 h-4 mr-2" />
+              <Sparkles className="w-5 h-5 mr-2" />
               Finalizar e Pagar
+              <Check className="w-5 h-5 ml-2" />
             </>
           )}
         </Button>
+
+        <Button type="button" variant="ghost" onClick={onBack} disabled={isSubmitting} className="w-full h-10 text-sm">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Voltar ao pagamento
+        </Button>
       </div>
-    </div>
+
+      <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
+        <Lock className="w-3 h-3" />
+        Dados protegidos com criptografia SSL
+      </p>
+    </motion.div>
   );
 }
