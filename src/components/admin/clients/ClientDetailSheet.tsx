@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,29 +8,30 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { format, addDays } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
   User, Phone, Mail, Building2, DollarSign, Clock, Star,
   FileText, CreditCard, MessageSquare, Calendar as CalendarIcon, Paperclip,
-  Upload, Loader2, ExternalLink, Plus, Edit, X, Check, 
+  Upload, Loader2, ExternalLink, Plus, Edit, X, Check,
   MessageCircle, ArrowUpRight, Tag, Zap, AlertTriangle,
-  CheckCircle, XCircle, TrendingUp, Users, Receipt, Trash2, UserCheck,
-  Bell, Send
+  CheckCircle, TrendingUp, Receipt, Trash2, UserCheck,
+  Bell, Send, MapPin, Hash, Globe, Briefcase, Shield,
+  ChevronRight, Activity, RefreshCw, Eye, Copy, Edit2,
+  Package, BarChart3, Wallet, FileCheck, Lock
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
 import { usePricing } from '@/hooks/usePricing';
 
-// Master admin that cannot be deleted
 const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
 
 interface ClientDetailSheetProps {
@@ -40,245 +41,182 @@ interface ClientDetailSheetProps {
   onUpdate: () => void;
 }
 
-interface ClientNote {
-  id: string;
-  content: string;
-  created_at: string;
-}
+interface ClientNote { id: string; content: string; created_at: string; }
+interface ClientAppointment { id: string; title: string; description: string | null; scheduled_at: string; completed: boolean; }
+interface ClientDocument { id: string; name: string; file_url: string; created_at: string; file_size?: number | null; mime_type?: string | null; }
+interface ClientInvoice { id: string; description: string; amount: number; status: string; due_date: string; payment_method?: string | null; pix_code?: string | null; }
 
-interface ClientAppointment {
-  id: string;
-  title: string;
-  description: string | null;
-  scheduled_at: string;
-  completed: boolean;
-}
-
-interface ClientDocument {
-  id: string;
-  name: string;
-  file_url: string;
-  created_at: string;
-}
-
-interface ClientInvoice {
-  id: string;
-  description: string;
-  amount: number;
-  status: string;
-  due_date: string;
-}
-
-// Hook-based dynamic pricing options
 const useServicePricingOptions = () => {
   const { pricing } = usePricing();
-  
   return useMemo(() => [
-    { 
-      id: 'registro_avista', 
-      label: 'Registro de Marca - À Vista', 
-      value: Math.round(pricing.avista.value), 
-      description: 'Pagamento único',
-      details: `R$ ${pricing.avista.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} à vista`
-    },
-    { 
-      id: 'registro_boleto', 
-      label: 'Registro de Marca - Boleto', 
-      value: pricing.boleto.value, 
-      description: `${pricing.boleto.installments}x de R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      details: `${pricing.boleto.installments}x R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (boleto)`
-    },
-    { 
-      id: 'registro_cartao', 
-      label: 'Registro de Marca - Cartão', 
-      value: pricing.cartao.value, 
-      description: `${pricing.cartao.installments}x de R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      details: `${pricing.cartao.installments}x R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (cartão)`
-    },
-    { 
-      id: 'exigencia_avista', 
-      label: 'Exigência/Publicação - À Vista', 
-      value: 1412, 
-      description: '1 Salário Mínimo',
-      details: 'R$ 1.412,00 à vista (1 SM)'
-    },
-    { 
-      id: 'exigencia_parcelado', 
-      label: 'Exigência/Publicação - Parcelado', 
-      value: 2388, 
-      description: '6x de R$ 398,00',
-      details: '6x R$ 398,00 (boleto ou cartão)'
-    },
-    { 
-      id: 'personalizado', 
-      label: 'Valor Personalizado', 
-      value: 0, 
-      description: 'Definir valor manualmente',
-      details: 'Informe o valor e motivo'
-    },
+    { id: 'registro_avista', label: 'Registro de Marca – À Vista', value: Math.round(pricing.avista.value), description: 'Pagamento único via PIX', details: `R$ ${pricing.avista.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} à vista` },
+    { id: 'registro_boleto', label: 'Registro de Marca – Boleto', value: pricing.boleto.value, description: `${pricing.boleto.installments}x de R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, details: `${pricing.boleto.installments}x R$ ${pricing.boleto.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (boleto)` },
+    { id: 'registro_cartao', label: 'Registro de Marca – Cartão', value: pricing.cartao.value, description: `${pricing.cartao.installments}x de R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, details: `${pricing.cartao.installments}x R$ ${pricing.cartao.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (cartão)` },
+    { id: 'exigencia_avista', label: 'Exigência/Publicação – À Vista', value: 1412, description: '1 Salário Mínimo', details: 'R$ 1.412,00 à vista (1 SM)' },
+    { id: 'exigencia_parcelado', label: 'Exigência/Publicação – Parcelado', value: 2388, description: '6x de R$ 398,00', details: '6x R$ 398,00 (boleto ou cartão)' },
+    { id: 'personalizado', label: 'Valor Personalizado', value: 0, description: 'Definir valor manualmente', details: 'Informe o valor e motivo' },
   ], [pricing]);
 };
 
 const SERVICE_TYPES = [
-  { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial de registro de marca junto ao INPI', stage: 'protocolado' },
-  { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI', stage: '003' },
-  { id: 'oposicao', label: 'Manifestação de Oposição', description: 'Defesa contra oposição de terceiros', stage: 'oposicao' },
-  { id: 'recurso', label: 'Recurso Administrativo', description: 'Recurso contra indeferimento do INPI', stage: 'indeferimento' },
-  { id: 'renovacao', label: 'Renovação de Marca', description: 'Renovação do registro decenal', stage: 'renovacao' },
-  { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido por terceiros', stage: 'notificacao' },
-  { id: 'deferimento', label: 'Deferimento', description: 'Pedido aprovado, aguardando taxa de concessão', stage: 'deferimento' },
-  { id: 'certificado', label: 'Certificado', description: 'Marca registrada e certificado emitido', stage: 'certificados' },
-  { id: 'distrato', label: 'Distrato', description: 'Cliente encerrou contrato ou serviço cancelado', stage: 'distrato' },
+  { id: 'pedido_registro', label: 'Pedido de Registro', description: 'Solicitação inicial junto ao INPI', stage: 'protocolado', icon: FileText },
+  { id: 'cumprimento_exigencia', label: 'Cumprimento de Exigência', description: 'Resposta a exigência formal do INPI', stage: '003', icon: FileCheck },
+  { id: 'oposicao', label: 'Manifestação de Oposição', description: 'Defesa contra oposição de terceiros', stage: 'oposicao', icon: Shield },
+  { id: 'recurso', label: 'Recurso Administrativo', description: 'Recurso contra indeferimento do INPI', stage: 'indeferimento', icon: TrendingUp },
+  { id: 'renovacao', label: 'Renovação de Marca', description: 'Renovação do registro decenal', stage: 'renovacao', icon: RefreshCw },
+  { id: 'notificacao', label: 'Notificação Extrajudicial', description: 'Cessação de uso indevido', stage: 'notificacao', icon: Bell },
+  { id: 'deferimento', label: 'Deferimento', description: 'Pedido aprovado, aguardando concessão', stage: 'deferimento', icon: CheckCircle },
+  { id: 'certificado', label: 'Certificado', description: 'Marca registrada e certificada', stage: 'certificados', icon: Star },
+  { id: 'distrato', label: 'Distrato', description: 'Serviço cancelado ou encerrado', stage: 'distrato', icon: X },
 ];
 
-// Mapeamento Tipo de Serviço → Pipeline Stage (bidirecional)
 const SERVICE_TYPE_TO_STAGE: Record<string, string> = {};
 const STAGE_TO_SERVICE_TYPE: Record<string, string> = {};
-SERVICE_TYPES.forEach(s => {
-  SERVICE_TYPE_TO_STAGE[s.id] = s.stage;
-  STAGE_TO_SERVICE_TYPE[s.stage] = s.id;
-});
+SERVICE_TYPES.forEach(s => { SERVICE_TYPE_TO_STAGE[s.id] = s.stage; STAGE_TO_SERVICE_TYPE[s.stage] = s.id; });
 
-const QUICK_ACTIONS = [
-  { id: 'chat', label: 'Chats', icon: MessageCircle, color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
-  { id: 'move', label: 'Mover', icon: ArrowUpRight, color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-  { id: 'email', label: 'Enviar Email', icon: Mail, color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
-  { id: 'notification', label: 'Enviar Notificação', icon: Bell, color: 'bg-green-100 text-green-700 hover:bg-green-200' },
-  { id: 'excluir', label: 'Excluir', icon: Trash2, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-];
+const AVAILABLE_TAGS = ['VIP', 'Urgente', 'Novo', 'Renovação', 'Em Risco', 'Inativo', 'Prioritário', 'Pendente'];
+
+const PRIORITY_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
+  high:   { label: 'Alta',  color: 'bg-red-500/15 text-red-400 border-red-500/30',    dot: 'bg-red-400' },
+  medium: { label: 'Média', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', dot: 'bg-amber-400' },
+  low:    { label: 'Baixa', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', dot: 'bg-emerald-400' },
+};
+
+// ─── Empty State ─────────────────────────────────────────────────────────────
+function EmptyState({ icon: Icon, title, description, action }: { icon: any; title: string; description: string; action?: React.ReactNode }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-14 gap-3">
+      <div className="w-16 h-16 rounded-2xl bg-muted/50 border border-border flex items-center justify-center relative">
+        <Icon className="h-7 w-7 text-muted-foreground/40" />
+        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <Plus className="h-3 w-3 text-primary/60" />
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="font-semibold text-sm">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5 max-w-[200px]">{description}</p>
+      </div>
+      {action}
+    </motion.div>
+  );
+}
+
+// ─── Info Row ────────────────────────────────────────────────────────────────
+function InfoRow({ icon: Icon, label, value, mono, copyable, link }: { icon: any; label: string; value?: string | null; mono?: boolean; copyable?: boolean; link?: string }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-border last:border-0 group">
+      <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{label}</p>
+        <p className={cn('text-sm font-medium truncate', mono && 'font-mono')}>{value}</p>
+      </div>
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {copyable && (
+          <button className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center" onClick={() => { navigator.clipboard.writeText(value); toast.success('Copiado!'); }}>
+            <Copy className="h-3 w-3 text-muted-foreground" />
+          </button>
+        )}
+        {link && (
+          <a href={link} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center">
+            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── File icon helper ─────────────────────────────────────────────────────────
+function DocIcon({ mime }: { mime?: string | null }) {
+  if (mime?.startsWith('image/')) return <Eye className="h-4 w-4 text-blue-400" />;
+  if (mime?.includes('pdf')) return <FileText className="h-4 w-4 text-red-400" />;
+  return <Paperclip className="h-4 w-4 text-muted-foreground" />;
+}
+
+function fmtBytes(b?: number | null) {
+  if (!b) return '';
+  if (b < 1024) return `${b}B`;
+  if (b < 1048576) return `${(b/1024).toFixed(1)}KB`;
+  return `${(b/1048576).toFixed(1)}MB`;
+}
 
 export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: ClientDetailSheetProps) {
   const SERVICE_PRICING_OPTIONS = useServicePricingOptions();
+
+  // Data
   const [notes, setNotes] = useState<ClientNote[]>([]);
   const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [invoices, setInvoices] = useState<ClientInvoice[]>([]);
+  const [profileData, setProfileData] = useState<any>(null);
+  const [adminUsersList, setAdminUsersList] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
+
+  // Loading states
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [newNote, setNewNote] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const [savingAppointment, setSavingAppointment] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  // UI state
+  const [newNote, setNewNote] = useState('');
   const [showNewAppointment, setShowNewAppointment] = useState(false);
-  const [newAppointment, setNewAppointment] = useState({
-    title: '',
-    description: '',
-    date: new Date(),
-    time: '10:00'
-  });
-  const [selectedPricing, setSelectedPricing] = useState<string>('');
-  const [customValue, setCustomValue] = useState<number>(0);
-  const [customValueReason, setCustomValueReason] = useState<string>('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showPricingDialog, setShowPricingDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [showNotificationDialog, setShowNotificationDialog] = useState(false);
-  const [notificationTemplates, setNotificationTemplates] = useState<{id:string;name:string;title:string;message:string;type:string}[]>([]);
-  const [notificationForm, setNotificationForm] = useState({ title: '', message: '', type: 'info', link: '/cliente/processos' });
-  const [editData, setEditData] = useState({
-    priority: '',
-    origin: '',
-    contract_value: 0,
-    pipeline_stage: ''
-  });
-  
-  // NEW: Tags functionality
-  const [showTagsDialog, setShowTagsDialog] = useState(false);
-  const [clientTags, setClientTags] = useState<string[]>([]);
-  const AVAILABLE_TAGS = ['VIP', 'Urgente', 'Novo', 'Renovação', 'Em Risco', 'Inativo', 'Prioritário', 'Pendente'];
-  
-  // NEW: Edit dialog state
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    cpf: '',
-    cnpj: '',
-    company_name: '',
-    address: '',
-    neighborhood: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    priority: 'medium',
-    origin: 'site',
-    brand_name: '',
-    business_area: '',
-    assigned_to: '' as string,
-  });
-  const [adminUsersList, setAdminUsersList] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
-  
-  // NEW: Add process dialog
+  const [showTagsDialog, setShowTagsDialog] = useState(false);
   const [showAddProcessDialog, setShowAddProcessDialog] = useState(false);
-  const [newProcess, setNewProcess] = useState({
-    brand_name: '',
-    process_number: '',
-    pipeline_stage: 'protocolado',
-    business_area: ''
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState('');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [newAppointment, setNewAppointment] = useState({ title: '', description: '', date: new Date(), time: '10:00' });
+  const [selectedPricing, setSelectedPricing] = useState('');
+  const [customValue, setCustomValue] = useState(0);
+  const [customValueReason, setCustomValueReason] = useState('');
+  const [notificationTemplates, setNotificationTemplates] = useState<any[]>([]);
+  const [notificationForm, setNotificationForm] = useState({ title: '', message: '', type: 'info', link: '/cliente/processos' });
+  const [clientTags, setClientTags] = useState<string[]>([]);
+  const [selectedServiceType, setSelectedServiceType] = useState('pedido_registro');
+
+  const [editData, setEditData] = useState({ priority: '', origin: '', contract_value: 0, pipeline_stage: '' });
+  const [editFormData, setEditFormData] = useState({
+    full_name: '', email: '', phone: '', cpf: '', cnpj: '', company_name: '',
+    address: '', neighborhood: '', city: '', state: '', zip_code: '',
+    priority: 'medium', origin: 'site', brand_name: '', business_area: '', assigned_to: '',
   });
-  
-  // NEW: Profile data for contacts tab
-  const [profileData, setProfileData] = useState<{
-    cpf?: string;
-    cnpj?: string;
-    company_name?: string;
-    address?: string;
-    neighborhood?: string;
-    city?: string;
-    state?: string;
-    zip_code?: string;
-  } | null>(null);
-  
-  // State for selected service type
-  const [selectedServiceType, setSelectedServiceType] = useState<string>('pedido_registro');
+  const [newProcess, setNewProcess] = useState({ brand_name: '', process_number: '', pipeline_stage: 'protocolado', business_area: '' });
 
   useEffect(() => {
     if (client && open) {
       fetchClientData();
-      setEditData({
-        priority: client.priority || 'medium',
-        origin: client.origin || 'site',
-        contract_value: client.contract_value || 0,
-        pipeline_stage: client.pipeline_stage || 'protocolado'
-      });
-      // Initialize selected service type based on pipeline stage (reverse mapping)
-      const clientStage = client.pipeline_stage || 'protocolado';
-      const matchingServiceType = STAGE_TO_SERVICE_TYPE[clientStage];
+      setEditData({ priority: client.priority || 'medium', origin: client.origin || 'site', contract_value: client.contract_value || 0, pipeline_stage: client.pipeline_stage || 'protocolado' });
+      const matchingServiceType = STAGE_TO_SERVICE_TYPE[client.pipeline_stage || 'protocolado'];
       setSelectedServiceType(matchingServiceType || 'pedido_registro');
-      // Initialize edit form data - cpf/cnpj will be populated from profileData
       setEditFormData({
-        full_name: client.full_name || '',
-        email: client.email || '',
-        phone: client.phone || '',
-        cpf: '',
-        cnpj: '',
-        company_name: client.company_name || '',
-        address: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        zip_code: '',
-        priority: client.priority || 'medium',
-        origin: client.origin || 'site',
-        brand_name: client.brand_name || '',
-        business_area: client.business_area || '',
-        assigned_to: client.assigned_to || '',
+        full_name: client.full_name || '', email: client.email || '', phone: client.phone || '',
+        cpf: '', cnpj: '', company_name: client.company_name || '',
+        address: '', neighborhood: '', city: '', state: '', zip_code: '',
+        priority: client.priority || 'medium', origin: client.origin || 'site',
+        brand_name: client.brand_name || '', business_area: client.business_area || '', assigned_to: client.assigned_to || '',
       });
-      // Try to match existing value with a pricing option
       const matchedOption = SERVICE_PRICING_OPTIONS.find(opt => opt.value === client.contract_value);
-      if (matchedOption) {
-        setSelectedPricing(matchedOption.id);
-      } else if (client.contract_value && client.contract_value > 0) {
-        setSelectedPricing('personalizado');
-        setCustomValue(client.contract_value);
-      }
+      if (matchedOption) setSelectedPricing(matchedOption.id);
+      else if (client.contract_value && client.contract_value > 0) { setSelectedPricing('personalizado'); setCustomValue(client.contract_value); }
     }
   }, [client, open]);
 
   const fetchClientData = async () => {
     if (!client) return;
     setLoading(true);
-
     try {
       const [notesRes, appointmentsRes, docsRes, invoicesRes, profileRes, contractRes] = await Promise.all([
         supabase.from('client_notes').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
@@ -286,1923 +224,1198 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false }),
         supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code, assigned_to, contract_value').eq('id', client.id).maybeSingle(),
-        supabase.from('contracts').select('contract_value, payment_method, signature_status').eq('user_id', client.id).order('created_at', { ascending: false }).limit(1)
+        supabase.from('contracts').select('contract_value, payment_method, signature_status').eq('user_id', client.id).order('created_at', { ascending: false }).limit(1),
       ]);
-
       setNotes(notesRes.data || []);
       setAppointments(appointmentsRes.data || []);
       setDocuments(docsRes.data || []);
       setInvoices(invoicesRes.data || []);
       setProfileData(profileRes.data);
-      
-      // Sync contract value from contracts table if available
       if (contractRes.data && contractRes.data.length > 0) {
         const contract = contractRes.data[0];
         if (contract.contract_value && contract.contract_value > 0) {
           setEditData(prev => ({ ...prev, contract_value: Number(contract.contract_value) }));
-          // Also update the profile if needed
-          if (profileRes.data && Number(profileRes.data.contract_value || 0) !== Number(contract.contract_value)) {
+          if (profileRes.data && Number((profileRes.data as any).contract_value || 0) !== Number(contract.contract_value)) {
             await supabase.from('profiles').update({ contract_value: contract.contract_value }).eq('id', client.id);
           }
         }
       }
-      
-      // Update edit form with profile data
       if (profileRes.data) {
         setEditFormData(prev => ({
           ...prev,
-          cpf: profileRes.data.cpf || '',
-          cnpj: profileRes.data.cnpj || '',
-          company_name: profileRes.data.company_name || prev.company_name || '',
-          address: profileRes.data.address || '',
-          neighborhood: profileRes.data.neighborhood || '',
-          city: profileRes.data.city || '',
-          state: profileRes.data.state || '',
-          zip_code: profileRes.data.zip_code || '',
+          cpf: (profileRes.data as any).cpf || '',
+          cnpj: (profileRes.data as any).cnpj || '',
+          company_name: (profileRes.data as any).company_name || prev.company_name || '',
+          address: (profileRes.data as any).address || '',
+          neighborhood: (profileRes.data as any).neighborhood || '',
+          city: (profileRes.data as any).city || '',
+          state: (profileRes.data as any).state || '',
+          zip_code: (profileRes.data as any).zip_code || '',
           assigned_to: (profileRes.data as any).assigned_to || '',
         }));
       }
-
-      // Fetch admin users for assignment dropdown
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'admin');
-      
+      const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'admin');
       if (roles && roles.length > 0) {
-        const userIds = roles.map(r => r.user_id);
-        const { data: adminProfiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', userIds);
-        
-        if (adminProfiles) {
-          setAdminUsersList(adminProfiles);
-        }
+        const { data: adminProfiles } = await supabase.from('profiles').select('id, full_name, email').in('id', roles.map(r => r.user_id));
+        if (adminProfiles) setAdminUsersList(adminProfiles);
       }
-    } catch (error) {
-      console.error('Error fetching client data:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error('Error fetching client data:', error); }
+    finally { setLoading(false); }
   };
 
+  // ─── Note CRUD ────────────────────────────────────────────────────────────
   const handleAddNote = async () => {
     if (!newNote.trim() || !client) return;
-
+    setSavingNote(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('client_notes').insert({
-        user_id: client.id,
-        admin_id: user?.id,
-        content: newNote
-      });
-
+      const { error } = await supabase.from('client_notes').insert({ user_id: client.id, admin_id: user?.id, content: newNote });
       if (error) throw error;
       toast.success('Nota adicionada');
       setNewNote('');
-      fetchClientData();
-    } catch (error) {
-      toast.error('Erro ao adicionar nota');
-    }
+      await fetchClientData();
+    } catch { toast.error('Erro ao adicionar nota'); }
+    finally { setSavingNote(false); }
   };
 
+  const handleDeleteNote = async (id: string) => {
+    const { error } = await supabase.from('client_notes').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir nota'); return; }
+    toast.success('Nota excluída');
+    await fetchClientData();
+  };
+
+  const handleSaveEditNote = async (id: string) => {
+    if (!editingNoteContent.trim()) return;
+    const { error } = await supabase.from('client_notes').update({ content: editingNoteContent.trim() }).eq('id', id);
+    if (error) { toast.error('Erro ao editar nota'); return; }
+    setEditingNoteId(null);
+    toast.success('Nota atualizada');
+    await fetchClientData();
+  };
+
+  // ─── Appointment CRUD ─────────────────────────────────────────────────────
   const handleCreateAppointment = async () => {
     if (!newAppointment.title.trim() || !client) return;
-
+    setSavingAppointment(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const scheduledAt = new Date(newAppointment.date);
-      const [hours, minutes] = newAppointment.time.split(':');
-      scheduledAt.setHours(parseInt(hours), parseInt(minutes));
-
-      const { error } = await supabase.from('client_appointments').insert({
-        user_id: client.id,
-        admin_id: user?.id,
-        title: newAppointment.title,
-        description: newAppointment.description,
-        scheduled_at: scheduledAt.toISOString()
-      });
-
+      const [h, m] = newAppointment.time.split(':');
+      scheduledAt.setHours(parseInt(h), parseInt(m));
+      const { error } = await supabase.from('client_appointments').insert({ user_id: client.id, admin_id: user?.id, title: newAppointment.title, description: newAppointment.description, scheduled_at: scheduledAt.toISOString() });
       if (error) throw error;
       toast.success('Agendamento criado!');
       setShowNewAppointment(false);
       setNewAppointment({ title: '', description: '', date: new Date(), time: '10:00' });
-      fetchClientData();
-    } catch (error) {
-      console.error(error);
-      toast.error('Erro ao criar agendamento');
-    }
+      await fetchClientData();
+    } catch { toast.error('Erro ao criar agendamento'); }
+    finally { setSavingAppointment(false); }
   };
 
-  const handleToggleAppointment = async (appointment: ClientAppointment) => {
-    try {
-      const { error } = await supabase
-        .from('client_appointments')
-        .update({ completed: !appointment.completed })
-        .eq('id', appointment.id);
-
-      if (error) throw error;
-      toast.success(appointment.completed ? 'Agendamento reaberto' : 'Agendamento concluído!');
-      fetchClientData();
-    } catch (error) {
-      toast.error('Erro ao atualizar agendamento');
-    }
+  const handleToggleAppointment = async (apt: ClientAppointment) => {
+    const { error } = await supabase.from('client_appointments').update({ completed: !apt.completed }).eq('id', apt.id);
+    if (error) { toast.error('Erro ao atualizar agendamento'); return; }
+    toast.success(apt.completed ? 'Reaberto' : 'Concluído!');
+    await fetchClientData();
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !client) return;
+  const handleDeleteAppointment = async (id: string) => {
+    const { error } = await supabase.from('client_appointments').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir agendamento'); return; }
+    toast.success('Agendamento excluído');
+    await fetchClientData();
+  };
 
-    // Sem limite de tamanho de arquivo
+  // ─── File Upload ──────────────────────────────────────────────────────────
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || !client) return;
     setUploading(true);
+    let uploaded = 0;
     try {
-      const fileName = `clients/${client.id}/${Date.now()}_${file.name}`;
-      console.log('Uploading file:', fileName);
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        if (uploadError.message.includes('row-level security')) {
-          toast.error('Erro de permissão. Verifique as configurações de storage.');
-        } else if (uploadError.message.includes('Bucket not found')) {
-          toast.error('Bucket de documentos não configurado.');
-        } else {
-          toast.error(`Erro no upload: ${uploadError.message}`);
-        }
-        return;
+      const { data: { user } } = await supabase.auth.getUser();
+      for (const file of Array.from(files)) {
+        const fileName = `clients/${client.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from('documents').upload(fileName, file, { upsert: false });
+        if (uploadError) { toast.error(`Erro: ${uploadError.message}`); continue; }
+        const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
+        const { error: dbError } = await supabase.from('documents').insert({ user_id: client.id, name: file.name, file_url: publicUrl, document_type: 'anexo', uploaded_by: user?.id || 'admin', file_size: file.size, mime_type: file.type });
+        if (!dbError) uploaded++;
       }
-
-      console.log('Upload successful:', uploadData);
-
-      // Use signed URL for security (valid for 1 hour)
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(fileName, 3600);
-
-      if (signedError || !signedData?.signedUrl) {
-        throw new Error('Failed to create signed URL');
-      }
-
-      const { error: dbError } = await supabase.from('documents').insert({
-        user_id: client.id,
-        name: file.name,
-        file_url: signedData.signedUrl,
-        document_type: 'anexo',
-        uploaded_by: 'admin',
-        file_size: file.size,
-        mime_type: file.type
-      });
-
-      if (dbError) {
-        console.error('Database insert error:', dbError);
-        toast.error(`Erro ao salvar documento: ${dbError.message}`);
-        return;
-      }
-
-      toast.success('Documento anexado com sucesso!');
-      fetchClientData();
-    } catch (error: any) {
-      console.error('Upload error:', error);
-      toast.error(`Erro inesperado: ${error?.message || 'Tente novamente'}`);
-    } finally {
-      setUploading(false);
-      // Reset input
-      e.target.value = '';
-    }
+      if (uploaded > 0) { toast.success(`${uploaded} arquivo(s) enviado(s)`); await fetchClientData(); }
+    } finally { setUploading(false); }
   };
 
-  const handleSaveChanges = async () => {
-    if (!client) return;
-
-    try {
-      await supabase.from('profiles').update({
-        priority: editData.priority,
-        origin: editData.origin,
-        contract_value: editData.contract_value
-      }).eq('id', client.id);
-
-      if (client.process_id) {
-        await supabase.from('brand_processes').update({
-          pipeline_stage: editData.pipeline_stage
-        }).eq('id', client.process_id);
-      }
-
-      toast.success('Alterações salvas');
-      setEditMode(false);
-      onUpdate();
-    } catch (error) {
-      toast.error('Erro ao salvar');
-    }
+  const handleDeleteDocument = async (doc: ClientDocument) => {
+    const urlParts = doc.file_url.split('/storage/v1/object/public/documents/');
+    if (urlParts[1]) await supabase.storage.from('documents').remove([urlParts[1]]);
+    const { error } = await supabase.from('documents').delete().eq('id', doc.id);
+    if (error) { toast.error('Erro ao excluir arquivo'); return; }
+    toast.success('Arquivo excluído');
+    await fetchClientData();
   };
 
-  // NEW: Handle full profile edit
+  // ─── Save Profile ─────────────────────────────────────────────────────────
   const handleSaveFullEdit = async () => {
     if (!client) return;
-
+    setSavingEdit(true);
     try {
-      // Update profile
       const { error: profileError } = await supabase.from('profiles').update({
-        full_name: editFormData.full_name,
-        email: editFormData.email,
-        phone: editFormData.phone,
-        cpf: editFormData.cpf || null,
-        cnpj: editFormData.cnpj || null,
+        full_name: editFormData.full_name, email: editFormData.email, phone: editFormData.phone,
+        cpf: editFormData.cpf || null, cnpj: editFormData.cnpj || null,
         cpf_cnpj: editFormData.cpf || editFormData.cnpj || null,
-        company_name: editFormData.company_name,
-        address: editFormData.address,
-        neighborhood: editFormData.neighborhood,
-        city: editFormData.city,
-        state: editFormData.state,
-        zip_code: editFormData.zip_code,
-        priority: editFormData.priority,
-        origin: editFormData.origin,
+        company_name: editFormData.company_name, address: editFormData.address,
+        neighborhood: editFormData.neighborhood, city: editFormData.city,
+        state: editFormData.state, zip_code: editFormData.zip_code,
+        priority: editFormData.priority, origin: editFormData.origin,
         assigned_to: editFormData.assigned_to || null,
       }).eq('id', client.id);
-
       if (profileError) throw profileError;
-
-      // Update brand process if exists and has brand data
       if (client.process_id && (editFormData.brand_name || editFormData.business_area)) {
-        const { error: processError } = await supabase.from('brand_processes').update({
-          brand_name: editFormData.brand_name,
-          business_area: editFormData.business_area || null
-        }).eq('id', client.process_id);
-
-        if (processError) throw processError;
+        await supabase.from('brand_processes').update({ brand_name: editFormData.brand_name, business_area: editFormData.business_area || null }).eq('id', client.process_id);
       }
-
       toast.success('Dados do cliente atualizados!');
       setShowEditDialog(false);
       onUpdate();
-      fetchClientData();
-    } catch (error: any) {
-      console.error('Error updating client:', error);
-      toast.error(`Erro ao atualizar: ${error?.message || 'Tente novamente'}`);
-    }
+      await fetchClientData();
+    } catch (error: any) { toast.error(`Erro: ${error?.message}`); }
+    finally { setSavingEdit(false); }
   };
 
-  // NEW: Handle tag toggle
-  const handleToggleTag = (tag: string) => {
-    setClientTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
-    // Note: Tags could be persisted to a new column in profiles table
-    // For now, we keep them in local state for the session
-  };
-
-  // NEW: Handle create process
-  const handleCreateProcess = async () => {
-    if (!client || !newProcess.brand_name.trim()) {
-      toast.error('Nome da marca é obrigatório');
-      return;
-    }
-
+  const handleSaveQuickChanges = async () => {
+    if (!client) return;
     try {
-      const { error } = await supabase.from('brand_processes').insert({
-        user_id: client.id,
-        brand_name: newProcess.brand_name,
-        process_number: newProcess.process_number || null,
-        pipeline_stage: newProcess.pipeline_stage,
-        business_area: newProcess.business_area || null,
-        status: 'em_andamento'
-      });
-
-      if (error) throw error;
-
-      toast.success('Processo criado com sucesso!');
-      setShowAddProcessDialog(false);
-      setNewProcess({ brand_name: '', process_number: '', pipeline_stage: 'protocolado', business_area: '' });
+      await supabase.from('profiles').update({ priority: editData.priority, origin: editData.origin, contract_value: editData.contract_value }).eq('id', client.id);
+      if (client.process_id) await supabase.from('brand_processes').update({ pipeline_stage: editData.pipeline_stage }).eq('id', client.process_id);
+      toast.success('Alterações salvas');
       onUpdate();
-    } catch (error: any) {
-      console.error('Error creating process:', error);
-      toast.error(`Erro ao criar processo: ${error?.message || 'Tente novamente'}`);
-    }
+    } catch { toast.error('Erro ao salvar'); }
   };
 
+  // ─── Delete client ────────────────────────────────────────────────────────
   const handleDeleteClient = async () => {
-    if (!client || !client.id) {
-      toast.error('Cliente não identificado');
-      return;
-    }
-    
-    // Protect master admin from deletion
-    if (client.email === MASTER_ADMIN_EMAIL) {
-      toast.error('Este usuário é o administrador master e não pode ser excluído.');
-      return;
-    }
-    
-    const clientId = client.id;
-    console.log('Deleting client with ID:', clientId);
-    
+    if (!client || !client.id) return;
+    if (client.email === MASTER_ADMIN_EMAIL) { toast.error('Administrador master não pode ser excluído.'); return; }
     setDeleting(true);
     try {
-      // Delete related data first (in order to avoid FK constraints)
-      // IMPORTANT: Each delete must use the specific client.id
-      
-      // Delete client notes for THIS client only
-      await supabase.from('client_notes').delete().eq('user_id', clientId);
-      
-      // Delete client activities for THIS client only
-      await supabase.from('client_activities').delete().eq('user_id', clientId);
-      
-      // Delete client appointments for THIS client only
-      await supabase.from('client_appointments').delete().eq('user_id', clientId);
-      
-      // Delete notifications for THIS client only
-      await supabase.from('notifications').delete().eq('user_id', clientId);
-      
-      // Delete chat messages for THIS client only
-      await supabase.from('chat_messages').delete().eq('user_id', clientId);
-      
-      // Delete documents for THIS client only
-      await supabase.from('documents').delete().eq('user_id', clientId);
-      
-      // Delete invoices for THIS client only
-      await supabase.from('invoices').delete().eq('user_id', clientId);
-      
-      // Delete contracts for THIS client only
-      await supabase.from('contracts').delete().eq('user_id', clientId);
-      
-      // Delete brand processes for THIS client only
-      await supabase.from('brand_processes').delete().eq('user_id', clientId);
-      
-      // Delete login history for THIS client only
-      await supabase.from('login_history').delete().eq('user_id', clientId);
-      
-      // Delete user roles for THIS client only
-      await supabase.from('user_roles').delete().eq('user_id', clientId);
-      
-      // Finally delete the profile for THIS client only
-      const { error } = await supabase.from('profiles').delete().eq('id', clientId);
-      
+      await Promise.all([
+        supabase.from('client_notes').delete().eq('user_id', client.id),
+        supabase.from('client_activities').delete().eq('user_id', client.id),
+        supabase.from('client_appointments').delete().eq('user_id', client.id),
+        supabase.from('notifications').delete().eq('user_id', client.id),
+        supabase.from('chat_messages').delete().eq('user_id', client.id),
+        supabase.from('documents').delete().eq('user_id', client.id),
+        supabase.from('invoices').delete().eq('user_id', client.id),
+        supabase.from('contracts').delete().eq('user_id', client.id),
+        supabase.from('brand_processes').delete().eq('user_id', client.id),
+        supabase.from('login_history').delete().eq('user_id', client.id),
+        supabase.from('user_roles').delete().eq('user_id', client.id),
+      ]);
+      const { error } = await supabase.from('profiles').delete().eq('id', client.id);
       if (error) throw error;
-      
-      console.log('Client deleted successfully:', clientId);
       toast.success('Cliente excluído com sucesso');
       setShowDeleteConfirm(false);
       onOpenChange(false);
       onUpdate();
-    } catch (error: any) {
-      console.error('Error deleting client:', error);
-      toast.error(`Erro ao excluir cliente: ${error?.message || 'Tente novamente'}`);
-    } finally {
-      setDeleting(false);
-    }
+    } catch (error: any) { toast.error(`Erro ao excluir: ${error?.message}`); }
+    finally { setDeleting(false); }
+  };
+
+  // ─── Move funnel ──────────────────────────────────────────────────────────
+  const handleMoveFunnel = async (targetFunnel: 'comercial' | 'juridico') => {
+    if (!client) return;
+    const currentFunnel = client.client_funnel_type || 'juridico';
+    if (currentFunnel === targetFunnel) { toast.info('Cliente já está neste funil'); setShowMoveDialog(false); return; }
+    try {
+      if (targetFunnel === 'juridico') {
+        const { data: contracts } = await supabase.from('contracts').select('id, signature_status').eq('user_id', client.id).eq('signature_status', 'signed').limit(1);
+        if (!contracts || contracts.length === 0) { toast.error('Cliente precisa ter um contrato assinado para ir ao funil jurídico'); return; }
+        await supabase.from('profiles').update({ client_funnel_type: 'juridico' }).eq('id', client.id);
+        if (client.process_id) await supabase.from('brand_processes').update({ pipeline_stage: 'protocolado' }).eq('id', client.process_id);
+      } else {
+        await supabase.from('profiles').update({ client_funnel_type: 'comercial' }).eq('id', client.id);
+        if (client.process_id) await supabase.from('brand_processes').update({ pipeline_stage: 'assinou_contrato' }).eq('id', client.process_id);
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('client_activities').insert({ user_id: client.id, admin_id: user?.id, activity_type: 'funnel_move', description: `Movido para funil ${targetFunnel}` });
+      toast.success(`Cliente movido para o funil ${targetFunnel === 'comercial' ? 'Comercial' : 'Jurídico'}!`);
+      setShowMoveDialog(false);
+      onUpdate();
+      onOpenChange(false);
+    } catch (error: any) { toast.error(`Erro ao mover: ${error?.message}`); }
+  };
+
+  // ─── Create process ───────────────────────────────────────────────────────
+  const handleCreateProcess = async () => {
+    if (!client || !newProcess.brand_name.trim()) { toast.error('Nome da marca é obrigatório'); return; }
+    try {
+      const { error } = await supabase.from('brand_processes').insert({ user_id: client.id, brand_name: newProcess.brand_name, process_number: newProcess.process_number || null, pipeline_stage: newProcess.pipeline_stage, business_area: newProcess.business_area || null, status: 'em_andamento' });
+      if (error) throw error;
+      toast.success('Processo criado!');
+      setShowAddProcessDialog(false);
+      setNewProcess({ brand_name: '', process_number: '', pipeline_stage: 'protocolado', business_area: '' });
+      onUpdate();
+    } catch (error: any) { toast.error(`Erro: ${error?.message}`); }
   };
 
   const handleQuickAction = async (actionId: string) => {
     switch (actionId) {
       case 'chat':
-        // Open the AdminChatWidget and start a conversation with this client
-        if (client) {
-          window.dispatchEvent(new CustomEvent('open-admin-chat', { detail: { clientId: client.id } }));
-        }
+        if (client) window.dispatchEvent(new CustomEvent('open-admin-chat', { detail: { clientId: client.id } }));
         break;
-      case 'move':
-        setShowMoveDialog(true);
-        break;
+      case 'move': setShowMoveDialog(true); break;
       case 'email':
-        if (client?.email) {
-          window.location.href = `/admin/emails?compose=true&to=${encodeURIComponent(client.email)}&name=${encodeURIComponent(client.full_name || '')}`;
-        } else {
-          toast.error('Cliente sem e-mail cadastrado');
-        }
+        if (client?.email) window.location.href = `/admin/emails?compose=true&to=${encodeURIComponent(client.email)}&name=${encodeURIComponent(client.full_name || '')}`;
+        else toast.error('Cliente sem e-mail cadastrado');
         break;
       case 'notification':
         if (client) {
-          // Fetch templates and open dialog
-          const { data: tpls } = await supabase.from('notification_templates').select('id, name, title, message, type').eq('is_active', true);
-          setNotificationTemplates(tpls || []);
+          const { data: tpls } = await supabase.from('notification_templates' as any).select('id, name, title, message, type').eq('is_active', true);
+          setNotificationTemplates((tpls as any) || []);
           setNotificationForm({ title: '', message: '', type: 'info', link: '/cliente/processos' });
           setShowNotificationDialog(true);
         }
         break;
-      case 'excluir':
-        setShowDeleteConfirm(true);
-        break;
-      default:
-        toast.info(`Ação: ${actionId}`);
-    }
-  };
-
-  // Handle moving client between funnels
-  const handleMoveFunnel = async (targetFunnel: 'comercial' | 'juridico') => {
-    if (!client) return;
-
-    try {
-      const currentFunnel = client.client_funnel_type || 'juridico';
-      if (currentFunnel === targetFunnel) {
-        toast.info('Cliente já está neste funil');
-        setShowMoveDialog(false);
-        return;
-      }
-
-      if (targetFunnel === 'juridico') {
-        // Moving to legal: check signed contract
-        const { data: contracts } = await supabase
-          .from('contracts')
-          .select('id, signature_status')
-          .eq('user_id', client.id)
-          .eq('signature_status', 'signed')
-          .limit(1);
-
-        if (!contracts || contracts.length === 0) {
-          toast.error('Cliente precisa ter um contrato assinado para ser movido ao funil jurídico');
-          return;
-        }
-
-        await supabase.from('profiles').update({ 
-          client_funnel_type: 'juridico',
-          updated_at: new Date().toISOString()
-        }).eq('id', client.id);
-
-        if (client.process_id) {
-          await supabase.from('brand_processes').update({ pipeline_stage: 'protocolado' }).eq('id', client.process_id);
-        }
-      } else {
-        // Moving to commercial
-        await supabase.from('profiles').update({ 
-          client_funnel_type: 'comercial',
-          updated_at: new Date().toISOString()
-        }).eq('id', client.id);
-
-        if (client.process_id) {
-          await supabase.from('brand_processes').update({ pipeline_stage: 'assinou_contrato' }).eq('id', client.process_id);
-        }
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('client_activities').insert({
-        user_id: client.id,
-        admin_id: user?.id,
-        activity_type: 'funnel_move',
-        description: `Cliente movido para o funil ${targetFunnel === 'comercial' ? 'Comercial' : 'Jurídico'}.`
-      });
-
-      toast.success(`✅ Cliente movido para o funil ${targetFunnel === 'comercial' ? 'Comercial' : 'Jurídico'}!`);
-      setShowMoveDialog(false);
-      onUpdate();
-      onOpenChange(false);
-    } catch (error: any) {
-      console.error('Error moving client:', error);
-      toast.error(`Erro ao mover cliente: ${error?.message || 'Tente novamente'}`);
-    }
-  };
-
-  // handleMoveToLegalFunnel replaced by handleMoveFunnel above
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'paid': return <Badge className="bg-green-500">Paga</Badge>;
-      case 'pending': return <Badge className="bg-yellow-500">Pendente</Badge>;
-      case 'overdue': return <Badge className="bg-red-500">Vencida</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
+      case 'excluir': setShowDeleteConfirm(true); break;
     }
   };
 
   if (!client) return null;
 
-  // Use editData.pipeline_stage for immediate UI updates
   const currentStage = PIPELINE_STAGES.find(s => s.id === (editData.pipeline_stage || client.pipeline_stage || 'protocolado'));
+  const priCfg = PRIORITY_CONFIG[client.priority || 'medium'] || PRIORITY_CONFIG.medium;
+  const initials = (client.full_name || 'C').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const isSigned = invoices.length > 0 || documents.length > 0;
+  const contractValue = editData.contract_value || client.contract_value || 0;
+
+  const QUICK_ACTIONS = [
+    { id: 'chat', label: 'Chat', icon: MessageCircle, cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' },
+    { id: 'move', label: 'Mover', icon: ArrowUpRight, cls: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60' },
+    { id: 'email', label: 'Email', icon: Mail, cls: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200' },
+    { id: 'notification', label: 'Notificar', icon: Bell, cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200' },
+    { id: 'excluir', label: 'Excluir', icon: Trash2, cls: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200' },
+  ];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
-        {/* Header with Gradient */}
-        <div className={cn(
-          "p-6 bg-gradient-to-r text-white",
-          currentStage?.color || "from-blue-500 to-blue-600"
-        )}>
-          <SheetHeader>
-            <div className="flex items-start gap-4">
-              <motion.div 
-                className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-2xl font-bold"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
-                {client.full_name?.charAt(0) || 'C'}
-              </motion.div>
-              <div className="flex-1">
-                <SheetTitle className="text-white flex items-center gap-2 text-xl">
-                  {client.full_name || 'Sem nome'}
-                  <Badge className={cn(
-                    "ml-2",
-                    client.priority === 'high' ? 'bg-red-500' : 
-                    client.priority === 'low' ? 'bg-green-500' : 'bg-yellow-500'
-                  )}>
-                    {client.priority === 'high' ? 'Alta' : client.priority === 'low' ? 'Baixa' : 'Média'}
-                  </Badge>
-                </SheetTitle>
-                <p className="text-sm text-white/70 mt-1">ID: {client.id.slice(0, 8)}...</p>
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                    {client.origin === 'whatsapp' ? '💬 WhatsApp' : '🌐 Site'}
-                  </Badge>
-                  <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                    📍 {currentStage?.label}
-                  </Badge>
-                </div>
-                {/* Responsible Admin - Highlighted */}
-                <div className="mt-3 flex items-center gap-2 flex-wrap">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="flex items-center gap-2 bg-white/20 hover:bg-white/30 rounded-lg px-3 py-1.5 transition-colors"
-                      >
-                        <div className="w-6 h-6 rounded-full bg-white/30 flex items-center justify-center">
-                          <UserCheck className="h-3.5 w-3.5 text-white" />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-[10px] text-white/60 leading-none">Responsável</p>
-                          <p className="text-xs font-bold text-white leading-tight">
-                            {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? 'Site' : 'Não atribuído')}
-                          </p>
-                        </div>
-                      </motion.button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64" align="start">
-                      <div className="space-y-3">
-                        <div>
-                          <h4 className="font-semibold text-sm mb-1">Atribuir Cliente</h4>
-                          <p className="text-xs text-muted-foreground">Selecione o administrador responsável</p>
-                        </div>
-                        <Select
-                          value={editFormData.assigned_to}
-                          onValueChange={async (value) => {
-                            const newAssignedTo = value === 'none' ? null : value;
-                            setEditFormData(prev => ({ ...prev, assigned_to: newAssignedTo || '' }));
-                            try {
-                              await supabase.from('profiles').update({
-                                assigned_to: newAssignedTo
-                              }).eq('id', client.id);
-                              toast.success('Cliente atribuído com sucesso!');
-                              onUpdate();
-                            } catch {
-                              toast.error('Erro ao atribuir cliente');
-                            }
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar admin..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Nenhum</SelectItem>
-                            {adminUsersList.map((admin) => (
-                              <SelectItem key={admin.id} value={admin.id}>
-                                {admin.full_name || admin.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {client.created_by_name && (
-                          <p className="text-[10px] text-muted-foreground">
-                            Criado por: <strong>{client.created_by_name}</strong>
-                          </p>
-                        )}
-                        {!client.created_by_name && client.origin === 'site' && (
-                          <p className="text-[10px] text-muted-foreground">
-                            Criado via: <strong>Site (cadastro online)</strong>
-                          </p>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  {client.created_by_name && client.assigned_to_name && client.created_by !== client.assigned_to && (
-                    <Badge variant="secondary" className="bg-white/10 text-white/70 border-0 text-[10px]">
-                      Criado por: {client.created_by_name}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                  <DialogTrigger asChild>
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      className="bg-red-500/80 hover:bg-red-600 text-white border-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2 text-red-600">
-                        <AlertTriangle className="h-5 w-5" />
-                        Excluir Cliente
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Tem certeza que deseja excluir <strong>{client.full_name}</strong>?
-                      </p>
-                      <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm">
-                        <p className="font-medium text-destructive mb-2">Esta ação irá excluir:</p>
-                        <ul className="text-muted-foreground space-y-1 text-xs">
-                          <li>• Todos os processos de marca</li>
-                          <li>• Todos os contratos</li>
-                          <li>• Todas as faturas</li>
-                          <li>• Todos os documentos</li>
-                          <li>• Todas as notas e atividades</li>
-                          <li>• Histórico de login</li>
-                        </ul>
-                        <p className="mt-3 font-semibold text-destructive">Esta ação é irreversível!</p>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
-                        Cancelar
-                      </Button>
-                      <Button 
-                        variant="destructive" 
-                        onClick={handleDeleteClient}
-                        disabled={deleting}
-                      >
-                        {deleting ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 mr-2" />
-                        )}
-                        Excluir Permanentemente
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  className="bg-white/20 hover:bg-white/30 text-white border-0"
-                  onClick={() => setEditMode(!editMode)}
-                >
-                  {editMode ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-                </Button>
-                {editMode && (
-                  <Button 
-                    size="sm" 
-                    className="bg-white text-primary hover:bg-white/90"
-                    onClick={handleSaveChanges}
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </SheetHeader>
+      <SheetContent className="w-full sm:max-w-2xl p-0 overflow-hidden flex flex-col">
+        {/* ──────────────────────────────── HEADER ────────────────────────── */}
+        <div className={cn('relative overflow-hidden flex-shrink-0', currentStage?.color || 'bg-gradient-to-r from-blue-600 to-blue-700')}>
+          {/* Background pattern */}
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 80%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
 
-          {/* Quick Actions */}
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <p className="text-xs text-white/60 mb-2 flex items-center gap-1">
-              <Zap className="h-3 w-3" /> Ações Rápidas
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_ACTIONS.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <motion.button
-                    key={action.id}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors",
-                      action.color
+          <div className="relative p-5">
+            <SheetHeader className="space-y-0">
+              {/* Top row */}
+              <div className="flex items-start gap-3.5">
+                {/* Avatar */}
+                <motion.div
+                  className="w-14 h-14 rounded-2xl bg-white/25 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white text-xl font-bold shadow-lg flex-shrink-0"
+                  initial={{ scale: 0, rotate: -10 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 200, delay: 0.05 }}
+                >
+                  {initials}
+                </motion.div>
+
+                {/* Name / info */}
+                <div className="flex-1 min-w-0">
+                  <SheetTitle className="text-white text-lg font-bold flex items-center gap-2 flex-wrap">
+                    {client.full_name || 'Sem nome'}
+                    <Badge className={cn('border text-[10px] font-bold px-2 py-0.5 ml-1', priCfg.color)}>
+                      <div className={cn('w-1.5 h-1.5 rounded-full mr-1', priCfg.dot)} />
+                      {priCfg.label}
+                    </Badge>
+                  </SheetTitle>
+                  <p className="text-white/60 text-xs mt-0.5 font-mono">ID: {client.id.slice(0, 8)}…</p>
+
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-medium">
+                      <Globe className="h-3 w-3" />
+                      {client.origin === 'whatsapp' ? 'WhatsApp' : client.origin === 'indicacao' ? 'Indicação' : 'Site'}
+                    </span>
+                    {currentStage && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-medium">
+                        <MapPin className="h-3 w-3" />
+                        {currentStage.label}
+                      </span>
                     )}
-                    onClick={() => handleQuickAction(action.id)}
+                    {client.brand_name && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-medium">
+                        <Tag className="h-3 w-3" />
+                        {client.brand_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                    <DialogTrigger asChild>
+                      <button className="w-9 h-9 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-400/40 flex items-center justify-center transition-colors">
+                        <Trash2 className="h-4 w-4 text-white" />
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" />Excluir Cliente</DialogTitle></DialogHeader>
+                      <div className="py-4 space-y-4">
+                        <p className="text-sm text-muted-foreground">Tem certeza que deseja excluir <strong>{client.full_name}</strong>? Esta ação é <strong>irreversível</strong>.</p>
+                        <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 text-xs text-muted-foreground space-y-1">
+                          <p className="font-semibold text-destructive mb-2">Serão excluídos permanentemente:</p>
+                          {['Todos os processos de marca', 'Todos os contratos', 'Todas as faturas', 'Todos os documentos e notas', 'Histórico de acesso'].map(item => (
+                            <p key={item}>• {item}</p>
+                          ))}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancelar</Button>
+                        <Button variant="destructive" onClick={handleDeleteClient} disabled={deleting}>
+                          {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                          Excluir
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  <button
+                    className="w-9 h-9 rounded-xl bg-white/20 hover:bg-white/30 border border-white/30 flex items-center justify-center transition-colors"
+                    onClick={() => setShowEditDialog(true)}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    {action.label}
-                  </motion.button>
-                );
-              })}
-            </div>
+                    <Edit2 className="h-4 w-4 text-white" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Responsible admin */}
+              <div className="mt-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="flex items-center gap-2 bg-white/15 hover:bg-white/25 border border-white/20 rounded-xl px-3 py-2 transition-colors">
+                      <div className="w-6 h-6 rounded-full bg-white/30 flex items-center justify-center">
+                        <UserCheck className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[10px] text-white/60 leading-none">Responsável</p>
+                        <p className="text-xs font-bold text-white leading-tight">
+                          {client.assigned_to_name || client.created_by_name || (client.origin === 'site' ? 'Site' : 'Não atribuído')}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-3.5 w-3.5 text-white/50 ml-1" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64" align="start">
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-semibold text-sm">Atribuir Cliente</h4>
+                        <p className="text-xs text-muted-foreground">Selecione o administrador responsável</p>
+                      </div>
+                      <Select value={editFormData.assigned_to} onValueChange={async (value) => {
+                        const newAssignedTo = value === 'none' ? null : value;
+                        setEditFormData(prev => ({ ...prev, assigned_to: newAssignedTo || '' }));
+                        try {
+                          await supabase.from('profiles').update({ assigned_to: newAssignedTo }).eq('id', client.id);
+                          toast.success('Atribuído com sucesso!');
+                          onUpdate();
+                        } catch { toast.error('Erro ao atribuir'); }
+                      }}>
+                        <SelectTrigger><SelectValue placeholder="Selecionar admin…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {adminUsersList.map(a => <SelectItem key={a.id} value={a.id}>{a.full_name || a.email}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="mt-3 pt-3 border-t border-white/15">
+                <p className="text-[10px] text-white/50 font-semibold uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Zap className="h-3 w-3" /> Ações Rápidas
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_ACTIONS.map(action => (
+                    <motion.button
+                      key={action.id}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={cn('px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors', action.cls)}
+                      onClick={() => handleQuickAction(action.id)}
+                    >
+                      <action.icon className="h-3.5 w-3.5" />
+                      {action.label}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            </SheetHeader>
           </div>
         </div>
 
-        {/* Tabs Content */}
-        <div className="p-4">
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid grid-cols-6 w-full mb-4">
-              <TabsTrigger value="overview" className="text-xs">
-                <User className="h-3 w-3 mr-1" />
-                Geral
-              </TabsTrigger>
-              <TabsTrigger value="contacts" className="text-xs">
-                <Phone className="h-3 w-3 mr-1" />
-                Contatos
-              </TabsTrigger>
-              <TabsTrigger value="services" className="text-xs">
-                <FileText className="h-3 w-3 mr-1" />
-                Serviços
-              </TabsTrigger>
-              <TabsTrigger value="appointments" className="text-xs">
-                <CalendarIcon className="h-3 w-3 mr-1" />
-                Agendamentos
-              </TabsTrigger>
-              <TabsTrigger value="attachments" className="text-xs">
-                <Paperclip className="h-3 w-3 mr-1" />
-                Anexos
-              </TabsTrigger>
-              <TabsTrigger value="financial" className="text-xs">
-                <CreditCard className="h-3 w-3 mr-1" />
-                Financeiro
-              </TabsTrigger>
-            </TabsList>
+        {/* ──────────────────────────────── TABS ──────────────────────────── */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <Tabs defaultValue="overview" className="flex-1 overflow-hidden flex flex-col">
+            {/* Tab bar */}
+            <div className="border-b border-border flex-shrink-0 px-1">
+              <TabsList className="h-auto bg-transparent p-0 gap-0 w-full justify-start overflow-x-auto flex-nowrap">
+                {[
+                  { value: 'overview', label: 'Geral', icon: User },
+                  { value: 'contacts', label: 'Contatos', icon: Phone },
+                  { value: 'services', label: 'Serviços', icon: Package },
+                  { value: 'appointments', label: 'Agenda', icon: CalendarIcon },
+                  { value: 'attachments', label: 'Anexos', icon: Paperclip },
+                  { value: 'financial', label: 'Financeiro', icon: Wallet },
+                ].map(tab => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="relative h-10 rounded-none px-3.5 text-xs font-medium text-muted-foreground border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent bg-transparent hover:text-foreground transition-colors gap-1.5 whitespace-nowrap"
+                  >
+                    <tab.icon className="h-3.5 w-3.5" />
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-4 mt-0">
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <h4 className="font-semibold mb-4 flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-500" />
-                    Status do Lead
-                    <Badge variant="outline" className="ml-auto">● Aberto</Badge>
-                  </h4>
+            <ScrollArea className="flex-1">
+              <div className="p-5 space-y-5">
+
+                {/* ─── GERAL TAB ─────────────────────────────────────────── */}
+                <TabsContent value="overview" className="mt-0 space-y-5">
+                  {/* KPI Cards */}
                   <div className="grid grid-cols-3 gap-3">
-                    <motion.div 
-                      className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl cursor-pointer"
+                    <motion.div
+                      className="rounded-2xl border border-border bg-emerald-500/5 border-emerald-500/20 p-4 cursor-pointer group"
                       whileHover={{ scale: 1.02 }}
-                      onClick={() => editMode && setShowPricingDialog(true)}
+                      onClick={() => setShowPricingDialog(true)}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <DollarSign className="h-4 w-4 text-emerald-600" />
-                        <p className="text-xs text-muted-foreground">Valor</p>
-                        {editMode && <Edit className="h-3 w-3 text-muted-foreground ml-auto" />}
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Valor</span>
+                        <Edit2 className="h-3 w-3 text-muted-foreground ml-auto opacity-0 group-hover:opacity-100" />
                       </div>
-                      <p className="font-bold text-lg text-emerald-600">R$ {(editData.contract_value || 0).toLocaleString('pt-BR')}</p>
+                      <p className="font-bold text-emerald-500 text-lg leading-none">
+                        {contractValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
                       {selectedPricing && selectedPricing !== 'personalizado' && (
-                        <p className="text-[10px] text-muted-foreground mt-1">
+                        <p className="text-[10px] text-muted-foreground mt-1 truncate">
                           {SERVICE_PRICING_OPTIONS.find(o => o.id === selectedPricing)?.details}
                         </p>
                       )}
-                      {selectedPricing === 'personalizado' && customValueReason && (
-                        <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">
-                          {customValueReason}
-                        </p>
-                      )}
                     </motion.div>
-                    <motion.div 
-                      className="p-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/20 dark:to-slate-800/20 rounded-xl"
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Clock className="h-4 w-4 text-slate-600" />
-                        <p className="text-xs text-muted-foreground">Último Contato</p>
+
+                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Último Contato</span>
                       </div>
-                      <p className="font-medium">Nunca</p>
-                    </motion.div>
-                    <motion.div 
-                      className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl"
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Star className="h-4 w-4 text-orange-600" />
-                        <p className="text-xs text-muted-foreground">Prioridade</p>
+                      <p className="font-semibold text-sm">
+                        {notes.length > 0
+                          ? formatDistanceToNow(new Date(notes[0].created_at), { addSuffix: true, locale: ptBR })
+                          : 'Nunca'}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-amber-500/5 border-amber-500/20 p-4">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Star className="h-3.5 w-3.5 text-amber-500" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Prioridade</span>
                       </div>
-                      {editMode ? (
-                        <Select value={editData.priority} onValueChange={(v) => setEditData({ ...editData, priority: v })}>
-                          <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Baixa</SelectItem>
-                            <SelectItem value="medium">Média</SelectItem>
-                            <SelectItem value="high">Alta</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <p className="font-medium capitalize">{client.priority || 'Média'}</p>
-                      )}
-                    </motion.div>
+                      <Badge className={cn('border text-xs', priCfg.color)}>
+                        <div className={cn('w-1.5 h-1.5 rounded-full mr-1.5', priCfg.dot)} />
+                        {priCfg.label}
+                      </Badge>
+                    </div>
                   </div>
 
-                  {/* Tags Section */}
-                  <div className="mt-6 p-4 bg-muted/30 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
+                  {/* Tags */}
+                  <div className="rounded-2xl border border-border bg-card p-4">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Tag className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Tags</span>
+                        <span className="text-sm font-semibold">Tags</span>
                       </div>
                       <Dialog open={showTagsDialog} onOpenChange={setShowTagsDialog}>
                         <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 text-xs">
-                            <Plus className="h-3 w-3 mr-1" />
-                            Gerenciar
-                          </Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs"><Plus className="h-3 w-3 mr-1" />Gerenciar</Button>
                         </DialogTrigger>
                         <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                              <Tag className="h-5 w-5" />
-                              Gerenciar Tags
-                            </DialogTitle>
-                          </DialogHeader>
+                          <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="h-5 w-5" />Gerenciar Tags</DialogTitle></DialogHeader>
                           <div className="py-4">
-                            <p className="text-sm text-muted-foreground mb-4">
-                              Selecione as tags para este cliente:
-                            </p>
                             <div className="grid grid-cols-3 gap-2">
                               {AVAILABLE_TAGS.map(tag => (
-                                <Button
-                                  key={tag}
-                                  variant={clientTags.includes(tag) ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => handleToggleTag(tag)}
-                                  className="justify-start"
-                                >
-                                  {clientTags.includes(tag) && <Check className="h-3 w-3 mr-1" />}
-                                  {tag}
+                                <Button key={tag} variant={clientTags.includes(tag) ? 'default' : 'outline'} size="sm" onClick={() => setClientTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}>
+                                  {clientTags.includes(tag) && <Check className="h-3 w-3 mr-1" />}{tag}
                                 </Button>
                               ))}
                             </div>
                           </div>
-                          <DialogFooter>
-                            <Button onClick={() => setShowTagsDialog(false)}>
-                              Concluído
-                            </Button>
-                          </DialogFooter>
+                          <DialogFooter><Button onClick={() => setShowTagsDialog(false)}>Concluído</Button></DialogFooter>
                         </DialogContent>
                       </Dialog>
                     </div>
                     {clientTags.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {clientTags.map(tag => (
-                          <Badge key={tag} variant="secondary" className="cursor-pointer" onClick={() => handleToggleTag(tag)}>
-                            {tag}
-                            <X className="h-3 w-3 ml-1" />
+                          <Badge key={tag} variant="secondary" className="cursor-pointer gap-1" onClick={() => setClientTags(prev => prev.filter(t => t !== tag))}>
+                            {tag}<X className="h-2.5 w-2.5" />
                           </Badge>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Nenhuma tag atribuída. Clique em "Gerenciar" para adicionar tags.
-                      </p>
+                      <p className="text-xs text-muted-foreground">Nenhuma tag. Clique em "Gerenciar" para adicionar.</p>
                     )}
                   </div>
 
-                  {/* Notes Section */}
-                  <div className="mt-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      Notas Internas
-                    </h4>
-                    <div className="space-y-2 mb-3">
+                  {/* Notes */}
+                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-semibold">Notas Internas</span>
+                      {notes.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{notes.length}</Badge>}
+                    </div>
+
+                    <div className="flex gap-2">
                       <Textarea
                         placeholder="Adicionar uma nota interna..."
                         value={newNote}
                         onChange={(e) => setNewNote(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) handleAddNote(); }}
                         rows={2}
-                        className="resize-none"
+                        className="resize-none flex-1 text-sm"
                       />
-                      <Button onClick={handleAddNote} disabled={!newNote.trim()} size="sm">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Adicionar Nota
+                      <Button size="sm" className="self-end h-9 w-9 p-0" onClick={handleAddNote} disabled={savingNote || !newNote.trim()}>
+                        {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       </Button>
                     </div>
+
                     {notes.length > 0 && (
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {notes.slice(0, 3).map(note => (
-                          <div key={note.id} className="p-3 bg-muted rounded-lg text-sm">
-                            <p>{note.content}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {format(new Date(note.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                            </p>
-                          </div>
-                        ))}
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        <AnimatePresence>
+                          {notes.map(note => (
+                            <motion.div
+                              key={note.id}
+                              initial={{ opacity: 0, y: -6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, x: -20 }}
+                              className="relative rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 group overflow-hidden"
+                            >
+                              <div className="absolute top-0 left-0 w-0.5 h-full bg-amber-400/60 rounded-l-xl" />
+                              <div className="pl-2">
+                                {editingNoteId === note.id ? (
+                                  <div className="space-y-2">
+                                    <Textarea value={editingNoteContent} onChange={(e) => setEditingNoteContent(e.target.value)} rows={2} className="resize-none text-xs" autoFocus />
+                                    <div className="flex gap-2 justify-end">
+                                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setEditingNoteId(null)}>Cancelar</Button>
+                                      <Button size="sm" className="h-6 text-xs" onClick={() => handleSaveEditNote(note.id)}>Salvar</Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="text-sm leading-relaxed">{note.content}</p>
+                                    <div className="flex items-center justify-between mt-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {formatDistanceToNow(new Date(note.created_at), { addSuffix: true, locale: ptBR })}
+                                      </p>
+                                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button className="w-5 h-5 rounded hover:bg-muted flex items-center justify-center" onClick={() => { setEditingNoteId(note.id); setEditingNoteContent(note.content); }}>
+                                          <Edit2 className="h-2.5 w-2.5 text-muted-foreground" />
+                                        </button>
+                                        <button className="w-5 h-5 rounded hover:bg-destructive/10 flex items-center justify-center" onClick={() => handleDeleteNote(note.id)}>
+                                          <Trash2 className="h-2.5 w-2.5 text-muted-foreground hover:text-destructive" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </TabsContent>
 
-            {/* Contacts Tab */}
-            <TabsContent value="contacts" className="space-y-4 mt-0">
-              {/* Dados Pessoais */}
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <h4 className="font-semibold mb-4 flex items-center gap-2">
-                    <User className="h-4 w-4 text-blue-500" />
-                    Dados Pessoais
-                  </h4>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">NOME COMPLETO</p>
-                      <p className="font-medium">{client.full_name || 'N/A'}</p>
+                {/* ─── CONTACTS TAB ──────────────────────────────────────── */}
+                <TabsContent value="contacts" className="mt-0 space-y-4">
+                  {/* Personal */}
+                  <div className="rounded-2xl border border-border bg-card p-4">
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                      <User className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold">Dados Pessoais</span>
                     </div>
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">CPF</p>
-                      <p className="font-medium font-mono">{profileData?.cpf || client.cpf_cnpj || 'N/A'}</p>
-                    </div>
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">E-MAIL</p>
-                      <p className="font-medium text-sm truncate">{client.email || 'N/A'}</p>
-                    </div>
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">TELEFONE</p>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{client.phone || 'N/A'}</p>
-                        {client.phone && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="h-6 w-6 text-green-600"
-                            onClick={() => {
-                              const cleanPhone = client.phone!.replace(/\D/g, '');
-                              window.open(`https://wa.me/55${cleanPhone}`, '_blank');
-                            }}
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+                    <InfoRow icon={User} label="Nome Completo" value={client.full_name} copyable />
+                    <InfoRow icon={Hash} label="CPF" value={profileData?.cpf || client.cpf_cnpj} mono copyable />
+                    <InfoRow icon={Hash} label="CNPJ" value={profileData?.cnpj} mono copyable />
+                    <InfoRow icon={Mail} label="E-mail" value={client.email} copyable link={`mailto:${client.email}`} />
+                    <InfoRow icon={Phone} label="Telefone" value={client.phone} copyable link={`https://wa.me/55${client.phone?.replace(/\D/g,'')}`} />
+                    <InfoRow icon={Building2} label="Empresa" value={client.company_name || profileData?.company_name} />
                   </div>
-                  
-                  {/* Endereço */}
+
+                  {/* Address */}
                   {(profileData?.address || profileData?.city) && (
-                    <div className="mt-4 p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-1">ENDEREÇO COMPLETO</p>
-                      <p className="font-medium">
-                        {profileData.address || 'Endereço não informado'}
-                        {profileData.neighborhood && ` - ${profileData.neighborhood}`}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {profileData.city}{profileData.state && ` - ${profileData.state}`}
-                        {profileData.zip_code && ` - CEP: ${profileData.zip_code}`}
-                      </p>
+                    <div className="rounded-2xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-semibold">Endereço</span>
+                      </div>
+                      <InfoRow icon={MapPin} label="Logradouro" value={[profileData.address, profileData.neighborhood].filter(Boolean).join(' – ')} />
+                      <InfoRow icon={Globe} label="Cidade / Estado" value={[profileData.city, profileData.state].filter(Boolean).join(' – ')} />
+                      <InfoRow icon={Hash} label="CEP" value={profileData.zip_code} mono copyable />
                     </div>
                   )}
-                </CardContent>
-              </Card>
 
-              {/* Dados da Marca */}
-              {client.brand_name && (
-                <Card className="border-0 shadow-md">
-                  <CardContent className="pt-4">
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-orange-500" />
-                      Dados da Marca
-                    </h4>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 border rounded-lg">
-                        <p className="text-xs text-muted-foreground">NOME DA MARCA</p>
-                        <p className="font-medium">{client.brand_name}</p>
+                  {/* Brand info */}
+                  {client.brand_name && (
+                    <div className="rounded-2xl border border-border bg-card p-4">
+                      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                        <Tag className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-semibold">Dados da Marca</span>
                       </div>
-                      <div className="p-3 border rounded-lg">
-                        <p className="text-xs text-muted-foreground">RAMO DE ATIVIDADE</p>
-                        <p className="font-medium">{client.business_area || 'N/A'}</p>
-                      </div>
+                      <InfoRow icon={Tag} label="Nome da Marca" value={client.brand_name} copyable />
+                      <InfoRow icon={Briefcase} label="Ramo de Atividade" value={client.business_area} />
+                      {client.process_number && <InfoRow icon={Hash} label="Protocolo INPI" value={client.process_number} mono copyable />}
                     </div>
-                  </CardContent>
-                </Card>
-              )}
+                  )}
+                </TabsContent>
 
-              {/* Dados da Empresa */}
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <h4 className="font-semibold mb-4 flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-purple-500" />
-                    Dados da Empresa
-                  </h4>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">RAZÃO SOCIAL</p>
-                      <p className="font-medium">{profileData?.company_name || client.company_name || 'N/A'}</p>
-                    </div>
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-xs text-muted-foreground">CNPJ</p>
-                      <p className="font-medium font-mono">
-                        {profileData?.cnpj || 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Services Tab */}
-            <TabsContent value="services" className="space-y-4 mt-0">
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Serviços Contratados
-                    </h4>
-                    <Select 
-                      value={editData.pipeline_stage} 
-                      onValueChange={async (v) => {
-                        setEditData({ ...editData, pipeline_stage: v });
-                        // Update selectedServiceType using the reverse mapping
-                        const matchingServiceType = STAGE_TO_SERVICE_TYPE[v];
-                        if (matchingServiceType) {
-                          setSelectedServiceType(matchingServiceType);
-                        }
-                        if (client?.process_id) {
-                          await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
-                          toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === v)?.label}`);
-                          onUpdate();
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-48"><SelectValue placeholder="Fase do processo" /></SelectTrigger>
-                      <SelectContent>
-                        {PIPELINE_STAGES.map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {client.brand_name ? (
+                {/* ─── SERVICES TAB ──────────────────────────────────────── */}
+                <TabsContent value="services" className="mt-0 space-y-4">
+                  {client.process_id ? (
                     <div className="space-y-4">
-                      <motion.div 
-                        className="p-4 border rounded-xl bg-gradient-to-br from-primary/5 to-primary/10"
-                        whileHover={{ scale: 1.01 }}
-                      >
+                      {/* Pipeline stage selector */}
+                      <div className="rounded-2xl border border-border bg-card p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <FileText className="h-5 w-5 text-primary" />
-                            <div>
-                              <p className="font-medium">Registro de Marca</p>
-                              <p className="text-sm text-muted-foreground">{client.brand_name}</p>
-                            </div>
+                            <Activity className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-semibold">Fase do Pipeline</span>
                           </div>
-                          <Badge variant={client.process_status === 'concedido' ? 'default' : 'secondary'}>
-                            {client.process_status || 'Em Andamento'}
-                          </Badge>
+                          <Select value={editData.pipeline_stage} onValueChange={async (v) => {
+                            setEditData(prev => ({ ...prev, pipeline_stage: v }));
+                            const matching = STAGE_TO_SERVICE_TYPE[v];
+                            if (matching) setSelectedServiceType(matching);
+                            if (client.process_id) {
+                              await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
+                              toast.success('Pipeline atualizado!');
+                              onUpdate();
+                            }
+                          }}>
+                            <SelectTrigger className="h-8 w-auto text-xs border-0 bg-muted/50 rounded-lg">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </div>
+                        {currentStage && (
+                          <div className={cn('rounded-xl p-3 text-sm font-medium flex items-center gap-2', currentStage.color)}>
+                            <div className="w-2 h-2 rounded-full bg-current opacity-80" />
+                            {currentStage.label}
+                          </div>
+                        )}
+                      </div>
 
-                        <div className={cn(
-                          "p-3 rounded-lg border",
-                          currentStage?.bgColor,
-                          currentStage?.borderColor
-                        )}>
-                          <p className="text-xs text-muted-foreground mb-1">Fase Atual</p>
-                          <p className={cn("font-semibold", currentStage?.textColor)}>
-                            {currentStage?.label}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {currentStage?.description}
-                          </p>
+                      {/* Service types */}
+                      <div className="rounded-2xl border border-border bg-card p-4">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                          <Package className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-semibold">Tipo de Serviço</span>
                         </div>
-
-                        <div className="mt-3 flex items-center justify-between">
-                          <p className="text-emerald-600 font-medium">
-                            <DollarSign className="h-4 w-4 inline" />
-                            R$ {(client.contract_value || 0).toLocaleString('pt-BR')}
-                          </p>
-                        </div>
-                      </motion.div>
-
-                      <div>
-                        <Label className="text-sm font-medium mb-2 block">Tipo de Serviço</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {SERVICE_TYPES.map(service => (
-                            <motion.div
-                              key={service.id}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={async () => {
-                                setSelectedServiceType(service.id);
-                                // Update pipeline stage based on service type's stage property
-                                if (service.stage && client?.process_id) {
-                                  setEditData(prev => ({ ...prev, pipeline_stage: service.stage }));
-                                  await supabase.from('brand_processes')
-                                    .update({ pipeline_stage: service.stage })
-                                    .eq('id', client.process_id);
-                                  toast.success(`Fase atualizada para ${PIPELINE_STAGES.find(s => s.id === service.stage)?.label}`);
-                                  onUpdate();
-                                }
-                              }}
-                              className={cn(
-                                "p-3 rounded-lg border cursor-pointer transition-all",
-                                selectedServiceType === service.id 
-                                  ? "border-primary bg-primary/5 ring-2 ring-primary/30" 
-                                  : "border-border hover:border-primary/50"
-                              )}
-                            >
-                              <p className="font-medium text-sm">{service.label}</p>
-                              <p className="text-xs text-muted-foreground">{service.description}</p>
-                            </motion.div>
-                          ))}
+                        <div className="space-y-2">
+                          {SERVICE_TYPES.map(svc => {
+                            const Icon = svc.icon;
+                            const isSelected = selectedServiceType === svc.id;
+                            return (
+                              <motion.button
+                                key={svc.id}
+                                whileTap={{ scale: 0.98 }}
+                                className={cn(
+                                  'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all',
+                                  isSelected ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/20 hover:bg-muted/30'
+                                )}
+                                onClick={async () => {
+                                  setSelectedServiceType(svc.id);
+                                  const newStage = SERVICE_TYPE_TO_STAGE[svc.id];
+                                  setEditData(prev => ({ ...prev, pipeline_stage: newStage }));
+                                  if (client.process_id) {
+                                    await supabase.from('brand_processes').update({ pipeline_stage: newStage }).eq('id', client.process_id);
+                                    toast.success(`Serviço: ${svc.label}`);
+                                    onUpdate();
+                                  }
+                                }}
+                              >
+                                <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', isSelected ? 'bg-primary/20' : 'bg-muted/50')}>
+                                  <Icon className={cn('h-4 w-4', isSelected ? 'text-primary' : 'text-muted-foreground')} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn('text-sm font-medium', isSelected && 'text-primary')}>{svc.label}</p>
+                                  <p className="text-xs text-muted-foreground">{svc.description}</p>
+                                </div>
+                                {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
+                              </motion.button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-muted-foreground mb-2">Nenhum processo registrado</p>
-                      <p className="text-sm text-muted-foreground mb-4">Adicione um processo de marca para este cliente</p>
-                      
-                      <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
-                        <DialogTrigger asChild>
-                          <Button className="bg-primary">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Adicionar Marca/Processo
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                              <FileText className="h-5 w-5" />
-                              Adicionar Processo de Marca
-                            </DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div>
-                              <Label>Nome da Marca *</Label>
-                              <Input 
-                                placeholder="Ex: WebMarcas"
-                                value={newProcess.brand_name}
-                                onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})}
-                              />
+                    <EmptyState
+                      icon={Package}
+                      title="Nenhum processo registrado"
+                      description="Adicione um processo de marca para este cliente"
+                      action={
+                        <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
+                          <DialogTrigger asChild>
+                            <Button size="sm" className="mt-2"><Plus className="h-4 w-4 mr-2" />Adicionar Processo</Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader><DialogTitle>Adicionar Processo de Marca</DialogTitle></DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div><Label>Nome da Marca *</Label><Input placeholder="Ex: WebMarcas" value={newProcess.brand_name} onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})} /></div>
+                              <div><Label>Número do Processo (INPI)</Label><Input placeholder="Ex: 928374651" value={newProcess.process_number} onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})} /></div>
+                              <div><Label>Fase do Pipeline</Label>
+                                <Select value={newProcess.pipeline_stage} onValueChange={(v) => setNewProcess({...newProcess, pipeline_stage: v})}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>{PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                              </div>
+                              <div><Label>Área de Atuação</Label><Input placeholder="Ex: Tecnologia" value={newProcess.business_area} onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})} /></div>
                             </div>
-                            <div>
-                              <Label>Número do Processo (INPI)</Label>
-                              <Input 
-                                placeholder="Ex: 928374651"
-                                value={newProcess.process_number}
-                                onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})}
-                              />
-                            </div>
-                            <div>
-                              <Label>Fase do Pipeline</Label>
-                              <Select 
-                                value={newProcess.pipeline_stage} 
-                                onValueChange={(v) => setNewProcess({...newProcess, pipeline_stage: v})}
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
+                              <Button onClick={handleCreateProcess}>Criar Processo</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      }
+                    />
+                  )}
+                </TabsContent>
+
+                {/* ─── APPOINTMENTS TAB ──────────────────────────────────── */}
+                <TabsContent value="appointments" className="mt-0 space-y-4">
+                  {/* New appointment form */}
+                  <AnimatePresence>
+                    {showNewAppointment ? (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3 overflow-hidden"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold">Novo Agendamento</span>
+                          <button className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center" onClick={() => setShowNewAppointment(false)}>
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <Input placeholder="Título do agendamento *" value={newAppointment.title} onChange={(e) => setNewAppointment({ ...newAppointment, title: e.target.value })} autoFocus />
+                        <Textarea placeholder="Descrição (opcional)" rows={2} value={newAppointment.description} onChange={(e) => setNewAppointment({ ...newAppointment, description: e.target.value })} className="resize-none" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start h-9 text-xs">
+                                <CalendarIcon className="h-3.5 w-3.5 mr-2" />
+                                {format(newAppointment.date, 'dd/MM/yyyy')}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar mode="single" selected={newAppointment.date} onSelect={(d) => d && setNewAppointment({ ...newAppointment, date: d })} initialFocus />
+                            </PopoverContent>
+                          </Popover>
+                          <Input type="time" value={newAppointment.time} onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })} className="h-9 text-xs" />
+                        </div>
+                        <Button size="sm" className="w-full h-8" onClick={handleCreateAppointment} disabled={savingAppointment || !newAppointment.title.trim()}>
+                          {savingAppointment ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : <Plus className="h-3 w-3 mr-2" />}
+                          Criar Agendamento
+                        </Button>
+                      </motion.div>
+                    ) : (
+                      <Button variant="outline" className="w-full h-10 border-dashed" onClick={() => setShowNewAppointment(true)}>
+                        <Plus className="h-4 w-4 mr-2" />Novo Agendamento
+                      </Button>
+                    )}
+                  </AnimatePresence>
+
+                  {loading ? (
+                    <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                  ) : appointments.length === 0 ? (
+                    <EmptyState icon={CalendarIcon} title="Nenhum agendamento" description="Crie agendamentos e compromissos para este cliente" />
+                  ) : (
+                    <div className="space-y-2">
+                      <AnimatePresence>
+                        {appointments.map((apt, i) => {
+                          const isPast = new Date(apt.scheduled_at) < new Date();
+                          const isOverdue = isPast && !apt.completed;
+                          return (
+                            <motion.div
+                              key={apt.id}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -20 }}
+                              transition={{ delay: i * 0.04 }}
+                              className={cn(
+                                'flex items-center gap-3 p-3 rounded-xl border group transition-all',
+                                apt.completed ? 'border-emerald-500/20 bg-emerald-500/5 opacity-70' :
+                                isOverdue ? 'border-red-500/20 bg-red-500/5' : 'border-border bg-card hover:bg-muted/20'
+                              )}
+                            >
+                              <button
+                                className={cn('w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all',
+                                  apt.completed ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40 hover:border-primary')}
+                                onClick={() => handleToggleAppointment(apt)}
                               >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {PIPELINE_STAGES.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label>Área de Atuação</Label>
-                              <Input 
-                                placeholder="Ex: Tecnologia, Alimentação..."
-                                value={newProcess.business_area}
-                                onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})}
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
-                            <Button onClick={handleCreateProcess}>Criar Processo</Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                                {apt.completed && <Check className="h-3.5 w-3.5 text-white" />}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className={cn('text-sm font-medium truncate', apt.completed && 'line-through text-muted-foreground')}>{apt.title}</p>
+                                {apt.description && <p className="text-xs text-muted-foreground truncate">{apt.description}</p>}
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className={cn('text-xs font-semibold', isOverdue && 'text-red-400')}>
+                                  {format(new Date(apt.scheduled_at), 'dd/MM/yyyy')}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">{format(new Date(apt.scheduled_at), 'HH:mm')}</p>
+                              </div>
+                              <button
+                                className="w-6 h-6 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 flex items-center justify-center transition-all"
+                                onClick={() => handleDeleteAppointment(apt.id)}
+                              >
+                                <Trash2 className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </TabsContent>
 
-            {/* Appointments Tab - NEW */}
-            <TabsContent value="appointments" className="space-y-4 mt-0">
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h4 className="font-semibold flex items-center gap-2">
-                        <CalendarIcon className="h-4 w-4" />
-                        Agendamentos do Lead
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        Gerencie todos os compromissos e reuniões relacionados a este lead
-                      </p>
-                    </div>
-                    <Dialog open={showNewAppointment} onOpenChange={setShowNewAppointment}>
-                      <DialogTrigger asChild>
-                        <Button className="bg-blue-600 hover:bg-blue-700">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Novo Agendamento
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Criar Agendamento</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div>
-                            <Label>Título</Label>
-                            <Input 
-                              placeholder="Ex: Reunião de apresentação"
-                              value={newAppointment.title}
-                              onChange={(e) => setNewAppointment({ ...newAppointment, title: e.target.value })}
-                            />
-                          </div>
-                          <div>
-                            <Label>Descrição</Label>
-                            <Textarea 
-                              placeholder="Detalhes do agendamento..."
-                              value={newAppointment.description}
-                              onChange={(e) => setNewAppointment({ ...newAppointment, description: e.target.value })}
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label>Data</Label>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {format(newAppointment.date, "dd/MM/yyyy")}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                  <Calendar
-                                    mode="single"
-                                    selected={newAppointment.date}
-                                    onSelect={(date) => date && setNewAppointment({ ...newAppointment, date })}
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                            <div>
-                              <Label>Horário</Label>
-                              <Input 
-                                type="time"
-                                value={newAppointment.time}
-                                onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
-                              />
-                            </div>
-                          </div>
+                {/* ─── ATTACHMENTS TAB ───────────────────────────────────── */}
+                <TabsContent value="attachments" className="mt-0 space-y-4">
+                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleFileUpload(e.target.files)} />
+
+                  {/* Drop zone */}
+                  <div
+                    className={cn(
+                      'border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer',
+                      dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/20'
+                    )}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFileUpload(e.dataTransfer.files); }}
+                  >
+                    {uploading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                        <p className="text-sm text-muted-foreground">Enviando...</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Upload className="h-6 w-6 text-primary" />
                         </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setShowNewAppointment(false)}>Cancelar</Button>
-                          <Button onClick={handleCreateAppointment}>Criar Agendamento</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                        <p className="font-medium text-sm">Arraste arquivos ou clique para selecionar</p>
+                        <p className="text-xs text-muted-foreground">PDF, imagens, docs — qualquer formato</p>
+                      </div>
+                    )}
                   </div>
 
                   {loading ? (
-                    <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                  ) : appointments.length === 0 ? (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-center py-12"
-                    >
-                      <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
-                        <CalendarIcon className="h-10 w-10 text-blue-500" />
-                      </div>
-                      <p className="font-medium text-lg mb-1">Nenhum agendamento encontrado</p>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Este lead ainda não possui agendamentos vinculados.
-                      </p>
-                      <Button 
-                        className="bg-blue-600 hover:bg-blue-700"
-                        onClick={() => setShowNewAppointment(true)}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Criar Primeiro Agendamento
-                      </Button>
-                    </motion.div>
+                    <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                  ) : documents.length === 0 ? (
+                    <EmptyState icon={Paperclip} title="Nenhum arquivo" description="Faça upload de documentos relacionados a este cliente" />
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       <AnimatePresence>
-                        {appointments.map((apt, index) => (
+                        {documents.map(doc => (
                           <motion.div
-                            key={apt.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className={cn(
-                              "flex items-center gap-4 p-4 border rounded-xl transition-all",
-                              apt.completed 
-                                ? "bg-green-50 border-green-200 dark:bg-green-900/20" 
-                                : "bg-white dark:bg-slate-900 hover:shadow-md"
-                            )}
+                            key={doc.id}
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/20 transition-colors group"
                           >
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={cn(
-                                "h-8 w-8 rounded-full",
-                                apt.completed ? "bg-green-500 text-white" : "border-2"
-                              )}
-                              onClick={() => handleToggleAppointment(apt)}
-                            >
-                              {apt.completed && <Check className="h-4 w-4" />}
-                            </Button>
-                            <div className="flex-1">
-                              <p className={cn(
-                                "font-medium",
-                                apt.completed && "line-through text-muted-foreground"
-                              )}>
-                                {apt.title}
-                              </p>
-                              {apt.description && (
-                                <p className="text-sm text-muted-foreground">{apt.description}</p>
-                              )}
+                            <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                              <DocIcon mime={doc.mime_type} />
                             </div>
-                            <div className="text-right">
-                              <p className="font-medium text-sm">
-                                {format(new Date(apt.scheduled_at), "dd/MM/yyyy")}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{doc.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {fmtBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{format(new Date(doc.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(new Date(apt.scheduled_at), "HH:mm")}
-                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                                <a href={doc.file_url} target="_blank" rel="noopener noreferrer" download><ExternalLink className="h-3.5 w-3.5" /></a>
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" onClick={() => handleDeleteDocument(doc)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </motion.div>
                         ))}
                       </AnimatePresence>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </TabsContent>
 
-            {/* Attachments Tab */}
-            <TabsContent value="attachments" className="space-y-4 mt-0">
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <Paperclip className="h-4 w-4" />
-                      Anexos do Lead
-                    </h4>
-                    <label>
-                      <Button size="sm" className="bg-orange-500 hover:bg-orange-600" disabled={uploading} asChild>
-                        <span>
-                          {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                          Novo Anexo
-                        </span>
-                      </Button>
-                      <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-                    </label>
+                {/* ─── FINANCIAL TAB ─────────────────────────────────────── */}
+                <TabsContent value="financial" className="mt-0 space-y-4">
+                  {/* Summary card */}
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <BarChart3 className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold">Resumo Financeiro</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Total', value: invoices.reduce((a, i) => a + Number(i.amount), 0), color: 'text-foreground' },
+                        { label: 'Pago', value: invoices.filter(i => i.status === 'paid').reduce((a, i) => a + Number(i.amount), 0), color: 'text-emerald-500' },
+                        { label: 'Pendente', value: invoices.filter(i => i.status !== 'paid').reduce((a, i) => a + Number(i.amount), 0), color: 'text-amber-500' },
+                      ].map(item => (
+                        <div key={item.label} className="text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{item.label}</p>
+                          <p className={cn('font-bold text-sm', item.color)}>
+                            {item.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {loading ? (
-                    <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                  ) : documents.length === 0 ? (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-100 flex items-center justify-center">
-                        <Paperclip className="h-8 w-8 text-orange-500" />
-                      </div>
-                      <p className="font-medium">Nenhum anexo ainda</p>
-                      <p className="text-sm text-muted-foreground">Adicione documentos, imagens ou arquivos relacionados a este lead.</p>
-                      <label>
-                        <Button className="mt-4 bg-orange-500 hover:bg-orange-600" asChild>
-                          <span>
-                            <Upload className="h-4 w-4 mr-2" />
-                            Adicionar Primeiro Anexo
-                          </span>
-                        </Button>
-                        <input type="file" className="hidden" onChange={handleFileUpload} />
-                      </label>
-                    </div>
+                    <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                  ) : invoices.length === 0 ? (
+                    <EmptyState icon={CreditCard} title="Nenhuma fatura" description="As faturas deste cliente aparecerão aqui" />
                   ) : (
                     <div className="space-y-2">
-                      {documents.map(doc => (
-                        <motion.div 
-                          key={doc.id} 
-                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                          whileHover={{ x: 5 }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <FileText className="h-5 w-5 text-muted-foreground" />
-                            <div>
-                              <p className="font-medium text-sm">{doc.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {format(new Date(doc.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                              </p>
-                            </div>
-                          </div>
-                          <Button variant="ghost" size="icon" asChild>
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        </motion.div>
-                      ))}
+                      <AnimatePresence>
+                        {invoices.map((inv, i) => {
+                          const STATUS = {
+                            paid: { label: 'Paga', cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+                            pending: { label: 'Pendente', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+                            overdue: { label: 'Vencida', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+                          }[inv.status] || { label: inv.status, cls: 'bg-muted text-muted-foreground' };
+                          return (
+                            <motion.div
+                              key={inv.id}
+                              initial={{ opacity: 0, y: -6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.04 }}
+                              className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                                <Receipt className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{inv.description}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Vence: {format(new Date(inv.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+                                </p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-sm">{Number(inv.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                <Badge className={cn('border text-[10px] h-4 px-1.5', STATUS.cls)}>{STATUS.label}</Badge>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </TabsContent>
 
-            {/* Financial Tab */}
-            <TabsContent value="financial" className="space-y-4 mt-0">
-              <Card className="border-0 shadow-md">
-                <CardContent className="pt-4">
-                  <h4 className="font-semibold mb-4 flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    Faturas
-                  </h4>
-                  {loading ? (
-                    <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                  ) : invoices.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">Nenhuma fatura</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {invoices.map(inv => (
-                        <motion.div 
-                          key={inv.id} 
-                          className="flex items-center justify-between p-3 border rounded-lg"
-                          whileHover={{ scale: 1.01 }}
-                        >
-                          <div>
-                            <p className="font-medium text-sm">{inv.description}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Vence: {format(new Date(inv.due_date), "dd/MM/yyyy", { locale: ptBR })}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold">R$ {Number(inv.amount).toLocaleString('pt-BR')}</p>
-                            {getStatusBadge(inv.status)}
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+              </div>
+            </ScrollArea>
           </Tabs>
         </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 p-4 bg-background border-t flex items-center justify-between">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Aberto
+        {/* ──────────────────────────── FOOTER ────────────────────────────── */}
+        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+              Ativo
             </span>
-            <span>$ R$ {(client.contract_value || 0).toLocaleString('pt-BR')}</span>
+            <span className="font-semibold text-foreground">
+              {contractValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </span>
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              Nunca
+              {notes.length > 0 ? formatDistanceToNow(new Date(notes[0].created_at), { addSuffix: true, locale: ptBR }) : 'Nunca'}
             </span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button variant="outline" className="gap-2" onClick={() => setShowEditDialog(true)}>
-              <ExternalLink className="h-4 w-4" />
-              Ver Completo
-            </Button>
-            <Button onClick={() => setShowEditDialog(true)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Editar
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button size="sm" onClick={() => setShowEditDialog(true)}>
+              <Edit2 className="h-3.5 w-3.5 mr-1.5" />Editar
             </Button>
           </div>
         </div>
-      </SheetContent>
 
-      {/* Pricing Selection Dialog */}
-      <Dialog open={showPricingDialog} onOpenChange={setShowPricingDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-emerald-600" />
-              Selecionar Valor do Serviço
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-3">
-            <RadioGroup 
-              value={selectedPricing} 
-              onValueChange={(value) => {
-                setSelectedPricing(value);
-                const option = SERVICE_PRICING_OPTIONS.find(o => o.id === value);
-                if (option && value !== 'personalizado') {
-                  setEditData({ ...editData, contract_value: option.value });
-                }
-              }}
-            >
-              {SERVICE_PRICING_OPTIONS.map((option) => (
-                <motion.div
-                  key={option.id}
-                  whileHover={{ scale: 1.01 }}
-                  className={cn(
-                    "flex items-start space-x-3 p-4 rounded-xl border transition-all cursor-pointer",
-                    selectedPricing === option.id 
-                      ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20" 
-                      : "border-border hover:border-emerald-300"
+        {/* ─── Pricing Dialog ──────────────────────────────────────────────── */}
+        <Dialog open={showPricingDialog} onOpenChange={setShowPricingDialog}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-emerald-600" />Selecionar Valor</DialogTitle></DialogHeader>
+            <ScrollArea className="max-h-[60vh]">
+              <div className="py-4 space-y-2 pr-3">
+                <RadioGroup value={selectedPricing} onValueChange={(v) => { setSelectedPricing(v); const opt = SERVICE_PRICING_OPTIONS.find(o => o.id === v); if (opt && v !== 'personalizado') setEditData(prev => ({ ...prev, contract_value: opt.value })); }}>
+                  {SERVICE_PRICING_OPTIONS.map(option => (
+                    <div key={option.id} className={cn('flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all', selectedPricing === option.id ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border hover:border-emerald-300/40')}
+                      onClick={() => { setSelectedPricing(option.id); const opt = SERVICE_PRICING_OPTIONS.find(o => o.id === option.id); if (opt && option.id !== 'personalizado') setEditData(prev => ({ ...prev, contract_value: opt.value })); }}>
+                      <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
+                      <div className="flex-1">
+                        <label htmlFor={option.id} className="font-medium text-sm cursor-pointer">{option.label}</label>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                        {option.id !== 'personalizado' && <p className="text-sm font-bold text-emerald-600 mt-0.5">R$ {option.value.toLocaleString('pt-BR')}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </RadioGroup>
+                <AnimatePresence>
+                  {selectedPricing === 'personalizado' && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-3 pt-2 overflow-hidden">
+                      <div><Label>Valor (R$)</Label><Input type="number" placeholder="0,00" value={customValue || ''} onChange={(e) => { const v = Number(e.target.value); setCustomValue(v); setEditData(prev => ({ ...prev, contract_value: v })); }} className="mt-1" /></div>
+                      <div><Label>Motivo</Label><Textarea placeholder="Motivo do valor personalizado..." value={customValueReason} onChange={(e) => setCustomValueReason(e.target.value)} rows={2} className="mt-1 resize-none" /></div>
+                    </motion.div>
                   )}
-                  onClick={() => {
-                    setSelectedPricing(option.id);
-                    const opt = SERVICE_PRICING_OPTIONS.find(o => o.id === option.id);
-                    if (opt && option.id !== 'personalizado') {
-                      setEditData({ ...editData, contract_value: opt.value });
-                    }
-                  }}
-                >
-                  <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
-                  <div className="flex-1">
-                    <label htmlFor={option.id} className="font-medium cursor-pointer">
-                      {option.label}
-                    </label>
-                    <p className="text-sm text-muted-foreground">{option.description}</p>
-                    {option.id !== 'personalizado' && (
-                      <p className="text-sm font-semibold text-emerald-600 mt-1">
-                        R$ {option.value.toLocaleString('pt-BR')}
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </RadioGroup>
+                </AnimatePresence>
+              </div>
+            </ScrollArea>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowPricingDialog(false)}>Cancelar</Button>
+              <Button onClick={() => { setShowPricingDialog(false); handleSaveQuickChanges(); toast.success(`Valor: ${editData.contract_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`); }} className="bg-emerald-600 hover:bg-emerald-700">
+                <Check className="h-4 w-4 mr-2" />Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-            {/* Custom Value Fields */}
-            <AnimatePresence>
-              {selectedPricing === 'personalizado' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-3 pt-2"
-                >
-                  <div>
-                    <Label>Valor Personalizado (R$)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0,00"
-                      value={customValue || ''}
-                      onChange={(e) => {
-                        const value = Number(e.target.value);
-                        setCustomValue(value);
-                        setEditData({ ...editData, contract_value: value });
-                      }}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label>Motivo / Observação</Label>
-                    <Textarea
-                      placeholder="Descreva o motivo deste valor personalizado..."
-                      value={customValueReason}
-                      onChange={(e) => setCustomValueReason(e.target.value)}
-                      rows={2}
-                      className="mt-1 resize-none"
-                    />
-                  </div>
-                </motion.div>
+        {/* ─── Edit Dialog ─────────────────────────────────────────────────── */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh]">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Edit2 className="h-5 w-5" />Editar Cliente</DialogTitle></DialogHeader>
+            <ScrollArea className="max-h-[65vh] pr-2">
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <div className="col-span-2"><Label>Nome Completo</Label><Input value={editFormData.full_name} onChange={(e) => setEditFormData({...editFormData, full_name: e.target.value})} placeholder="Nome completo" /></div>
+                <div><Label>E-mail</Label><Input type="email" value={editFormData.email} onChange={(e) => setEditFormData({...editFormData, email: e.target.value})} placeholder="email@exemplo.com" /></div>
+                <div><Label>Telefone</Label><Input value={editFormData.phone} onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})} placeholder="(11) 99999-9999" /></div>
+                <div><Label>CPF</Label><Input value={editFormData.cpf} onChange={(e) => setEditFormData({...editFormData, cpf: e.target.value})} placeholder="000.000.000-00" /></div>
+                <div><Label>CNPJ</Label><Input value={editFormData.cnpj} onChange={(e) => setEditFormData({...editFormData, cnpj: e.target.value})} placeholder="00.000.000/0001-00" /></div>
+                <div><Label>Empresa</Label><Input value={editFormData.company_name} onChange={(e) => setEditFormData({...editFormData, company_name: e.target.value})} placeholder="Nome da empresa" /></div>
+                <div className="col-span-2"><Label>Endereço</Label><Input value={editFormData.address} onChange={(e) => setEditFormData({...editFormData, address: e.target.value})} placeholder="Rua, número" /></div>
+                <div><Label>Bairro</Label><Input value={editFormData.neighborhood} onChange={(e) => setEditFormData({...editFormData, neighborhood: e.target.value})} placeholder="Bairro" /></div>
+                <div><Label>Cidade</Label><Input value={editFormData.city} onChange={(e) => setEditFormData({...editFormData, city: e.target.value})} placeholder="Cidade" /></div>
+                <div><Label>Estado</Label>
+                  <Select value={editFormData.state} onValueChange={(v) => setEditFormData({...editFormData, state: v})}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>{['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => <SelectItem key={uf} value={uf}>{uf}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label>CEP</Label><Input value={editFormData.zip_code} onChange={(e) => setEditFormData({...editFormData, zip_code: e.target.value})} placeholder="00000-000" /></div>
+                {client?.process_id && (
+                  <>
+                    <div><Label>Nome da Marca</Label><Input value={editFormData.brand_name} onChange={(e) => setEditFormData({...editFormData, brand_name: e.target.value})} placeholder="Nome da marca" /></div>
+                    <div><Label>Ramo de Atividade</Label><Input value={editFormData.business_area} onChange={(e) => setEditFormData({...editFormData, business_area: e.target.value})} placeholder="Ex: Tecnologia" /></div>
+                  </>
+                )}
+                <div><Label>Prioridade</Label>
+                  <Select value={editFormData.priority} onValueChange={(v) => setEditFormData({...editFormData, priority: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Média</SelectItem><SelectItem value="high">Alta</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Origem</Label>
+                  <Select value={editFormData.origin} onValueChange={(v) => setEditFormData({...editFormData, origin: v})}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="site">Site</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="indicacao">Indicação</SelectItem><SelectItem value="instagram">Instagram</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2"><Label className="flex items-center gap-1"><UserCheck className="h-3.5 w-3.5" />Atribuir a</Label>
+                  <Select value={editFormData.assigned_to} onValueChange={(v) => setEditFormData({...editFormData, assigned_to: v === 'none' ? '' : v})}>
+                    <SelectTrigger><SelectValue placeholder="Não atribuído" /></SelectTrigger>
+                    <SelectContent className="max-h-60"><SelectItem value="none">Nenhum</SelectItem>{adminUsersList.map(a => <SelectItem key={a.id} value={a.id}>{a.full_name || a.email}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </ScrollArea>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancelar</Button>
+              <Button onClick={handleSaveFullEdit} disabled={savingEdit}>
+                {savingEdit ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Move Dialog ──────────────────────────────────────────────────── */}
+        <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowUpRight className="h-5 w-5 text-blue-600" />Mover para Funil</DialogTitle></DialogHeader>
+            <div className="py-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Funil atual: <strong>{(client?.client_funnel_type || 'juridico') === 'comercial' ? 'Comercial' : 'Jurídico'}</strong></p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: 'comercial', label: 'Comercial', desc: 'Pipeline de vendas', Icon: Building2, color: 'blue' },
+                  { id: 'juridico', label: 'Jurídico', desc: 'Processos INPI', Icon: Lock, color: 'purple' },
+                ].map(({ id, label, desc, Icon, color }) => {
+                  const isCurrent = (client?.client_funnel_type || 'juridico') === id;
+                  return (
+                    <button key={id} className={cn('p-4 rounded-xl border-2 text-center transition-all', isCurrent ? `border-${color}-500 bg-${color}-50 dark:bg-${color}-950/30 opacity-50 cursor-not-allowed` : `border-border hover:border-${color}-500 hover:bg-${color}-50 dark:hover:bg-${color}-950/20`)} disabled={isCurrent} onClick={() => handleMoveFunnel(id as any)}>
+                      <Icon className={`h-8 w-8 mx-auto mb-2 text-${color}-600`} />
+                      <p className="font-semibold text-sm">{label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <DialogFooter><Button variant="outline" onClick={() => setShowMoveDialog(false)}>Cancelar</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Notification Dialog ──────────────────────────────────────────── */}
+        <Dialog open={showNotificationDialog} onOpenChange={setShowNotificationDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Bell className="h-5 w-5" />Enviar Notificação</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-4">
+              {notificationTemplates.length > 0 && (
+                <div>
+                  <Label>Template</Label>
+                  <Select onValueChange={(v) => { const tpl = notificationTemplates.find(t => t.id === v); if (tpl) setNotificationForm(prev => ({ ...prev, title: tpl.title, message: tpl.message, type: tpl.type })); }}>
+                    <SelectTrigger><SelectValue placeholder="Selecionar template…" /></SelectTrigger>
+                    <SelectContent>{notificationTemplates.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               )}
-            </AnimatePresence>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPricingDialog(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={() => {
-                setShowPricingDialog(false);
-                toast.success(`Valor definido: R$ ${editData.contract_value.toLocaleString('pt-BR')}`);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Confirmar Valor
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Client Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              Editar Cliente
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2">
-              <Label>Nome Completo</Label>
-              <Input 
-                value={editFormData.full_name}
-                onChange={(e) => setEditFormData({...editFormData, full_name: e.target.value})}
-                placeholder="Nome completo do cliente"
-              />
-            </div>
-            <div>
-              <Label>E-mail</Label>
-              <Input 
-                type="email"
-                value={editFormData.email}
-                onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
-                placeholder="email@exemplo.com"
-              />
-            </div>
-            <div>
-              <Label>Telefone</Label>
-              <Input 
-                value={editFormData.phone}
-                onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
-                placeholder="(11) 99999-9999"
-              />
-            </div>
-            <div>
-              <Label>CPF</Label>
-              <Input 
-                value={editFormData.cpf}
-                onChange={(e) => setEditFormData({...editFormData, cpf: e.target.value})}
-                placeholder="000.000.000-00"
-              />
-            </div>
-            <div>
-              <Label>CNPJ</Label>
-              <Input 
-                value={editFormData.cnpj}
-                onChange={(e) => setEditFormData({...editFormData, cnpj: e.target.value})}
-                placeholder="00.000.000/0001-00"
-              />
-            </div>
-            <div>
-              <Label>Empresa</Label>
-              <Input 
-                value={editFormData.company_name}
-                onChange={(e) => setEditFormData({...editFormData, company_name: e.target.value})}
-                placeholder="Nome da empresa"
-              />
-            </div>
-            <div className="col-span-2">
-              <Label>Endereço</Label>
-              <Input 
-                value={editFormData.address}
-                onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
-                placeholder="Rua, número"
-              />
-            </div>
-            <div>
-              <Label>Bairro</Label>
-              <Input 
-                value={editFormData.neighborhood}
-                onChange={(e) => setEditFormData({...editFormData, neighborhood: e.target.value})}
-                placeholder="Bairro"
-              />
-            </div>
-            <div>
-              <Label>Cidade</Label>
-              <Input 
-                value={editFormData.city}
-                onChange={(e) => setEditFormData({...editFormData, city: e.target.value})}
-                placeholder="Cidade"
-              />
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Select 
-                value={editFormData.state} 
-                onValueChange={(v) => setEditFormData({...editFormData, state: v})}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
-                    <SelectItem key={uf} value={uf}>{uf}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>CEP</Label>
-              <Input 
-                value={editFormData.zip_code}
-                onChange={(e) => setEditFormData({...editFormData, zip_code: e.target.value})}
-                placeholder="00000-000"
-              />
-            </div>
-            {/* Brand fields - only show if client has a process */}
-            {client?.process_id && (
-              <>
-                <div>
-                  <Label>Nome da Marca</Label>
-                  <Input 
-                    value={editFormData.brand_name}
-                    onChange={(e) => setEditFormData({...editFormData, brand_name: e.target.value})}
-                    placeholder="Nome da marca registrada"
-                  />
-                </div>
-                <div>
-                  <Label>Ramo de Atividade</Label>
-                  <Input 
-                    value={editFormData.business_area}
-                    onChange={(e) => setEditFormData({...editFormData, business_area: e.target.value})}
-                    placeholder="Ex: Tecnologia, Alimentação..."
-                  />
-                </div>
-              </>
-            )}
-            <div>
-              <Label>Prioridade</Label>
-              <Select 
-                value={editFormData.priority} 
-                onValueChange={(v) => setEditFormData({...editFormData, priority: v})}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Baixa</SelectItem>
-                  <SelectItem value="medium">Média</SelectItem>
-                  <SelectItem value="high">Alta</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Origem</Label>
-              <Select 
-                value={editFormData.origin} 
-                onValueChange={(v) => setEditFormData({...editFormData, origin: v})}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="site">Site</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="indicacao">Indicação</SelectItem>
-                  <SelectItem value="instagram">Instagram</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {/* Atribuir a usuário admin */}
-            <div className="col-span-2">
-              <Label className="flex items-center gap-1">
-                <UserCheck className="h-3.5 w-3.5" />
-                Atribuir Cliente a
-              </Label>
-              <Select 
-                value={editFormData.assigned_to} 
-                onValueChange={(v) => setEditFormData({...editFormData, assigned_to: v === 'none' ? '' : v})}
-              >
-                <SelectTrigger><SelectValue placeholder="Nenhum (não atribuído)" /></SelectTrigger>
-                <SelectContent className="max-h-60 overflow-y-auto">
-                  <SelectItem value="none">Nenhum (não atribuído)</SelectItem>
-                  {adminUsersList.map(admin => (
-                    <SelectItem key={admin.id} value={admin.id}>
-                      {admin.full_name || admin.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveFullEdit}>
-              <Check className="h-4 w-4 mr-2" />
-              Salvar Alterações
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Move Funnel Dialog */}
-      <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowUpRight className="h-5 w-5 text-blue-600" />
-              Mover Cliente para Funil
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Funil atual: <strong>{(client?.client_funnel_type || 'juridico') === 'comercial' ? 'Comercial' : 'Jurídico'}</strong>
-            </p>
-            <p className="text-sm text-muted-foreground">Selecione o funil de destino:</p>
-            <div className="grid grid-cols-2 gap-3">
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => handleMoveFunnel('comercial')}
-                className={cn(
-                  "p-4 rounded-xl border-2 text-center transition-all",
-                  (client?.client_funnel_type || 'juridico') === 'comercial'
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30 opacity-50 cursor-not-allowed"
-                    : "border-border hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                )}
-                disabled={(client?.client_funnel_type || 'juridico') === 'comercial'}
-              >
-                <Building2 className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-                <p className="font-semibold text-sm">Comercial</p>
-                <p className="text-xs text-muted-foreground mt-1">Pipeline de vendas</p>
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => handleMoveFunnel('juridico')}
-                className={cn(
-                  "p-4 rounded-xl border-2 text-center transition-all",
-                  (client?.client_funnel_type || 'juridico') === 'juridico'
-                    ? "border-purple-500 bg-purple-50 dark:bg-purple-950/30 opacity-50 cursor-not-allowed"
-                    : "border-border hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950/20"
-                )}
-                disabled={(client?.client_funnel_type || 'juridico') === 'juridico'}
-              >
-                <FileText className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-                <p className="font-semibold text-sm">Jurídico</p>
-                <p className="text-xs text-muted-foreground mt-1">Processos INPI</p>
-              </motion.button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMoveDialog(false)}>
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Notification Dialog */}
-      <Dialog open={showNotificationDialog} onOpenChange={setShowNotificationDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Enviar Notificação</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            if (!notificationForm.title || !notificationForm.message || !client) return;
-            try {
-              await supabase.from('notifications').insert({
-                user_id: client.id,
-                title: notificationForm.title,
-                message: notificationForm.message,
-                type: notificationForm.type,
-                link: notificationForm.link || null,
-                read: false,
-              });
-              toast.success('Notificação enviada ao cliente!');
-              setShowNotificationDialog(false);
-            } catch {
-              toast.error('Erro ao enviar notificação');
-            }
-          }} className="space-y-4">
-            {notificationTemplates.length > 0 && (
-              <div>
-                <Label>Usar Template (opcional)</Label>
-                <Select onValueChange={(id) => {
-                  const t = notificationTemplates.find(t => t.id === id);
-                  if (t) setNotificationForm(f => ({ ...f, title: t.title, message: t.message, type: t.type }));
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Selecione um template..." /></SelectTrigger>
-                  <SelectContent>
-                    {notificationTemplates.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label>Título *</Label>
-              <Input value={notificationForm.title} onChange={e => setNotificationForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Atualização do seu processo" required />
-            </div>
-            <div>
-              <Label>Mensagem *</Label>
-              <Textarea value={notificationForm.message} onChange={e => setNotificationForm(f => ({ ...f, message: e.target.value }))} placeholder="Conteúdo da notificação..." rows={4} required />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Tipo</Label>
-                <Select value={notificationForm.type} onValueChange={v => setNotificationForm(f => ({ ...f, type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="info">Informação</SelectItem>
-                    <SelectItem value="success">Sucesso</SelectItem>
-                    <SelectItem value="warning">Aviso</SelectItem>
-                    <SelectItem value="error">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Link (opcional)</Label>
-                <Input value={notificationForm.link} onChange={e => setNotificationForm(f => ({ ...f, link: e.target.value }))} placeholder="/cliente/processos" />
-              </div>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/50">
-              <p className="text-sm text-muted-foreground">
-                <Users className="inline h-4 w-4 mr-1" />
-                Cliente: <strong>{client?.full_name || client?.email}</strong>
-              </p>
+              <div><Label>Título *</Label><Input value={notificationForm.title} onChange={(e) => setNotificationForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Título da notificação" /></div>
+              <div><Label>Mensagem *</Label><Textarea value={notificationForm.message} onChange={(e) => setNotificationForm(prev => ({ ...prev, message: e.target.value }))} rows={3} className="resize-none" placeholder="Conteúdo da notificação…" /></div>
+              <div><Label>Link (opcional)</Label><Input value={notificationForm.link} onChange={(e) => setNotificationForm(prev => ({ ...prev, link: e.target.value }))} placeholder="/cliente/processos" /></div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowNotificationDialog(false)}>Cancelar</Button>
-              <Button type="submit"><Send className="h-4 w-4 mr-2" />Enviar</Button>
+              <Button variant="outline" onClick={() => setShowNotificationDialog(false)}>Cancelar</Button>
+              <Button onClick={async () => {
+                if (!notificationForm.title || !notificationForm.message || !client) return;
+                try {
+                  await supabase.from('notifications').insert({ user_id: client.id, title: notificationForm.title, message: notificationForm.message, type: notificationForm.type, link: notificationForm.link || null, read: false });
+                  toast.success('Notificação enviada!');
+                  setShowNotificationDialog(false);
+                } catch { toast.error('Erro ao enviar notificação'); }
+              }} disabled={!notificationForm.title || !notificationForm.message}>
+                <Send className="h-4 w-4 mr-2" />Enviar
+              </Button>
             </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      </SheetContent>
     </Sheet>
   );
 }
