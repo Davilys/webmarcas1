@@ -98,6 +98,85 @@ async function withRetry(
   return { ...last, attempts: maxAttempts };
 }
 
+// ─── Link Extractor ───────────────────────────────────────────────────────────
+
+const URL_REGEX = /https?:\/\/[^\s]+/g;
+
+function extractLinks(text: string): { cleanText: string; links: string[] } {
+  const links = text.match(URL_REGEX) || [];
+  const cleanText = text.replace(URL_REGEX, '').replace(/\s+/g, ' ').trim();
+  return { cleanText, links };
+}
+
+// ─── AI SMS Summarizer ────────────────────────────────────────────────────────
+
+async function summarizeForSMS(message: string): Promise<string> {
+  // Se já cabe no SMS, não precisa chamar IA
+  if (message.length <= 160) return message;
+
+  const { cleanText, links } = extractLinks(message);
+
+  // Calcula espaço disponível para o resumo (reserva espaço para links)
+  const linkSpace = links.reduce((acc, l) => acc + l.length + 1, 0);
+  const targetLen = Math.max(60, 155 - linkSpace);
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY não configurada');
+
+    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um compressor de SMS profissional. Resuma a mensagem em no máximo ${targetLen} caracteres.
+REGRAS OBRIGATÓRIAS:
+- Mantenha sempre "WebMarcas:" no início
+- Preserve o nome do destinatário
+- Preserve valores monetários (R$)
+- Preserve nomes de marcas/produtos
+- Não use abreviações que dificultem entendimento
+- Não adicione comentários, apenas o texto resumido
+- Responda SOMENTE o texto resumido, sem aspas`,
+          },
+          { role: 'user', content: cleanText },
+        ],
+        max_tokens: 80,
+        temperature: 0.2,
+      }),
+    });
+
+    if (!res.ok) throw new Error(`AI gateway HTTP ${res.status}`);
+
+    const json = await res.json();
+    const summary = (json.choices?.[0]?.message?.content as string | undefined)?.trim() || '';
+
+    if (!summary) throw new Error('resposta vazia da IA');
+
+    // Reinsere links preservados no final
+    const final = links.length > 0 ? `${summary} ${links.join(' ')}` : summary;
+
+    console.log(`[sms-ai] Resumo aplicado: ${message.length} → ${final.length} chars`);
+    return final.substring(0, 160);
+
+  } catch (err) {
+    console.warn('[sms-ai] Resumo falhou, usando fallback manual:', err);
+    // Fallback: trunca o texto mas preserva o primeiro link
+    if (links.length > 0) {
+      const link = links[0];
+      const spaceForLink = 160 - link.length - 1;
+      return `${cleanText.substring(0, spaceForLink)} ${link}`;
+    }
+    return message.substring(0, 160);
+  }
+}
+
 // ─── SMS via Zenvia ───────────────────────────────────────────────────────────
 
 async function sendSMS(
@@ -275,10 +354,13 @@ const handler = async (req: Request): Promise<Response> => {
         await logDispatch(supabase, event_type, 'sms', 'failed', rawPayload,
           undefined, recipient.email, recipient.user_id, 'Telefone não informado', undefined, 0);
       } else {
-        const smsResult = await withRetry(() => sendSMS(smsSettings, phone, message));
-        results.sms = smsResult;
+        const smsMessage = await summarizeForSMS(message); // ← IA resume aqui
+        const smsSummarized = smsMessage !== message;
+        const smsResult = await withRetry(() => sendSMS(smsSettings, phone, smsMessage));
+        results.sms = { ...smsResult, ...(smsSummarized ? { summarized: true, original_length: message.length, sms_length: smsMessage.length } : {}) };
         await logDispatch(supabase, event_type, 'sms',
-          smsResult.success ? 'sent' : 'failed', rawPayload,
+          smsResult.success ? 'sent' : 'failed',
+          { ...rawPayload, sms_message_summarized: smsSummarized, sms_final_message: smsMessage },
           phone, recipient.email, recipient.user_id,
           smsResult.error, smsResult.response, smsResult.attempts);
       }
