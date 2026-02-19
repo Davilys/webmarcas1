@@ -208,7 +208,7 @@ export function ContractRenderer({
                 CONTRATO
               </h1>
               
-              {/* Dark Blue Box with Contract Title */}
+              {/* Dark Blue Box with Contract Title - same as PDF model */}
               <div 
                 className="text-center py-3 px-4 rounded mb-4"
                 style={{ backgroundColor: '#1e3a5f' }}
@@ -521,7 +521,7 @@ export function generateContractPrintHTML(
     
     /* Light Blue Box with Contract Title */
     .contract-title-box {
-      background-color: #0EA5E9 !important;
+      background-color: #1e3a5f !important;
       color: white !important;
       text-align: center;
       padding: 14px 20px;
@@ -634,7 +634,7 @@ export function generateContractPrintHTML(
       }
       
       .contract-title-box {
-        background-color: #0EA5E9 !important;
+        background-color: #1e3a5f !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
