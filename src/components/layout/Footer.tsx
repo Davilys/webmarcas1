@@ -1,6 +1,6 @@
 import { Mail, Phone, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
-import webmarcasLogo from "@/assets/webmarcas-logo.png";
+
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const Footer = () => {
@@ -30,7 +30,6 @@ const Footer = () => {
           {/* Brand */}
           <div className="lg:col-span-1">
             <a href="#home" className="flex items-center gap-2 mb-4">
-              <img src={webmarcasLogo} alt="WebMarcas" className="h-10 w-auto" />
               <span className="font-display text-xl font-bold">
                 Web<span className="gradient-text">Marcas</span>
               </span>
