@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import webmarcasLogoMark from "@/assets/webmarcas-logo-mark.png";
 import { Menu, X, Moon, Sun, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -55,6 +56,11 @@ const Header = () => {
         <div className="flex items-center justify-between h-14 md:h-16 lg:h-20">
           {/* Logo */}
           <a href="/" className="flex items-center gap-1.5 md:gap-2">
+            <img
+              src={webmarcasLogoMark}
+              alt="WebMarcas"
+              className="h-9 md:h-11 w-auto shrink-0 mix-blend-multiply dark:mix-blend-screen dark:invert"
+            />
             <span className="font-display text-lg md:text-xl font-bold">
               Web<span className="gradient-text">Marcas</span>
             </span>
