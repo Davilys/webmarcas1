@@ -726,6 +726,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
           ? boletoVencimentoDate.toISOString().split('T')[0]
           : null;
 
+      // Get current admin user to register as contract creator
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+
       const { data: contract, error } = await supabase.from('contracts').insert({
         user_id: userId,
         contract_number: generateContractNumber(),
@@ -742,15 +745,26 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         signatory_cnpj: isNewClient && brandData.hasCNPJ ? brandData.cnpj : (formData.signatory_cnpj || null),
         penalty_value: formData.penalty_value ? parseFloat(formData.penalty_value) : null,
         payment_method: (isNewClient || isStandardTemplate) && paymentMethod ? paymentMethod : null,
-        custom_due_date: customDueDate, // Save admin-specified custom date for PIX/Boleto
+        custom_due_date: customDueDate,
         signature_status: 'not_signed',
         visible_to_client: true,
         lead_id: leadId || null,
-      }).select().single();
+        created_by: adminUser?.id || null, // ← Camada 2: registra admin criador
+      } as any).select().single();
 
       if (error) throw error;
 
       setCreatedContractId(contract.id);
+
+      // Camada 2: Atribuir admin como responsável no perfil do cliente (se ainda não tiver)
+      if (adminUser?.id && userId) {
+        await supabase
+          .from('profiles')
+          .update({ assigned_to: adminUser.id })
+          .eq('id', userId)
+          .is('assigned_to', null); // Só atribui se ainda não tiver responsável
+      }
+
       toast.success('Contrato criado com sucesso');
 
       // Check if it's a standard contract template that needs automatic link generation

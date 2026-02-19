@@ -167,12 +167,12 @@ serve(async (req) => {
       signatureData.client_signature_image = signatureImage;
     }
 
-    // Update contract in database
+    // Update contract in database and fetch created_by to auto-assign responsible admin
     const { data: contractData, error: contractError } = await supabase
       .from('contracts')
       .update(signatureData)
       .eq('id', contractId)
-      .select('*, leads(*)')
+      .select('*, leads(*), created_by')
       .single();
 
     if (contractError) {
@@ -354,6 +354,30 @@ serve(async (req) => {
       }
     }
 
+    // ========================================
+    // CAMADA 3: ATRIBUIÇÃO AUTOMÁTICA DE RESPONSÁVEL
+    // Se o contrato foi criado por um admin, atribuir esse admin como
+    // responsável pelo cliente no momento da assinatura
+    // ========================================
+    if (userId && contractData?.created_by) {
+      const { error: assignError } = await supabase
+        .from('profiles')
+        .update({
+          assigned_to: contractData.created_by,
+          created_by: contractData.created_by,
+        })
+        .eq('id', userId)
+        .is('assigned_to', null); // Só atribui se ainda não tiver responsável
+
+      if (assignError) {
+        console.error('Error assigning responsible admin to client profile:', assignError);
+      } else {
+        console.log('Auto-assigned admin as responsible for client:', contractData.created_by, '→ user:', userId);
+      }
+    } else if (userId && !contractData?.created_by) {
+      console.log('Contract has no created_by (signed from site) - skipping auto-assignment');
+    }
+
     // Create client activity log
     if (userId) {
       await supabase
@@ -367,14 +391,14 @@ serve(async (req) => {
             blockchain_hash: contractHash,
             blockchain_tx_id: blockchainData.txId,
             ip_address: clientIP,
-            ots_file_url: otsFileUrl
+            ots_file_url: otsFileUrl,
+            auto_assigned_to: contractData?.created_by || null,
           }
         });
 
       // ========================================
       // UPDATE PIPELINE STAGE FOR COMMERCIAL CLIENTS
       // ========================================
-      // Check if client is in commercial funnel and update their process stage
       const { data: clientProfile } = await supabase
         .from('profiles')
         .select('client_funnel_type')
@@ -382,7 +406,6 @@ serve(async (req) => {
         .single();
 
       if (clientProfile?.client_funnel_type === 'comercial') {
-        // Update all processes for this client to 'assinou_contrato' stage
         const { error: stageError } = await supabase
           .from('brand_processes')
           .update({ pipeline_stage: 'assinou_contrato' })
