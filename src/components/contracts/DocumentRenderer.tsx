@@ -1,18 +1,18 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import webmarcasLogo from '@/assets/webmarcas-logo-new.png';
 import davilysSignature from '@/assets/davilys-signature.png';
 import { ContractRenderer } from '@/components/contracts/ContractRenderer';
 
 // Função para gerar URL de verificação dinâmica baseada no domínio atual
-const getVerificationUrl = (hash: string, baseUrl?: string) => {
-  const base = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+const getVerificationUrl = (hash: string) => {
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.net';
   return `${base}/verificar-contrato?hash=${hash}`;
 };
 
 // Função para obter o host atual para exibição
 const getCurrentHost = () => {
-  return typeof window !== 'undefined' ? window.location.host : 'webmarcas.lovable.app';
+  return typeof window !== 'undefined' ? window.location.host : 'webmarcas.net';
 };
 
 interface BlockchainSignature {
@@ -34,6 +34,66 @@ interface DocumentRendererProps {
   signatoryCnpj?: string;
 }
 
+/** Detecta documento HTML completo (com DOCTYPE ou <html>) */
+function isFullHtmlDocument(content: string): boolean {
+  const t = content.trim();
+  return t.startsWith('<!DOCTYPE') || t.startsWith('<html') || t.startsWith('<HTML');
+}
+
+/** Detecta HTML parcial (tags HTML mas sem documento completo) */
+function isPartialHtml(content: string): boolean {
+  const t = content.trim();
+  return t.startsWith('<') && t.includes('</') && !isFullHtmlDocument(t);
+}
+
+/**
+ * Renderiza documentos HTML completos via iframe sandboxed.
+ * Isso garante que o CSS do documento não vaze para fora como texto visível.
+ */
+function FullHtmlDocumentViewer({ htmlContent }: { htmlContent: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeHeight, setIframeHeight] = useState(900);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    const adjustHeight = () => {
+      try {
+        const body = doc.body;
+        if (body) {
+          const height = Math.max(body.scrollHeight, body.offsetHeight, 600);
+          setIframeHeight(height + 60);
+        }
+      } catch {
+        // cross-origin fallback
+      }
+    };
+
+    iframe.onload = adjustHeight;
+    setTimeout(adjustHeight, 400);
+    setTimeout(adjustHeight, 1000);
+  }, [htmlContent]);
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+      <iframe
+        ref={iframeRef}
+        title="Visualização do Documento"
+        style={{ width: '100%', height: `${iframeHeight}px`, border: 'none', display: 'block' }}
+        sandbox="allow-same-origin"
+      />
+    </div>
+  );
+}
+
 export function DocumentRenderer({
   documentType,
   content,
@@ -44,337 +104,111 @@ export function DocumentRenderer({
   signatoryCpf,
   signatoryCnpj,
 }: DocumentRendererProps) {
-  const documentTitle = useMemo(() => {
-    switch (documentType) {
-      case 'procuracao':
-        return 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI';
-      case 'distrato_multa':
-        return 'Acordo de Distrato de Parceria - Anexo I';
-      case 'distrato_sem_multa':
-        return 'Acordo de Distrato de Parceria - Anexo I';
-      case 'contract':
-        return 'CONTRATO';
-      default:
-        return 'DOCUMENTO';
-    }
-  }, [documentType]);
-
-  const documentSubtitle = useMemo(() => {
-    if (documentType === 'procuracao') {
-      return 'Instrumento Particular de Procuração para fins de Registro de Marca';
-    }
-    return null;
-  }, [documentType]);
-
-  // Detectar se o conteúdo é HTML completo (já possui estrutura própria)
-  const isCompleteHtmlDocument = useMemo(() => {
-    const trimmedContent = content.trim();
-    // Verifica se já tem estrutura de documento completo
-    return trimmedContent.startsWith('<!DOCTYPE') || 
-           trimmedContent.startsWith('<html') ||
-           // Verifica se tem estrutura de contrato completo (com header)
-           trimmedContent.includes('gradient-bar') ||
-           trimmedContent.includes('main-title') ||
-           trimmedContent.includes('header-logo') ||
-           // Verifica se é apenas HTML simples (parágrafos, divs)
-           (trimmedContent.startsWith('<div') && trimmedContent.includes('</div>'));
-  }, [content]);
-
-  // Detectar se é HTML parcial (sem documento completo, apenas tags)
-  const isHtmlContent = useMemo(() => {
-    const trimmedContent = content.trim();
-    return trimmedContent.startsWith('<') && trimmedContent.includes('</');
-  }, [content]);
-
+  // All hooks must be called unconditionally at the top level
   const formattedContent = useMemo(() => {
-    // Remove {contract_signature} placeholder from content
     return content.replace(/\{contract_signature\}/g, '').trim();
   }, [content]);
 
-  // URL de verificação dinâmica
-  const verificationUrl = blockchainSignature?.hash 
-    ? getVerificationUrl(blockchainSignature.hash) 
-    : '';
-  
-  // Função para extrair apenas o conteúdo do corpo (sem header duplicado)
-  const extractBodyContent = (html: string): string => {
-    let cleanedHtml = html;
-    
-    // Se o HTML tem estrutura de PDF gerado (com pdf-content), extrair apenas o conteúdo
-    const pdfContentMatch = html.match(/<div class="pdf-content">([\s\S]*?)(?:<div class="pdf-footer">|<div class="pdf-blue-divider">|<div class="pdf-certification">|$)/i);
-    if (pdfContentMatch) {
-      cleanedHtml = pdfContentMatch[1];
+  const isFullHtml = useMemo(() => isFullHtmlDocument(formattedContent), [formattedContent]);
+  const isHtml = useMemo(() => isPartialHtml(formattedContent), [formattedContent]);
+  const isPureText = !isFullHtml && !isHtml;
+  const isContractPureText = documentType === 'contract' && isPureText;
+
+  const documentTitle = useMemo(() => {
+    switch (documentType) {
+      case 'procuracao': return 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI';
+      case 'distrato_multa': return 'Acordo de Distrato de Parceria - Anexo I';
+      case 'distrato_sem_multa': return 'Acordo de Distrato de Parceria - Anexo I';
+      default: return 'DOCUMENTO';
     }
-    
-    // ESTRATÉGIA: Localizar onde começa o conteúdo real (após "Acordo do Contrato" ou box azul)
-    // e remover tudo antes disso que seja header duplicado
-    
-    // Encontrar a posição do box azul (CONTRATO PARTICULAR...) que marca início do conteúdo real
-    const blueBoxMatch = cleanedHtml.match(/<div[^>]*(?:background[^>]*#0ea5e9|background[^>]*rgb\(14,\s*165,\s*233\)|class="[^"]*highlight-box[^"]*")[^>]*>/i);
-    
-    if (blueBoxMatch && blueBoxMatch.index !== undefined) {
-      // Remover tudo antes do box azul que seja parte do header duplicado
-      const beforeBlueBox = cleanedHtml.substring(0, blueBoxMatch.index);
-      const afterBlueBox = cleanedHtml.substring(blueBoxMatch.index);
-      
-      // Limpar a parte antes do box azul de elementos de header
-      let cleanedBefore = beforeBlueBox
-        // Remove qualquer coisa que contenha WebMarcas ou www.webmarcas
-        .replace(/<[^>]*>[\s\S]*?WebMarcas[\s\S]*?<\/[^>]*>/gi, '')
-        .replace(/<[^>]*>[\s\S]*?www\.webmarcas\.net[\s\S]*?<\/[^>]*>/gi, '')
-        // Remove gradient bars
-        .replace(/<div[^>]*style="[^"]*(?:linear-gradient|#f97316|#fbbf24)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove títulos CONTRATO e Acordo do Contrato
-        .replace(/<h1[^>]*>[\s\S]*?CONTRATO[\s\S]*?<\/h1>/gi, '')
-        .replace(/<h2[^>]*>[\s\S]*?CONTRATO[\s\S]*?<\/h2>/gi, '')
-        .replace(/<h1[^>]*>[\s\S]*?Acordo do Contrato[\s\S]*?<\/h1>/gi, '')
-        .replace(/<h2[^>]*>[\s\S]*?Acordo do Contrato[\s\S]*?<\/h2>/gi, '')
-        // Remove imagens de logo
-        .replace(/<img[^>]*>/gi, '')
-        // Remove spans/links com WebMarcas ou URL
-        .replace(/<span[^>]*>[\s\S]*?WebMarcas[\s\S]*?<\/span>/gi, '')
-        .replace(/<a[^>]*>[\s\S]*?www\.webmarcas[\s\S]*?<\/a>/gi, '')
-        // Limpar texto solto
-        .replace(/WebMarcas/gi, '')
-        .replace(/www\.webmarcas\.net/gi, '')
-        // Limpar divs vazios
-        .replace(/<div[^>]*>\s*<\/div>/gi, '')
-        .replace(/<div[^>]*>\s*<\/div>/gi, '');
-      
-      cleanedHtml = cleanedBefore + afterBlueBox;
-    } else {
-      // Fallback: usar regex para limpar elementos comuns de header
-      cleanedHtml = cleanedHtml
-        // Remove elementos com classes PDF específicas
-        .replace(/<div[^>]*class="[^"]*pdf-header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<div[^>]*class="[^"]*pdf-gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<h1[^>]*class="[^"]*pdf-main-title[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
-        // Remove blocos com WebMarcas + URL + gradient
-        .replace(/<div[^>]*>[\s\S]*?WebMarcas[\s\S]*?www\.webmarcas\.net[\s\S]*?<\/div>\s*<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove gradient bars
-        .replace(/<div[^>]*style="[^"]*linear-gradient[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<div[^>]*style="[^"]*background[^"]*#f97316[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove imagens de logo
-        .replace(/<img[^>]*webmarcas[^>]*\/?>/gi, '')
-        .replace(/<img[^>]*alt="WebMarcas"[^>]*\/?>/gi, '')
-        // Remove spans e links com WebMarcas ou URL
-        .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
-        .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
-        .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
-        // Remove títulos CONTRATO e Acordo do Contrato
-        .replace(/<h1[^>]*>\s*CONTRATO\s*<\/h1>/gi, '')
-        .replace(/<h2[^>]*>\s*CONTRATO\s*<\/h2>/gi, '')
-        .replace(/<h1[^>]*>\s*Acordo do Contrato[\s\S]*?<\/h1>/gi, '')
-        .replace(/<h2[^>]*>\s*Acordo do Contrato[\s\S]*?<\/h2>/gi, '')
-        // Remove textos isolados
-        .replace(/WebMarcas<\/span>/gi, '')
-        .replace(/www\.webmarcas\.net/gi, '')
-        // Remove divs com class header ou gradient-bar
-        .replace(/<div[^>]*class="[^"]*header[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<div[^>]*class="[^"]*gradient-bar[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-    }
-    
-    // Limpeza final - remove divs vazios em múltiplas passadas
-    cleanedHtml = cleanedHtml
-      .replace(/<div[^>]*>\s*<\/div>/gi, '')
-      .replace(/<div[^>]*>\s*<\/div>/gi, '')
-      .replace(/<div[^>]*>\s*<\/div>/gi, '')
-      .trim();
-      
-    return cleanedHtml;
-  };
+  }, [documentType]);
 
-  // Se for documento HTML completo, adiciona cabeçalho correto com logo real
-  if (isCompleteHtmlDocument) {
-    const bodyContent = extractBodyContent(formattedContent);
-    
-    return (
-      <div className="bg-white text-black rounded-lg shadow-lg overflow-hidden">
-        {/* Header correto com Logo real */}
-        <div className="bg-white p-6">
-          <div className="flex items-center justify-between pb-3">
-            <img 
-              src={webmarcasLogo} 
-              alt="WebMarcas" 
-              className="h-12 object-contain"
-            />
-            <a 
-              href="https://www.webmarcas.net" 
-              className="text-sm font-medium"
-              style={{ color: '#0EA5E9' }}
-            >
-              www.webmarcas.net
-            </a>
-          </div>
-          {/* Gradient Bar */}
-          <div className="h-2 w-full rounded-sm" style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)' }} />
-        </div>
-
-        {/* Conteúdo do documento */}
-        <div className="px-8 py-6">
-          <div 
-            className="prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: bodyContent }}
-          />
-        </div>
-        
-        {/* Digital Certification Section - Sempre no final para documentos assinados */}
-        {(showCertificationSection || blockchainSignature?.hash) && blockchainSignature && (
-          <div className="mx-6 mb-6">
-            <div className="mt-8 pt-8 border-t-2 border-blue-600">
-              <div className="bg-blue-50 rounded-lg p-6">
-                <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">Hash SHA-256</p>
-                      <p className="text-xs font-mono bg-white p-2 rounded border break-all">
-                        {blockchainSignature.hash}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">Data/Hora da Assinatura</p>
-                      <p className="text-sm">{blockchainSignature.timestamp}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">ID da Transação</p>
-                      <p className="text-xs font-mono">{blockchainSignature.txId}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">Rede Blockchain</p>
-                      <p className="text-sm">{blockchainSignature.network}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">IP do Signatário</p>
-                      <p className="text-sm">{blockchainSignature.ipAddress}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-4 bg-white rounded border">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">QR Code de Verificação</p>
-                    <QRCodeSVG 
-                      value={verificationUrl}
-                      size={120}
-                      level="M"
-                      includeMargin={true}
-                    />
-                    <p className="text-xs text-gray-500 mt-2 text-center">
-                      Escaneie para verificar
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-gray-600 mt-4 italic text-center">
-                  Este documento foi assinado eletronicamente e possui validade jurídica conforme 
-                  Lei 14.063/2020 e MP 2.200-2/2001.
-                </p>
-                <p className="text-xs text-blue-700 mt-2 text-center font-medium">
-                  Verifique a autenticidade em: {getCurrentHost()}/verificar-contrato
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="bg-gray-100 px-8 py-4 border-t text-center text-xs text-gray-500">
-          <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
-          <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
-        <p>Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
-        </div>
-      </div>
-    );
-  }
+  const documentSubtitle = documentType === 'procuracao'
+    ? 'Instrumento Particular de Procuração para fins de Registro de Marca'
+    : null;
 
   const legalNotice = useMemo(() => {
     if (documentType === 'procuracao') {
       return 'Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.';
     }
     if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
-      return `Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.
-
-Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.`;
+      return `Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.\n\nOs termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.`;
     }
     return null;
   }, [documentType]);
 
-  // Contrato (texto puro): renderizar com o mesmo layout do modelo padrão (ContractRenderer)
-  if (documentType === 'contract' && !isHtmlContent) {
+  const verificationUrl = blockchainSignature?.hash ? getVerificationUrl(blockchainSignature.hash) : '';
+  const showCertSection = (showCertificationSection || !!blockchainSignature?.hash) && !!blockchainSignature;
+
+  // CASO 1: Documento HTML completo → renderizar via iframe (evita CSS visível como texto)
+  if (isFullHtml) {
+    return <FullHtmlDocumentViewer htmlContent={formattedContent} />;
+  }
+
+  // CASO 2: Contrato em texto puro → usar ContractRenderer (renderização React nativa, visual perfeito)
+  if (isContractPureText) {
     return (
       <ContractRenderer
         content={formattedContent}
         showLetterhead
         className="rounded-lg shadow-lg overflow-hidden"
-        showCertificationSection={showCertificationSection}
-        blockchainSignature={blockchainSignature?.hash ? {
-          hash: blockchainSignature.hash,
-          timestamp: blockchainSignature.timestamp,
-          txId: blockchainSignature.txId,
-          network: blockchainSignature.network,
-          ipAddress: blockchainSignature.ipAddress,
-        } : undefined}
+        showCertificationSection={showCertificationSection || !!blockchainSignature?.hash}
+        blockchainSignature={
+          blockchainSignature?.hash
+            ? {
+                hash: blockchainSignature.hash,
+                timestamp: blockchainSignature.timestamp,
+                txId: blockchainSignature.txId,
+                network: blockchainSignature.network,
+                ipAddress: blockchainSignature.ipAddress,
+              }
+            : undefined
+        }
+        documentType={documentType}
       />
     );
   }
 
+  // CASO 3: Procuração / Distrato em texto puro ou HTML parcial → layout completo com cabeçalho padrão
   return (
     <div className="bg-white text-black rounded-lg shadow-lg overflow-hidden">
-      {/* Header with Logo and Gradient Bar (igual ao modelo) */}
+      {/* Header */}
       <div className="bg-white p-6 border-b">
         <div className="flex items-center justify-between pb-3">
-          <img 
-            src={webmarcasLogo} 
-            alt="WebMarcas" 
-            className="h-12 object-contain"
-          />
-          <div className="text-right text-sm text-gray-600">
-            <p>www.webmarcas.net</p>
-            <p>juridico@webmarcas.net</p>
-          </div>
+          <img src={webmarcasLogo} alt="WebMarcas" className="h-12 object-contain" />
+          <a href="https://www.webmarcas.net" className="text-sm font-medium" style={{ color: '#0EA5E9' }}>
+            www.webmarcas.net
+          </a>
         </div>
-        {/* Gradient Bar */}
         <div className="h-2 w-full rounded-sm" style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)' }} />
       </div>
 
-      {/* Document Title */}
       <div className="px-8 py-6">
-        <h1 className="text-2xl font-bold text-blue-700 text-center mb-2">
-          {documentTitle}
-        </h1>
+        {/* Document Title */}
+        <h1 className="text-2xl font-bold text-blue-700 text-center mb-2">{documentTitle}</h1>
         {documentSubtitle && (
-          <p className="text-base text-gray-600 text-center mb-6 italic">
-            {documentSubtitle}
-          </p>
+          <p className="text-base text-gray-600 text-center mb-6 italic">{documentSubtitle}</p>
         )}
 
         {/* Legal Notice Box */}
         {legalNotice && (
           <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6 text-sm text-gray-700 italic">
             {legalNotice.split('\n\n').map((paragraph, idx) => (
-              <p key={idx} className={idx > 0 ? 'mt-3' : ''}>
-                {paragraph}
-              </p>
+              <p key={idx} className={idx > 0 ? 'mt-3' : ''}>{paragraph}</p>
             ))}
           </div>
         )}
 
         {/* Document Content */}
-        {isHtmlContent ? (
-          <div 
+        {isHtml ? (
+          <div
             className="prose prose-sm max-w-none text-justify leading-relaxed"
             dangerouslySetInnerHTML={{ __html: formattedContent }}
           />
         ) : (
           <div className="prose prose-sm max-w-none text-justify leading-relaxed">
             {formattedContent.split('\n\n').map((paragraph, idx) => (
-              <p key={idx} className="mb-4 text-gray-800">
-                {paragraph}
-              </p>
+              <p key={idx} className="mb-4 text-gray-800">{paragraph}</p>
             ))}
           </div>
         )}
@@ -384,9 +218,8 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
           <p className="text-sm text-gray-600 mb-8">
             Por estarem justas e contratadas, as partes assinam o presente de igual teor e forma, de forma digital válido juridicamente.
           </p>
-
           <div className="grid grid-cols-2 gap-8">
-            {/* Contractor Signature (WebMarcas/Davilys) */}
+            {/* Contractor Signature */}
             <div className="text-center">
               <p className="text-sm font-semibold mb-2">Assinatura autorizada:</p>
               <p className="text-sm text-gray-700 mb-4">
@@ -394,26 +227,15 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
               </p>
               <div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
                 {documentType === 'procuracao' ? (
-                  // Procuração: Mostrar assinatura manuscrita do Davilys
-                  <img 
-                    src={davilysSignature} 
-                    alt="Assinatura WebMarcas"
-                    className="h-16 mx-auto object-contain"
-                  />
+                  <img src={davilysSignature} alt="Assinatura WebMarcas" className="h-16 mx-auto object-contain" />
                 ) : (
-                  // Distrato/Contrato: Apenas texto indicando assinatura digital
                   <div className="flex items-center justify-center h-16">
-                    <span className="text-blue-600 font-medium text-sm">
-                      ✓ Assinado Digitalmente
-                    </span>
+                    <span className="text-blue-600 font-medium text-sm">✓ Assinado Digitalmente</span>
                   </div>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                {documentType === 'procuracao' 
-                  ? 'Davilys Danques de Oliveira Cunha'
-                  : 'Certificação Digital - Lei 14.063/2020'
-                }
+                {documentType === 'procuracao' ? 'Davilys Danques de Oliveira Cunha' : 'Certificação Digital - Lei 14.063/2020'}
               </p>
             </div>
 
@@ -427,21 +249,13 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
               </p>
               <div className="border-b-2 border-black mx-auto w-64 pb-2 min-h-[4rem]">
                 {clientSignature ? (
-                  <img 
-                    src={clientSignature} 
-                    alt="Assinatura do Cliente"
-                    className="h-16 mx-auto object-contain"
-                  />
+                  <img src={clientSignature} alt="Assinatura do Cliente" className="h-16 mx-auto object-contain" />
                 ) : blockchainSignature?.hash ? (
                   <div className="flex items-center justify-center h-16">
-                    <span className="text-blue-600 font-medium text-sm">
-                      ✓ Assinado Digitalmente
-                    </span>
+                    <span className="text-blue-600 font-medium text-sm">✓ Assinado Digitalmente</span>
                   </div>
                 ) : (
-                  <p className="text-gray-400 italic text-sm py-4">
-                    Aguardando assinatura...
-                  </p>
+                  <p className="text-gray-400 italic text-sm py-4">Aguardando assinatura...</p>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
@@ -451,8 +265,8 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
           </div>
         </div>
 
-        {/* Digital Certification Section with QR Code */}
-        {(showCertificationSection || blockchainSignature?.hash) && blockchainSignature && (
+        {/* Digital Certification Section */}
+        {showCertSection && blockchainSignature && (
           <div className="mt-12 pt-8 border-t-2 border-blue-600">
             <div className="bg-blue-50 rounded-lg p-6">
               <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
@@ -461,14 +275,11 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
                 </svg>
                 CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
               </h3>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase">Hash SHA-256</p>
-                    <p className="text-xs font-mono bg-white p-2 rounded border break-all">
-                      {blockchainSignature.hash}
-                    </p>
+                    <p className="text-xs font-mono bg-white p-2 rounded border break-all">{blockchainSignature.hash}</p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase">Data/Hora da Assinatura</p>
@@ -489,21 +300,12 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
                 </div>
                 <div className="flex flex-col items-center justify-center p-4 bg-white rounded border">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-3">QR Code de Verificação</p>
-                  <QRCodeSVG 
-                    value={verificationUrl}
-                    size={120}
-                    level="M"
-                    includeMargin={true}
-                  />
-                  <p className="text-xs text-gray-500 mt-2 text-center">
-                    Escaneie para verificar
-                  </p>
+                  <QRCodeSVG value={verificationUrl} size={120} level="M" includeMargin={true} />
+                  <p className="text-xs text-gray-500 mt-2 text-center">Escaneie para verificar</p>
                 </div>
               </div>
-
               <p className="text-xs text-gray-600 mt-4 italic text-center">
-                Este documento foi assinado eletronicamente e possui validade jurídica conforme 
-                Lei 14.063/2020 e MP 2.200-2/2001.
+                Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
               </p>
               <p className="text-xs text-blue-700 mt-2 text-center font-medium">
                 Verifique a autenticidade em: {getCurrentHost()}/verificar-contrato
@@ -516,7 +318,7 @@ Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviç
       {/* Footer */}
       <div className="bg-gray-100 px-8 py-4 border-t text-center text-xs text-gray-500">
         <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
-        <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
+        <p>Av. Brigadeiro Luís Antônio, 2696 - São Paulo - SP, CEP: 01402-000</p>
         <p>Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
       </div>
     </div>
@@ -561,6 +363,9 @@ export async function getLogoBase64ForPDF(): Promise<string> {
   }
 }
 
+// Embedded fallback logo SVG
+const WEBMARCAS_LOGO_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgNTAiPjxyZWN0IGZpbGw9IiMxZTNhNWYiIHdpZHRoPSIyMDAiIGhlaWdodD0iNTAiLz48dGV4dCB4PSIxMCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmYiPldlYk1hcmNhczwvdGV4dD48L3N2Zz4=';
+
 export function generateDocumentPrintHTML(
   documentType: 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' | 'contract',
   content: string,
@@ -573,625 +378,134 @@ export function generateDocumentPrintHTML(
   baseUrl?: string,
   logoBase64?: string
 ): string {
+  // Se for um HTML completo salvo, retorná-lo diretamente (já é o PDF pronto)
+  const trimmed = content.trim();
+  if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<HTML')) {
+    return content;
+  }
+
   let documentTitle = 'DOCUMENTO';
-  let documentSubtitle = '';
   if (documentType === 'procuracao') {
     documentTitle = 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI';
-    documentSubtitle = 'Instrumento Particular de Procuração para fins de Registro de Marca';
   } else if (documentType === 'contract') {
     documentTitle = 'CONTRATO';
-    documentSubtitle = 'CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO PARA REGISTRO DE MARCA JUNTO AO INPI';
   } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
     documentTitle = 'Acordo de Distrato de Parceria - Anexo I';
   }
 
-  // Legal notice for contracts and distratos
+  // Legal notice box
   let legalNotice = '';
-  if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
-    legalNotice = `<div class="legal-notice">
-        <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
-        <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
-      </div>`;
-  } else if (documentType === 'contract') {
-    legalNotice = `<div class="legal-notice" style="background: #FEF9E7 !important; border: none !important; border-left: 4px solid #F59E0B !important; border-radius: 0 !important;">
-        <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
-        <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
-      </div>`;
+  if (documentType === 'contract') {
+    legalNotice = `<div class="highlight-box">
+      <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+      <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
+    </div>`;
+  } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
+    legalNotice = `<div class="highlight-box">
+      <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+      <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
+    </div>`;
   }
 
-  // Limpar o conteúdo de headers duplicados antes de formatar
-  const cleanContent = (html: string): string => {
-    let cleaned = html;
-    
-    // Se for HTML, remover elementos de header que já existem
-    if (html.includes('<') && html.includes('>')) {
-      cleaned = cleaned
-        // Remove QUALQUER div que contenha texto de subtítulo de contrato
-        .replace(/<div[^>]*style="[^"]*background[^"]*"[^>]*>[^<]*(?:CONTRATO DE PRESTAÇÃO|Acordo do Contrato|Prestação de Serviços)[^<]*<\/div>/gi, '')
-        // Remove elementos de header
-        .replace(/<div[^>]*class="[^"]*(?:header|pdf-header)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove gradient bars
-        .replace(/<div[^>]*class="[^"]*(?:gradient-bar|pdf-gradient-bar)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<div[^>]*style="[^"]*(?:linear-gradient|#f97316|#fbbf24)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove títulos duplicados - mais agressivo
-        .replace(/<h1[^>]*class="[^"]*(?:document-title|main-title|pdf-main-title)[^"]*"[^>]*>[\s\S]*?<\/h1>/gi, '')
-        .replace(/<h1[^>]*>\s*(?:CONTRATO|Acordo do Contrato[^<]*)\s*<\/h1>/gi, '')
-        .replace(/<h2[^>]*>\s*(?:CONTRATO|Acordo do Contrato[^<]*)\s*<\/h2>/gi, '')
-        .replace(/<h1[^>]*style="[^"]*text-decoration[^"]*"[^>]*>[^<]*<\/h1>/gi, '')
-        // Remove imagens de logo
-        .replace(/<img[^>]*(?:header-logo|webmarcas|alt="WebMarcas")[^>]*\/?>/gi, '')
-        // Remove spans/links com WebMarcas ou URL
-        .replace(/<span[^>]*>\s*WebMarcas\s*<\/span>/gi, '')
-        .replace(/<a[^>]*>\s*www\.webmarcas\.net\s*<\/a>/gi, '')
-        .replace(/<span[^>]*>\s*www\.webmarcas\.net\s*<\/span>/gi, '')
-        .replace(/<div[^>]*class="[^"]*header-url[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove divs de container que envolvem o header
-        .replace(/<div[^>]*class="[^"]*document-container[^"]*"[^>]*>/gi, '')
-        // Remove highlight boxes azuis (tanto azul claro quanto azul escuro) - regex mais amplo
-        .replace(/<div[^>]*class="[^"]*highlight-box[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        .replace(/<div[^>]*style="[^"]*background[^"]*(?:#0EA5E9|#1e3a5f|#0ea5e9|rgb\s*\(\s*14|rgb\s*\(\s*30)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove contract-title-box
-        .replace(/<div[^>]*class="[^"]*(?:contract-title-box|pdf-contract-title-box)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove legal-notice boxes que já existem
-        .replace(/<div[^>]*class="[^"]*legal-notice[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove avisos legais amarelos já existentes
-        .replace(/<div[^>]*style="[^"]*(?:background[^"]*#FEF3C7|background[^"]*#fef3c7|border-left[^"]*#F59E0B)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Remove qualquer div com background azul escuro
-        .replace(/<div[^>]*style="[^"]*background[^"]*:\s*#1e3a5f[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
-        // Limpar divs vazios
-        .replace(/<div[^>]*>\s*<\/div>/gi, '')
-        .replace(/<div[^>]*>\s*<\/div>/gi, '');
-    }
-    
-    return cleaned.replace(/\{contract_signature\}/g, '').trim();
-  };
-  
-  const cleanedContent = cleanContent(content);
-  
-  // Verificar se o conteúdo é HTML ou texto puro
-  const isHtmlContent = cleanedContent.includes('<') && cleanedContent.includes('>') && 
-                        (cleanedContent.includes('<p') || cleanedContent.includes('<div') || cleanedContent.includes('<span'));
-  
-  // Função para extrair texto puro do HTML
-  const extractTextFromHtml = (html: string): string => {
-    return html
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .trim();
+  // Format plain text content as HTML
+  const cleanedContent = content.replace(/\{contract_signature\}/g, '').trim();
+  const isHtmlContent = cleanedContent.includes('<') && cleanedContent.includes('>') &&
+    (cleanedContent.includes('<p') || cleanedContent.includes('<div') || cleanedContent.includes('<span'));
+
+  const formatAsHtml = (text: string): string => {
+    return text.split('\n').map(line => {
+      const t = line.trim();
+      if (!t) return '<div style="height: 8px;"></div>';
+      if (t.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS')) return '';
+      if (/^\d+\.\s*CLÁUSULA/.test(t)) return `<h2 style="font-weight:bold;font-size:12px;color:#0284c7;margin-top:20px;margin-bottom:8px;">${t}</h2>`;
+      if (/^\d+\.\d+\s/.test(t)) return `<p style="font-size:11px;margin-bottom:8px;padding-left:16px;">${t}</p>`;
+      if (/^[a-z]\)/.test(t)) return `<p style="font-size:11px;margin-bottom:4px;padding-left:32px;">${t}</p>`;
+      if (t.startsWith('•')) return `<p style="font-size:11px;margin-bottom:8px;padding-left:16px;">${t}</p>`;
+      if (/^I+\)/.test(t)) return `<p style="font-size:11px;margin-bottom:12px;font-weight:500;">${t}</p>`;
+      if (t.match(/^_+$/)) return '';
+      if (t === 'CONTRATADA:' || t === 'CONTRATANTE:') return `<p style="font-size:11px;font-weight:bold;text-align:center;margin-top:24px;margin-bottom:4px;">${t}</p>`;
+      if (t.startsWith('São Paulo,')) return `<p style="font-size:11px;margin-top:24px;margin-bottom:24px;">${t}</p>`;
+      return `<p style="font-size:11px;margin-bottom:12px;line-height:1.6;">${t}</p>`;
+    }).join('\n');
   };
 
-  // Função para formatar o conteúdo do contrato igual ao ContractRenderer (React)
-  const formatContractContent = (textContent: string): string => {
-    const lines = textContent.split('\n');
-    const formattedLines = lines.map(line => {
-      const trimmed = line.trim();
-      
-      if (!trimmed) return '<div style="height: 8px;"></div>';
-      
-      // Skip the main contract title (already in header)
-      if (trimmed.includes('CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS')) {
-        return '';
-      }
-      
-      // 1. Clause titles - BLUE BOLD (matching ContractRenderer exactly)
-      if (/^\d+\.\s*CLÁUSULA/.test(trimmed)) {
-        return `<h2 style="font-weight: bold; font-size: 12px; color: #0284c7 !important; margin-top: 20px; margin-bottom: 8px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${trimmed}</h2>`;
-      }
-      
-      // 2. Sub-items (10.1, 5.1, etc.)
-      if (/^\d+\.\d+\s/.test(trimmed)) {
-        return `<p style="font-size: 11px; margin-bottom: 8px; padding-left: 16px; color: #374151 !important;">${trimmed}</p>`;
-      }
-      
-      // 3. Letter items (a), b), etc.)
-      if (/^[a-z]\)/.test(trimmed)) {
-        return `<p style="font-size: 11px; margin-bottom: 4px; padding-left: 32px; color: #374151 !important;">${trimmed}</p>`;
-      }
-      
-      // 4. Bullet points
-      if (trimmed.startsWith('•')) {
-        return `<p style="font-size: 11px; margin-bottom: 8px; padding-left: 16px; color: #374151 !important;">${trimmed}</p>`;
-      }
-      
-      // 5. Roman numerals
-      if (/^I+\)/.test(trimmed)) {
-        return `<p style="font-size: 11px; margin-bottom: 12px; font-weight: 500; color: #374151 !important;">${trimmed}</p>`;
-      }
-      
-      // 6. SKIP signature underscores (electronic contracts don't use them)
-      if (trimmed.match(/^_+$/)) {
-        return ''; // Don't render _____ lines
-      }
-      
-      // 7. Party identification headers
-      if (trimmed === 'CONTRATADA:' || trimmed === 'CONTRATANTE:') {
-        return `<p style="font-size: 11px; font-weight: bold; text-align: center; margin-top: 24px; margin-bottom: 4px; color: #1F2937 !important;">${trimmed}</p>`;
-      }
-      
-      // 8. Company name and CPF/CNPJ
-      if (trimmed.includes('WEB MARCAS PATENTES EIRELI') || 
-          trimmed.startsWith('CNPJ:') || 
-          trimmed.startsWith('CPF:') ||
-          trimmed.startsWith('CPF/CNPJ:')) {
-        return `<p style="font-size: 10px; text-align: center; color: #6b7280 !important; margin-bottom: 4px;">${trimmed}</p>`;
-      }
-      
-      // 9. Date line
-      if (trimmed.startsWith('São Paulo,')) {
-        return `<p style="font-size: 11px; margin-top: 24px; margin-bottom: 24px; color: #374151 !important;">${trimmed}</p>`;
-      }
-      
-      // 10. Regular paragraphs
-      return `<p style="font-size: 11px; margin-bottom: 12px; line-height: 1.6; text-align: justify; color: #374151 !important;">${trimmed}</p>`;
-    });
-    
-    return formattedLines.filter(line => line !== '').join('\n');
-  };
+  const htmlContent = isHtmlContent ? cleanedContent : formatAsHtml(cleanedContent);
+  const logoSrc = logoBase64 || WEBMARCAS_LOGO_FALLBACK;
+  const verificationBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.net');
 
-  // Extrair texto do HTML e aplicar formatação igual ao ContractRenderer
-  const textContent = isHtmlContent ? extractTextFromHtml(cleanedContent) : cleanedContent;
-  const formattedContent = formatContractContent(textContent);
-
-  // URL de verificação dinâmica
-  const verificationBaseUrl = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webmarcas.lovable.app');
-  const verificationUrl = blockchainSignature?.hash 
-    ? `${verificationBaseUrl}/verificar-contrato?hash=${blockchainSignature.hash}`
+  const contractTitleBox = documentType === 'contract'
+    ? `<div class="contract-title-box"><p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p></div>`
+    : documentType === 'distrato_multa' || documentType === 'distrato_sem_multa'
+    ? `<div class="contract-title-box"><p>INSTRUMENTO PARTICULAR DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p></div>`
     : '';
-
-  // Gerar QR Code como imagem usando API do QRServer (Google Charts foi descontinuado)
-  const qrCodeUrl = blockchainSignature?.hash 
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`
-    : '';
-
-  const certificationSection = blockchainSignature?.hash
-    ? `<div class="certification-section">
-        <div class="certification-box">
-          <h3 class="certification-title">
-            <span style="color: #16A34A;">✓</span>
-            CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA
-          </h3>
-          <div class="certification-content">
-            <div class="certification-data">
-              <p class="cert-label">HASH SHA-256</p>
-              <p class="cert-hash">${blockchainSignature.hash}</p>
-              <p class="cert-label">DATA/HORA</p>
-              <p class="cert-value">${blockchainSignature.timestamp}</p>
-              <p class="cert-label">ID TRANSAÇÃO</p>
-              <p class="cert-hash">${blockchainSignature.txId}</p>
-              <p class="cert-label">REDE BLOCKCHAIN</p>
-              <p class="cert-value">${blockchainSignature.network}</p>
-              <p class="cert-label">IP SIGNATÁRIO</p>
-              <p class="cert-value">${blockchainSignature.ipAddress}</p>
-            </div>
-            <div class="certification-qr">
-              <p class="cert-label">QR CODE VERIFICAÇÃO</p>
-              <div class="qr-box">
-                <img src="${qrCodeUrl}" alt="QR Code Verificação" style="width: 120px; height: 120px;" />
-              </div>
-              <p class="qr-text">Escaneie para verificar</p>
-            </div>
-          </div>
-          <p class="cert-legal">
-            Documento com validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.
-          </p>
-          <p class="cert-verify">
-            Verifique a autenticidade em: ${verificationBaseUrl}/verificar-contrato
-          </p>
-        </div>
-      </div>`
-    : '';
-
-  // Logo: usar base64 se fornecido, senão usar fallback SVG
-  const logoSrc = logoBase64 || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgNTAiPjxyZWN0IGZpbGw9IiMxZTNhNWYiIHdpZHRoPSIyMDAiIGhlaWdodD0iNTAiLz48dGV4dCB4PSIxMCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmYiPldlYk1hcmNhczwvdGV4dD48L3N2Zz4=';
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=210mm, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${documentTitle} - WebMarcas</title>
   <style>
-    /* PDF/Print-specific settings - Fixed A4 layout */
-    @page { 
-      size: A4; 
-      margin: 20mm; 
-    }
-    
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      color-adjust: exact !important;
-    }
-    
-    html, body {
-      width: 210mm;
-      min-height: 297mm;
-    }
-    
-    body { 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      color: #1F2937 !important; 
-      line-height: 1.6; 
-      background: white !important;
-      font-size: 11px;
-      max-width: 210mm;
-      margin: 0 auto;
-    }
-    
-    .document-container {
-      max-width: 170mm;
-      margin: 0 auto;
-      background: white !important;
-      padding: 0;
-    }
-    
-    /* Header with logo */
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 12px;
-      margin-bottom: 0;
-      page-break-inside: avoid;
-    }
-    
-    .header-logo {
-      height: 48px;
-      width: auto;
-      object-fit: contain;
-    }
-    
-    .header-url {
-      text-align: right;
-      font-size: 14px;
-    }
-    
-    .header-url a {
-      color: #0EA5E9 !important;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    
-    /* Gradient bar */
-    .gradient-bar {
-      height: 8px;
-      width: 100%;
-      background: linear-gradient(90deg, #f97316, #fbbf24) !important;
-      border-radius: 4px;
-      margin-bottom: 24px;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    
-    /* Document title */
-    .document-title {
-      text-align: center;
-      color: #1E40AF !important;
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-    
-    .document-subtitle {
-      text-align: center;
-      color: #4B5563 !important;
-      font-size: 14px;
-      font-style: italic;
-      margin-bottom: 24px;
-    }
-    
-    /* Legal notice */
-    .legal-notice {
-      background: #FFFBEB !important;
-      border: 1px solid #FCD34D !important;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 24px;
-      font-size: 12px;
-      color: #374151 !important;
-      font-style: italic;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    
-    /* Content paragraphs */
-    .content-paragraph {
-      margin-bottom: 16px;
-      text-align: justify;
-      font-size: 12px;
-      color: #374151 !important;
-    }
-    
-    /* Signatures section */
-    .signatures-section {
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 1px solid #E5E7EB;
-      page-break-inside: avoid;
-    }
-    
-    .signatures-intro {
-      font-size: 12px;
-      color: #4B5563 !important;
-      margin-bottom: 32px;
-    }
-    
-    .signatures-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
-    }
-    
-    .signature-box {
-      text-align: center;
-    }
-    
-    .signature-box h4 {
-      font-size: 13px;
-      font-weight: 600;
-      color: #1F2937 !important;
-    }
-    
-    .signature-box .details {
-      font-size: 11px;
-      color: #4B5563 !important;
-    }
-    
-    .signature-line {
-      border-bottom: 2px solid black;
-      width: 200px;
-      margin: 16px auto;
-      padding-bottom: 8px;
-      min-height: 64px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .signature-line img {
-      height: 64px;
-      object-fit: contain;
-    }
-    
-    .digital-signature {
-      color: #2563EB !important;
-      font-weight: 500;
-      font-size: 12px;
-    }
-    
-    .awaiting-signature {
-      color: #9CA3AF !important;
-      font-style: italic;
-      padding: 16px 0;
-    }
-    
-    .signature-caption {
-      font-size: 10px;
-      color: #6B7280 !important;
-    }
-    
-    /* Certification section */
-    .certification-section {
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 2px solid #1E40AF !important;
-      page-break-inside: avoid;
-    }
-    
-    .certification-box {
-      background: #EFF6FF !important;
-      border-radius: 8px;
-      padding: 24px;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    
-    .certification-title {
-      font-size: 16px;
-      font-weight: bold;
-      color: #1E3A8A !important;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .certification-content {
-      display: flex;
-      gap: 24px;
-      flex-wrap: wrap;
-    }
-    
-    .certification-data {
-      flex: 1;
-      min-width: 280px;
-    }
-    
-    .certification-qr {
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-width: 150px;
-    }
-    
-    .cert-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: #6B7280 !important;
-      margin-top: 12px;
-      margin-bottom: 2px;
-    }
-    
-    .cert-label:first-child {
-      margin-top: 0;
-    }
-    
-    .cert-hash {
-      font-size: 9px;
-      font-family: monospace;
-      background: white !important;
-      padding: 8px;
-      border-radius: 4px;
-      word-break: break-all;
-      color: #1F2937 !important;
-    }
-    
-    .cert-value {
-      font-size: 12px;
-      color: #1F2937 !important;
-    }
-    
-    .qr-box {
-      background: white !important;
-      padding: 12px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      margin: 8px 0;
-    }
-    
-    .qr-text {
-      font-size: 9px;
-      color: #6B7280 !important;
-    }
-    
-    .cert-legal {
-      font-size: 11px;
-      color: #4B5563 !important;
-      margin-top: 16px;
-      font-style: italic;
-      text-align: center;
-    }
-    
-    .cert-verify {
-      font-size: 11px;
-      color: #1D4ED8 !important;
-      margin-top: 8px;
-      text-align: center;
-      font-weight: 500;
-    }
-    
-    /* Footer */
-    .footer {
-      margin-top: 48px;
-      padding-top: 16px;
-      border-top: 1px solid #E5E7EB;
-      text-align: center;
-      font-size: 10px;
-      color: #6B7280 !important;
-    }
-    
-    /* Print media query - reinforce colors */
+    @page { size: A4; margin: 20mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 210mm; min-height: 297mm; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #1f2937; background: white; padding: 30px; font-size: 11px; max-width: 210mm; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; }
+    .header-logo { height: 48px; width: auto; object-fit: contain; }
+    .header-url { color: #0284c7; font-weight: 600; font-size: 14px; }
+    .gradient-bar { height: 8px; width: 100%; background: linear-gradient(90deg, #f97316, #fbbf24); border-radius: 3px; margin-bottom: 24px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .main-title { text-align: center; color: #0284c7; font-size: 20px; font-weight: bold; margin-bottom: 16px; text-decoration: underline; }
+    .contract-title-box { background-color: #1e3a5f; color: white; text-align: center; padding: 14px 20px; border-radius: 6px; margin-bottom: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .contract-title-box p { font-weight: 600; font-size: 13px; line-height: 1.5; margin: 0; color: white; }
+    .highlight-box { background-color: #FEF9E7; padding: 16px 20px; margin-bottom: 24px; border-left: 4px solid #F59E0B; font-size: 12px; line-height: 1.6; color: #374151; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .content { margin-top: 20px; color: #1f2937; }
+    .content h2 { color: #0284c7; font-size: 13px; font-weight: bold; margin-top: 24px; margin-bottom: 10px; }
+    .content p { color: #1f2937; font-size: 11px; line-height: 1.7; margin-bottom: 10px; text-align: justify; }
+    .footer { margin-top: 40px; text-align: center; color: #6b7280; font-size: 10px; border-top: 1px solid #e5e7eb; padding-top: 16px; }
     @media print {
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        color-adjust: exact !important;
-      }
-      
-      body {
-        padding: 0;
-      }
-      
-      .gradient-bar,
-      .legal-notice,
-      .certification-box {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        color-adjust: exact !important;
-      }
+      .gradient-bar { background: linear-gradient(90deg, #f97316, #fbbf24) !important; }
+      .contract-title-box { background-color: #1e3a5f !important; }
+      .highlight-box { background-color: #FEF9E7 !important; border-left: 4px solid #F59E0B !important; }
     }
   </style>
 </head>
 <body>
-  <div class="document-container">
-    <!-- Header -->
-    <div class="header">
-      <img src="${logoSrc}" alt="WebMarcas" class="header-logo" />
-      <div class="header-url">
-        <a href="https://www.webmarcas.net" style="color: #0EA5E9 !important; text-decoration: none; font-weight: 500;">www.webmarcas.net</a>
-      </div>
+  <div class="header">
+    <img src="${logoSrc}" alt="WebMarcas" class="header-logo" />
+    <span class="header-url">www.webmarcas.net</span>
+  </div>
+  <div class="gradient-bar"></div>
+  <h1 class="main-title">${documentTitle}</h1>
+  ${contractTitleBox}
+  ${legalNotice}
+  <div class="content">
+    ${htmlContent}
+  </div>
+  ${blockchainSignature?.hash ? `
+  <div style="margin-top:32px;">
+    <div style="text-align:center;padding:16px 0;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280;">
+      <p>Contrato gerado e assinado eletronicamente pelo sistema WebMarcas</p>
+      <p>www.webmarcas.net | juridico@webmarcas.net</p>
     </div>
-    
-    <!-- Gradient Bar -->
-    <div class="gradient-bar"></div>
-    
-    <!-- Title -->
-    <h1 class="document-title" style="text-decoration: underline;">${documentTitle}</h1>
-    ${documentSubtitle ? `<div class="highlight-box" style="background: #1e3a5f !important; color: white !important; padding: 16px; border-radius: 8px; margin: 16px 0 24px 0; text-align: center; font-weight: 600; font-size: 13px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${documentSubtitle}</div>` : ''}
-
-    ${legalNotice}
-
-    <!-- Content -->
-    <div class="document-content">
-      ${formattedContent}
-    </div>
-
-    <!-- Signatures -->
-    <div class="signatures-section">
-      <p class="signatures-intro">
-        Por estarem justas e contratadas, as partes assinam o presente de igual teor e forma, de forma digital válido juridicamente.
-      </p>
-      
-      <div class="signatures-grid">
-        <div class="signature-box">
-          <h4>Assinatura autorizada:</h4>
-          <p class="details">WebMarcas Patentes - CNPJ/MF sob o nº 39.528.012/0001-29</p>
-          <div class="signature-line">
-            ${documentType === 'procuracao' && davilysSignatureBase64 
-              ? `<img src="${davilysSignatureBase64}" alt="Assinatura">`
-              : '<span class="digital-signature">✓ Assinado Digitalmente</span>'
-            }
-          </div>
-          <p class="signature-caption">
-            ${documentType === 'procuracao' 
-              ? 'Davilys Danques de Oliveira Cunha'
-              : 'Certificação Digital - Lei 14.063/2020'
-            }
-          </p>
-        </div>
-        
-        <div class="signature-box">
-          <h4>Contratante:</h4>
-          <p class="details">
-            ${signatoryName || 'Nome do Representante'}
-            ${signatoryCnpj ? ` - CNPJ sob o nº ${signatoryCnpj}` : ''}
-            ${signatoryCpf ? `, CPF sob o n⁰ ${signatoryCpf}` : ''}
-          </p>
-          <div class="signature-line">
-            ${clientSignature && clientSignature.trim() !== ''
-              ? `<img src="${clientSignature}" alt="Assinatura Cliente">`
-              : blockchainSignature && blockchainSignature.hash 
-                ? '<span style="color: #2563eb; font-weight: 500; font-size: 14px;">✓ Assinado Digitalmente</span>'
-                : '<span class="awaiting-signature">Aguardando assinatura...</span>'
-            }
-          </div>
-          <p style="font-size: 10px; color: #6b7280; margin-top: 8px;">
-            ${blockchainSignature && blockchainSignature.hash ? 'Certificação Digital - Lei 14.063/2020' : ''}
-          </p>
-        </div>
-      </div>
-    </div>
-
-    ${certificationSection}
-
-    <!-- Footer -->
-    <div class="footer">
-      <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
-      <p>Av. Prestes Maia, 241 - Centro, São Paulo - SP, CEP: 01031-001</p>
-      <p>Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
+    <div style="height:4px;background:#0284c7;margin:16px 0;"></div>
+    <div style="padding:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+      <h3 style="font-size:18px;font-weight:bold;color:#0284c7;margin-bottom:20px;">CERTIFICAÇÃO DIGITAL E VALIDADE JURÍDICA</h3>
+      <p style="font-size:11px;font-weight:bold;color:#1e293b;margin-bottom:6px;">HASH SHA-256</p>
+      <div style="background:white;padding:10px;border:1px solid #e2e8f0;font-family:monospace;font-size:10px;word-break:break-all;margin-bottom:12px;">${blockchainSignature.hash}</div>
+      <p style="font-size:11px;color:#1e293b;margin-bottom:6px;"><strong>Rede Blockchain:</strong> ${blockchainSignature.network || 'Bitcoin (OpenTimestamps)'}</p>
+      ${blockchainSignature.ipAddress ? `<p style="font-size:11px;color:#1e293b;margin-bottom:6px;"><strong>IP do Signatário:</strong> ${blockchainSignature.ipAddress}</p>` : ''}
+      <p style="font-size:10px;color:#64748b;margin-top:16px;font-style:italic;text-align:center;">Este documento foi assinado eletronicamente e possui validade jurídica conforme Lei 14.063/2020 e MP 2.200-2/2001.</p>
+      <p style="font-size:10px;color:#0284c7;text-align:center;">Verifique em: ${verificationBase}/verificar-contrato</p>
     </div>
   </div>
+  ` : `
+  <div class="footer">
+    <p>WebMarcas Patentes - CNPJ: 39.528.012/0001-29</p>
+    <p>Av. Brigadeiro Luís Antônio, 2696 - São Paulo - SP | Tel: (11) 91112-0225 | juridico@webmarcas.net</p>
+  </div>
+  `}
 </body>
 </html>`;
 }
+
+export default DocumentRenderer;
