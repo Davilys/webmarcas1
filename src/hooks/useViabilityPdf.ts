@@ -187,9 +187,10 @@ function addPageStrip(doc: jsPDF, pw: number, _ph: number) {
 // Logo via URL absoluta com fallback robusto
 function loadLogo(): Promise<string> {
   return new Promise((resolve) => {
-    // Tenta carregar o logo-mark da WebMarcas
+    // Logo circular WebMarcas — em public/ para acesso via URL
     const urls = [
-      'https://webmarcas1.lovable.app/favicon.png',
+      window.location.origin + '/webmarcas-logo-circular.png',
+      'https://webmarcas1.lovable.app/webmarcas-logo-circular.png',
       window.location.origin + '/favicon.png',
     ];
     let tried = 0;
