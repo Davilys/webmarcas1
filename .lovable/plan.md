@@ -1,70 +1,87 @@
 
-# Correção: Documentos Duplicados e Erros de JWT Expirado
+# Correção: Nome do Consultor e Conversa Atribuída no Chat Suporte do Cliente
 
-## Diagnóstico
+## Diagnóstico do Problema
 
-O problema tem **duas causas raízes**:
+### Problema 1 — RLS bloqueia a leitura do perfil do admin atribuído
+A política de segurança da tabela `profiles` permite que clientes visualizem **apenas o próprio perfil** (`auth.uid() = id`). Quando o `ChatSuporte.tsx` tenta buscar o nome do admin com:
 
-### Causa 1 — Duplicação
-A função `fetchDocs` em `Documentos.tsx` busca dados de **duas fontes**:
-- Tabela `contracts` → gera os cards bonitos (com "Visualizar" e "Baixar PDF")
-- Tabela `documents` → busca todos os documentos do usuário (inclui os PDFs gerados pela Edge Function)
+```typescript
+const { data: admin } = await supabase
+  .from('profiles')
+  .select('id, full_name')
+  .eq('id', adminId)  // ← adminId é o ID do admin, não do cliente
+  .single();
+```
 
-A Edge Function `upload-signed-contract-pdf` salva um registro na tabela `documents` com `contract_id` preenchido para cada contrato assinado. Resultado: cada contrato assinado aparece **duas vezes** na lista — uma vez como contrato (bonito), uma vez como arquivo PDF bruto (nome técnico).
+A query retorna `null` porque o RLS bloqueia o acesso ao perfil de outro usuário. Por isso `assignedAdmin` fica `null` e o card mostra **"Seu Consultor"** com inicial **"C"** genérica.
 
-### Causa 2 — Erro JWT expirado
-Os registros duplicados na tabela `documents` apontam para **Signed URLs** do Supabase Storage com validade de apenas 24 horas. Após esse prazo, a URL expira e ao tentar abrir aparece: `{"statusCode":"400","error":"InvalidJWT","message":"\"exp\" claim timestamp check failed"}`.
+### Problema 2 — Ao clicar, não inicia conversa com o admin correto
+Quando `assignedAdmin` é `null`, a função `startHumanChat` não consegue chamar `chat.openDirectConversation(assignedAdmin.id)` e retorna erro silencioso ou mensagem "Nenhum consultor atribuído".
 
 ## Solução
 
-### Correção 1 — Filtrar documentos que são PDFs de contratos (tabela `documents`)
-Na query da tabela `documents`, **excluir** os registros que têm `contract_id` preenchido e cujo nome começa com padrão técnico gerado pela Edge Function. A abordagem mais robusta é filtrar na query:
+### Correção 1 — Nova RLS policy: clientes podem ver perfis dos admins atribuídos a eles
+Adicionar uma política de leitura que permita ao cliente visualizar o perfil do usuário cujo `id` está registrado como `assigned_to` ou `created_by` no perfil do próprio cliente:
 
-```typescript
-// ANTES: busca todos os documentos do usuário
-supabase.from('documents').select('*').eq('user_id', uid)
-
-// DEPOIS: exclui documentos que são PDFs de contratos (já aparecem como contratos)
-supabase.from('documents').select('*').eq('user_id', uid).is('contract_id', null)
+```sql
+CREATE POLICY "Clients can view their assigned admin profile"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (
+  -- Permite que clientes vejam o perfil do admin atribuído a eles
+  id IN (
+    SELECT assigned_to FROM profiles WHERE id = auth.uid() AND assigned_to IS NOT NULL
+    UNION
+    SELECT created_by FROM profiles WHERE id = auth.uid() AND created_by IS NOT NULL
+  )
+);
 ```
 
-Isso garante que PDFs gerados automaticamente pela assinatura (que têm `contract_id`) não apareçam novamente na lista, já que o contrato original já está sendo exibido pela query da tabela `contracts`.
+Esta política é segura: o cliente só consegue ler o perfil do **seu próprio consultor**, não de qualquer outro usuário.
 
-### Correção 2 — Renovar Signed URLs expiradas sob demanda (DocumentPreview)
-Para os documentos da tabela `documents` que **ainda têm** `contract_id` nulo (uploads manuais, taxas, etc.) e usam Signed URLs, implementar lógica de renovação automática no `DocumentPreview.tsx` quando a URL expirar.
+### Correção 2 — Buscar nome do admin direto na query do perfil do cliente (fallback eficiente)
+Como a query de perfil do cliente já retorna `assigned_to` (o UUID do admin), podemos fazer um join via Supabase para buscar o nome do admin em uma única query, tornando a busca mais robusta:
 
-O `DocumentPreview.tsx` já tem lógica de `trySignedUrl()` mas só é acionada quando carregamento falha. A melhoria é detectar URLs assinadas expiradas **antes** de tentar carregar.
-
-### Correção 3 — Mudar Storage de Signed URL para Public URL no upload-signed-contract-pdf
-A raiz do problema de URLs expiradas está na Edge Function `upload-signed-contract-pdf` que usa `createSignedUrl` com 24 horas. Como o bucket `documents` é **público**, deve usar `getPublicUrl` em vez de `createSignedUrl`:
+No `ChatSuporte.tsx`, modificar a query do perfil para incluir o nome do admin via select aninhado:
 
 ```typescript
-// ANTES (expira em 24h):
-const { data: signedData } = await supabase.storage
-  .from('documents')
-  .createSignedUrl(filePath, 86400);
+const { data: profile } = await supabase
+  .from('profiles')
+  .select('full_name, assigned_to, created_by')
+  .eq('id', session.user.id)
+  .single();
 
-// DEPOIS (permanente, bucket é público):
-const { data: publicData } = supabase.storage
-  .from('documents')
-  .getPublicUrl(filePath);
-const publicUrl = publicData.publicUrl;
+// Com a nova policy RLS, isso vai funcionar:
+const adminId = profile?.assigned_to || profile?.created_by;
+if (adminId) {
+  const { data: admin } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('id', adminId)
+    .single();
+  if (admin) setAssignedAdmin(admin);
+}
 ```
 
-## Arquivos a modificar
+### Correção 3 — Exibir nome correto no card e iniciar conversa automaticamente ao clicar
+Com o `assignedAdmin` populado corretamente, o card já exibe o nome real (linha 539: `{assignedAdmin?.full_name || 'Seu Consultor'}`). Confirmar que `startHumanChat` abre corretamente a conversa com o admin atribuído.
 
-### 1. `src/pages/cliente/Documentos.tsx`
-Na função `fetchDocs`, adicionar `.is('contract_id', null)` na query de documentos para excluir PDFs de contratos que já aparecem via tabela `contracts`.
+Adicionar feedback visual de loading no card do consultor enquanto os dados carregam, e uma mensagem de fallback mais clara quando o cliente realmente não tem nenhum consultor atribuído.
 
-### 2. `supabase/functions/upload-signed-contract-pdf/index.ts`
-Substituir `createSignedUrl` por `getPublicUrl` para que os URLs dos PDFs nunca expirem (bucket já é público).
+## Arquivos a Modificar
 
-## Resultado esperado
+### 1. Migration SQL (nova RLS policy)
+Criar migration adicionando a policy `Clients can view their assigned admin profile` na tabela `profiles`.
 
-- Cada contrato/procuração aparece **uma única vez** — o card bonito com nome amigável, badges de Blockchain/Assinado e botões "Visualizar"/"Baixar PDF"
-- Os PDFs armazenados no Storage terão URLs permanentes que nunca expiram
-- Documentos enviados manualmente pelo cliente (sem `contract_id`) continuam aparecendo normalmente
+### 2. `src/pages/cliente/ChatSuporte.tsx`
+- Adicionar estado `loadingAdmin` para exibir skeleton no card do consultor enquanto carrega
+- Melhorar fallback quando não há consultor atribuído (mensagem explicativa em vez de "Seu Consultor" com inicial "C" genérica)
+- Garantir que ao clicar no card, a conversa com o admin correto é iniciada imediatamente
 
-## Impacto nos dados existentes
-
-Os 2 registros duplicados na tabela `documents` que já existem (com `contract_id` preenchido) deixarão de aparecer na UI imediatamente após a correção do filtro. Eles continuam no banco, mas não serão mais exibidos — sem risco de perda de dados.
+## Resultado Esperado
+- Card **"Seu Consultor"** exibe o nome real do consultor atribuído (ex: "Caroline Martins")
+- As iniciais no avatar verde refletem o nome real (ex: "CM")
+- Ao clicar no card, abre o chat diretamente com o consultor atribuído
+- A conversa é persistida no banco e visível para o admin no painel administrativo
