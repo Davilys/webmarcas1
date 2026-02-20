@@ -1,6 +1,6 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const FAMOUS_BRANDS = [
@@ -480,7 +480,8 @@ Após o laudo, forneça em JSON (em uma linha separada, começando com ###JSON##
 // HANDLER PRINCIPAL
 // =====================================================================
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
 
   try {
     const { brandName, businessArea } = await req.json();
@@ -523,17 +524,17 @@ Deno.serve(async (req) => {
     // Obter classes NCL
     const classes = getClassesForBusinessArea(businessArea);
 
-    // Rodar os 3 módulos de busca em paralelo
+    // Rodar os 3 módulos de busca em paralelo com timeout de 25s cada
     console.log('[MAIN] Iniciando 3 módulos de busca em paralelo...');
-    const [inpiSettled, companiesSettled, webSettled] = await Promise.allSettled([
-      searchINPI(brandName, firecrawlKey || ''),
-      searchCompaniesBR(brandName),
-      searchWebPresence(brandName, businessArea, firecrawlKey || ''),
+    const withTimeout = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+      Promise.race([promise, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
+    const [inpiResults, companiesResult, webResult] = await Promise.all([
+      withTimeout(searchINPI(brandName, firecrawlKey || ''), 20000, { found: false, totalResults: 0, conflicts: [], source: 'Timeout na consulta' }),
+      withTimeout(searchCompaniesBR(brandName), 15000, { found: false, companies: [], total: 0 }),
+      withTimeout(searchWebPresence(brandName, businessArea, firecrawlKey || ''), 20000, { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise web indisponível.' }),
     ]);
 
-    const inpiResults = inpiSettled.status === 'fulfilled' ? inpiSettled.value : { found: false, totalResults: 0, conflicts: [], source: 'Erro na consulta' };
-    const companiesResult = companiesSettled.status === 'fulfilled' ? companiesSettled.value : { found: false, companies: [], total: 0 };
-    const webResult = webSettled.status === 'fulfilled' ? webSettled.value : { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise indisponível' };
 
     console.log(`[MAIN] Módulos concluídos. INPI: ${inpiResults.found}, Empresas: ${companiesResult.found}, Web: ${webResult.webMentions} menções`);
 
