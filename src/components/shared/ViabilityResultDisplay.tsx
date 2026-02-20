@@ -23,11 +23,13 @@ interface ViabilityResultDisplayProps {
 }
 
 // ─── Urgency Gauge ────────────────────────────────────────────────
-function UrgencyGauge({ score }: { score: number }) {
-  const isUrgent = score > 70;
-  const isMedium = score > 40;
-  const color = isUrgent ? '#ef4444' : isMedium ? '#f59e0b' : '#10b981';
-  const label = isUrgent ? 'URGENTE' : isMedium ? 'MODERADO' : 'TRANQUILO';
+function UrgencyGauge({ score, effectiveLevel }: { score: number; effectiveLevel: string }) {
+  const color =
+    effectiveLevel === 'high' ? '#10b981' :
+    effectiveLevel === 'medium' ? '#f59e0b' : '#ef4444';
+  const label =
+    effectiveLevel === 'high' ? 'TRANQUILO' :
+    effectiveLevel === 'medium' ? 'MODERADO' : 'URGENTE';
   const rotation = -90 + (score / 100) * 180;
 
   return (
@@ -424,15 +426,18 @@ export function ViabilityResultDisplay({
     }
   };
 
-  // Lógica de viabilidade: "low" com urgency <= 50 na prática significa alta chance de registro
-  // Se urgencyScore <= 50 (tranquilo/moderado) e level é low ou medium → tratar como ALTA VIABILIDADE visual
-  const urgency = result.urgencyScore ?? 50;
+  // Lógica baseada nos dados reais das três fontes
+  const hasINPIConflict = result.inpiResults?.found === true && (result.inpiResults?.totalResults ?? 0) > 0;
+  const hasCNPJConflict = result.companiesResult?.found === true && (result.companiesResult?.total ?? 0) > 0;
+  const hasWebPresence = (result.webAnalysis?.webMentions ?? 0) > 2;
+
   const effectiveLevel = (() => {
     if (result.level === 'blocked') return 'blocked';
-    if (result.level === 'high') return 'high';
-    // Se urgência <= 50 (baixo risco) → alta viabilidade mesmo que a API retornou low/medium
-    if (urgency <= 50) return 'high';
-    if (result.level === 'medium') return 'medium';
+    // LIMPO em todas as fontes → ALTA VIABILIDADE (verde)
+    if (!hasINPIConflict && !hasCNPJConflict && !hasWebPresence) return 'high';
+    // Só presença web leve sem INPI/CNPJ → MÉDIA
+    if (!hasINPIConflict && !hasCNPJConflict) return 'medium';
+    // Tem colidência INPI ou CNPJ → BAIXA (vermelho)
     return 'low';
   })();
 
@@ -482,7 +487,7 @@ export function ViabilityResultDisplay({
           <Icon className="w-3.5 h-3.5" />
           {config.badgeLabel}
         </motion.span>
-        {result.urgencyScore !== undefined && <UrgencyGauge score={result.urgencyScore} />}
+        {result.urgencyScore !== undefined && <UrgencyGauge score={result.urgencyScore} effectiveLevel={effectiveLevel} />}
       </div>
 
       {/* ── Card Principal ── */}
