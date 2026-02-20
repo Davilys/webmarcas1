@@ -424,6 +424,18 @@ export function ViabilityResultDisplay({
     }
   };
 
+  // Lógica de viabilidade: "low" com urgency <= 50 na prática significa alta chance de registro
+  // Se urgencyScore <= 50 (tranquilo/moderado) e level é low ou medium → tratar como ALTA VIABILIDADE visual
+  const urgency = result.urgencyScore ?? 50;
+  const effectiveLevel = (() => {
+    if (result.level === 'blocked') return 'blocked';
+    if (result.level === 'high') return 'high';
+    // Se urgência <= 50 (baixo risco) → alta viabilidade mesmo que a API retornou low/medium
+    if (urgency <= 50) return 'high';
+    if (result.level === 'medium') return 'medium';
+    return 'low';
+  })();
+
   const levelConfig = {
     high: {
       icon: CheckCircle, gradient: 'from-emerald-500/10 to-emerald-600/5',
@@ -451,7 +463,7 @@ export function ViabilityResultDisplay({
     },
   };
 
-  const config = levelConfig[result.level] || levelConfig.medium;
+  const config = levelConfig[effectiveLevel] || levelConfig.medium;
   const Icon = config.icon;
 
   return (
