@@ -1,119 +1,70 @@
 
-# Atribuição Automática de Responsável ao Assinar Contrato
+# Correção: Documentos Duplicados e Erros de JWT Expirado
 
-## O que será feito
+## Diagnóstico
 
-O objetivo é garantir que, em qualquer fluxo onde um admin crie um contrato ou um cliente novo, esse admin fique automaticamente salvo como `assigned_to` no perfil do cliente. Isso inclui:
+O problema tem **duas causas raízes**:
 
-1. Admin cria contrato para cliente existente → admin fica como responsável
-2. Admin cria contrato com novo cliente → admin fica como responsável
-3. Cliente assina contrato enviado pelo admin → admin criador é preservado como responsável
+### Causa 1 — Duplicação
+A função `fetchDocs` em `Documentos.tsx` busca dados de **duas fontes**:
+- Tabela `contracts` → gera os cards bonitos (com "Visualizar" e "Baixar PDF")
+- Tabela `documents` → busca todos os documentos do usuário (inclui os PDFs gerados pela Edge Function)
 
----
+A Edge Function `upload-signed-contract-pdf` salva um registro na tabela `documents` com `contract_id` preenchido para cada contrato assinado. Resultado: cada contrato assinado aparece **duas vezes** na lista — uma vez como contrato (bonito), uma vez como arquivo PDF bruto (nome técnico).
 
-## Diagnóstico Completo
+### Causa 2 — Erro JWT expirado
+Os registros duplicados na tabela `documents` apontam para **Signed URLs** do Supabase Storage com validade de apenas 24 horas. Após esse prazo, a URL expira e ao tentar abrir aparece: `{"statusCode":"400","error":"InvalidJWT","message":"\"exp\" claim timestamp check failed"}`.
 
-### O que já funciona
-- `CreateClientDialog` → ao criar cliente manualmente, o admin logado já é salvo em `created_by` e `assigned_to` no perfil. Correto.
+## Solução
 
-### O que está faltando
-
-**Problema 1: Tabela `contracts` não tem coluna `created_by`**
-- Quando um admin cria um contrato (via `CreateContractDialog`), não há como saber qual admin o criou
-- Sem essa informação, a Edge Function de assinatura não consegue saber quem deve ser o `assigned_to`
-
-**Problema 2: `CreateContractDialog` não salva o admin como responsável**
-- Ao inserir o contrato no banco, o admin logado (`auth.uid()`) não é salvo em lugar nenhum
-- O perfil do cliente (`profiles`) não recebe `assigned_to` durante a criação do contrato
-
-**Problema 3: Edge Function `sign-contract-blockchain` não atribui responsável**
-- Quando o cliente assina, a função cria/atualiza o perfil mas não seta `assigned_to`
-- Para contratos vindos do site (sem admin), o `assigned_to` ficaria nulo — aceitável
-- Para contratos criados pelo admin, o `assigned_to` deveria ser o admin que criou o contrato
-
----
-
-## Solução em 3 Camadas
-
-### Camada 1 — Banco de Dados (Migração)
-Adicionar coluna `created_by` na tabela `contracts` para registrar qual admin criou cada contrato.
-
-```sql
-ALTER TABLE public.contracts 
-ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
-```
-
-### Camada 2 — Frontend: `CreateContractDialog.tsx`
-No momento da inserção do contrato (linha ~729), adicionar o `user_id` do admin logado como `created_by`:
+### Correção 1 — Filtrar documentos que são PDFs de contratos (tabela `documents`)
+Na query da tabela `documents`, **excluir** os registros que têm `contract_id` preenchido e cujo nome começa com padrão técnico gerado pela Edge Function. A abordagem mais robusta é filtrar na query:
 
 ```typescript
-// Antes de chamar supabase.from('contracts').insert(...)
-const { data: { user: adminUser } } = await supabase.auth.getUser();
+// ANTES: busca todos os documentos do usuário
+supabase.from('documents').select('*').eq('user_id', uid)
 
-// No objeto de inserção:
-created_by: adminUser?.id || null,
+// DEPOIS: exclui documentos que são PDFs de contratos (já aparecem como contratos)
+supabase.from('documents').select('*').eq('user_id', uid).is('contract_id', null)
 ```
 
-E logo após criar o contrato com sucesso, atualizar o perfil do cliente para definir o admin como responsável (se ainda não tiver um):
+Isso garante que PDFs gerados automaticamente pela assinatura (que têm `contract_id`) não apareçam novamente na lista, já que o contrato original já está sendo exibido pela query da tabela `contracts`.
+
+### Correção 2 — Renovar Signed URLs expiradas sob demanda (DocumentPreview)
+Para os documentos da tabela `documents` que **ainda têm** `contract_id` nulo (uploads manuais, taxas, etc.) e usam Signed URLs, implementar lógica de renovação automática no `DocumentPreview.tsx` quando a URL expirar.
+
+O `DocumentPreview.tsx` já tem lógica de `trySignedUrl()` mas só é acionada quando carregamento falha. A melhoria é detectar URLs assinadas expiradas **antes** de tentar carregar.
+
+### Correção 3 — Mudar Storage de Signed URL para Public URL no upload-signed-contract-pdf
+A raiz do problema de URLs expiradas está na Edge Function `upload-signed-contract-pdf` que usa `createSignedUrl` com 24 horas. Como o bucket `documents` é **público**, deve usar `getPublicUrl` em vez de `createSignedUrl`:
 
 ```typescript
-if (adminUser?.id && userId) {
-  await supabase
-    .from('profiles')
-    .update({ assigned_to: adminUser.id })
-    .eq('id', userId)
-    .is('assigned_to', null); // Só atribui se ainda não tiver responsável
-}
+// ANTES (expira em 24h):
+const { data: signedData } = await supabase.storage
+  .from('documents')
+  .createSignedUrl(filePath, 86400);
+
+// DEPOIS (permanente, bucket é público):
+const { data: publicData } = supabase.storage
+  .from('documents')
+  .getPublicUrl(filePath);
+const publicUrl = publicData.publicUrl;
 ```
 
-### Camada 3 — Edge Function: `sign-contract-blockchain`
-Após a assinatura do contrato, buscar o `created_by` do contrato e atribuí-lo como `assigned_to` no perfil do cliente:
+## Arquivos a modificar
 
-```typescript
-// Após identificar o userId do cliente
-const { data: contractWithAdmin } = await supabase
-  .from('contracts')
-  .select('created_by')
-  .eq('id', contractId)
-  .single();
+### 1. `src/pages/cliente/Documentos.tsx`
+Na função `fetchDocs`, adicionar `.is('contract_id', null)` na query de documentos para excluir PDFs de contratos que já aparecem via tabela `contracts`.
 
-// Se o contrato tem um admin criador, atribuir como responsável
-if (contractWithAdmin?.created_by && userId) {
-  await supabase
-    .from('profiles')
-    .update({ 
-      assigned_to: contractWithAdmin.created_by,
-      created_by: contractWithAdmin.created_by // se ainda não tiver
-    })
-    .eq('id', userId)
-    .is('assigned_to', null); // Só atribui se ainda não tiver responsável
-}
-```
+### 2. `supabase/functions/upload-signed-contract-pdf/index.ts`
+Substituir `createSignedUrl` por `getPublicUrl` para que os URLs dos PDFs nunca expirem (bucket já é público).
 
----
+## Resultado esperado
 
-## Fluxos cobertos após a implementação
+- Cada contrato/procuração aparece **uma única vez** — o card bonito com nome amigável, badges de Blockchain/Assinado e botões "Visualizar"/"Baixar PDF"
+- Os PDFs armazenados no Storage terão URLs permanentes que nunca expiram
+- Documentos enviados manualmente pelo cliente (sem `contract_id`) continuam aparecendo normalmente
 
-| Fluxo | Comportamento esperado |
-|---|---|
-| Admin cria cliente manualmente (Novo Cliente) | Admin → `created_by` + `assigned_to` do perfil (já funciona) |
-| Admin cria contrato para cliente existente | Admin → `created_by` do contrato + `assigned_to` do perfil (novo) |
-| Admin cria contrato para novo cliente | Admin → `created_by` do contrato + `assigned_to` do perfil (novo) |
-| Cliente assina via link enviado pelo admin | Admin (via `contracts.created_by`) → `assigned_to` do perfil (novo) |
-| Cliente assina via formulário do site (sem admin) | `assigned_to` permanece nulo — sem admin para atribuir |
+## Impacto nos dados existentes
 
----
-
-## Arquivos que serão modificados
-
-1. **Migração SQL** — adicionar `created_by` na tabela `contracts`
-2. **`src/components/admin/contracts/CreateContractDialog.tsx`** — salvar admin logado no contrato e no perfil
-3. **`supabase/functions/sign-contract-blockchain/index.ts`** — buscar `created_by` do contrato e atribuir ao perfil no momento da assinatura
-
----
-
-## Observações importantes
-
-- A lógica usa `.is('assigned_to', null)` para não sobrescrever um responsável já atribuído manualmente
-- Para contratos do site (sem admin), o campo `created_by` ficará nulo — comportamento esperado
-- A coluna `created_by` na tabela `contracts` usa `ON DELETE SET NULL` para manter integridade referencial caso o admin seja removido
+Os 2 registros duplicados na tabela `documents` que já existem (com `contract_id` preenchido) deixarão de aparecer na UI imediatamente após a correção do filtro. Eles continuam no banco, mas não serão mais exibidos — sem risco de perda de dados.
