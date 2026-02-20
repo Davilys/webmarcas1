@@ -1012,13 +1012,14 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         },
-        body: JSON.stringify({
+          body: JSON.stringify({
           trigger_event: 'form_completed',
           lead_id: leadId || null,
           data: {
             nome: personalData.fullName,
             email: personalData.email,
             marca: brandData.brandName,
+            base_url: 'https://webmarcas.net',
           },
         }),
       });

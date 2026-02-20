@@ -55,15 +55,13 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Determine app_url
-    const appUrl = data.base_url || Deno.env.get('SITE_URL');
-    if (!appUrl) {
-      console.error('No base_url provided and SITE_URL secret not configured');
-      return new Response(
-        JSON.stringify({ error: 'SITE_URL not configured. Please set the SITE_URL secret.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Determine app_url — always falls back to production domain (never returns 500)
+    const PRODUCTION_DOMAIN = 'https://webmarcas.net';
+    const rawSiteUrl = Deno.env.get('SITE_URL') || '';
+    const isPreviewUrl = (url: string) =>
+      !url || url.includes('lovable.app') || url.includes('localhost') || url.includes('127.0.0.1');
+    const appUrl = data.base_url ||
+      (rawSiteUrl && !isPreviewUrl(rawSiteUrl) ? rawSiteUrl : PRODUCTION_DOMAIN);
     console.log('Using app URL:', appUrl);
 
     let actualLeadId = lead_id;

@@ -442,6 +442,7 @@ serve(async (req) => {
               email: recipientEmail,
               senha: tempPassword,
               login_url: loginUrl,
+              base_url: 'https://webmarcas.net',
             }
           })
         });
@@ -481,6 +482,7 @@ serve(async (req) => {
               ip_assinatura: clientIP,
               verification_url: verificationUrl,
               ots_file_url: otsFileUrl,
+              base_url: 'https://webmarcas.net',
             }
           })
         });
