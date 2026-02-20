@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle, AlertTriangle, AlertCircle, ShieldX, Download,
+  CheckCircle, AlertTriangle, AlertCircle, ShieldX,
   ArrowRight, Sparkles, Shield, Globe, Building2,
   Search, Linkedin, MapPin, ExternalLink, RefreshCw, Clock,
   FileText, ChevronDown, ChevronUp, Star, Zap, Award, TrendingUp
@@ -9,9 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { type ViabilityResult } from "@/lib/api/viability";
-import { generateViabilityPDF } from "@/hooks/useViabilityPdf";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+
 
 interface ViabilityResultDisplayProps {
   result: ViabilityResult;
@@ -411,20 +410,6 @@ export function CinematicLoader({ brandName }: { brandName: string }) {
 export function ViabilityResultDisplay({
   result, brandName, businessArea, onReset, onNext, showNextButton = false
 }: ViabilityResultDisplayProps) {
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-
-  const handleDownloadPDF = async () => {
-    setIsGeneratingPdf(true);
-    try {
-      await generateViabilityPDF(brandName, businessArea, result);
-      toast.success('PDF gerado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao gerar PDF. Tente novamente.');
-      console.error(error);
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
 
   // Lógica baseada nos dados reais das três fontes
   const hasINPIConflict = result.inpiResults?.found === true && (result.inpiResults?.totalResults ?? 0) > 0;
@@ -557,9 +542,6 @@ export function ViabilityResultDisplay({
         </motion.div>
       )}
 
-      {/* ── Laudo Técnico ── */}
-      {result.laudo && <LaudoSection laudo={result.laudo} delay={0.5} />}
-
       {/* ── Alerta de Urgência ── */}
       {result.level !== 'blocked' && (
         <motion.div
@@ -580,20 +562,6 @@ export function ViabilityResultDisplay({
 
       {/* ── Ações ── */}
       <div className="space-y-2.5 pt-1">
-        <Button
-          className="w-full h-12 font-semibold rounded-xl gap-2"
-          variant="outline"
-          onClick={handleDownloadPDF}
-          disabled={isGeneratingPdf}
-        >
-          {isGeneratingPdf ? (
-            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
-              <RefreshCw className="w-4 h-4" />
-            </motion.div>
-          ) : <Download className="w-4 h-4" />}
-          {isGeneratingPdf ? 'Gerando PDF Premium...' : 'Baixar Laudo Profissional em PDF'}
-        </Button>
-
         {showNextButton && onNext && result.level !== 'blocked' && (
           <Button
             className="w-full h-14 text-base font-semibold rounded-xl"
