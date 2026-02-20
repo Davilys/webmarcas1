@@ -59,7 +59,7 @@ const Header = () => {
             <img
               src={webmarcasLogoMark}
               alt="WebMarcas"
-              className="h-9 md:h-11 w-auto shrink-0 mix-blend-multiply dark:mix-blend-screen dark:invert"
+              className="h-9 md:h-11 w-auto shrink-0"
             />
             <span className="font-display text-lg md:text-xl font-bold">
               Web<span className="gradient-text">Marcas</span>
