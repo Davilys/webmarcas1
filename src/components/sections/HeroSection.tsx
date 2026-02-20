@@ -6,6 +6,43 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedCounter } from "@/components/admin/dashboard/AnimatedCounter";
 
+const RotatingRegisteredBadge = () => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ delay: 0.8, duration: 0.6, type: "spring" }}
+    className="absolute top-[18%] right-[6%] hidden md:block z-20"
+  >
+    <svg width="120" height="120" viewBox="0 0 120 120">
+      {/* Fundo circular branco */}
+      <circle cx="60" cy="60" r="58" fill="white" stroke="#e2e8f0" strokeWidth="1.5" />
+      
+      {/* ® central - círculo + R */}
+      <circle cx="60" cy="60" r="20" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
+      <text x="60" y="67" textAnchor="middle" fontSize="18" fontWeight="bold" fill="#3b82f6" fontFamily="serif">R</text>
+
+      {/* Texto circular girando */}
+      <g style={{ animation: "badgeSpin 8s linear infinite", transformOrigin: "60px 60px" }}>
+        <defs>
+          <path id="badge-circle-path" d="M 60,60 m -45,0 a 45,45 0 1,1 90,0 a 45,45 0 1,1 -90,0" />
+        </defs>
+        <text fontSize="9.5" fontWeight="700" fill="#1e293b" letterSpacing="2.5">
+          <textPath href="#badge-circle-path" startOffset="0%">
+            REGISTRO DE MARCAS EM 24H · · ·
+          </textPath>
+        </text>
+      </g>
+    </svg>
+
+    <style>{`
+      @keyframes badgeSpin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `}</style>
+  </motion.div>
+);
+
 const HeroSection = () => {
   const { t } = useLanguage();
   const [phraseIndex, setPhraseIndex] = useState(0);
@@ -64,6 +101,9 @@ const HeroSection = () => {
 
   return (
     <section id="home" className="relative min-h-[85vh] flex items-center hero-glow overflow-hidden">
+      {/* Badge ® animado */}
+      <RotatingRegisteredBadge />
+
       {/* Background elements */}
       <div className="absolute inset-0 bg-hero-gradient" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
