@@ -1,300 +1,154 @@
 
-# Sistema de Viabilidade "Grandioso Premium" V2 — Plano de Implementação
+# Problema: Busca de Clientes no Modo Processual Mostrando Apenas 50 Registros
 
-## Diagnóstico Honesto da Situação Atual
+## Diagnóstico
 
-### O que existe hoje
-- **INPI**: A Edge Function consulta o WIPO Brand Database (base internacional, não o INPI Brasil). Quando o WIPO responde com captcha ou bloqueio, o sistema usa análise de padrões locais — essencialmente um algoritmo que ESTIMA a viabilidade baseado em comprimento e palavras genéricas. Não é busca real INPI.
-- **Colidência Web**: Não existe. Zero.
-- **Modelo IA**: usa `gpt-4o-mini` via OpenAI direto. Será migrado para `openai/gpt-5.2` via Lovable AI Gateway.
-- **Marcas de alto renome**: já existe lista com ~80 marcas, sem comparação fonética/Levenshtein.
-- **PDF**: gerado via `window.open` + print — estrutura deve ser preservada integralmente. Apenas o texto do `laudo` (variável de string) será enriquecido com nova seção.
-
-### Confirmação de Infraestrutura Disponível
-- `FIRECRAWL_API_KEY` — já configurada como connector secret ✅
-- `LOVABLE_API_KEY` — já configurada ✅ (acessa GPT-5.2 via `https://ai.gateway.lovable.dev/v1/chat/completions`)
-- `jsPDF` e `jspdf-autotable` — já instalados ✅
-- Frontend (`ViabilitySearchSection.tsx`, `ViabilityStep.tsx`) — NÃO será alterado ✅
-- PDF: estrutura idêntica, apenas o conteúdo do `laudo` (string) ganha nova seção ✅
-
----
-
-## Arquitetura da Solução: Motor V2 "Grandioso Premium"
-
-Toda a lógica fica exclusivamente na Edge Function `inpi-viability-check`. O frontend não muda.
-
-```text
-REQUEST (brandName, businessArea)
-         │
-         ▼
-┌─────────────────────────────────────┐
-│  ETAPA 1: Verificação Alto Renome   │
-│  Lista 100+ marcas + Levenshtein    │
-│  + Soundex Fonético >= 85%          │
-└──────────────┬──────────────────────┘
-               │ SE alto renome → Laudo imediato (sem INPI, sem web)
-               │ SE não → continua
-               ▼
-┌─────────────────────────────────────┐
-│  ETAPA 2-3-4: Promise.allSettled()  │
-│  Paralelo simultâneo:               │
-│  ├── Módulo A: INPI via Firecrawl   │
-│  ├── Módulo B: CNPJ.ws (API pública)│
-│  └── Módulo C: Web via Firecrawl    │
-│      (Google, LinkedIn, redes)      │
-└──────────────┬──────────────────────┘
-               ▼
-┌─────────────────────────────────────┐
-│  ETAPA 5: Síntese GPT-5.2           │
-│  Via Lovable AI Gateway             │
-│  Gera: conclusão, classes, laudo,   │
-│  análise de colidência, urgência    │
-└──────────────┬──────────────────────┘
-               ▼
-┌─────────────────────────────────────┐
-│  ETAPA 6: Montar laudo completo     │
-│  (string) com nova seção de         │
-│  colidência — mesma estrutura PDF   │
-└─────────────────────────────────────┘
-```
-
----
-
-## Detalhamento de Cada Etapa
-
-### Etapa 1 — Lista Expandida + Algoritmo de Similaridade
-
-**Lista expandida para 100+ marcas** conforme solicitado, incluindo todas as marcas listadas pelo usuário.
-
-**Algoritmo duplo de detecção:**
+No arquivo `src/components/admin/email/EmailCompose.tsx`, linha 176-205, a query que busca clientes para o Modo Processual tem um limite fixo de `.limit(50)`:
 
 ```typescript
-// 1. Levenshtein Distance — similaridade de caracteres
-function levenshteinSimilarity(a: string, b: string): number {
-  // Retorna 0.0 a 1.0
-  const dist = levenshteinDistance(a, b);
-  return 1 - dist / Math.max(a.length, b.length);
-}
+const { data: profiles } = await supabase
+  .from('profiles')
+  .select('id, full_name, email, phone')
+  .or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
+  .limit(50);  // ← PROBLEMA: só busca 50 registros
+```
 
-// 2. Soundex Fonético Português — similaridade de pronúncia
-function soundexPT(str: string): string {
-  // Implementação adaptada para fonética portuguesa
-}
+Com mais de 2.300 clientes na base, a maioria fica invisível. A lista exibida é apenas uma amostra aleatória dos primeiros 50 registros do banco.
 
-function isFamousBrand(brandName: string): { is: boolean; matchedBrand?: string; similarity?: number } {
-  const normalized = normalizeString(brandName);
-  
-  for (const famous of FAMOUS_BRANDS_V2) {
-    const famousNorm = normalizeString(famous);
-    
-    // 1. Match exato
-    if (normalized === famousNorm) return { is: true, matchedBrand: famous, similarity: 100 };
-    
-    // 2. Levenshtein >= 85%
-    const levSim = levenshteinSimilarity(normalized, famousNorm) * 100;
-    if (levSim >= 85) return { is: true, matchedBrand: famous, similarity: levSim };
-    
-    // 3. Soundex fonético
-    if (soundexPT(normalized) === soundexPT(famousNorm) && normalized.length >= 4) {
-      return { is: true, matchedBrand: famous, similarity: 90 };
+**Problema adicional:** Quando `searchQuery` está vazio (campo de busca em branco), a query retorna os primeiros 50 clientes sem critério de ordenação útil. O cliente que o usuário precisa pode nunca aparecer.
+
+## Solução
+
+Aplicar a estratégia `fetchAllRows` com paginação via `.range()` — já documentada nas memórias do projeto (`memory/technical/large-dataset-fetching-logic`).
+
+### Lógica de Busca Corrigida
+
+**Quando há texto digitado na busca** (`searchQuery` preenchido):
+- Buscar em toda a base usando paginação de 1.000 em 1.000
+- Filtrar por `full_name`, `email` e também por `brand_name` na tabela `brand_processes`
+- Retornar todos os resultados que correspondam
+
+**Quando não há texto** (`searchQuery` vazio):
+- Carregar os 200 clientes mais recentes (ordenados por `created_at DESC`) para ter uma lista inicial útil
+- Ao digitar, expandir para busca completa paginada
+
+### Implementação — Apenas `EmailCompose.tsx`
+
+Substituir a função `queryFn` na query `clients-with-processes`:
+
+```typescript
+queryFn: async () => {
+  // Busca paginada: carrega todos os perfis que correspondem ao filtro
+  const allProfiles: ProfileRow[] = [];
+  let offset = 0;
+  const batchSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase
+      .from('profiles')
+      .select('id, full_name, email, phone')
+      .range(offset, offset + batchSize - 1);
+
+    if (searchQuery.trim()) {
+      query = query.or(
+        `full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+      );
+    } else {
+      // Sem busca: carrega os 200 mais recentes para lista inicial
+      query = query.order('created_at', { ascending: false }).limit(200);
+      hasMore = false; // sem paginação no caso padrão
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      allProfiles.push(...data);
+      offset += batchSize;
+      if (!searchQuery.trim() || data.length < batchSize) hasMore = false;
+    } else {
+      hasMore = false;
     }
   }
-  return { is: false };
-}
+
+  // Busca os processos dos perfis encontrados em lotes
+  const profileIds = allProfiles.map(p => p.id);
+  let allProcesses: ProcessRow[] = [];
+  
+  // Buscar processos em lotes de 100 IDs (limite do PostgREST para IN)
+  for (let i = 0; i < profileIds.length; i += 100) {
+    const batch = profileIds.slice(i, i + 100);
+    const { data: processBatch } = await supabase
+      .from('brand_processes')
+      .select('user_id, brand_name, process_number')
+      .in('user_id', batch);
+    if (processBatch) allProcesses.push(...processBatch);
+  }
+
+  // Monta mapa final
+  const clientsMap = new Map<string, ClientWithProcess>();
+  allProfiles.forEach(profile => {
+    const process = allProcesses.find(p => p.user_id === profile.id);
+    clientsMap.set(profile.id, {
+      id: profile.id,
+      full_name: profile.full_name || '',
+      email: profile.email,
+      brand_name: process?.brand_name || undefined,
+      process_number: process?.process_number || undefined,
+    });
+  });
+  return Array.from(clientsMap.values());
+},
 ```
 
-**Teste validado:** "Gooogle" → Levenshtein vs "Google" = 85.7% → BLOQUEADO ✅
+### Debounce na busca
 
-**Laudo de alto renome** gerado imediatamente, com fundamentação jurídica (Art. 125 da Lei 9.279/1996), sem executar os módulos de busca.
-
-### Etapa 2 — Módulo INPI via Firecrawl
-
-Firecrawl (`FIRECRAWL_API_KEY` disponível) será usado para raspar o INPI Brasil em duas URLs:
-
-```
-URL 1 (busca exata):
-https://busca.inpi.gov.br/pePI/servlet/MarcaServlet?Action=detail&CodProcesso={marca}
-
-URL 2 (busca radical — marcas similares):
-https://busca.inpi.gov.br/pePI/servlet/MarcaServlet?Action=detail&marca={marca}&tipoMarca=&situacao=
-```
-
-Firecrawl extrai o conteúdo em Markdown, bypassa Cloudflare e renderiza JavaScript. O resultado bruto é passado para o GPT-5.2 interpretar os dados estruturados.
-
-**Fallback:** Se Firecrawl falhar ou INPI estiver fora, o módulo retorna `{ success: false, note: "INPI temporariamente indisponível" }` e o laudo reporta isso com transparência. Os outros módulos continuam.
-
-### Etapa 3 — Módulo Empresas BR (CNPJ.ws API Pública)
-
-API pública gratuita, sem autenticação:
-
-```
-GET https://publica.cnpj.ws/cnpj/busca?q={brandName}&limit=10
-GET https://api.cnpjcheck.com.br/search?q={brandName}
-```
-
-Captura empresas com nome idêntico ou muito similar registradas na Receita Federal. Retorna: nome empresarial, CNPJ, município, UF, situação cadastral.
-
-### Etapa 4 — Módulo Web via Firecrawl (Colidência)
-
-Firecrawl executa buscas web reais para verificar presença da marca:
+Adicionar debounce de 400ms para evitar disparar uma query a cada letra digitada:
 
 ```typescript
-// Busca 1: Google Meu Negócio / Instagram / LinkedIn
-const webSearch1 = await firecrawl.search(`"${brandName}" empresa OR negócio site:linkedin.com OR site:instagram.com`);
+const [searchQuery, setSearchQuery] = useState('');
+const [debouncedSearch, setDebouncedSearch] = useState('');
 
-// Busca 2: Sites empresariais e marketplaces
-const webSearch2 = await firecrawl.search(`"${brandName}" empresa Brazil CNPJ`);
+useEffect(() => {
+  const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+  return () => clearTimeout(timer);
+}, [searchQuery]);
 
-// Busca 3: Marketplaces
-const webSearch3 = await firecrawl.search(`"${brandName}" loja OR produto OR serviço Brasil`);
-```
-
-Retorna lista de menções com URL e fonte.
-
-### Etapa 5 — GPT-5.2 via Lovable AI Gateway
-
-```typescript
-const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-  method: 'POST',
-  headers: {
-    Authorization: `Bearer ${LOVABLE_API_KEY}`,
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    model: 'openai/gpt-5.2',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT_JURIDICO },
-      { role: 'user', content: buildAnalysisPrompt(brandName, businessArea, inpiResult, cnpjResult, webResult) }
-    ],
-    temperature: 0.3,
-  }),
+// Usar debouncedSearch na queryKey e queryFn
+const { data: clients = [], isLoading: isLoadingClients } = useQuery({
+  queryKey: ['clients-with-processes', debouncedSearch],
+  queryFn: async () => { /* ... usa debouncedSearch ... */ },
+  enabled: isProcessualMode,
 });
 ```
 
-**O GPT-5.2 recebe:**
-- Resultado bruto do INPI (markdown extraído pelo Firecrawl)
-- Lista de empresas do CNPJ.ws
-- Menções web encontradas
-- Ramo de atividade e nome da marca
+### Indicador de loading na lista
 
-**O GPT-5.2 gera:**
-- Conclusão técnica jurídica
-- Nível de viabilidade (high/medium/low) com fundamentação
-- 3 classes NCL recomendadas com descrições
-- Estratégia jurídica
-- Seção "ANÁLISE DE COLIDÊNCIA NA INTERNET (BRASIL)" formatada
-- Score de urgência com justificativa
+Mostrar um spinner enquanto a busca está em andamento:
 
-### Etapa 6 — Laudo Final (Estrutura Preservada)
-
-A variável `laudo` (string) mantém a mesma estrutura existente, apenas com uma nova seção inserida:
-
-```
-*LAUDO TÉCNICO DE VIABILIDADE DE MARCA*
-*Pesquisa INPI + Análise de Colidência Premium*
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 *DADOS DA CONSULTA*
-[dados iguais ao atual]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🔍 *RESULTADO DA PESQUISA INPI*
-[marcas encontradas / disponível]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🌐 *ANÁLISE DE COLIDÊNCIA NA INTERNET (BRASIL)*   ← NOVA SEÇÃO
-[empresas CNPJ + presença web]
-[mensagem de urgência se encontradas]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚖️ *CONCLUSÃO TÉCNICA*
-[gerada pelo GPT-5.2]
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏷️ *CLASSES RECOMENDADAS PARA REGISTRO*
-[3 classes com descrições]
-
-[restante igual ao atual]
+```tsx
+{isLoadingClients ? (
+  <div className="flex items-center justify-center py-4">
+    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+    <span className="ml-2 text-sm text-muted-foreground">Buscando clientes...</span>
+  </div>
+) : clients.length === 0 ? (
+  <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente encontrado</p>
+) : (
+  /* lista de clientes */
+)}
 ```
 
----
+## Arquivo a Modificar
 
-## Arquivos a Modificar
-
-### 1. `supabase/functions/inpi-viability-check/index.ts`
-**Reescrever completamente.** É o único arquivo com lógica de busca. Nenhum arquivo frontend é alterado.
-
-Mudanças:
-- Lista de 100+ marcas de alto renome expandida
-- Algoritmo Levenshtein + Soundex fonético
-- 3 módulos paralelos (INPI via Firecrawl, CNPJ.ws, Web via Firecrawl)
-- GPT-5.2 via Lovable AI Gateway (substitui gpt-4o-mini via OpenAI direto)
-- Nova seção "ANÁLISE DE COLIDÊNCIA NA INTERNET" no laudo
-- Todos os botões sempre retornados (nunca omitidos no response)
-- Timeout de 25s por módulo para evitar cold start do Supabase (limite 150s)
-
-### 2. `src/lib/api/viability.ts`
-**Ampliar a interface `ViabilityResult`** com campos opcionais novos:
-
-```typescript
-export interface ViabilityResult {
-  success: boolean;
-  isFamousBrand?: boolean;
-  famousBrandMatch?: string;        // qual marca de alto renome foi detectada
-  level: 'high' | 'medium' | 'low' | 'blocked';
-  title: string;
-  description: string;
-  laudo?: string;
-  classes?: number[];
-  classDescriptions?: string[];
-  searchDate?: string;
-  error?: string;
-  // Novos campos opcionais (não quebram nada existente)
-  webCollidenceFound?: boolean;     // flag se encontrou empresas na web
-  inpiSearched?: boolean;           // flag se INPI foi consultado via Firecrawl
-  urgencyScore?: number;            // 0-100
-}
-```
-
-Os novos campos são todos **opcionais** — não quebram nenhum componente existente que já usa `ViabilityResult`.
-
----
-
-## Garantias de Não-Regressão
-
-| Item | Status |
+| Arquivo | Mudança |
 |---|---|
-| Layout do site | NÃO alterado — apenas Edge Function e interface TypeScript |
-| Identidade visual | NÃO alterada |
-| Botões (Registrar / Especialista / Nova consulta) | SEMPRE visíveis — o frontend não muda |
-| Estrutura do PDF | IDÊNTICA — apenas o texto do laudo ganha nova seção |
-| Papel timbrado | NÃO alterado |
-| Design da página | NÃO alterado |
-| Estrutura do formulário | NÃO alterada |
-| CRM | NÃO alterado |
-| Outros fluxos (contratos, pagamento, etc.) | NÃO impactados |
+| `src/components/admin/email/EmailCompose.tsx` | Substituir queryFn da query `clients-with-processes` com paginação completa + debounce + loading indicator |
 
-**Em caso de falha de qualquer módulo externo** (INPI fora do ar, Firecrawl timeout, CNPJ.ws indisponível): o sistema degrada graciosamente, reporta a indisponibilidade no laudo com transparência, e retorna um resultado válido com os dados que foram possíveis obter. Os botões SEMPRE aparecem.
+## Impacto
 
----
-
-## Honestidade Técnica sobre Limitações
-
-**O que será 100% real:**
-- Detecção de alto renome com Levenshtein fonético (Nike, Gooogle → bloqueado)
-- Empresas abertas no Brasil via CNPJ.ws (API pública oficial)
-- Busca web real via Firecrawl (Google, LinkedIn, Instagram, sites)
-- Síntese jurídica via GPT-5.2 (modelo mais avançado disponível)
-- Laudo com seção de colidência real
-
-**O que tem limitação técnica legítima:**
-- INPI Brasil: o site `busca.inpi.gov.br` tem Cloudflare + captcha em certas rotas. Firecrawl tenta bypassar, mas não é garantido 100% em todas as consultas. Se bloqueado, o laudo reporta "INPI consultado via base alternativa" e usa dados WIPO como fallback. Isso é transparente.
-
-**O que NÃO pode ser feito:**
-- API oficial do INPI não existe para terceiros (apenas acesso web)
-- Google Meu Negócio não tem API pública — coberto indiretamente pela busca web do Firecrawl
+- Nenhuma alteração em layout, design, PDF, CRM ou outras páginas
+- A busca passará a retornar TODOS os clientes da base (2.300+)
+- Com debounce de 400ms, a performance é mantida
+- O indicador de loading melhora a experiência durante a busca
