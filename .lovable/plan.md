@@ -1,154 +1,104 @@
 
-# Problema: Busca de Clientes no Modo Processual Mostrando Apenas 50 Registros
+# Correção: Links Quebrados nos E-mails Automáticos
 
-## Diagnóstico
+## Diagnóstico Preciso
 
-No arquivo `src/components/admin/email/EmailCompose.tsx`, linha 176-205, a query que busca clientes para o Modo Processual tem um limite fixo de `.limit(50)`:
+A URL no screenshot é: `webmarcas.net/admin/%7B%7Bapp_url%7D%7D/status-pedido`
 
-```typescript
-const { data: profiles } = await supabase
-  .from('profiles')
-  .select('id, full_name, email, phone')
-  .or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
-  .limit(50);  // ← PROBLEMA: só busca 50 registros
-```
+`%7B%7B` = `{{` e `%7D%7D` = `}}` em URL encoding. Isso significa que a variável `{{app_url}}` **não foi substituída** no corpo do e-mail antes do envio. O cliente recebeu o placeholder literal no HTML, e ao clicar, o browser URL-encodou as chaves.
 
-Com mais de 2.300 clientes na base, a maioria fica invisível. A lista exibida é apenas uma amostra aleatória dos primeiros 50 registros do banco.
+### Causa Raiz
 
-**Problema adicional:** Quando `searchQuery` está vazio (campo de busca em branco), a query retorna os primeiros 50 clientes sem critério de ordenação útil. O cliente que o usuário precisa pode nunca aparecer.
-
-## Solução
-
-Aplicar a estratégia `fetchAllRows` com paginação via `.range()` — já documentada nas memórias do projeto (`memory/technical/large-dataset-fetching-logic`).
-
-### Lógica de Busca Corrigida
-
-**Quando há texto digitado na busca** (`searchQuery` preenchido):
-- Buscar em toda a base usando paginação de 1.000 em 1.000
-- Filtrar por `full_name`, `email` e também por `brand_name` na tabela `brand_processes`
-- Retornar todos os resultados que correspondam
-
-**Quando não há texto** (`searchQuery` vazio):
-- Carregar os 200 clientes mais recentes (ordenados por `created_at DESC`) para ter uma lista inicial útil
-- Ao digitar, expandir para busca completa paginada
-
-### Implementação — Apenas `EmailCompose.tsx`
-
-Substituir a função `queryFn` na query `clients-with-processes`:
+No arquivo `supabase/functions/trigger-email-automation/index.ts`, linhas 68-80:
 
 ```typescript
-queryFn: async () => {
-  // Busca paginada: carrega todos os perfis que correspondem ao filtro
-  const allProfiles: ProfileRow[] = [];
-  let offset = 0;
-  const batchSize = 1000;
-  let hasMore = true;
-
-  while (hasMore) {
-    let query = supabase
-      .from('profiles')
-      .select('id, full_name, email, phone')
-      .range(offset, offset + batchSize - 1);
-
-    if (searchQuery.trim()) {
-      query = query.or(
-        `full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
-      );
-    } else {
-      // Sem busca: carrega os 200 mais recentes para lista inicial
-      query = query.order('created_at', { ascending: false }).limit(200);
-      hasMore = false; // sem paginação no caso padrão
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      allProfiles.push(...data);
-      offset += batchSize;
-      if (!searchQuery.trim() || data.length < batchSize) hasMore = false;
-    } else {
-      hasMore = false;
-    }
-  }
-
-  // Busca os processos dos perfis encontrados em lotes
-  const profileIds = allProfiles.map(p => p.id);
-  let allProcesses: ProcessRow[] = [];
-  
-  // Buscar processos em lotes de 100 IDs (limite do PostgREST para IN)
-  for (let i = 0; i < profileIds.length; i += 100) {
-    const batch = profileIds.slice(i, i + 100);
-    const { data: processBatch } = await supabase
-      .from('brand_processes')
-      .select('user_id, brand_name, process_number')
-      .in('user_id', batch);
-    if (processBatch) allProcesses.push(...processBatch);
-  }
-
-  // Monta mapa final
-  const clientsMap = new Map<string, ClientWithProcess>();
-  allProfiles.forEach(profile => {
-    const process = allProcesses.find(p => p.user_id === profile.id);
-    clientsMap.set(profile.id, {
-      id: profile.id,
-      full_name: profile.full_name || '',
-      email: profile.email,
-      brand_name: process?.brand_name || undefined,
-      process_number: process?.process_number || undefined,
-    });
-  });
-  return Array.from(clientsMap.values());
-},
+const appUrl = data.base_url || Deno.env.get('SITE_URL');
+if (!appUrl) {
+  console.error('No base_url provided and SITE_URL secret not configured');
+  return new Response(
+    JSON.stringify({ error: 'SITE_URL not configured...' }),
+    { status: 500, ... }
+  );
+}
 ```
 
-### Debounce na busca
+A função exige `data.base_url` ou a secret `SITE_URL`. O problema: **a secret `SITE_URL` está configurada como `https://webmarcas.net`**, mas os callers internos (edge functions como `sign-contract-blockchain`, `asaas-webhook`, `create-asaas-payment`, `check-abandoned-forms`) **NÃO passam `base_url` no payload**. 
 
-Adicionar debounce de 400ms para evitar disparar uma query a cada letra digitada:
+Verificando os callers:
+- `sign-contract-blockchain` → chama `trigger-email-automation` com `data: { nome, email, ... }` **sem `base_url`**
+- `asaas-webhook` → idem, sem `base_url`
+- `create-asaas-payment` → idem
+- `check-abandoned-forms` → idem
+- `confirm-payment` → idem
+
+Portanto, a função depende 100% da secret `SITE_URL`. Se a secret estiver vazia ou incorreta, `appUrl` fica `undefined`, a substituição `{{app_url}} → valor` não funciona, e o placeholder vai literalmente no e-mail.
+
+**Solução definitiva**: Remover a dependência da secret `SITE_URL` e hardcodar o domínio de produção `https://webmarcas.net` diretamente na função `trigger-email-automation`, assim como já é feito nas funções `send-signature-request` e `generate-signature-link` (que têm `const PRODUCTION_DOMAIN = 'https://webmarcas.net'`).
+
+## Arquivos a Modificar
+
+### 1. `supabase/functions/trigger-email-automation/index.ts`
+
+**Mudança**: Substituir a lógica frágil de `appUrl` por uma constante hardcoded com fallback robusto:
 
 ```typescript
-const [searchQuery, setSearchQuery] = useState('');
-const [debouncedSearch, setDebouncedSearch] = useState('');
+// ANTES (frágil - depende de SITE_URL):
+const appUrl = data.base_url || Deno.env.get('SITE_URL');
+if (!appUrl) {
+  return new Response({ error: 'SITE_URL not configured' }, { status: 500 });
+}
 
-useEffect(() => {
-  const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
-  return () => clearTimeout(timer);
-}, [searchQuery]);
-
-// Usar debouncedSearch na queryKey e queryFn
-const { data: clients = [], isLoading: isLoadingClients } = useQuery({
-  queryKey: ['clients-with-processes', debouncedSearch],
-  queryFn: async () => { /* ... usa debouncedSearch ... */ },
-  enabled: isProcessualMode,
-});
+// DEPOIS (robusto - domínio de produção fixo como nas outras funções):
+const PRODUCTION_DOMAIN = 'https://webmarcas.net';
+const rawSiteUrl = Deno.env.get('SITE_URL') || '';
+const isPreviewUrl = (url: string) =>
+  url.includes('lovable.app') || url.includes('localhost') || !url;
+const appUrl = data.base_url || 
+  (rawSiteUrl && !isPreviewUrl(rawSiteUrl) ? rawSiteUrl : PRODUCTION_DOMAIN);
+// Nunca retorna erro 500 — sempre tem um fallback válido
 ```
 
-### Indicador de loading na lista
+### 2. Todos os callers internos que invocam `trigger-email-automation`
 
-Mostrar um spinner enquanto a busca está em andamento:
+Adicionar `base_url: 'https://webmarcas.net'` explicitamente nos payloads de cada caller, garantindo que mesmo que a lógica da secret falhe, o domínio correto seja passado:
 
-```tsx
-{isLoadingClients ? (
-  <div className="flex items-center justify-center py-4">
-    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-    <span className="ml-2 text-sm text-muted-foreground">Buscando clientes...</span>
-  </div>
-) : clients.length === 0 ? (
-  <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente encontrado</p>
-) : (
-  /* lista de clientes */
-)}
-```
+**Arquivos afetados:**
+- `supabase/functions/sign-contract-blockchain/index.ts` — invocações de `user_created` e `contract_signed`
+- `supabase/functions/asaas-webhook/index.ts` — invocações de `payment_received`
+- `supabase/functions/create-asaas-payment/index.ts` — invocação de `form_completed`
+- `supabase/functions/confirm-payment/index.ts` — invocações de `contract_signed` e `payment_received`
+- `supabase/functions/check-abandoned-forms/index.ts` — invocação de `form_abandoned`
+- `src/components/sections/RegistrationFormSection.tsx` — invocação de `form_started` (frontend)
 
-## Arquivo a Modificar
+## Plano de Implementação
 
-| Arquivo | Mudança |
-|---|---|
-| `src/components/admin/email/EmailCompose.tsx` | Substituir queryFn da query `clients-with-processes` com paginação completa + debounce + loading indicator |
+### Etapa 1: Corrigir `trigger-email-automation/index.ts`
+- Hardcodar `PRODUCTION_DOMAIN = 'https://webmarcas.net'`
+- Remover o bloqueio de `return 500` quando `SITE_URL` está ausente
+- Garantir que `appUrl` **sempre** tenha um valor válido
+
+### Etapa 2: Atualizar todos os callers
+- Adicionar `base_url: 'https://webmarcas.net'` no campo `data` de cada invocação a `trigger-email-automation`
+- Isso garante redundância dupla: o caller passa a URL correta E a função tem o fallback correto
+
+### Etapa 3: Deploy automático
+- As edge functions serão implantadas automaticamente após a edição
 
 ## Impacto
 
-- Nenhuma alteração em layout, design, PDF, CRM ou outras páginas
-- A busca passará a retornar TODOS os clientes da base (2.300+)
-- Com debounce de 400ms, a performance é mantida
-- O indicador de loading melhora a experiência durante a busca
+- Links de todos os e-mails automáticos voltarão a funcionar corretamente
+- "Continuar Registro", "Ver Status do Pedido", "Acessar Área do Cliente", links de assinatura — todos apontarão para `https://webmarcas.net/...`
+- Sem alterações no banco de dados, sem migração necessária
+- Zero impacto em layout, CRM ou demais funcionalidades
+
+## Arquivos a Modificar (resumo técnico)
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/trigger-email-automation/index.ts` | Hardcodar PRODUCTION_DOMAIN, remover erro 500 por SITE_URL ausente |
+| `supabase/functions/sign-contract-blockchain/index.ts` | Adicionar `base_url` nos 2 payloads |
+| `supabase/functions/asaas-webhook/index.ts` | Adicionar `base_url` nos payloads |
+| `supabase/functions/create-asaas-payment/index.ts` | Adicionar `base_url` no payload |
+| `supabase/functions/confirm-payment/index.ts` | Adicionar `base_url` nos payloads |
+| `supabase/functions/check-abandoned-forms/index.ts` | Adicionar `base_url` no payload |
+| `src/components/sections/RegistrationFormSection.tsx` | Adicionar `base_url: window.location.origin` que a lógica já usa |
