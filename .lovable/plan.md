@@ -1,87 +1,61 @@
 
-# Correção: Nome do Consultor e Conversa Atribuída no Chat Suporte do Cliente
+# Processos (Pipeline) — Configurações: Redesign Premium
 
-## Diagnóstico do Problema
+## O que essa aba faz (importante manter)
 
-### Problema 1 — RLS bloqueia a leitura do perfil do admin atribuído
-A política de segurança da tabela `profiles` permite que clientes visualizem **apenas o próprio perfil** (`auth.uid() = id`). Quando o `ChatSuporte.tsx` tenta buscar o nome do admin com:
+A aba **Processos** configura as **etapas do pipeline jurídico INPI** — os estágios que aparecem no:
+- Kanban de processos do cliente (`/cliente/processos` → aba Kanban)
+- Página de Processos do admin (`/admin/processos`)
+- Revista INPI ao mover um processo para uma nova etapa
+- Detalhe do processo do cliente (`/cliente/processos/:id`)
 
-```typescript
-const { data: admin } = await supabase
-  .from('profiles')
-  .select('id, full_name')
-  .eq('id', adminId)  // ← adminId é o ID do admin, não do cliente
-  .single();
-```
+Ou seja: **é uma configuração central e importante**. O problema é que a UI atual está quebrada (nomes das etapas não aparecem — fundo preto sobre fundo escuro) e muito básica. Deve ser mantida e modernizada.
 
-A query retorna `null` porque o RLS bloqueia o acesso ao perfil de outro usuário. Por isso `assignedAdmin` fica `null` e o card mostra **"Seu Consultor"** com inicial **"C"** genérica.
+## Diagnóstico do bug atual
 
-### Problema 2 — Ao clicar, não inicia conversa com o admin correto
-Quando `assignedAdmin` é `null`, a função `startHumanChat` não consegue chamar `chat.openDirectConversation(assignedAdmin.id)` e retorna erro silencioso ou mensagem "Nenhum consultor atribuído".
+O `<Reorder.Item>` tem `bg-card` mas o `<span>` com o nome da etapa não tem cor de texto definida, resultando em texto invisível sobre fundo escuro no tema dark. Além disso, o `<input type="color">` nativo fica como um quadrado preto sem estilo.
 
-## Solução
+## Solução: Redesign Premium do ProcessSettings
 
-### Correção 1 — Nova RLS policy: clientes podem ver perfis dos admins atribuídos a eles
-Adicionar uma política de leitura que permita ao cliente visualizar o perfil do usuário cujo `id` está registrado como `assigned_to` ou `created_by` no perfil do próprio cliente:
+### 1. Visual pipeline preview (novo)
+Adicionar uma faixa horizontal no topo do card mostrando as etapas como "chips" conectados por setas — igual a um funil visual. Isso dá contexto imediato de como as etapas se encadeiam.
 
-```sql
-CREATE POLICY "Clients can view their assigned admin profile"
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING (
-  -- Permite que clientes vejam o perfil do admin atribuído a eles
-  id IN (
-    SELECT assigned_to FROM profiles WHERE id = auth.uid() AND assigned_to IS NOT NULL
-    UNION
-    SELECT created_by FROM profiles WHERE id = auth.uid() AND created_by IS NOT NULL
-  )
-);
-```
+### 2. Itens do Reorder redesenhados
+Cada etapa na lista passa a ter:
+- **Nome visível** com `text-foreground` explícito
+- **Barra colorida** lateral à esquerda (estilo HUD, igual ao sidebar de Configurações)
+- **Badge de índice** (01, 02, 03...) indicando posição no pipeline
+- **Swatches de cor** substituem o `<input type="color">` nativo — paleta de 9 cores clicável
+- **Chip de preview** da cor selecionada com o nome da etapa
+- Fundo com glassmorphism e borda colorida dinâmica baseada na cor da etapa
 
-Esta política é segura: o cliente só consegue ler o perfil do **seu próprio consultor**, não de qualquer outro usuário.
+### 3. Dialog "Nova Etapa" modernizado
+- Preview em tempo real da etapa enquanto o usuário digita o nome
+- Swatches de cores com animação de seleção (ring + scale)
+- Nome gerado automaticamente como badge de preview antes de adicionar
 
-### Correção 2 — Buscar nome do admin direto na query do perfil do cliente (fallback eficiente)
-Como a query de perfil do cliente já retorna `assigned_to` (o UUID do admin), podemos fazer um join via Supabase para buscar o nome do admin em uma única query, tornando a busca mais robusta:
+### 4. Estado vazio premium
+Quando não há etapas, mostrar um estado visual com ícone animado e call-to-action para adicionar a primeira etapa.
 
-No `ChatSuporte.tsx`, modificar a query do perfil para incluir o nome do admin via select aninhado:
+### 5. Auto-save ao reordenar
+Após soltar (drag end), salvar automaticamente a nova ordem sem precisar clicar no botão "Salvar" manualmente — feedback toast instantâneo.
 
-```typescript
-const { data: profile } = await supabase
-  .from('profiles')
-  .select('full_name, assigned_to, created_by')
-  .eq('id', session.user.id)
-  .single();
+## Arquivos a modificar
 
-// Com a nova policy RLS, isso vai funcionar:
-const adminId = profile?.assigned_to || profile?.created_by;
-if (adminId) {
-  const { data: admin } = await supabase
-    .from('profiles')
-    .select('id, full_name')
-    .eq('id', adminId)
-    .single();
-  if (admin) setAssignedAdmin(admin);
-}
-```
+### `src/components/admin/settings/ProcessSettings.tsx`
+Reescrever o componente com o novo design premium:
+- Corrigir `text-foreground` nos nomes das etapas
+- Pipeline preview visual horizontal
+- Reorder items com glassmorphism + borda colorida + badge de índice
+- Swatches de cor inline (sem `<input type="color">` nativo)
+- Dialog modernizado com preview em tempo real
+- Auto-save no reorder
+- Estado vazio com animação
 
-### Correção 3 — Exibir nome correto no card e iniciar conversa automaticamente ao clicar
-Com o `assignedAdmin` populado corretamente, o card já exibe o nome real (linha 539: `{assignedAdmin?.full_name || 'Seu Consultor'}`). Confirmar que `startHumanChat` abre corretamente a conversa com o admin atribuído.
+## Resultado esperado
 
-Adicionar feedback visual de loading no card do consultor enquanto os dados carregam, e uma mensagem de fallback mais clara quando o cliente realmente não tem nenhum consultor atribuído.
-
-## Arquivos a Modificar
-
-### 1. Migration SQL (nova RLS policy)
-Criar migration adicionando a policy `Clients can view their assigned admin profile` na tabela `profiles`.
-
-### 2. `src/pages/cliente/ChatSuporte.tsx`
-- Adicionar estado `loadingAdmin` para exibir skeleton no card do consultor enquanto carrega
-- Melhorar fallback quando não há consultor atribuído (mensagem explicativa em vez de "Seu Consultor" com inicial "C" genérica)
-- Garantir que ao clicar no card, a conversa com o admin correto é iniciada imediatamente
-
-## Resultado Esperado
-- Card **"Seu Consultor"** exibe o nome real do consultor atribuído (ex: "Caroline Martins")
-- As iniciais no avatar verde refletem o nome real (ex: "CM")
-- Ao clicar no card, abre o chat diretamente com o consultor atribuído
-- A conversa é persistida no banco e visível para o admin no painel administrativo
+- Nomes das etapas **visíveis** e legíveis em todos os temas
+- Interface premium alinhada com a identidade visual "Futurista 2026"
+- Pipeline preview que dá contexto imediato do que está sendo configurado
+- Experiência de drag-and-drop refinada com auto-save
+- Sem perda de funcionalidade — as etapas continuam sendo salvas na `system_settings` e usadas em todo o sistema
