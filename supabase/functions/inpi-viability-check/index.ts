@@ -3,7 +3,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Lista de marcas de alto renome - não realizar laudo
 const FAMOUS_BRANDS = [
   'petrobras', 'itau', 'itaú', 'bradesco', 'caixa', 'santander', 'nubank',
   'magazine luiza', 'magalu', 'casas bahia', 'coca-cola', 'coca cola', 'cocacola',
@@ -27,738 +26,559 @@ const FAMOUS_BRANDS = [
   'meta', 'twitter', 'tiktok', 'youtube', 'linkedin', 'pinterest', 'snapchat'
 ];
 
-// Mapeamento de ramos para classes NCL
 const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: string[] }> = {
-  'tecnologia': {
-    classes: [9, 42, 35],
-    descriptions: [
-      'Classe 09 – Aparelhos e instrumentos científicos, software, hardware e equipamentos eletrônicos',
-      'Classe 42 – Serviços científicos, tecnológicos e de design, desenvolvimento de software',
-      'Classe 35 – Publicidade, gestão de negócios, administração comercial'
-    ]
-  },
-  'alimentacao': {
-    classes: [43, 30, 29],
-    descriptions: [
-      'Classe 43 – Serviços de restaurante, alimentação e hospedagem',
-      'Classe 30 – Café, chá, cacau, açúcar, arroz, massas, pães, doces e condimentos',
-      'Classe 29 – Carne, peixe, aves, caça, frutas, legumes, ovos, leite e derivados'
-    ]
-  },
-  'moda': {
-    classes: [25, 18, 35],
-    descriptions: [
-      'Classe 25 – Vestuário, calçados e chapelaria',
-      'Classe 18 – Couro, bolsas, malas, guarda-chuvas e artigos de selaria',
-      'Classe 35 – Publicidade, gestão de negócios, comércio varejista'
-    ]
-  },
-  'saude': {
-    classes: [44, 5, 10],
-    descriptions: [
-      'Classe 44 – Serviços médicos, veterinários, higiênicos e de beleza',
-      'Classe 05 – Produtos farmacêuticos, veterinários e sanitários',
-      'Classe 10 – Aparelhos e instrumentos médicos, cirúrgicos e odontológicos'
-    ]
-  },
-  'educacao': {
-    classes: [41, 16, 9],
-    descriptions: [
-      'Classe 41 – Educação, treinamento, entretenimento e atividades desportivas e culturais',
-      'Classe 16 – Papel, produtos de papelaria, material de instrução e ensino',
-      'Classe 09 – Aparelhos para gravação, transmissão ou reprodução de som ou imagem'
-    ]
-  },
-  'beleza': {
-    classes: [44, 3, 35],
-    descriptions: [
-      'Classe 44 – Serviços de salão de beleza, estética e cabeleireiro',
-      'Classe 03 – Cosméticos, perfumaria, óleos essenciais e produtos de higiene',
-      'Classe 35 – Publicidade e comércio de produtos de beleza'
-    ]
-  },
-  'construcao': {
-    classes: [37, 19, 6],
-    descriptions: [
-      'Classe 37 – Construção civil, reparação e serviços de instalação',
-      'Classe 19 – Materiais de construção não metálicos (cimento, tijolo, vidro)',
-      'Classe 06 – Metais comuns e suas ligas, materiais de construção metálicos'
-    ]
-  },
-  'financeiro': {
-    classes: [36, 35, 42],
-    descriptions: [
-      'Classe 36 – Seguros, negócios financeiros, imobiliários e bancários',
-      'Classe 35 – Gestão de negócios, administração comercial e contabilidade',
-      'Classe 42 – Serviços científicos e tecnológicos relacionados a finanças'
-    ]
-  },
-  'advocacia': {
-    classes: [45, 35, 41],
-    descriptions: [
-      'Classe 45 – Serviços jurídicos, advocacia e consultoria legal',
-      'Classe 35 – Gestão de negócios e administração de escritórios',
-      'Classe 41 – Educação jurídica, palestras e treinamentos'
-    ]
-  },
-  'automotivo': {
-    classes: [37, 12, 35],
-    descriptions: [
-      'Classe 37 – Reparação e manutenção de veículos',
-      'Classe 12 – Veículos, aparelhos de locomoção por terra, ar ou água',
-      'Classe 35 – Comércio de veículos e peças automotivas'
-    ]
-  },
-  'default': {
-    classes: [35, 41, 42],
-    descriptions: [
-      'Classe 35 – Publicidade, gestão de negócios e administração comercial',
-      'Classe 41 – Educação, treinamento, entretenimento e cultura',
-      'Classe 42 – Serviços científicos, tecnológicos e de pesquisa'
-    ]
-  }
+  'tecnologia': { classes: [9, 42, 35], descriptions: ['Classe 09 – Software, hardware e equipamentos eletrônicos', 'Classe 42 – Desenvolvimento de software e serviços tecnológicos', 'Classe 35 – Publicidade e gestão de negócios digitais'] },
+  'alimentacao': { classes: [43, 30, 29], descriptions: ['Classe 43 – Serviços de restaurante e alimentação', 'Classe 30 – Alimentos processados, pães, doces e condimentos', 'Classe 29 – Carnes, laticínios, frutas e legumes processados'] },
+  'moda': { classes: [25, 18, 35], descriptions: ['Classe 25 – Vestuário, calçados e chapelaria', 'Classe 18 – Couro, bolsas, malas e artigos de selaria', 'Classe 35 – Comércio varejista de moda'] },
+  'saude': { classes: [44, 5, 10], descriptions: ['Classe 44 – Serviços médicos e de saúde', 'Classe 05 – Produtos farmacêuticos e sanitários', 'Classe 10 – Aparelhos médicos e cirúrgicos'] },
+  'educacao': { classes: [41, 16, 9], descriptions: ['Classe 41 – Educação, treinamento e entretenimento', 'Classe 16 – Material de instrução e ensino', 'Classe 09 – Plataformas educacionais e e-learning'] },
+  'beleza': { classes: [44, 3, 35], descriptions: ['Classe 44 – Serviços de salão de beleza e estética', 'Classe 03 – Cosméticos, perfumaria e produtos de higiene', 'Classe 35 – Comércio de produtos de beleza'] },
+  'construcao': { classes: [37, 19, 6], descriptions: ['Classe 37 – Construção civil e serviços de instalação', 'Classe 19 – Materiais de construção não metálicos', 'Classe 06 – Materiais de construção metálicos'] },
+  'financeiro': { classes: [36, 35, 42], descriptions: ['Classe 36 – Seguros, finanças e serviços imobiliários', 'Classe 35 – Gestão de negócios e contabilidade', 'Classe 42 – Tecnologia financeira (fintech)'] },
+  'advocacia': { classes: [45, 35, 41], descriptions: ['Classe 45 – Serviços jurídicos e advocacia', 'Classe 35 – Gestão e administração de escritórios', 'Classe 41 – Educação jurídica e treinamentos'] },
+  'automotivo': { classes: [37, 12, 35], descriptions: ['Classe 37 – Reparação e manutenção de veículos', 'Classe 12 – Veículos e aparelhos de locomoção', 'Classe 35 – Comércio de veículos e peças'] },
+  'default': { classes: [35, 41, 42], descriptions: ['Classe 35 – Publicidade e gestão de negócios', 'Classe 41 – Educação e entretenimento', 'Classe 42 – Serviços científicos e tecnológicos'] }
 };
 
 function normalizeString(str: string): string {
-  return str.toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
 
 function isFamousBrand(brandName: string): boolean {
   const normalized = normalizeString(brandName);
-  return FAMOUS_BRANDS.some(famous => 
-    normalized.includes(normalizeString(famous)) || 
-    normalizeString(famous).includes(normalized)
+  return FAMOUS_BRANDS.some(famous =>
+    normalized.includes(normalizeString(famous)) || normalizeString(famous).includes(normalized)
   );
 }
 
-// Função de fallback para mapeamento fixo (usada se IA falhar)
-function getClassesForBusinessAreaFallback(businessArea: string): { classes: number[], descriptions: string[] } {
+function getClassesForBusinessArea(businessArea: string): { classes: number[], descriptions: string[] } {
   const normalized = normalizeString(businessArea);
-  
   for (const [key, value] of Object.entries(BUSINESS_AREA_CLASSES)) {
-    if (key !== 'default' && normalized.includes(key)) {
-      return value;
-    }
+    if (key !== 'default' && normalized.includes(key)) return value;
   }
-  
-  if (normalized.includes('software') || normalized.includes('app') || normalized.includes('sistema') || normalized.includes('ti')) {
-    return BUSINESS_AREA_CLASSES.tecnologia;
-  }
-  if (normalized.includes('restaurante') || normalized.includes('comida') || normalized.includes('gastronomia') || normalized.includes('lanchonete')) {
-    return BUSINESS_AREA_CLASSES.alimentacao;
-  }
-  if (normalized.includes('roupa') || normalized.includes('vestuario') || normalized.includes('loja') || normalized.includes('boutique')) {
-    return BUSINESS_AREA_CLASSES.moda;
-  }
-  if (normalized.includes('clinica') || normalized.includes('hospital') || normalized.includes('medic') || normalized.includes('farmacia')) {
-    return BUSINESS_AREA_CLASSES.saude;
-  }
-  if (normalized.includes('escola') || normalized.includes('curso') || normalized.includes('ensino') || normalized.includes('faculdade')) {
-    return BUSINESS_AREA_CLASSES.educacao;
-  }
-  if (normalized.includes('salao') || normalized.includes('estetica') || normalized.includes('cabelo') || normalized.includes('cosmetico')) {
-    return BUSINESS_AREA_CLASSES.beleza;
-  }
-  if (normalized.includes('obra') || normalized.includes('engenharia') || normalized.includes('arquitetura') || normalized.includes('pedreiro')) {
-    return BUSINESS_AREA_CLASSES.construcao;
-  }
-  if (normalized.includes('banco') || normalized.includes('investimento') || normalized.includes('credito') || normalized.includes('financeira')) {
-    return BUSINESS_AREA_CLASSES.financeiro;
-  }
-  if (normalized.includes('advogado') || normalized.includes('juridico') || normalized.includes('direito') || normalized.includes('escritorio')) {
-    return BUSINESS_AREA_CLASSES.advocacia;
-  }
-  if (normalized.includes('carro') || normalized.includes('moto') || normalized.includes('oficina') || normalized.includes('mecanica')) {
-    return BUSINESS_AREA_CLASSES.automotivo;
-  }
-  
+  if (normalized.includes('software') || normalized.includes('app') || normalized.includes('sistema') || normalized.includes('ti')) return BUSINESS_AREA_CLASSES.tecnologia;
+  if (normalized.includes('restaurante') || normalized.includes('comida') || normalized.includes('gastronomia')) return BUSINESS_AREA_CLASSES.alimentacao;
+  if (normalized.includes('roupa') || normalized.includes('vestuario') || normalized.includes('boutique')) return BUSINESS_AREA_CLASSES.moda;
+  if (normalized.includes('clinica') || normalized.includes('hospital') || normalized.includes('medic')) return BUSINESS_AREA_CLASSES.saude;
+  if (normalized.includes('escola') || normalized.includes('curso') || normalized.includes('ensino')) return BUSINESS_AREA_CLASSES.educacao;
+  if (normalized.includes('salao') || normalized.includes('estetica') || normalized.includes('cosmetico')) return BUSINESS_AREA_CLASSES.beleza;
+  if (normalized.includes('obra') || normalized.includes('engenharia') || normalized.includes('arquitetura')) return BUSINESS_AREA_CLASSES.construcao;
+  if (normalized.includes('banco') || normalized.includes('investimento') || normalized.includes('financeira')) return BUSINESS_AREA_CLASSES.financeiro;
+  if (normalized.includes('advogado') || normalized.includes('juridico') || normalized.includes('direito')) return BUSINESS_AREA_CLASSES.advocacia;
+  if (normalized.includes('carro') || normalized.includes('moto') || normalized.includes('oficina')) return BUSINESS_AREA_CLASSES.automotivo;
   return BUSINESS_AREA_CLASSES.default;
 }
 
-// Função para sugerir classes NCL via IA baseado no ramo de atividade
-async function suggestClassesWithAI(businessArea: string): Promise<{
-  classes: number[];
-  descriptions: string[];
+// =====================================================================
+// MÓDULO 1: Busca INPI via WIPO (com fallback Firecrawl)
+// =====================================================================
+async function searchINPI(brandName: string, firecrawlKey: string): Promise<{
+  found: boolean;
+  totalResults: number;
+  conflicts: Array<{ processo: string; marca: string; situacao: string; titular: string; classe: string; pais: string }>;
+  source: string;
 }> {
-  const openAIKey = Deno.env.get('OPENAI_API_KEY');
-  
-  // Fallback para mapeamento fixo se não tiver chave
-  if (!openAIKey) {
-    console.log('[CLASSES] OpenAI key não configurada, usando fallback');
-    return getClassesForBusinessAreaFallback(businessArea);
+  // Primeiro tenta WIPO JSON API
+  try {
+    console.log('[INPI] Tentando WIPO API...');
+    const searchStructure = {
+      _id: 'wm1', boolean: 'AND',
+      bricks: [{ _id: 'wm2', key: 'brandName', value: brandName, strategy: 'Simple' }]
+    };
+    const params = new URLSearchParams({
+      sort: 'score desc', rows: '20',
+      asStructure: JSON.stringify(searchStructure),
+      fg: '_void_', _: Date.now().toString()
+    });
+    const wipoUrl = `https://branddb.wipo.int/en/similarname/results?${params}`;
+    const res = await fetch(wipoUrl, {
+      headers: {
+        'Accept': 'application/json, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://branddb.wipo.int/en/similarname',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+    const text = await res.text();
+    if (text.startsWith('{') || text.startsWith('[')) {
+      const data = JSON.parse(text);
+      const docs = data.response?.docs || data.docs || [];
+      const numFound = data.response?.numFound || docs.length;
+      if (numFound >= 0) {
+        const conflicts = docs.map((doc: any) => ({
+          processo: doc.AN || doc.RN || '',
+          marca: doc.BN || brandName.toUpperCase(),
+          situacao: doc.ST || 'Registrado',
+          classe: Array.isArray(doc.NC) ? doc.NC.join(', ') : (doc.NC || ''),
+          titular: doc.HOL || '',
+          pais: doc.OO || ''
+        }));
+        const br = conflicts.filter((c: any) => c.pais === 'BR');
+        const others = conflicts.filter((c: any) => c.pais !== 'BR');
+        console.log(`[INPI] WIPO encontrou ${numFound} resultados (${br.length} BR)`);
+        return { found: numFound > 0, totalResults: numFound, conflicts: [...br, ...others].slice(0, 15), source: 'WIPO Global Brand Database' };
+      }
+    }
+    // Se resposta não é JSON (captcha/bloqueio), tentar Firecrawl
+    if (text.includes('altcha') || text.includes('challenge') || text.includes('Just a moment') || !text.startsWith('{')) {
+      throw new Error('WIPO bloqueado - usando Firecrawl');
+    }
+  } catch (wipoError) {
+    console.log('[INPI] WIPO falhou, tentando Firecrawl INPI...');
   }
-  
-  const prompt = `Você é um especialista em registro de marcas no INPI Brasil e na Classificação Internacional de Nice (NCL).
 
-Com base no ramo de atividade informado pelo cliente, sugira EXATAMENTE 3 classes NCL mais adequadas para proteger uma marca neste segmento de mercado.
+  // Fallback: Firecrawl para buscar no INPI Brasil
+  if (firecrawlKey) {
+    try {
+      const inpiSearchUrl = `https://busca.inpi.gov.br/pePI/servlet/MarcaServlet?Action=detail&Tipo=M&NrProcesso=${encodeURIComponent(brandName)}`;
+      // Usa Firecrawl Search para buscar sobre a marca no INPI
+      const fcRes = await fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `marca "${brandName}" INPI Brasil registro site:busca.inpi.gov.br OR site:inpi.gov.br`,
+          limit: 5,
+          scrapeOptions: { formats: ['markdown'] }
+        })
+      });
+      if (fcRes.ok) {
+        const fcData = await fcRes.json();
+        const results = fcData.data || [];
+        const hasConflict = results.some((r: any) =>
+          (r.markdown || r.content || '').toLowerCase().includes(normalizeString(brandName))
+        );
+        console.log(`[INPI] Firecrawl encontrou ${results.length} resultados INPI`);
+        const conflicts = hasConflict ? [{
+          processo: 'Ver INPI',
+          marca: brandName.toUpperCase(),
+          situacao: 'Encontrado via busca web',
+          classe: '',
+          titular: 'Consultar INPI',
+          pais: 'BR'
+        }] : [];
+        return {
+          found: hasConflict,
+          totalResults: hasConflict ? 1 : 0,
+          conflicts,
+          source: 'Firecrawl + INPI Brasil'
+        };
+      }
+    } catch (fcError) {
+      console.error('[INPI] Firecrawl INPI também falhou:', fcError);
+    }
+  }
 
-Ramo de Atividade: "${businessArea}"
+  // Sem dados disponíveis
+  return { found: false, totalResults: 0, conflicts: [], source: 'Indisponível no momento' };
+}
 
-REGRAS IMPORTANTES:
-- Retorne APENAS um JSON válido no formato especificado
-- As classes devem ser números entre 1 e 45 (classes válidas NCL)
-- As descrições devem ser claras, em português e começar com "Classe XX – "
-- Priorize classes específicas e diretamente relacionadas ao ramo informado
-- Evite classes genéricas como 35, 41, 42 quando existirem classes mais específicas
-- Considere toda a cadeia do negócio (produtos, serviços, comercialização)
-
-Formato de resposta (JSON puro, sem markdown, sem code blocks):
-{
-  "classes": [numero1, numero2, numero3],
-  "descriptions": [
-    "Classe XX – Descrição completa e detalhada da classe 1",
-    "Classe XX – Descrição completa e detalhada da classe 2", 
-    "Classe XX – Descrição completa e detalhada da classe 3"
-  ]
-}`;
+// =====================================================================
+// MÓDULO 2: Empresas Abertas no Brasil (CNPJ.ws + ReceitaWS)
+// =====================================================================
+async function searchCompaniesBR(brandName: string): Promise<{
+  found: boolean;
+  companies: Array<{ name: string; cnpj: string; status: string; city: string; state: string; opened: string }>;
+  total: number;
+}> {
+  const companiesFound: Array<{ name: string; cnpj: string; status: string; city: string; state: string; opened: string }> = [];
 
   try {
-    console.log(`[CLASSES] Consultando IA para ramo: "${businessArea}"`);
-    
+    console.log('[CNPJ] Buscando empresas na Receita Federal...');
+    // CNPJ.ws public API
+    const cnpjRes = await fetch(
+      `https://publica.cnpj.ws/cnpj/busca?q=${encodeURIComponent(brandName)}&simei=false&tipo=EMP`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0',
+        }
+      }
+    );
+
+    if (cnpjRes.ok) {
+      const cnpjData = await cnpjRes.json();
+      const items = cnpjData?.data || cnpjData?.items || cnpjData || [];
+      const arr = Array.isArray(items) ? items : [];
+      console.log(`[CNPJ] Encontradas ${arr.length} empresas`);
+      for (const item of arr.slice(0, 10)) {
+        const razao = item.razao_social || item.nome || item.name || '';
+        if (normalizeString(razao).includes(normalizeString(brandName)) ||
+            normalizeString(brandName).includes(normalizeString(razao).substring(0, Math.min(normalizeString(razao).length, 5)))) {
+          companiesFound.push({
+            name: razao,
+            cnpj: item.cnpj || '',
+            status: item.descricao_situacao_cadastral || item.situacao || 'Ativa',
+            city: item.municipio || item.cidade || '',
+            state: item.uf || item.estado || '',
+            opened: item.data_inicio_atividade || item.abertura || ''
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[CNPJ] Erro CNPJ.ws:', err);
+  }
+
+  // Fallback: BrasilAPI
+  if (companiesFound.length === 0) {
+    try {
+      const brasilRes = await fetch(
+        `https://brasilapi.com.br/api/cnpj/v1/search?company=${encodeURIComponent(brandName)}`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (brasilRes.ok) {
+        const brasilData = await brasilRes.json();
+        const arr = Array.isArray(brasilData) ? brasilData : [];
+        for (const item of arr.slice(0, 5)) {
+          companiesFound.push({
+            name: item.razao_social || item.nome_fantasia || '',
+            cnpj: item.cnpj || '',
+            status: item.descricao_situacao_cadastral || 'Ativa',
+            city: item.municipio || '',
+            state: item.uf || '',
+            opened: item.data_inicio_atividade || ''
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[CNPJ] Erro BrasilAPI:', err);
+    }
+  }
+
+  return { found: companiesFound.length > 0, companies: companiesFound, total: companiesFound.length };
+}
+
+// =====================================================================
+// MÓDULO 3: Análise Web via Firecrawl Search
+// =====================================================================
+async function searchWebPresence(brandName: string, businessArea: string, firecrawlKey: string): Promise<{
+  googleMeuNegocio: boolean;
+  linkedin: boolean;
+  webMentions: number;
+  sources: Array<{ title: string; url: string; snippet: string }>;
+  summary: string;
+}> {
+  if (!firecrawlKey) {
+    return { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise web não disponível.' };
+  }
+
+  try {
+    console.log('[WEB] Iniciando análise de presença web via Firecrawl...');
+
+    // Busca 1: presença geral + Google Maps + LinkedIn
+    const [generalSearch, linkedinSearch] = await Promise.allSettled([
+      fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `"${brandName}" empresa negócio ${businessArea} Brasil`,
+          limit: 8,
+          scrapeOptions: { formats: ['markdown'] }
+        })
+      }),
+      fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `"${brandName}" site:linkedin.com/company OR site:maps.google.com`,
+          limit: 5,
+          scrapeOptions: { formats: ['markdown'] }
+        })
+      })
+    ]);
+
+    let allSources: Array<{ title: string; url: string; snippet: string }> = [];
+    let googleFound = false;
+    let linkedinFound = false;
+
+    if (generalSearch.status === 'fulfilled' && generalSearch.value.ok) {
+      const data = await generalSearch.value.json();
+      const results = data.data || [];
+      for (const r of results) {
+        if (r.url?.includes('google.com/maps') || r.url?.includes('goo.gl/maps')) googleFound = true;
+        if (r.url?.includes('linkedin.com')) linkedinFound = true;
+        allSources.push({ title: r.metadata?.title || r.title || '', url: r.url || '', snippet: (r.markdown || '').substring(0, 200) });
+      }
+    }
+
+    if (linkedinSearch.status === 'fulfilled' && linkedinSearch.value.ok) {
+      const data = await linkedinSearch.value.json();
+      const results = data.data || [];
+      for (const r of results) {
+        if (r.url?.includes('linkedin.com')) { linkedinFound = true; }
+        if (r.url?.includes('google.com/maps') || r.url?.includes('maps.')) { googleFound = true; }
+      }
+    }
+
+    const webMentions = allSources.length;
+    console.log(`[WEB] Encontradas ${webMentions} menções web. Google: ${googleFound}, LinkedIn: ${linkedinFound}`);
+
+    const summary = webMentions > 3
+      ? `A marca "${brandName}" possui presença consolidada na web com ${webMentions} menções identificadas.${googleFound ? ' Detectada no Google Maps/Negócios.' : ''}${linkedinFound ? ' Detectada no LinkedIn.' : ''}`
+      : webMentions > 0
+      ? `A marca "${brandName}" possui presença limitada na web com ${webMentions} menções.`
+      : `Não foram encontradas menções significativas da marca "${brandName}" na web.`;
+
+    return { googleMeuNegocio: googleFound, linkedin: linkedinFound, webMentions, sources: allSources.slice(0, 6), summary };
+  } catch (err) {
+    console.error('[WEB] Erro análise web:', err);
+    return { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise web não disponível.' };
+  }
+}
+
+// =====================================================================
+// MÓDULO 4: Geração do Laudo via OpenAI GPT-4o
+// =====================================================================
+async function generateLaudo(params: {
+  brandName: string;
+  businessArea: string;
+  classes: { classes: number[]; descriptions: string[] };
+  inpiResults: { found: boolean; totalResults: number; conflicts: any[]; source: string };
+  companiesResult: { found: boolean; companies: any[]; total: number };
+  webResult: { googleMeuNegocio: boolean; linkedin: boolean; webMentions: number; sources: any[]; summary: string };
+  openAIKey: string;
+}): Promise<{
+  laudo: string;
+  level: 'high' | 'medium' | 'low' | 'blocked';
+  title: string;
+  description: string;
+  urgencyScore: number;
+}> {
+  const { brandName, businessArea, classes, inpiResults, companiesResult, webResult, openAIKey } = params;
+
+  const contextData = `
+DADOS DA CONSULTA:
+- Marca consultada: "${brandName}"
+- Ramo de atividade: "${businessArea}"
+- Classes NCL sugeridas: ${classes.classes.join(', ')} (${classes.descriptions.join(' | ')})
+
+RESULTADO DA BUSCA INPI (${inpiResults.source}):
+- Marcas colidentes encontradas: ${inpiResults.totalResults}
+- Colidências detectadas: ${inpiResults.conflicts.length > 0 ? inpiResults.conflicts.map(c => `${c.marca} (${c.situacao}, Titular: ${c.titular}, País: ${c.pais}, Classe: ${c.classe})`).join('; ') : 'Nenhuma colidência direta encontrada'}
+
+RESULTADO DA BUSCA DE EMPRESAS BRASILEIRAS (Receita Federal):
+- Empresas com nome similar encontradas: ${companiesResult.total}
+- Empresas: ${companiesResult.companies.length > 0 ? companiesResult.companies.map(c => `${c.name} (CNPJ: ${c.cnpj}, Status: ${c.status}, ${c.city}/${c.state})`).join('; ') : 'Nenhuma empresa com nome idêntico ou similar encontrada'}
+
+ANÁLISE DE PRESENÇA WEB:
+- Menções encontradas na web: ${webResult.webMentions}
+- Google Meu Negócio / Maps: ${webResult.googleMeuNegocio ? 'SIM - detectado' : 'NÃO detectado'}
+- LinkedIn: ${webResult.linkedin ? 'SIM - detectado' : 'NÃO detectado'}
+- Resumo: ${webResult.summary}
+`;
+
+  const prompt = `Você é Dr. Alexandre Moreira, especialista sênior em Propriedade Intelectual com 20 anos de experiência no INPI e em registro de marcas no Brasil. Você foi contratado para emitir um Laudo Técnico de Viabilidade de Marca.
+
+${contextData}
+
+Com base nos dados acima, elabore um LAUDO TÉCNICO COMPLETO e PROFISSIONAL seguindo EXATAMENTE este formato:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LAUDO TÉCNICO DE VIABILIDADE DE MARCA — WEBMARCAS
+Protocolo: WM-${Date.now().toString(36).toUpperCase()}
+Data: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. IDENTIFICAÇÃO DA MARCA
+   • Nome da marca: [nome]
+   • Ramo de atividade: [ramo]
+   • Classes NCL recomendadas: [classes]
+
+2. METODOLOGIA E FONTES CONSULTADAS
+   Descreva as fontes consultadas (INPI/WIPO, Receita Federal, análise web).
+
+3. ANÁLISE DA BASE DO INPI
+   Descreva detalhadamente os resultados da busca no INPI. Se encontrou colidências, liste-as com detalhes técnicos jurídicos. Se não encontrou, explique o que isso significa.
+
+4. ANÁLISE DE COLIDÊNCIA EMPRESARIAL
+   Descreva se existem empresas com nome idêntico ou similar registradas na Receita Federal do Brasil. Analise o risco de colidência empresarial.
+
+5. ANÁLISE DE PRESENÇA WEB E MERCADO
+   Descreva a presença da marca na internet, Google Meu Negócio, LinkedIn e outros meios digitais. Avalie o risco de confusão do consumidor.
+
+6. PARECER TÉCNICO-JURÍDICO
+   Emita um parecer técnico detalhado baseado nos dados reais coletados. Use linguagem jurídica adequada. Mencione artigos da Lei de Propriedade Industrial (Lei 9.279/96) relevantes.
+
+7. NÍVEL DE RISCO E URGÊNCIA
+   Classifique o risco de forma clara: BAIXO / MÉDIO / ALTO. Dê um SCORE DE URGÊNCIA de 0 a 100 onde 100 = urgência máxima de registrar.
+
+8. RECOMENDAÇÃO FINAL
+   Dê uma recomendação clara e objetiva sobre o que o cliente deve fazer. Se houver colidências, enfatize com URGÊNCIA que o dono da marca é quem registra PRIMEIRO (Lei 9.279/96, art. 129).
+
+9. AVISO LEGAL
+   Inclua aviso padrão sobre limitações da análise prévia.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ass.: Dr. Alexandre Moreira | Especialista em PI | WEBMARCAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Após o laudo, forneça em JSON (em uma linha separada, começando com ###JSON###):
+###JSON###{"level":"high|medium|low|blocked","title":"Título do resultado","description":"Descrição curta 1-2 frases","urgencyScore":0-100}`;
+
+  try {
+    console.log('[LAUDO] Gerando laudo via OpenAI GPT-4o...');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Authorization': `Bearer ${openAIKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
-          { 
-            role: 'system', 
-            content: 'Você é um especialista em propriedade intelectual e classificação NCL do INPI Brasil. Responda sempre em JSON válido, sem markdown.' 
-          },
+          { role: 'system', content: 'Você é Dr. Alexandre Moreira, especialista sênior em Propriedade Intelectual. Responda de forma técnica, jurídica e profissional. Seja específico e baseie-se APENAS nos dados reais fornecidos, sem inventar informações.' },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.3,
-        max_tokens: 600,
-        response_format: { type: "json_object" }
+        temperature: 0.4,
+        max_tokens: 3000,
       }),
     });
 
     if (!response.ok) {
-      console.error(`[CLASSES] Erro na API OpenAI: ${response.status}`);
-      return getClassesForBusinessAreaFallback(businessArea);
+      throw new Error(`OpenAI error: ${response.status}`);
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    
-    if (content) {
-      const parsed = JSON.parse(content);
-      
-      // Validar resposta
-      if (Array.isArray(parsed.classes) && parsed.classes.length === 3 &&
-          Array.isArray(parsed.descriptions) && parsed.descriptions.length === 3 &&
-          parsed.classes.every((c: number) => c >= 1 && c <= 45)) {
-        console.log(`[CLASSES] IA sugeriu para "${businessArea}":`, parsed.classes);
-        return {
-          classes: parsed.classes,
-          descriptions: parsed.descriptions
-        };
-      } else {
-        console.log('[CLASSES] Resposta da IA inválida, usando fallback');
-      }
-    }
-  } catch (error) {
-    console.error('[CLASSES] Erro ao consultar IA:', error);
-  }
-  
-  // Fallback para mapeamento fixo
-  console.log('[CLASSES] Usando fallback para:', businessArea);
-  return getClassesForBusinessAreaFallback(businessArea);
-}
+    const content: string = data.choices?.[0]?.message?.content || '';
+    console.log('[LAUDO] Laudo gerado com sucesso');
 
-// Função para buscar no WIPO Global Brand Database
-async function searchWIPO(brandName: string): Promise<{
-  success: boolean;
-  totalResults: number;
-  brands: Array<{
-    processo: string;
-    marca: string;
-    situacao: string;
-    classe: string;
-    titular: string;
-    pais: string;
-  }>;
-  error?: string;
-}> {
-  try {
-    console.log(`[WIPO] ========== INICIANDO BUSCA ==========`);
-    console.log(`[WIPO] Marca: "${brandName}"`);
-    
-    // Construir a estrutura de busca do WIPO similarname
-    const searchStructure = {
-      _id: Math.random().toString(36).substring(2, 6),
-      boolean: 'AND',
-      bricks: [{
-        _id: Math.random().toString(36).substring(2, 6),
-        key: 'brandName',
-        value: brandName,
-        strategy: 'Simple'
-      }]
-    };
-    
-    // URL exata do WIPO similarname com os parâmetros corretos
-    const params = new URLSearchParams({
-      sort: 'score desc',
-      rows: '30',
-      asStructure: JSON.stringify(searchStructure),
-      fg: '_void_',
-      _: Date.now().toString()
-    });
-    
-    // Endpoint de resultados JSON do WIPO
-    const wipoJsonUrl = `https://branddb.wipo.int/en/similarname/results?${params.toString()}`;
-    
-    console.log(`[WIPO] URL: ${wipoJsonUrl}`);
+    // Extrair JSON de metadados do final do laudo
+    const jsonMatch = content.match(/###JSON###({.+})/s);
+    let level: 'high' | 'medium' | 'low' | 'blocked' = 'medium';
+    let title = 'Análise de Viabilidade Concluída';
+    let description = 'Análise técnica realizada com base em dados reais.';
+    let urgencyScore = 50;
 
-    const response = await fetch(wipoJsonUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://branddb.wipo.int/en/similarname',
-        'Origin': 'https://branddb.wipo.int',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-    });
-
-    console.log(`[WIPO] Response status: ${response.status}`);
-    
-    const text = await response.text();
-    console.log(`[WIPO] Response length: ${text.length}`);
-    console.log(`[WIPO] Response preview: ${text.substring(0, 300)}`);
-    
-    // Verificar se é JSON válido
-    if (text.startsWith('{') || text.startsWith('[')) {
-      const data = JSON.parse(text);
-      console.log(`[WIPO] JSON parsed successfully`);
-      
-      // Estrutura de resposta WIPO
-      const docs = data.response?.docs || data.docs || data.results || [];
-      const numFound = data.response?.numFound || data.numFound || data.total || docs.length;
-
-      console.log(`[WIPO] Total encontrado: ${numFound}, Docs: ${docs.length}`);
-
-      const brands = docs.map((doc: any) => ({
-        processo: doc.AN || doc.applicationNumber || doc.RN || doc.registrationNumber || '',
-        marca: doc.BN || doc.brandName || doc.name || '',
-        situacao: doc.ST || doc.status || doc.statusDescription || 'Registrado',
-        classe: Array.isArray(doc.NC) ? doc.NC.join(', ') : (doc.NC || doc.niceClasses || ''),
-        titular: doc.HOL || doc.holderName || doc.holder || '',
-        pais: doc.OO || doc.origin || doc.country || ''
-      }));
-
-      // Priorizar marcas do Brasil
-      const brazilBrands = brands.filter((b: any) => b.pais === 'BR');
-      const otherBrands = brands.filter((b: any) => b.pais !== 'BR');
-      const sortedBrands = [...brazilBrands, ...otherBrands];
-
-      console.log(`[WIPO] Marcas encontradas: ${brands.length}, BR: ${brazilBrands.length}`);
-
-      return {
-        success: true,
-        totalResults: numFound,
-        brands: sortedBrands.slice(0, 15)
-      };
-    }
-    
-    // Se não é JSON, verificar se é página de captcha
-    if (text.includes('altcha') || text.includes('challenge') || text.includes('Just a moment')) {
-      console.log('[WIPO] Página de verificação/captcha detectada');
-      return {
-        success: false,
-        totalResults: 0,
-        brands: [],
-        error: 'Verificação de segurança do WIPO ativa. A busca automática está temporariamente bloqueada.'
-      };
-    }
-    
-    // Tentar extrair dados do HTML
-    console.log('[WIPO] Tentando extrair dados do HTML...');
-    
-    // Procurar por dados JSON embutidos no HTML
-    const jsonMatch = text.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/) ||
-                      text.match(/var\s+(?:results|data|searchData)\s*=\s*(\{[\s\S]*?\});/) ||
-                      text.match(/"docs"\s*:\s*\[([\s\S]*?)\]/);
-    
     if (jsonMatch) {
       try {
-        let jsonData;
-        if (jsonMatch[1].startsWith('{')) {
-          jsonData = JSON.parse(jsonMatch[1]);
-        } else {
-          jsonData = { docs: JSON.parse(`[${jsonMatch[1]}]`) };
-        }
-        
-        const docs = jsonData.docs || jsonData.results || [];
-        console.log(`[WIPO] Dados extraídos do HTML: ${docs.length} resultados`);
-        
-        return {
-          success: true,
-          totalResults: docs.length,
-          brands: docs.slice(0, 15).map((doc: any) => ({
-            processo: doc.AN || doc.RN || '',
-            marca: doc.BN || brandName.toUpperCase(),
-            situacao: doc.ST || 'Encontrado',
-            classe: doc.NC || '',
-            titular: doc.HOL || '',
-            pais: doc.OO || ''
-          }))
-        };
-      } catch (e) {
-        console.log('[WIPO] Falha ao parsear JSON embutido:', e);
-      }
-    }
-    
-    // Procurar menções da marca no HTML
-    const brandRegex = new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    const matches = text.match(brandRegex);
-    
-    if (matches && matches.length > 0) {
-      console.log(`[WIPO] Encontradas ${matches.length} menções da marca no HTML`);
-      return {
-        success: true,
-        totalResults: matches.length,
-        brands: [{
-          processo: '',
-          marca: brandName.toUpperCase(),
-          situacao: 'Encontrado na base WIPO',
-          classe: '',
-          titular: '',
-          pais: ''
-        }]
-      };
+        const meta = JSON.parse(jsonMatch[1]);
+        level = meta.level || 'medium';
+        title = meta.title || title;
+        description = meta.description || description;
+        urgencyScore = meta.urgencyScore || 50;
+      } catch (e) { console.error('[LAUDO] Erro ao parsear JSON meta:', e); }
     }
 
-    // Nenhum resultado encontrado
-    console.log('[WIPO] Nenhum resultado encontrado');
-    return {
-      success: true,
-      totalResults: 0,
-      brands: []
-    };
+    // Laudo sem a parte JSON
+    const laudoText = content.replace(/###JSON###.+$/s, '').trim();
 
+    return { laudo: laudoText, level, title, description, urgencyScore };
   } catch (error) {
-    console.error('[WIPO] ERRO:', error);
+    console.error('[LAUDO] Erro ao gerar laudo:', error);
+    // Fallback sem IA
+    const hasConflict = inpiResults.found || companiesResult.found;
+    const level = hasConflict ? 'medium' : 'high';
+    const urgencyScore = hasConflict ? 75 : 35;
     return {
-      success: false,
-      totalResults: 0,
-      brands: [],
-      error: error instanceof Error ? error.message : 'Erro desconhecido na busca WIPO'
+      laudo: `LAUDO TÉCNICO DE VIABILIDADE — WEBMARCAS\nProtocolo: WM-${Date.now().toString(36).toUpperCase()}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\n1. IDENTIFICAÇÃO\nMarca: "${brandName}" | Ramo: "${businessArea}"\n\n2. ANÁLISE INPI\n${inpiResults.found ? `Foram encontradas ${inpiResults.totalResults} marca(s) similares na base do INPI. Risco de colidência identificado.` : 'Nenhuma colidência direta encontrada na base do INPI para esta marca.'}\n\n3. ANÁLISE EMPRESARIAL\n${companiesResult.found ? `Encontradas ${companiesResult.total} empresa(s) com nome similar na Receita Federal.` : 'Nenhuma empresa com nome idêntico encontrada na Receita Federal.'}\n\n4. PRESENÇA WEB\n${webResult.summary}\n\n5. RECOMENDAÇÃO\n${hasConflict ? '⚠️ ATENÇÃO: Foram identificadas possíveis colidências. Recomenda-se consulta especializada antes do protocolo. O dono da marca é quem registra PRIMEIRO.' : '✅ A marca apresenta boa viabilidade de registro. Recomendamos protocolar o pedido o quanto antes para garantir a prioridade.'}`,
+      level,
+      title: hasConflict ? 'Atenção: Possíveis Colidências Detectadas' : 'Marca com Boa Viabilidade',
+      description: hasConflict ? 'Foram encontradas referências similares. Análise especializada recomendada.' : 'Sua marca apresenta boa viabilidade de registro.',
+      urgencyScore
     };
   }
 }
 
-// Análise de padrões da marca para viabilidade
-function analyzeBrandPattern(brandName: string): {
-  score: number;
-  observations: string[];
-} {
-  const observations: string[] = [];
-  let score = 100; // Começa com 100 (alta viabilidade)
-  
-  const normalized = normalizeString(brandName);
-  
-  // Verificar comprimento - marcas muito curtas são difíceis de registrar
-  if (normalized.length < 3) {
-    score -= 30;
-    observations.push('❌ Marca muito curta (menos de 3 caracteres) - difícil de registrar');
-  } else if (normalized.length <= 4) {
-    score -= 15;
-    observations.push('⚠️ Marca curta - pode haver muitas marcas similares');
-  } else {
-    observations.push('✅ Comprimento adequado da marca');
-  }
-  
-  // Verificar se é palavra genérica
-  const genericWords = ['servicos', 'comercio', 'brasil', 'solucoes', 'grupo', 'consultoria', 'digital', 'tech', 'plus', 'premium', 'express', 'master', 'pro', 'super', 'mega', 'top', 'max', 'best'];
-  const hasGenericWord = genericWords.some(word => normalized.includes(word));
-  if (hasGenericWord) {
-    score -= 20;
-    observations.push('⚠️ Contém palavra genérica - recomendamos adicionar elemento distintivo');
-  }
-  
-  // Verificar se contém números
-  if (/\d/.test(brandName)) {
-    observations.push('ℹ️ Contém números - comum em marcas modernas');
-  }
-  
-  // Verificar se é palavra inventada (maior proteção)
-  const commonWords = ['casa', 'loja', 'mundo', 'novo', 'vida', 'arte', 'sol', 'mar', 'terra', 'agua', 'luz', 'cor', 'flor', 'lar'];
-  const isInventedWord = !commonWords.some(word => normalized.includes(word)) && normalized.length > 5;
-  if (isInventedWord && !hasGenericWord) {
-    score += 10;
-    observations.push('✅ Aparenta ser marca inventada/distintiva - maior proteção');
-  }
-  
-  // Verificar caracteres especiais
-  if (/[^a-zA-Z0-9\s]/.test(brandName.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) {
-    observations.push('ℹ️ Contém caracteres especiais');
-  }
-  
-  // Verificar se é composta
-  const words = brandName.trim().split(/\s+/);
-  if (words.length >= 2) {
-    observations.push('✅ Marca composta por múltiplas palavras - boa distintividade');
-  }
-  
-  // Limitar score entre 0 e 100
-  score = Math.max(0, Math.min(100, score));
-  
-  return { score, observations };
-}
-
-// Função combinada para análise de viabilidade
-async function analyzeViability(brandName: string): Promise<{
-  success: boolean;
-  totalResults: number;
-  brands: Array<{
-    processo: string;
-    marca: string;
-    situacao: string;
-    classe: string;
-    titular: string;
-  }>;
-  patternAnalysis: {
-    score: number;
-    observations: string[];
-  };
-  searchAttempted: boolean;
-  error?: string;
-}> {
-  // Análise de padrões (sempre funciona)
-  const patternAnalysis = analyzeBrandPattern(brandName);
-  
-  // Tentar busca no WIPO
-  const wipoResult = await searchWIPO(brandName);
-  
-  return {
-    success: true,
-    totalResults: wipoResult.totalResults,
-    brands: wipoResult.brands.map(b => ({
-      processo: b.processo,
-      marca: b.marca,
-      situacao: b.situacao,
-      classe: b.classe,
-      titular: b.titular
-    })),
-    patternAnalysis,
-    searchAttempted: wipoResult.success,
-    error: wipoResult.error
-  };
-}
-
+// =====================================================================
+// HANDLER PRINCIPAL
+// =====================================================================
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const { brandName, businessArea } = await req.json();
 
     if (!brandName || !businessArea) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Nome da marca e ramo de atividade são obrigatórios' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ success: false, error: 'brandName e businessArea são obrigatórios' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
-    // Check for famous brands
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[MAIN] Nova consulta: "${brandName}" | "${businessArea}"`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    // Checar marca famosa
     if (isFamousBrand(brandName)) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          isFamousBrand: true,
-          level: 'blocked',
-          title: 'Marca de Alto Renome',
-          description: `A marca "${brandName}" é uma marca de alto renome protegida em todas as classes. Não é possível realizar o registro desta marca ou de marcas semelhantes.`,
-          laudo: null
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.log('[MAIN] Marca famosa detectada - bloqueando');
+      return new Response(JSON.stringify({
+        success: true, isFamousBrand: true,
+        level: 'blocked',
+        title: '🚫 Marca de Alto Renome — Registro Não Recomendado',
+        description: `"${brandName}" é uma marca de alto renome internacionalmente conhecida. O registro desta marca no INPI será indeferido.`,
+        laudo: `A marca "${brandName}" é reconhecida como marca de alto renome, protegida nos termos do art. 125 da Lei 9.279/96. O INPI indeferirá qualquer pedido de registro desta marca por terceiros em qualquer classe.`,
+        urgencyScore: 0,
+        webAnalysis: null,
+        inpiResults: { found: true, totalResults: 1, conflicts: [] },
+        companiesResult: { found: true, companies: [], total: 0 }
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Generate current date/time in Brazil timezone
-    const now = new Date();
-    const brazilTime = now.toLocaleString('pt-BR', { 
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    const openAIKey = Deno.env.get('OPENAI_API_KEY');
+    const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
+
+    if (!openAIKey) {
+      return new Response(JSON.stringify({ success: false, error: 'OPENAI_API_KEY não configurada' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Obter classes NCL
+    const classes = getClassesForBusinessArea(businessArea);
+
+    // Rodar os 3 módulos de busca em paralelo
+    console.log('[MAIN] Iniciando 3 módulos de busca em paralelo...');
+    const [inpiSettled, companiesSettled, webSettled] = await Promise.allSettled([
+      searchINPI(brandName, firecrawlKey || ''),
+      searchCompaniesBR(brandName),
+      searchWebPresence(brandName, businessArea, firecrawlKey || ''),
+    ]);
+
+    const inpiResults = inpiSettled.status === 'fulfilled' ? inpiSettled.value : { found: false, totalResults: 0, conflicts: [], source: 'Erro na consulta' };
+    const companiesResult = companiesSettled.status === 'fulfilled' ? companiesSettled.value : { found: false, companies: [], total: 0 };
+    const webResult = webSettled.status === 'fulfilled' ? webSettled.value : { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise indisponível' };
+
+    console.log(`[MAIN] Módulos concluídos. INPI: ${inpiResults.found}, Empresas: ${companiesResult.found}, Web: ${webResult.webMentions} menções`);
+
+    // Gerar laudo via GPT-4o
+    const laudoResult = await generateLaudo({
+      brandName, businessArea, classes, inpiResults, companiesResult, webResult, openAIKey
     });
 
-    // ANÁLISE DE VIABILIDADE (padrões + tentativa de busca)
-    const analysisResult = await analyzeViability(brandName);
-    
-    // Get classes for the business area
-    const { classes, descriptions } = await suggestClassesWithAI(businessArea);
-    const classesText = descriptions.map((desc: string) => `${desc}`).join('\n');
-    
-    // Determinar nível de viabilidade baseado na análise de padrões
-    let viabilityLevel: 'high' | 'medium' | 'low' = 'high';
-    let resultText = '';
-    
-    // Análise de padrões da marca
-    const patternScore = analysisResult.patternAnalysis.score;
-    const patternObs = analysisResult.patternAnalysis.observations.join('\n');
-    
-    if (analysisResult.searchAttempted && analysisResult.totalResults > 0) {
-      // Busca encontrou resultados
-      const hasActiveRegistration = analysisResult.brands.some((b: { situacao: string }) => 
-        b.situacao.toLowerCase().includes('regist') || 
-        b.situacao.toLowerCase().includes('active') ||
-        b.situacao.toLowerCase().includes('ativo')
-      );
-      
-      if (hasActiveRegistration) {
-        viabilityLevel = 'low';
-      } else {
-        viabilityLevel = 'medium';
+    const response = {
+      success: true,
+      level: laudoResult.level,
+      title: laudoResult.title,
+      description: laudoResult.description,
+      laudo: laudoResult.laudo,
+      urgencyScore: laudoResult.urgencyScore,
+      classes: classes.classes,
+      classDescriptions: classes.descriptions,
+      searchDate: new Date().toISOString(),
+      inpiResults: {
+        found: inpiResults.found,
+        totalResults: inpiResults.totalResults,
+        conflicts: inpiResults.conflicts,
+        source: inpiResults.source
+      },
+      companiesResult: {
+        found: companiesResult.found,
+        companies: companiesResult.companies,
+        total: companiesResult.total
+      },
+      webAnalysis: {
+        googleMeuNegocio: webResult.googleMeuNegocio,
+        linkedin: webResult.linkedin,
+        webMentions: webResult.webMentions,
+        sources: webResult.sources,
+        summary: webResult.summary
       }
-      
-      resultText = `Foram encontradas ${analysisResult.totalResults} marca(s) na base global:\n\n`;
-      analysisResult.brands.slice(0, 10).forEach((b: { marca: string; processo: string; situacao: string; classe: string; titular?: string }, i: number) => {
-        resultText += `${i + 1}. ${b.marca}\n`;
-        resultText += `   Processo: ${b.processo}\n`;
-        if (b.situacao) resultText += `   Situação: ${b.situacao}\n`;
-        if (b.classe) resultText += `   Classe NCL: ${b.classe}\n`;
-        resultText += '\n';
-      });
-    } else {
-      // Usar análise de padrões para determinar viabilidade
-      if (patternScore >= 80) {
-        viabilityLevel = 'high';
-        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
+    };
 
-Score de Distintividade: ${patternScore}/100 - ALTO
-
-${patternObs}
-
-✅ A marca "${brandName.toUpperCase()}" apresenta boas características para registro.
-✅ Nome distintivo com baixa probabilidade de conflitos.
-✅ Recomendamos prosseguir com o registro.`;
-      } else if (patternScore >= 50) {
-        viabilityLevel = 'medium';
-        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
-
-Score de Distintividade: ${patternScore}/100 - MÉDIO
-
-${patternObs}
-
-⚠️ A marca possui algumas características que podem dificultar o registro.
-⚠️ Recomendamos consulta especializada antes de prosseguir.`;
-      } else {
-        viabilityLevel = 'low';
-        resultText = `📊 *ANÁLISE DE PADRÕES DA MARCA*
-
-Score de Distintividade: ${patternScore}/100 - BAIXO
-
-${patternObs}
-
-❌ A marca possui características que dificultam o registro.
-❌ Sugerimos revisar o nome ou consultar um especialista.`;
-      }
-    }
-
-    // Build the laudo
-    const laudo = `*LAUDO TÉCNICO DE VIABILIDADE DE MARCA*
-*Pesquisa na Base Global WIPO + INPI*
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 *DADOS DA CONSULTA*
-
-Marca Pesquisada: ${brandName.toUpperCase()}
-Ramo de Atividade: ${businessArea}
-Tipo de Pesquisa: EXATA
-Data/Hora: ${brazilTime}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🔍 *RESULTADO DA PESQUISA*
-
-${resultText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚖️ *CONCLUSÃO TÉCNICA*
-
-${viabilityLevel === 'high' ? 
-'A marca apresenta ALTA VIABILIDADE de registro. Não foram encontradas marcas idênticas nas bases do INPI que possam impedir o registro.' :
-viabilityLevel === 'medium' ?
-'A marca apresenta VIABILIDADE MÉDIA. Podem existir marcas similares. Recomendamos consultar um especialista antes de prosseguir.' :
-'A marca apresenta BAIXA VIABILIDADE. Existem marcas conflitantes registradas que provavelmente impedirão o registro. Sugerimos alteração do nome ou consulta especializada.'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏷️ *CLASSES RECOMENDADAS PARA REGISTRO*
-
-${classesText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚖️ *ORIENTAÇÃO JURÍDICA*
-
-O ideal é registrar nas 3 classes para máxima proteção.
-Se a questão for financeira, orientamos registrar urgente na classe principal.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ *IMPORTANTE*
-
-O DONO DA MARCA É QUEM REGISTRA PRIMEIRO!
-Não perca tempo.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-WebMarcas - Registro de Marcas
-www.webmarcas.net`;
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        isFamousBrand: false,
-        level: viabilityLevel,
-        title: viabilityLevel === 'high' ? 'Alta Viabilidade' : 
-               viabilityLevel === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
-        description: viabilityLevel === 'high' 
-          ? 'Sua marca está disponível para registro! Não encontramos conflitos na base do INPI.'
-          : viabilityLevel === 'medium'
-          ? 'Recomendamos consulta especializada antes de prosseguir.'
-          : 'Existem marcas conflitantes na base do INPI. Consulte nossos especialistas.',
-        laudo,
-        classes,
-        classDescriptions: descriptions,
-        searchDate: brazilTime,
-        analysisResult: {
-          totalResults: analysisResult.totalResults,
-          brands: analysisResult.brands.slice(0, 10),
-          patternScore: analysisResult.patternAnalysis.score,
-          searchAttempted: analysisResult.searchAttempted
-        }
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.log(`[MAIN] Resposta gerada: level=${response.level}, urgency=${response.urgencyScore}`);
+    return new Response(JSON.stringify(response), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
-    console.error('Error in viability check:', error);
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Erro ao processar a consulta' 
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('[MAIN] Erro crítico:', error);
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 });
