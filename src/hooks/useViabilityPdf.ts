@@ -86,14 +86,20 @@ function cleanLaudo(raw: string): string {
   return raw
     // Remove linhas que contêm APENAS % (com ou sem espaços entre eles)
     .replace(/^[\s%]+$/gm, '')
+    // Remove sequências de % com espaços: % % % % % (3+)
+    .replace(/(% *){3,}/g, '')
+    // Remove sequências de % sem espaços (3+)
+    .replace(/[%]{3,}/g, '')
     // Remove bloco de cabeçalho gerado pelo AI que duplica o cabeçalho do PDF
     .replace(/^LAUDO T[ÉE]CNICO DE VIABILIDADE.*$/gim, '')
     .replace(/^Protocolo:\s*WM-.*$/gim, '')
     .replace(/^Data:\s*\d.*$/gim, '')
-    // Remove sequências de % sem espaços (3 ou mais)
-    .replace(/[%]{3,}/g, '')
-    // Remove sequências de % com espaços entre eles  ex: % % % % %
-    .replace(/(% *){3,}/g, '')
+    // Remove assinatura "Dr. Alexandre Moreira" e variações
+    .replace(/^Ass\.?:.*Alexandre.*$/gim, '')
+    .replace(/^.*Dr\.?\s*Alexandre.*Moreira.*$/gim, '')
+    .replace(/^.*Especialista em PI.*$/gim, '')
+    // Remove linhas de separadores (━━━, ----, ====, ###)
+    .replace(/^[━─=\-#]{4,}.*$/gm, '')
     .replace(/={5,}/g, '')
     .replace(/#{1,6}\s*/g, '')
     .replace(/\*{2,}/g, '')
@@ -156,17 +162,26 @@ function pageGuard(doc: jsPDF, y: number, pageH: number, margin: number, needed 
   if (y > pageH - needed) {
     doc.addPage();
     addPageStrip(doc, pw, pageH);
-    return 22;
+    return 19;
   }
   return y;
 }
 
 function addPageStrip(doc: jsPDF, pw: number, _ph: number) {
-  filledRect(doc, 0, 0, pw, 10, C.navy);
-  filledRect(doc, 0, 0, 3, 10, C.gold);
-  filledRect(doc, 0, 10, pw, 0.6, C.gold);
-  setFont(doc, 'normal', 6, C.gray400);
-  doc.text('WebMarcas — Laudo Tecnico de Viabilidade de Marca', pw / 2, 6.5, { align: 'center' });
+  // Fundo branco — sem barra navy
+  // www.webmarcas.net em azul à direita
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(2, 132, 199); // #0284c7
+  doc.text('www.webmarcas.net', pw - 16, 10, { align: 'right' });
+
+  // Barra gradiente laranja → amarelo
+  doc.setFillColor(249, 115, 22);
+  doc.rect(0, 13, pw * 0.33, 1.5, 'F');
+  doc.setFillColor(251, 146, 60);
+  doc.rect(pw * 0.33, 13, pw * 0.33, 1.5, 'F');
+  doc.setFillColor(251, 191, 36);
+  doc.rect(pw * 0.66, 13, pw * 0.34, 1.5, 'F');
 }
 
 // Logo via URL absoluta com fallback robusto
@@ -230,45 +245,31 @@ export async function generateViabilityPDF(
   const logoData = await loadLogo();
 
   // ═══════════════════════════════════════
-  // PAPEL TIMBRADO — LIMPO (estilo contrato/INPI)
+  // PAPEL TIMBRADO — IDÊNTICO AO CONTRATO
+  // Fundo branco puro, logo esquerda, url direita, gradiente laranja→amarelo
   // ═══════════════════════════════════════
 
-  // Faixa azul-marinho fina no topo
-  filledRect(doc, 0, 0, pw, 6, C.navy);
-  // Linha dourada abaixo
-  filledRect(doc, 0, 6, pw, 1.5, C.gold);
+  let y = M;
 
-  let y = 11;
-
-  // Logo à esquerda
+  // Logo circular à esquerda
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', M, y + 1, 18, 18); } catch { /* skip */ }
+    try { doc.addImage(logoData, 'PNG', M, y, 20, 20); } catch { /* skip */ }
   }
 
-  // Texto ao lado do logo
-  const textX = M + 22;
-  setFont(doc, 'bold', 18, C.navy);
-  doc.text('WEBMARCAS', textX, y + 8);
-  setFont(doc, 'normal', 7.5, [120, 130, 150]);
-  doc.text('Propriedade Intelectual e Registro de Marcas no INPI', textX, y + 14);
+  // www.webmarcas.net em azul (#0284c7) à direita
+  setFont(doc, 'bold', 11, [2, 132, 199]);
+  doc.text('www.webmarcas.net', pw - M, y + 13, { align: 'right' });
 
-  // Informações da empresa à direita
-  setFont(doc, 'bold', 7, C.navy);
-  doc.text('CNPJ: 39.528.012/0001-29', pw - M, y + 4, { align: 'right' });
-  setFont(doc, 'normal', 6.5, [150, 150, 150]);
-  doc.text('Av. Brigadeiro Luiz Antonio, 2696', pw - M, y + 9, { align: 'right' });
-  doc.text('Centro — Sao Paulo/SP', pw - M, y + 14, { align: 'right' });
-  doc.text('www.webmarcas.net', pw - M, y + 19, { align: 'right' });
+  y += 24;
 
-  // Dupla linha separadora
-  y += 23;
-  doc.setDrawColor(...C.navy); doc.setLineWidth(0.8);
-  doc.line(M, y, pw - M, y);
-  doc.setDrawColor(...C.gold); doc.setLineWidth(0.3);
-  doc.line(M, y + 1.5, pw - M, y + 1.5);
+  // Barra gradiente laranja → amarelo (simulada com 3 retângulos interpolados)
+  filledRect(doc, 0, y, pw * 0.33, 2.5, [249, 115, 22]);   // #f97316
+  filledRect(doc, pw * 0.33, y, pw * 0.33, 2.5, [251, 146, 60]); // intermediário
+  filledRect(doc, pw * 0.66, y, pw * 0.34, 2.5, [251, 191, 36]); // #fbbf24
+
   y += 8;
 
-  // Badge de título centralizado
+  // Badge título centralizado em navy
   const badgeText = 'LAUDO TECNICO DE VIABILIDADE DE MARCA';
   setFont(doc, 'bold', 10, C.white);
   const badgeW = doc.getTextWidth(badgeText) + 16;
@@ -705,7 +706,7 @@ export async function generateViabilityPDF(
       if (y > ph - M - 22) {
         doc.addPage();
         addPageStrip(doc, pw, ph);
-        y = 22;
+        y = 19;
       }
       doc.text(line, M, y);
       y += 4.5;
