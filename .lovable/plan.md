@@ -1,104 +1,108 @@
 
-# Correção: Links Quebrados nos E-mails Automáticos
+# Busca Real no INPI: Integração com Firecrawl + GPT-5.2
 
-## Diagnóstico Preciso
+## O que o PDF pede vs. o que é tecnicamente viável
 
-A URL no screenshot é: `webmarcas.net/admin/%7B%7Bapp_url%7D%7D/status-pedido`
+O PDF descreve usar Playwright/Puppeteer para automatizar o navegador no portal `servicos.busca.inpi.gov.br`. Isso **não é compatível** com Edge Functions (Deno), que são ambientes serverless sem suporte a browser headless.
 
-`%7B%7B` = `{{` e `%7D%7D` = `}}` em URL encoding. Isso significa que a variável `{{app_url}}` **não foi substituída** no corpo do e-mail antes do envio. O cliente recebeu o placeholder literal no HTML, e ao clicar, o browser URL-encodou as chaves.
+**Solução equivalente e superior:** usar o **Firecrawl** (já configurado no projeto como `FIRECRAWL_API_KEY`) para fazer scraping real do portal INPI via API e depois analisar os resultados com GPT-5.2 — exatamente o que o PDF quer, mas viável na arquitetura atual.
 
-### Causa Raiz
+## Arquitetura da Solução
 
-No arquivo `supabase/functions/trigger-email-automation/index.ts`, linhas 68-80:
-
-```typescript
-const appUrl = data.base_url || Deno.env.get('SITE_URL');
-if (!appUrl) {
-  console.error('No base_url provided and SITE_URL secret not configured');
-  return new Response(
-    JSON.stringify({ error: 'SITE_URL not configured...' }),
-    { status: 500, ... }
-  );
-}
+```text
+Cliente (navegador)
+        │
+        ▼
+  [inpi-viability-check]  ← Edge Function (Deno)
+        │
+        ├── 1. Verifica marcas famosas (lista local)
+        │
+        ├── 2. Firecrawl → scraping real do INPI
+        │        URL: servicos.busca.inpi.gov.br/marcas
+        │        Parâmetro: ?search={{nome_marca}}
+        │        Extrai: tabela de resultados (processo, marca, situação, classe, titular)
+        │
+        ├── 3. GPT-5.2 (via Lovable AI Gateway) → análise inteligente
+        │        Prompt especialista em PI/INPI
+        │        Gera: viabilidade_geral, laudo estruturado, riscos
+        │
+        ├── 4. IA de Classes NCL (mantida como está)
+        │
+        └── 5. Retorna ViabilityResult completo
 ```
 
-A função exige `data.base_url` ou a secret `SITE_URL`. O problema: **a secret `SITE_URL` está configurada como `https://webmarcas.net`**, mas os callers internos (edge functions como `sign-contract-blockchain`, `asaas-webhook`, `create-asaas-payment`, `check-abandoned-forms`) **NÃO passam `base_url` no payload**. 
+## O que NÃO muda
 
-Verificando os callers:
-- `sign-contract-blockchain` → chama `trigger-email-automation` com `data: { nome, email, ... }` **sem `base_url`**
-- `asaas-webhook` → idem, sem `base_url`
-- `create-asaas-payment` → idem
-- `check-abandoned-forms` → idem
-- `confirm-payment` → idem
+- Todo o frontend permanece igual: `ViabilityStep.tsx`, `ViabilitySearchSection.tsx`, `src/lib/api/viability.ts`
+- O layout do laudo no PDF permanece igual (gerado pelo frontend)
+- Os campos retornados (`level`, `title`, `description`, `laudo`, `classes`, `classDescriptions`, `searchDate`) permanecem idênticos
+- A interface da área do cliente e do site não muda em nada
 
-Portanto, a função depende 100% da secret `SITE_URL`. Se a secret estiver vazia ou incorreta, `appUrl` fica `undefined`, a substituição `{{app_url}} → valor` não funciona, e o placeholder vai literalmente no e-mail.
+## O que muda
 
-**Solução definitiva**: Remover a dependência da secret `SITE_URL` e hardcodar o domínio de produção `https://webmarcas.net` diretamente na função `trigger-email-automation`, assim como já é feito nas funções `send-signature-request` e `generate-signature-link` (que têm `const PRODUCTION_DOMAIN = 'https://webmarcas.net'`).
+Apenas `supabase/functions/inpi-viability-check/index.ts` — substituindo a busca no WIPO pela busca real no INPI via Firecrawl + análise por GPT-5.2.
 
-## Arquivos a Modificar
+## Implementação Detalhada
 
-### 1. `supabase/functions/trigger-email-automation/index.ts`
+### Etapa 1: Nova função `searchINPIviaFirecrawl()`
 
-**Mudança**: Substituir a lógica frágil de `appUrl` por uma constante hardcoded com fallback robusto:
-
-```typescript
-// ANTES (frágil - depende de SITE_URL):
-const appUrl = data.base_url || Deno.env.get('SITE_URL');
-if (!appUrl) {
-  return new Response({ error: 'SITE_URL not configured' }, { status: 500 });
-}
-
-// DEPOIS (robusto - domínio de produção fixo como nas outras funções):
-const PRODUCTION_DOMAIN = 'https://webmarcas.net';
-const rawSiteUrl = Deno.env.get('SITE_URL') || '';
-const isPreviewUrl = (url: string) =>
-  url.includes('lovable.app') || url.includes('localhost') || !url;
-const appUrl = data.base_url || 
-  (rawSiteUrl && !isPreviewUrl(rawSiteUrl) ? rawSiteUrl : PRODUCTION_DOMAIN);
-// Nunca retorna erro 500 — sempre tem um fallback válido
+Substitui a atual `searchWIPO()`. Usa o Firecrawl para fazer scraping da URL:
+```
+https://servicos.busca.inpi.gov.br/marcas?search=NOME_DA_MARCA&tipo=M
 ```
 
-### 2. Todos os callers internos que invocam `trigger-email-automation`
+O Firecrawl retorna o HTML/Markdown da página. Extraímos a tabela de resultados com os campos:
+- Número do processo
+- Nome da Marca
+- Situação (Registro concedido, Pedido em exame, Arquivado, etc.)
+- Classe NCL
+- Titular
+- Data do depósito
 
-Adicionar `base_url: 'https://webmarcas.net'` explicitamente nos payloads de cada caller, garantindo que mesmo que a lógica da secret falhe, o domínio correto seja passado:
+### Etapa 2: Nova função `analyzeWithGPT52()`
 
-**Arquivos afetados:**
-- `supabase/functions/sign-contract-blockchain/index.ts` — invocações de `user_created` e `contract_signed`
-- `supabase/functions/asaas-webhook/index.ts` — invocações de `payment_received`
-- `supabase/functions/create-asaas-payment/index.ts` — invocação de `form_completed`
-- `supabase/functions/confirm-payment/index.ts` — invocações de `contract_signed` e `payment_received`
-- `supabase/functions/check-abandoned-forms/index.ts` — invocação de `form_abandoned`
-- `src/components/sections/RegistrationFormSection.tsx` — invocação de `form_started` (frontend)
+Substitui a análise por padrões simples. Envia os dados brutos extraídos pelo Firecrawl para o GPT-5.2 via Lovable AI Gateway com o prompt do PDF:
 
-## Plano de Implementação
+```
+"Você é um especialista em propriedade intelectual do INPI Brasil.
+Analise os seguintes resultados da busca no INPI para a marca '{{nome_marca}}'..."
+```
 
-### Etapa 1: Corrigir `trigger-email-automation/index.ts`
-- Hardcodar `PRODUCTION_DOMAIN = 'https://webmarcas.net'`
-- Remover o bloqueio de `return 500` quando `SITE_URL` está ausente
-- Garantir que `appUrl` **sempre** tenha um valor válido
+O GPT-5.2 retorna um JSON com:
+- `viabilidade_geral`: "Viabilidade Técnica Favorável" | "RISCO ALTO" | "RISCO MODERADO"
+- `laudo_viabilidade`: texto completo do laudo
+- `processos_encontrados`: lista estruturada com todos os detalhes
+- `resultado_encontrado`: true/false
 
-### Etapa 2: Atualizar todos os callers
-- Adicionar `base_url: 'https://webmarcas.net'` no campo `data` de cada invocação a `trigger-email-automation`
-- Isso garante redundância dupla: o caller passa a URL correta E a função tem o fallback correto
+### Etapa 3: Lógica de fallback segura
 
-### Etapa 3: Deploy automático
-- As edge functions serão implantadas automaticamente após a edição
+Se o Firecrawl falhar (INPI fora do ar, bloqueio, etc.):
+1. Tenta a busca WIPO como fallback (código atual mantido como backup)
+2. Se WIPO também falhar, usa análise de padrões (já existente)
+3. **Nunca retorna erro para o usuário** — sempre entrega um resultado
 
-## Impacto
+### Etapa 4: Teste antes de publicar
 
-- Links de todos os e-mails automáticos voltarão a funcionar corretamente
-- "Continuar Registro", "Ver Status do Pedido", "Acessar Área do Cliente", links de assinatura — todos apontarão para `https://webmarcas.net/...`
-- Sem alterações no banco de dados, sem migração necessária
-- Zero impacto em layout, CRM ou demais funcionalidades
+Após a implementação, testar chamando a edge function diretamente com marcas conhecidas (ex: "WebMarcas", "Nike", "TechFlow") e verificar:
+- Se o Firecrawl consegue scraping do portal INPI
+- Se o GPT-5.2 analisa corretamente os resultados
+- Se o laudo gerado está coerente
 
-## Arquivos a Modificar (resumo técnico)
+**Se o Firecrawl não conseguir acessar o INPI** (bloqueio anti-bot), o fallback garante que o sistema continua funcionando sem degradação para o usuário.
+
+## Arquivo Modificado
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/trigger-email-automation/index.ts` | Hardcodar PRODUCTION_DOMAIN, remover erro 500 por SITE_URL ausente |
-| `supabase/functions/sign-contract-blockchain/index.ts` | Adicionar `base_url` nos 2 payloads |
-| `supabase/functions/asaas-webhook/index.ts` | Adicionar `base_url` nos payloads |
-| `supabase/functions/create-asaas-payment/index.ts` | Adicionar `base_url` no payload |
-| `supabase/functions/confirm-payment/index.ts` | Adicionar `base_url` nos payloads |
-| `supabase/functions/check-abandoned-forms/index.ts` | Adicionar `base_url` no payload |
-| `src/components/sections/RegistrationFormSection.tsx` | Adicionar `base_url: window.location.origin` que a lógica já usa |
+| `supabase/functions/inpi-viability-check/index.ts` | Substitui `searchWIPO()` por `searchINPIviaFirecrawl()` + nova função `analyzeWithGPT52()`. Mantém fallback para WIPO e análise de padrões. |
+
+## Segurança e Isolamento
+
+- Nenhuma outra função ou página é modificada
+- O contrato de retorno da API permanece idêntico
+- Fallbacks garantem zero regressão
+- A publicação só ocorre após validação dos logs da edge function
+
+## Limitação Honesta
+
+O portal INPI pode ter proteções anti-bot. O Firecrawl é especializado em contornar isso, mas se o INPI bloquear completamente, o sistema mantém o comportamento atual via WIPO. O usuário final nunca verá degradação — apenas a qualidade dos dados melhora quando o Firecrawl funciona.
