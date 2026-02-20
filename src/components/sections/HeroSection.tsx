@@ -11,45 +11,45 @@ const RotatingRegisteredBadge = () => (
     initial={{ opacity: 0, scale: 0.8 }}
     animate={{ opacity: 1, scale: 1 }}
     transition={{ delay: 0.8, duration: 0.6, type: "spring" }}
-    className="absolute top-[18%] right-[6%] hidden md:block z-20"
+    className="absolute top-[16%] right-[5%] hidden md:block z-20 drop-shadow-lg"
   >
-    <svg width="140" height="140" viewBox="0 0 140 140">
+    <svg width="130" height="130" viewBox="0 0 130 130" overflow="visible">
       <defs>
-        {/* Caminho circular para o texto — raio 62, sentido horário */}
+        {/* Caminho para texto circular — raio 56 ao redor do centro 65,65 */}
         <path
-          id="badge-text-path"
-          d="M 70,70 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0"
+          id="badge-text-arc"
+          d="M 65,65 m -56,0 a 56,56 0 1,1 112,0 a 56,56 0 1,1 -112,0"
         />
       </defs>
 
-      {/* Fundo branco com sombra sutil */}
-      <circle cx="70" cy="70" r="68" fill="white" stroke="#d1d5db" strokeWidth="1" />
+      {/* Fundo branco */}
+      <circle cx="65" cy="65" r="64" fill="white" stroke="#d1d5db" strokeWidth="1.2" />
 
-      {/* Borda interna decorativa */}
-      <circle cx="70" cy="70" r="56" fill="none" stroke="#e5e7eb" strokeWidth="0.8" strokeDasharray="3,3" />
+      {/* Símbolo ® — círculo azul grande centralizado */}
+      <circle cx="65" cy="65" r="28" fill="none" stroke="#3b82f6" strokeWidth="3.5" />
 
-      {/* Símbolo ® centralizado — círculo azul + R grande */}
-      <circle cx="70" cy="70" r="26" fill="none" stroke="#3b82f6" strokeWidth="3.5" />
-      {/* Letra R grande dentro do círculo */}
+      {/* Letra R centralizada com dominantBaseline para ficar no centro exato */}
       <text
-        x="70" y="80"
+        x="65"
+        y="65"
         textAnchor="middle"
-        fontSize="30"
+        dominantBaseline="central"
+        fontSize="32"
         fontWeight="900"
         fill="#3b82f6"
-        fontFamily="Arial, Helvetica, sans-serif"
+        fontFamily="Arial Black, Arial, sans-serif"
       >R</text>
 
       {/* Texto circular girando */}
-      <g style={{ animation: "badgeSpin 9s linear infinite", transformOrigin: "70px 70px" }}>
+      <g style={{ animation: "badgeSpin 10s linear infinite", transformOrigin: "65px 65px" }}>
         <text
-          fontSize="10.5"
-          fontWeight="800"
-          fill="#111827"
-          fontFamily="Arial, Helvetica, sans-serif"
-          letterSpacing="3.2"
+          fontSize="10"
+          fontWeight="700"
+          fill="#1e293b"
+          fontFamily="Arial, sans-serif"
+          letterSpacing="3.5"
         >
-          <textPath href="#badge-text-path" startOffset="0%">
+          <textPath href="#badge-text-arc" startOffset="2%">
             REGISTRO DE MARCAS EM 24H ·
           </textPath>
         </text>
