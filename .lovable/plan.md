@@ -1,91 +1,86 @@
 
-# Adicionar Badge ® Animado no Hero Section
+# Corrigir Lógica de Cores da Viabilidade: Verde/Vermelho Baseado nos Dados Reais
 
-## O que será criado
+## O Problema Atual
 
-Um componente de badge circular decorativo com:
-- **® (R de Registrado)** no centro em azul, dentro de um círculo
-- **Texto circular girando**: "REGISTRO DE MARCAS EM 24H" em volta, com animação de rotação contínua suave (igual ao Consolide)
-- **Posição**: canto superior direito do Hero Section, flutuando absolutamente, exatamente onde o usuário marcou o círculo na segunda imagem
-
-## Detalhes do design (baseado na referência)
-
-A animação do Consolide usa **texto em arco circular que gira continuamente** (CSS `animation: spin`) com o ® fixo no centro. O visual é:
-
-```text
-    · R E G I S T R O ·
-  ·                     ·
-·    ┌──────────────┐    ·
-·    │      ®       │    ·
-·    └──────────────┘    ·
-  ·                     ·
-    · E M  2 4 H  · · ·
+A lógica de `effectiveLevel` no `ViabilityResultDisplay.tsx` usa o `urgencyScore` como critério:
+```ts
+if (urgency <= 50) return 'high'; // verde
 ```
 
-## Implementação técnica
+Isso é impreciso. O `urgencyScore` pode ter qualquer valor e não reflete diretamente os dados reais das três fontes. O usuário quer uma regra clara e objetiva:
 
-O texto circular será feito com **SVG `<textPath>`** — a forma mais precisa de colocar texto seguindo um arco circular, sem dependências externas. O SVG terá:
+**Regra do usuário:**
+- INPI: sem colidências + CNPJ: sem empresas + Web: 0 menções → **VERDE / ALTA VIABILIDADE**
+- Se qualquer uma dessas fontes tiver resultado positivo (conflito) → **VERMELHO / BAIXA VIABILIDADE**
 
-- Um `<circle>` como path para o texto seguir
-- `<textPath>` com `startOffset="0%"` para distribuir o texto ao redor
-- Animação CSS `@keyframes spin` no grupo SVG do texto (rotação de 0° → 360°, `linear`, `infinite`)
-- O ® central é um elemento separado, estático (não gira)
-- Fundo branco com borda cinza sutil, exatamente como na referência
+## Também precisa corrigir: o Gauge de Urgência
 
-## Posicionamento no Hero
+O gauge mostra score numérico com ponteiro. Atualmente:
+- Score alto (ex: 85) = vermelho = URGENTE
+- Score baixo = verde = TRANQUILO
 
-O badge será posicionado **absolutamente** dentro da `<section>` do Hero:
-- `absolute top-[18%] right-[8%]` em desktop
-- Oculto (`hidden`) em mobile pequeno, visível a partir de `md:`
-- Tamanho: ~120px × 120px (mesmo da referência)
+Mas quando não há conflito nenhum, o gauge pode ainda mostrar vermelho se o `urgencyScore` retornado pela API for alto. O gauge precisa refletir a mesma lógica dos dados reais.
 
-## Arquivo a modificar
+## O que será modificado
 
-### `src/components/sections/HeroSection.tsx`
-- Adicionar o componente SVG do badge diretamente no arquivo, como função interna `RotatingRegisteredBadge`
-- Posicionar dentro da `<section>` com `absolute`, antes do container principal
-- Animação CSS inline com `style` tag ou `keyframes` via framer-motion
+### `src/components/shared/ViabilityResultDisplay.tsx`
 
-## Código do badge (SVG com textPath)
+**1. Nova função `computeViabilityLevel`** — substitui o bloco `effectiveLevel` atual:
+
+```ts
+const computeViabilityLevel = (result: ViabilityResult) => {
+  // Marca bloqueada = sempre vermelho severo
+  if (result.level === 'blocked') return 'blocked';
+  
+  const hasINPIConflict = result.inpiResults?.found === true && (result.inpiResults?.totalResults ?? 0) > 0;
+  const hasCNPJConflict = result.companiesResult?.found === true && (result.companiesResult?.total ?? 0) > 0;
+  const hasWebPresence = (result.webAnalysis?.webMentions ?? 0) > 2; // tolerância de até 2 menções
+  
+  // LIMPO em todas as fontes → ALTA VIABILIDADE (verde)
+  if (!hasINPIConflict && !hasCNPJConflict && !hasWebPresence) return 'high';
+  
+  // Tem apenas presença web leve mas sem INPI/CNPJ → MÉDIA
+  if (!hasINPIConflict && !hasCNPJConflict) return 'medium';
+  
+  // Tem colidência INPI ou CNPJ → BAIXA (vermelho)
+  return 'low';
+};
+```
+
+**2. Gauge de Urgência coerente** — o score visual do gauge também deve mudar:
+
+Quando `effectiveLevel === 'high'` (dados limpos), forçar a cor do gauge para verde, independente do `urgencyScore` numérico retornado pela API. Isso será feito passando o `effectiveLevel` para o `UrgencyGauge`:
 
 ```tsx
-const RotatingRegisteredBadge = () => (
-  <motion.div
-    initial={{ opacity: 0, scale: 0.8 }}
-    animate={{ opacity: 1, scale: 1 }}
-    transition={{ delay: 0.8, duration: 0.6, type: "spring" }}
-    className="absolute top-[18%] right-[6%] hidden md:block z-20"
-  >
-    <svg width="120" height="120" viewBox="0 0 120 120">
-      {/* Fundo circular branco */}
-      <circle cx="60" cy="60" r="58" fill="white" stroke="#e2e8f0" strokeWidth="1.5" />
-      
-      {/* ® central */}
-      <circle cx="60" cy="60" r="20" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-      <text x="60" y="66" textAnchor="middle" fontSize="18" fontWeight="bold" fill="#3b82f6">R</text>
-      
-      {/* Texto circular girando */}
-      <g style={{ animation: "spin 8s linear infinite", transformOrigin: "60px 60px" }}>
-        <defs>
-          <path id="circle-path" d="M 60,60 m -45,0 a 45,45 0 1,1 90,0 a 45,45 0 1,1 -90,0" />
-        </defs>
-        <text fontSize="10" fontWeight="600" fill="#1e293b" letterSpacing="3">
-          <textPath href="#circle-path">
-            REGISTRO DE MARCAS EM 24H · 
-          </textPath>
-        </text>
-      </g>
-    </svg>
-    
-    <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-  </motion.div>
-);
+<UrgencyGauge score={result.urgencyScore ?? 30} effectiveLevel={effectiveLevel} />
 ```
 
-## Resultado esperado
+No componente `UrgencyGauge`, a cor será determinada pelo `effectiveLevel` e não apenas pelo score numérico:
+```ts
+const color = 
+  effectiveLevel === 'high' ? '#10b981' :      // verde
+  effectiveLevel === 'medium' ? '#f59e0b' :    // âmbar
+  '#ef4444';                                    // vermelho
+  
+const label = 
+  effectiveLevel === 'high' ? 'TRANQUILO' :
+  effectiveLevel === 'medium' ? 'MODERADO' : 'URGENTE';
+```
 
-- Badge aparece com animação de entrada (scale + fade) após 0.8s do carregamento da página
-- Texto "REGISTRO DE MARCAS EM 24H" gira suavemente ao redor do ® central
-- Visível apenas em desktop (md+), não atrapalha mobile
-- Posicionado no canto superior direito do Hero, idêntico à referência do Consolide
-- Apenas 1 arquivo modificado: `HeroSection.tsx`
+**3. Badge de resultado** — já usa `effectiveLevel`, então automaticamente ficará verde com "✓ ALTA VIABILIDADE" quando os dados forem limpos.
+
+## Resultado Esperado
+
+| Cenário | INPI | CNPJ | Web | Cor | Texto |
+|---|---|---|---|---|---|
+| Limpo | ✓ 0 | ✓ 0 | ✓ 0 | 🟢 Verde | ALTA VIABILIDADE |
+| Só web | ✓ 0 | ✓ 0 | ⚠ 3+ | 🟡 Âmbar | VIABILIDADE MÉDIA |
+| Com conflitos | ✗ 1+ | ✗/✓ | qualquer | 🔴 Vermelho | BAIXA VIABILIDADE |
+| Bloqueada | ✗ | ✗ | ✗ | 🔴 Vermelho | MARCA BLOQUEADA |
+
+## Arquivo a modificar
+- `src/components/shared/ViabilityResultDisplay.tsx` — apenas lógica de `effectiveLevel` e `UrgencyGauge`
+
+## Nenhuma mudança de banco de dados ou edge function necessária
+A lógica é puramente frontend, baseada nos dados já retornados pela API.
