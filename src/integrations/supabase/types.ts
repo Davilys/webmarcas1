@@ -2291,6 +2291,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_assigned_admin_of_current_user: {
+        Args: { _admin_id: string }
+        Returns: boolean
+      }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
         Returns: boolean

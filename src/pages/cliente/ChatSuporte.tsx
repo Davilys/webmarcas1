@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ClientLayout } from '@/components/cliente/ClientLayout';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatMessageBubble } from '@/components/chat/ChatMessageBubble';
 import { VideoCallOverlay, IncomingCallNotification } from '@/components/chat/VideoCallOverlay';
@@ -249,6 +250,7 @@ export default function ChatSuporte() {
   const [userName, setUserName] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>('select');
   const [assignedAdmin, setAssignedAdmin] = useState<{ id: string; full_name: string | null } | null>(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(true);
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -303,6 +305,7 @@ export default function ChatSuporte() {
         if (!isMounted) return;
         if (admin) setAssignedAdmin(admin);
       }
+      if (isMounted) setLoadingAdmin(false);
     };
 
     init();
@@ -523,40 +526,69 @@ export default function ChatSuporte() {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.5, type: 'spring', stiffness: 300 }}
-          whileHover={{ scale: 1.02, x: 4 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={startHumanChat}
-          className="w-full text-left rounded-2xl p-4 border border-emerald-500/25 relative overflow-hidden group"
+          whileHover={{ scale: assignedAdmin ? 1.02 : 1, x: assignedAdmin ? 4 : 0 }}
+          whileTap={{ scale: assignedAdmin ? 0.98 : 1 }}
+          onClick={assignedAdmin ? startHumanChat : undefined}
+          disabled={loadingAdmin || !assignedAdmin}
+          className="w-full text-left rounded-2xl p-4 border border-emerald-500/25 relative overflow-hidden group disabled:cursor-not-allowed"
           style={{ background: 'rgba(16,185,129,0.08)', backdropFilter: 'blur(16px)' }}
         >
           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
             style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
 
           <div className="relative flex items-center gap-4">
-            <HumanOrb name={assignedAdmin?.full_name || 'Consultor'} size="md" />
+            {loadingAdmin ? (
+              <div className="h-14 w-14 flex-shrink-0 rounded-2xl overflow-hidden">
+                <Skeleton className="h-full w-full bg-white/10" />
+              </div>
+            ) : (
+              <HumanOrb name={assignedAdmin?.full_name || 'Consultor'} size="md" />
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <p className="font-bold text-white text-sm">{assignedAdmin?.full_name || 'Seu Consultor'}</p>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Online
-                </span>
+                {loadingAdmin ? (
+                  <Skeleton className="h-4 w-32 bg-white/10 rounded" />
+                ) : (
+                  <>
+                    <p className="font-bold text-white text-sm">
+                      {assignedAdmin?.full_name || 'Sem consultor atribuído'}
+                    </p>
+                    {assignedAdmin && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Online
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
-              <p className="text-xs text-white/50">Consultor especializado · Atendimento personalizado</p>
-              <div className="flex items-center gap-3 mt-2">
-                {[Headphones, Lock, Hash].map((Icon, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <Icon className="h-3 w-3 text-emerald-400" />
-                    <span className="text-[10px] text-white/40">{['Ao vivo', 'Privado', 'Direto'][i]}</span>
-                  </div>
-                ))}
-              </div>
+              {loadingAdmin ? (
+                <Skeleton className="h-3 w-48 bg-white/10 rounded mt-1" />
+              ) : (
+                <p className="text-xs text-white/50">
+                  {assignedAdmin
+                    ? 'Consultor especializado · Atendimento personalizado'
+                    : 'Nenhum consultor foi atribuído ainda'}
+                </p>
+              )}
+              {!loadingAdmin && (
+                <div className="flex items-center gap-3 mt-2">
+                  {[Headphones, Lock, Hash].map((Icon, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <Icon className="h-3 w-3 text-emerald-400" />
+                      <span className="text-[10px] text-white/40">{['Ao vivo', 'Privado', 'Direto'][i]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <motion.div
-              animate={{ x: [0, 4, 0] }}
-              transition={{ duration: 2.3, repeat: Infinity }}
-            >
-              <ChevronRight className="h-5 w-5 text-emerald-400/60" />
-            </motion.div>
+            {!loadingAdmin && assignedAdmin && (
+              <motion.div
+                animate={{ x: [0, 4, 0] }}
+                transition={{ duration: 2.3, repeat: Infinity }}
+              >
+                <ChevronRight className="h-5 w-5 text-emerald-400/60" />
+              </motion.div>
+            )}
           </div>
         </motion.button>
 
