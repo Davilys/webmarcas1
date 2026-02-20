@@ -474,7 +474,7 @@ ANÁLISE DE PRESENÇA WEB:
 - Resumo: ${webResult.summary}
 `;
 
-  const prompt = `Você é Dr. Alexandre Moreira, especialista sênior em Propriedade Intelectual com 20 anos de experiência no INPI e em registro de marcas no Brasil. Você foi contratado para emitir um Laudo Técnico de Viabilidade de Marca.
+  const prompt = `Você é um especialista sênior em Propriedade Intelectual com 20 anos de experiência no INPI e em registro de marcas no Brasil. Você foi contratado para emitir um Laudo Técnico de Viabilidade de Marca. Não inclua nome de especialista, assinatura ou separadores de linha (━━) no texto do laudo.
 
 ${contextData}
 
@@ -513,11 +513,7 @@ Data: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', 
    Dê uma recomendação clara e objetiva sobre o que o cliente deve fazer. Se houver colidências, enfatize com URGÊNCIA que o dono da marca é quem registra PRIMEIRO (Lei 9.279/96, art. 129).
 
 9. AVISO LEGAL
-   Inclua aviso padrão sobre limitações da análise prévia.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Ass.: Dr. Alexandre Moreira | Especialista em PI | WEBMARCAS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Inclua aviso padrão sobre limitações da análise prévia. Não inclua assinatura, nome de especialista ou separadores de linha no final do laudo.
 
 Após o laudo, forneça em JSON (em uma linha separada, começando com ###JSON###):
 ###JSON###{"level":"high|medium|low|blocked","title":"Título do resultado","description":"Descrição curta 1-2 frases","urgencyScore":0-100}`;
@@ -530,7 +526,7 @@ Após o laudo, forneça em JSON (em uma linha separada, começando com ###JSON##
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'Você é Dr. Alexandre Moreira, especialista sênior em Propriedade Intelectual. Responda de forma técnica, jurídica e profissional. Seja específico e baseie-se APENAS nos dados reais fornecidos, sem inventar informações.' },
+          { role: 'system', content: 'Você é um especialista sênior em Propriedade Intelectual da WebMarcas. Responda de forma técnica, jurídica e profissional. Seja específico e baseie-se APENAS nos dados reais fornecidos, sem inventar informações. Não inclua assinatura, nome de especialista ou separadores de linha no final do texto.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.4,

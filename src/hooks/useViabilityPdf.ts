@@ -735,22 +735,23 @@ export async function generateViabilityPDF(
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    const fY = ph - 13;
-    filledRect(doc, 0, fY - 0.8, pw, 0.8, C.gold);
-    filledRect(doc, 0, fY, pw, 13, C.navy);
-    filledRect(doc, 0, fY, 4, 13, C.gold);
-    setFont(doc, 'normal', 6.5, C.gray400);
+    const fY = ph - 12;
+    // Linha separadora dourada fina (sem fundo navy)
+    doc.setDrawColor(...C.gold); doc.setLineWidth(0.4);
+    doc.line(M, fY, pw - M, fY);
+    // Texto do rodapé em cinza claro sobre fundo branco
+    setFont(doc, 'normal', 6, [160, 160, 160]);
     doc.text(
       `Protocolo: ${protocol}  ·  WebMarcas — www.webmarcas.net  ·  Gerado em: ${timeStr}`,
-      pw / 2, fY + 6, { align: 'center' }
+      pw / 2, fY + 4.5, { align: 'center' }
     );
-    setFont(doc, 'normal', 5.5, C.gray500);
+    setFont(doc, 'normal', 5, [190, 190, 190]);
     doc.text(
       'Este documento e um laudo tecnico preliminar de viabilidade de marca. Nao substitui consulta juridica especializada.',
-      pw / 2, fY + 11, { align: 'center' }
+      pw / 2, fY + 9, { align: 'center' }
     );
-    setFont(doc, 'bold', 6.5, C.gray400);
-    doc.text(`${i} / ${totalPages}`, pw - M, fY + 7, { align: 'right' });
+    setFont(doc, 'bold', 6, [160, 160, 160]);
+    doc.text(`${i} / ${totalPages}`, pw - M, fY + 5, { align: 'right' });
   }
 
   const fileName = `Laudo-WebMarcas-${brandName.replace(/\s+/g, '-').toUpperCase()}-${Date.now()}.pdf`;
