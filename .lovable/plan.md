@@ -1,103 +1,163 @@
 
-# Reescrever o PDF do Laudo de Viabilidade — Visual Premium + Lógica Correta
+# Enriquecer Seção "Análise de Colidência" com Varredura Real da Internet
 
-## Problemas Identificados no PDF Atual
+## Escopo Estrito (conforme regras do usuário)
 
-### 1. Lógica de Cor/Resultado Errada
-A função `getLevelColor` e `getLevelLabel` no PDF ainda usa `urgencyScore <= 50` como critério, enquanto o frontend foi corrigido para usar dados reais (INPI, CNPJ, Web). Resultado: marca "FORT NEW" sem nenhuma colidência aparecia como **RISCO / BAIXA VIABILIDADE** (vermelho).
-
-### 2. Card de Resultado Mal Formatado
-- O texto `✗  RISCO` aparece como `' R I S C O` com espaços estranhos — causado por caracteres especiais (✗/✓) incompatíveis com a fonte `helvetica` do jsPDF
-- O score `85` aparece deslocado e desproporcional
-- O painel branco à direita tem código duplicado (`filledRect` chamado duas vezes para o mesmo elemento)
-
-### 3. Seção "Parecer Técnico-Jurídico" com Lixo Visual
-O laudo IA gerado às vezes contém caracteres `%%%` ou delimitadores que são renderizados literalmente no PDF
-
-### 4. Cabeçalho sem Logo (Logo Quebrado)
-O logo carrega via `/favicon.png` com `crossOrigin`, que pode falhar no contexto de geração de PDF (CORS). O resultado é o cabeçalho sem imagem.
-
-### 5. Falta Sincronização de Cores com Frontend
-O PDF deve usar a **mesma lógica** do frontend:
-- Sem conflito INPI + sem conflito CNPJ + web ≤ 2 → **VERDE / ALTA VIABILIDADE**
-- Só web → **ÂMBAR / VIABILIDADE MÉDIA**  
-- Conflito INPI ou CNPJ → **VERMELHO / BAIXA VIABILIDADE**
+Alteração SOMENTE dentro da seção de colidência. Nada muda em:
+- Score de viabilidade
+- Conclusão técnica baseada no INPI
+- Ordem das seções
+- Formatação das demais seções
+- Estrutura do laudo
 
 ---
 
-## O que Será Corrigido em `src/hooks/useViabilityPdf.ts`
+## O que existe hoje vs. o que precisa mudar
 
-### Correção 1 — Lógica de Viabilidade (sincronizar com frontend)
-Substituir as funções `getLevelColor` e `getLevelLabel` por uma função derivada dos dados reais:
+### Backend (`supabase/functions/inpi-viability-check/index.ts`)
+
+**Módulo 3 atual** (`searchWebPresence`) faz:
+- Busca geral Google via Firecrawl
+- Busca LinkedIn via Firecrawl
+- Retorna: `googleMeuNegocio`, `linkedin`, `webMentions`, `sources`, `summary`
+
+**O que falta buscar:**
+- Instagram (busca por nome exato)
+- CNPJá (cnpja.com)
+- CNPJ.ws com busca textual
+- CNPJCheck
+- Serasa Experian (consulta pública)
+
+**Solução:** Enriquecer o `searchWebPresence` e `searchCompaniesBR` para retornar dados estruturados de redes sociais e fontes de CNPJ, e adicionar um novo campo `instagramFound` + `socialProfiles` + `cnpjSources` ao resultado.
+
+A interface `WebAnalysis` em `src/lib/api/viability.ts` será estendida com:
+```ts
+instagramFound?: boolean;
+socialProfiles?: Array<{ platform: string; profileName: string; url: string; followers?: string }>;
+cnpjSources?: Array<{ source: string; name: string; cnpj?: string; city?: string; state?: string; status?: string }>;
+marketNote?: string; // nota jurídica quando há empresa mas não há INPI
+```
+
+### PDF (`src/hooks/useViabilityPdf.ts`)
+
+**Seção 5 atual** ("Colidência Empresarial — CNPJ") mostra apenas tabela simples de empresas do CNPJ.ws.
+
+**Mudança dentro da seção 5:** Adicionar ao final da seção 5 um bloco visual com subtítulo "Pesquisa de Uso no Mercado (Internet e CNPJ)", mostrando:
+
+1. **Empresas encontradas** (de todos os buscadores de CNPJ consultados): tabela com Nome, CNPJ, Cidade/UF, Fonte, Situação
+2. **Redes Sociais encontradas**: tabela ou cards com Plataforma, Nome do Perfil, Link, Seguidores
+3. Se nada encontrado: banner verde "Não foram identificadas empresas ativas ou perfis relevantes com nome idêntico na internet ou bases públicas de CNPJ."
+4. **Nota Jurídica obrigatória** quando há empresa mas sem INPI: "A existência de empresas com nome idêntico no mercado não implica direito marcário, caso não haja registro válido no INPI."
+
+---
+
+## Arquivos a Modificar
+
+### 1. `supabase/functions/inpi-viability-check/index.ts`
+
+**Enriquecer `searchWebPresence`** para incluir:
 
 ```ts
-function computePdfLevel(result: ViabilityResult): 'high' | 'medium' | 'low' | 'blocked' {
-  if (result.level === 'blocked') return 'blocked';
-  const hasINPI  = result.inpiResults?.found === true && (result.inpiResults?.totalResults ?? 0) > 0;
-  const hasCNPJ  = result.companiesResult?.found === true && (result.companiesResult?.total ?? 0) > 0;
-  const hasWeb   = (result.webAnalysis?.webMentions ?? 0) > 2;
-  if (!hasINPI && !hasCNPJ && !hasWeb) return 'high';
-  if (!hasINPI && !hasCNPJ) return 'medium';
-  return 'low';
+// Busca Instagram por nome exato
+const instagramSearch = fetch('https://api.firecrawl.dev/v1/search', {
+  body: JSON.stringify({
+    query: `"${brandName}" site:instagram.com`,
+    limit: 3,
+  })
+});
+
+// Busca CNPJá + Serasa via Firecrawl scrape
+const cnpjaSearch = fetch('https://api.firecrawl.dev/v1/search', {
+  body: JSON.stringify({
+    query: `"${brandName}" site:cnpja.com OR site:cnpj.ws OR site:serasa.com.br`,
+    limit: 5,
+  })
+});
+```
+
+Resultado retornado ampliado:
+```ts
+return {
+  googleMeuNegocio: boolean,
+  linkedin: boolean,
+  instagramFound: boolean,
+  webMentions: number,
+  sources: [...],
+  summary: string,
+  // NOVO:
+  socialProfiles: Array<{ platform, profileName, url, followers? }>,
+  cnpjSources: Array<{ source, name, cnpj?, city?, state?, status? }>,
+};
+```
+
+### 2. `src/lib/api/viability.ts`
+
+Estender a interface `WebAnalysis` com os novos campos opcionais (sem quebrar nada existente):
+```ts
+export interface WebAnalysis {
+  googleMeuNegocio: boolean;
+  linkedin: boolean;
+  instagramFound?: boolean;        // NOVO
+  webMentions: number;
+  sources: WebSource[];
+  summary: string;
+  socialProfiles?: Array<{         // NOVO
+    platform: string;
+    profileName: string;
+    url: string;
+    followers?: string;
+  }>;
+  cnpjSources?: Array<{            // NOVO
+    source: string;
+    name: string;
+    cnpj?: string;
+    city?: string;
+    state?: string;
+    status?: string;
+  }>;
 }
 ```
 
-### Correção 2 — Ícones de Texto Simples (sem caracteres Unicode problemáticos)
-Substituir `✓` e `✗` por texto ASCII puro compatível com helvetica:
-- `✓  VIAVEL` → usar apenas `VIAVEL` com background verde
-- `✗  RISCO` → usar `RISCO` sem o caractere especial
+### 3. `src/hooks/useViabilityPdf.ts`
 
-### Correção 3 — Card de Resultado Redesenhado
-O card principal (seção 2) será redesenhado:
+Dentro da **seção 5** existente ("Colidência Empresarial — CNPJ"), após o bloco atual de tabela de empresas, adicionar o novo bloco:
 
-**Layout novo do card:**
+**Sub-bloco: "Pesquisa de Uso no Mercado (Internet e CNPJ)"**
+
 ```
-┌──────────────────────────────────────────────────────────┐
-│  [VERDE/VERMELHO]        │  Título do resultado          │
-│                          │  Descrição resumida           │
-│  ALTA VIABILIDADE        │                               │
-│  ou BAIXA VIABILIDADE    │  Urgência: TRANQUILO          │
-└──────────────────────────────────────────────────────────┘
-```
-- Remover o score numérico do lado esquerdo (não agrega valor visual)
-- Usar retângulo arredondado limpo com fundo de cor sólida
-- Texto grande e legível no lado esquerdo: apenas o label de viabilidade
-- Texto da descrição no lado direito com boa quebra de linha
+Cabeçalho cinza claro com texto: "PESQUISA DE USO NO MERCADO (INTERNET E CNPJ)"
 
-### Correção 4 — Logo via Import ES6
-Usar o logo da WebMarcas importado diretamente (não via URL que pode falhar por CORS):
-- O hook receberá o `logoBase64` como parâmetro opcional, ou
-- Usar `toBase64FromUrl` com a URL completa absoluta do site em produção como fallback
-- Adicionar tratamento robusto de erro para não quebrar o PDF se o logo falhar
+SE não encontrou nada:
+  Banner verde: "Não foram identificadas empresas ativas ou perfis relevantes
+                 com nome idêntico na internet ou bases públicas de CNPJ."
 
-### Correção 5 — Limpar Seção de Parecer Técnico-Jurídico
-Antes de renderizar `result.laudo` no PDF, limpar o texto:
-```ts
-const cleanLaudo = (result.laudo || '')
-  .replace(/[%]{3,}/g, '')   // remove %%% 
-  .replace(/={5,}/g, '---')  // substitui ===== por linha
-  .trim();
-```
+SE encontrou empresas (cnpjSources):
+  Subtítulo: "Empresas encontradas:"
+  Tabela: Nome Empresarial | CNPJ | Cidade/UF | Fonte | Situação
 
-### Correção 6 — Gauge de Urgência Ajustado
-O label de urgência no PDF também será derivado do nível real:
-```ts
-const urgencyLabel = 
-  pdfLevel === 'high' ? 'TRANQUILO' :
-  pdfLevel === 'medium' ? 'MODERADO' : 'URGENTE';
+SE encontrou redes sociais (socialProfiles):
+  Subtítulo: "Redes Sociais Encontradas:"
+  Tabela: Plataforma | Nome do Perfil | Link | Seguidores
+
+SEMPRE (quando há empresa mas sem conflito INPI):
+  Nota jurídica:
+  "A existência de empresas com nome idêntico no mercado não implica direito
+   marcário, caso não haja registro válido no INPI."
 ```
 
 ---
 
-## Arquivo a Modificar
-- **`src/hooks/useViabilityPdf.ts`** — apenas correções de lógica e layout, sem mudanças de banco
+## Ordem de Implementação
 
-## Resultado Esperado
+1. Estender interface `WebAnalysis` em `src/lib/api/viability.ts` (campos opcionais — sem quebrar nada)
+2. Enriquecer `searchWebPresence` na edge function com buscas de Instagram + CNPJá/Serasa via Firecrawl
+3. Atualizar resposta da edge function para incluir os novos campos no `webAnalysis`
+4. Adicionar o sub-bloco visual no PDF (seção 5, após tabela de CNPJ atual)
 
-| Cenário | Cor do Card | Label Principal | Label Urgência |
-|---|---|---|---|
-| Sem conflitos (INPI, CNPJ, Web limpos) | Verde | ALTA VIABILIDADE | TRANQUILO |
-| Só presença web | Âmbar | VIABILIDADE MÉDIA | MODERADO |
-| Conflito INPI ou CNPJ | Vermelho | BAIXA VIABILIDADE | URGENTE |
-
-O PDF ficará idêntico ao visual do site: limpo, com identidade navy/gold da WebMarcas, logo discreto, textos organizados e resultado correto refletindo os dados reais da pesquisa.
+## O que NÃO muda
+- Score de urgência → inalterado
+- Lógica de `computePdfLevel` → inalterada
+- Seções 4, 7, 8, 9, 10 → inalteradas
+- Ordem das seções → inalterada
+- Conclusão técnica baseada no INPI → inalterada
+- Toda a estrutura e formatação existente → inalterada
