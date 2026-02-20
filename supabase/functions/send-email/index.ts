@@ -46,17 +46,21 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch default email account for from address
+    // Fetch default email account for display name only
     const { data: emailAccount } = await supabase
       .from("email_accounts")
       .select("email_address, display_name")
       .eq("is_default", true)
       .single();
 
-    // Determine from address
-    const fromAddress = emailAccount?.display_name 
-      ? `${emailAccount.display_name} <${emailAccount.email_address}>`
-      : emailAccount?.email_address || "WebMarcas <noreply@webmarcas.net>";
+    // ALWAYS use verified webmarcas.net domain for sending (Resend requirement).
+    // Gmail and other free domains are not allowed as "from" address.
+    const VERIFIED_FROM_DOMAIN = 'webmarcas.net';
+    const VERIFIED_FROM_EMAIL = `noreply@${VERIFIED_FROM_DOMAIN}`;
+
+    // Use the display name from DB if available, but force the verified domain
+    const displayName = emailAccount?.display_name || 'WebMarcas';
+    const fromAddress = `${displayName} <${VERIFIED_FROM_EMAIL}>`;
 
     // Create professional HTML content
     const htmlContent = html || `
