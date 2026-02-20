@@ -506,7 +506,7 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-96 p-0" align="start">
-                        <Command>
+                        <Command shouldFilter={false}>
                           <CommandInput placeholder="Nome, email ou marca..." value={searchQuery} onValueChange={setSearchQuery} />
                           <CommandList>
                             {isLoadingClients ? (
