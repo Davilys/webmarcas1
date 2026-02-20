@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Search, AlertCircle, CheckCircle, AlertTriangle, ArrowRight, MessageCircle, ShieldX, Printer } from "lucide-react";
+import { Search, AlertCircle, CheckCircle, AlertTriangle, ArrowRight, MessageCircle, ShieldX, Printer, Shield, Zap, TrendingUp } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import webmarcasIcon from "@/assets/webmarcas-icon.png";
 
 type ViabilityLevel = "high" | "medium" | "low" | "blocked" | null;
+
+const FEATURE_CARDS = [
+  { icon: Shield, label: "100% Seguro", sub: "Dados protegidos" },
+  { icon: Zap, label: "Tempo Real", sub: "Base oficial INPI" },
+  { icon: TrendingUp, label: "Laudo Técnico", sub: "IA especializada" },
+];
 
 const ViabilitySearchSection = () => {
   const [brandName, setBrandName] = useState("");
@@ -35,7 +42,6 @@ const ViabilitySearchSection = () => {
       const viabilityResult = await checkViability(brandName.trim(), businessArea.trim());
       setResult(viabilityResult);
 
-      // Save search to database for social proof notifications
       await supabase.from('viability_searches').insert({
         brand_name: brandName.trim(),
         business_area: businessArea.trim(),
@@ -72,7 +78,7 @@ const ViabilitySearchSection = () => {
   const printLaudo = () => {
     const currentDate = new Date().toLocaleString('pt-BR');
     const viabilityText = getViabilityText(result?.level || null);
-    
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast({
@@ -167,7 +173,6 @@ const ViabilitySearchSection = () => {
       businessArea,
       level: result?.level,
     }));
-    // Scroll to top before navigation
     window.scrollTo({ top: 0, behavior: 'instant' });
     navigate('/registro');
   };
@@ -213,14 +218,21 @@ const ViabilitySearchSection = () => {
   };
 
   return (
-    <section id="consultar" className="py-8 md:py-12 lg:py-16 relative overflow-hidden">
+    <section id="consultar" className="py-12 md:py-16 lg:py-24 relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-hero-gradient opacity-30" />
-      <div className="absolute top-1/4 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/3 rounded-full blur-3xl" />
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
-        <div className="text-center max-w-2xl mx-auto mb-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center max-w-2xl mx-auto mb-10"
+        >
           <span className="badge-premium mb-4 inline-flex">Pesquisa Real no INPI</span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
             Consulte a viabilidade da sua{" "}
@@ -229,49 +241,78 @@ const ViabilitySearchSection = () => {
           <p className="text-muted-foreground text-lg">
             Pesquisa automática na base oficial do INPI em tempo real.
           </p>
-        </div>
+        </motion.div>
 
-        {/* Search Form / Result */}
         <div className="max-w-2xl mx-auto">
+          {/* Feature Cards */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.45, delay: 0.1 }}
+            className="grid grid-cols-3 gap-4 mb-6"
+          >
+            {FEATURE_CARDS.map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.35, delay: 0.15 + i * 0.07 }}
+                className="flex flex-col items-center gap-2.5 rounded-2xl border border-border/50 bg-card/70 backdrop-blur-sm px-3 py-5 text-center shadow-sm"
+              >
+                <item.icon className="w-7 h-7 text-primary" strokeWidth={1.5} />
+                <p className="font-semibold text-foreground text-sm leading-tight">{item.label}</p>
+                <p className="text-xs text-muted-foreground leading-snug">{item.sub}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Search Form / Result */}
           {!result ? (
-            <form onSubmit={handleSearch} className="glass-card p-8">
+            <motion.form
+              onSubmit={handleSearch}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.45, delay: 0.2 }}
+              className="rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm shadow-md p-8"
+            >
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="brandName" className="block text-sm font-medium mb-2">
-                    Nome da Marca
+                  <label htmlFor="brandName" className="block text-sm font-bold text-foreground mb-2.5">
+                    Nome da Marca <span className="text-destructive">*</span>
                   </label>
                   <input
                     id="brandName"
                     type="text"
                     value={brandName}
                     onChange={(e) => setBrandName(e.target.value)}
-                    placeholder="Ex: WebMarcas"
-                    className="input-styled"
+                    placeholder="Ex: WebMarcas, TechFlow, BioVida..."
+                    className="w-full h-14 rounded-xl border border-border/60 bg-muted/30 px-4 text-base text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all disabled:opacity-50"
                     disabled={isSearching}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="businessArea" className="block text-sm font-medium mb-2">
-                    Ramo de Atividade
+                  <label htmlFor="businessArea" className="block text-sm font-bold text-foreground mb-2.5">
+                    Ramo de Atividade <span className="text-destructive">*</span>
                   </label>
                   <input
                     id="businessArea"
                     type="text"
                     value={businessArea}
                     onChange={(e) => setBusinessArea(e.target.value)}
-                    placeholder="Ex: Serviços Jurídicos"
-                    className="input-styled"
+                    placeholder="Ex: Serviços Jurídicos, Alimentação, Tecnologia..."
+                    className="w-full h-14 rounded-xl border border-border/60 bg-muted/30 px-4 text-base text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all disabled:opacity-50"
                     disabled={isSearching}
                   />
                 </div>
 
-                <Button
+                <button
                   type="submit"
-                  variant="hero"
-                  size="lg"
-                  className="w-full"
                   disabled={isSearching}
+                  className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-semibold text-base flex items-center justify-center gap-2.5 hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isSearching ? (
                     <>
@@ -284,14 +325,22 @@ const ViabilitySearchSection = () => {
                       Consultar Viabilidade
                     </>
                   )}
-                </Button>
+                </button>
               </div>
-            </form>
+
+              <p className="mt-5 text-center text-xs text-muted-foreground">
+                🔒 Consulta gratuita • Resultado em segundos • Sem cadastro necessário
+              </p>
+            </motion.form>
           ) : (
-            <div className="glass-card p-8">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm shadow-md p-8"
+            >
               {/* Official Badge */}
-              <div className="flex justify-center mb-4">
-                <span className="bg-accent/10 text-accent px-4 py-2 rounded-full text-sm font-medium">
+              <div className="flex justify-center mb-5">
+                <span className="bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium border border-primary/20">
                   📋 Resultado da pesquisa real no INPI
                 </span>
               </div>
@@ -329,7 +378,7 @@ const ViabilitySearchSection = () => {
                       Imprimir / Salvar Laudo
                     </Button>
                   </div>
-                  <div className="bg-secondary/50 rounded-xl p-4 max-h-80 overflow-y-auto">
+                  <div className="bg-muted/40 rounded-xl p-4 max-h-80 overflow-y-auto border border-border/40">
                     <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-sans leading-relaxed">
                       {result.laudo}
                     </pre>
@@ -351,39 +400,32 @@ const ViabilitySearchSection = () => {
               {/* CTAs */}
               <div className="space-y-3">
                 {result.level !== 'blocked' && (
-                  <Button
-                    variant="hero"
-                    size="lg"
-                    className="w-full group"
+                  <button
+                    className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-semibold text-base flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm group"
                     onClick={handleRegisterClick}
                   >
                     🚀 Registrar minha marca agora
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </Button>
+                  </button>
                 )}
-                <Button
-                  variant="hero-outline"
-                  size="lg"
-                  className="w-full"
-                  asChild
+                <a
+                  href={`https://wa.me/5511911120225?text=${encodeURIComponent(`Olá, estava no site da Webmarcas, quero registrar uma marca!`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-14 rounded-xl border border-primary/40 text-primary font-semibold text-base flex items-center justify-center gap-2 hover:bg-primary/5 active:scale-[0.98] transition-all"
                 >
-                  <a
-                    href={`https://wa.me/5511911120225?text=${encodeURIComponent(`Olá, estava no site da Webmarcas, quero registrar uma marca!`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <MessageCircle className="w-5 h-5" />
-                    Falar com especialista
-                  </a>
-                </Button>
+                  <MessageCircle className="w-5 h-5" />
+                  Falar com especialista
+                </a>
                 <button
                   onClick={resetSearch}
-                  className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
+                  className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors py-2 flex items-center justify-center gap-1.5"
                 >
+                  <Search className="w-3.5 h-3.5" />
                   Fazer nova consulta
                 </button>
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
