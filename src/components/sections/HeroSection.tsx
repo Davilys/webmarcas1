@@ -13,22 +13,44 @@ const RotatingRegisteredBadge = () => (
     transition={{ delay: 0.8, duration: 0.6, type: "spring" }}
     className="absolute top-[18%] right-[6%] hidden md:block z-20"
   >
-    <svg width="120" height="120" viewBox="0 0 120 120">
-      {/* Fundo circular branco */}
-      <circle cx="60" cy="60" r="58" fill="white" stroke="#e2e8f0" strokeWidth="1.5" />
-      
-      {/* ® central - círculo + R */}
-      <circle cx="60" cy="60" r="20" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-      <text x="60" y="67" textAnchor="middle" fontSize="18" fontWeight="bold" fill="#3b82f6" fontFamily="serif">R</text>
+    <svg width="140" height="140" viewBox="0 0 140 140">
+      <defs>
+        {/* Caminho circular para o texto — raio 62, sentido horário */}
+        <path
+          id="badge-text-path"
+          d="M 70,70 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0"
+        />
+      </defs>
+
+      {/* Fundo branco com sombra sutil */}
+      <circle cx="70" cy="70" r="68" fill="white" stroke="#d1d5db" strokeWidth="1" />
+
+      {/* Borda interna decorativa */}
+      <circle cx="70" cy="70" r="56" fill="none" stroke="#e5e7eb" strokeWidth="0.8" strokeDasharray="3,3" />
+
+      {/* Símbolo ® centralizado — círculo azul + R grande */}
+      <circle cx="70" cy="70" r="26" fill="none" stroke="#3b82f6" strokeWidth="3.5" />
+      {/* Letra R grande dentro do círculo */}
+      <text
+        x="70" y="80"
+        textAnchor="middle"
+        fontSize="30"
+        fontWeight="900"
+        fill="#3b82f6"
+        fontFamily="Arial, Helvetica, sans-serif"
+      >R</text>
 
       {/* Texto circular girando */}
-      <g style={{ animation: "badgeSpin 8s linear infinite", transformOrigin: "60px 60px" }}>
-        <defs>
-          <path id="badge-circle-path" d="M 60,60 m -45,0 a 45,45 0 1,1 90,0 a 45,45 0 1,1 -90,0" />
-        </defs>
-        <text fontSize="9.5" fontWeight="700" fill="#1e293b" letterSpacing="2.5">
-          <textPath href="#badge-circle-path" startOffset="0%">
-            REGISTRO DE MARCAS EM 24H · · ·
+      <g style={{ animation: "badgeSpin 9s linear infinite", transformOrigin: "70px 70px" }}>
+        <text
+          fontSize="10.5"
+          fontWeight="800"
+          fill="#111827"
+          fontFamily="Arial, Helvetica, sans-serif"
+          letterSpacing="3.2"
+        >
+          <textPath href="#badge-text-path" startOffset="0%">
+            REGISTRO DE MARCAS EM 24H ·
           </textPath>
         </text>
       </g>
