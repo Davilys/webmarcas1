@@ -167,30 +167,75 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
   const [searchQuery, setSearchQuery] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isAIGenerating, setIsAIGenerating] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
   const [lgpdOptIn, setLgpdOptIn] = useState(true);
 
-  const { data: clients = [] } = useQuery({
-    queryKey: ['clients-with-processes', searchQuery],
+  // Debounce search to avoid firing a query on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  type ProfileRow = { id: string; full_name: string | null; email: string; phone: string | null };
+  type ProcessRow = { user_id: string | null; brand_name: string; process_number: string | null };
+
+  const { data: clients = [], isLoading: isLoadingClients } = useQuery({
+    queryKey: ['clients-with-processes', debouncedSearch],
     queryFn: async () => {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, phone')
-        .or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
-        .limit(50);
+      // Paginated fetch — loads all matching profiles in batches of 1000
+      const allProfiles: ProfileRow[] = [];
+      let offset = 0;
+      const batchSize = 1000;
+      let hasMore = true;
 
-      const profileIds = profiles?.map(p => p.id) || [];
-      const { data: processes } = await supabase
-        .from('brand_processes')
-        .select('user_id, brand_name, process_number')
-        .in('user_id', profileIds);
+      while (hasMore) {
+        if (debouncedSearch.trim()) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, phone')
+            .or(`full_name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`)
+            .range(offset, offset + batchSize - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allProfiles.push(...data);
+            offset += batchSize;
+            if (data.length < batchSize) hasMore = false;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          // No search: load 200 most recent clients as default list
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, phone')
+            .order('created_at', { ascending: false })
+            .limit(200);
+          if (error) throw error;
+          if (data) allProfiles.push(...data);
+          hasMore = false;
+        }
+      }
 
+      // Fetch processes in batches of 100 (PostgREST IN limit)
+      const profileIds = allProfiles.map(p => p.id);
+      const allProcesses: ProcessRow[] = [];
+      for (let i = 0; i < profileIds.length; i += 100) {
+        const batch = profileIds.slice(i, i + 100);
+        const { data: processBatch } = await supabase
+          .from('brand_processes')
+          .select('user_id, brand_name, process_number')
+          .in('user_id', batch);
+        if (processBatch) allProcesses.push(...processBatch);
+      }
+
+      // Build final client map
       const clientsMap = new Map<string, ClientWithProcess>();
-      profiles?.forEach(profile => {
-        const process = processes?.find(p => p.user_id === profile.id);
+      allProfiles.forEach(profile => {
+        const process = allProcesses.find(p => p.user_id === profile.id);
         clientsMap.set(profile.id, {
           id: profile.id,
           full_name: profile.full_name || '',
@@ -464,20 +509,29 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
                         <Command>
                           <CommandInput placeholder="Nome, email ou marca..." value={searchQuery} onValueChange={setSearchQuery} />
                           <CommandList>
-                            <CommandEmpty>Nenhum cliente encontrado</CommandEmpty>
-                            <CommandGroup>
-                              {clients.map(client => (
-                                <CommandItem key={client.id} onSelect={() => { setSelectedClient(client); setClientSearchOpen(false); }} className="cursor-pointer">
-                                  <div className="flex flex-col">
-                                    <span className="font-medium text-sm">{client.full_name}</span>
-                                    <span className="text-xs text-muted-foreground">{client.email}</span>
-                                    {client.brand_name && (
-                                      <span className="text-[10px] text-primary">Marca: {client.brand_name} {client.process_number && `· Proc: ${client.process_number}`}</span>
-                                    )}
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
+                            {isLoadingClients ? (
+                              <div className="flex items-center justify-center py-4 gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Buscando clientes...</span>
+                              </div>
+                            ) : (
+                              <>
+                                <CommandEmpty>Nenhum cliente encontrado</CommandEmpty>
+                                <CommandGroup>
+                                  {clients.map(client => (
+                                    <CommandItem key={client.id} onSelect={() => { setSelectedClient(client); setClientSearchOpen(false); }} className="cursor-pointer">
+                                      <div className="flex flex-col">
+                                        <span className="font-medium text-sm">{client.full_name}</span>
+                                        <span className="text-xs text-muted-foreground">{client.email}</span>
+                                        {client.brand_name && (
+                                          <span className="text-[10px] text-primary">Marca: {client.brand_name} {client.process_number && `· Proc: ${client.process_number}`}</span>
+                                        )}
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </>
+                            )}
                           </CommandList>
                         </Command>
                       </PopoverContent>
