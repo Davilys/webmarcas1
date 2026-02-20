@@ -27,9 +27,24 @@ export interface WebSource {
 export interface WebAnalysis {
   googleMeuNegocio: boolean;
   linkedin: boolean;
+  instagramFound?: boolean;
   webMentions: number;
   sources: WebSource[];
   summary: string;
+  socialProfiles?: Array<{
+    platform: string;
+    profileName: string;
+    url: string;
+    followers?: string;
+  }>;
+  cnpjSources?: Array<{
+    source: string;
+    name: string;
+    cnpj?: string;
+    city?: string;
+    state?: string;
+    status?: string;
+  }>;
 }
 
 export interface INPIResults {

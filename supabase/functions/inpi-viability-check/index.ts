@@ -249,24 +249,32 @@ async function searchCompaniesBR(brandName: string): Promise<{
 }
 
 // =====================================================================
-// MÓDULO 3: Análise Web via Firecrawl Search
+// MÓDULO 3: Análise Web via Firecrawl Search (enriquecida)
 // =====================================================================
 async function searchWebPresence(brandName: string, businessArea: string, firecrawlKey: string): Promise<{
   googleMeuNegocio: boolean;
   linkedin: boolean;
+  instagramFound: boolean;
   webMentions: number;
   sources: Array<{ title: string; url: string; snippet: string }>;
   summary: string;
+  socialProfiles: Array<{ platform: string; profileName: string; url: string; followers?: string }>;
+  cnpjSources: Array<{ source: string; name: string; cnpj?: string; city?: string; state?: string; status?: string }>;
 }> {
-  if (!firecrawlKey) {
-    return { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise web não disponível.' };
-  }
+  const emptyResult = {
+    googleMeuNegocio: false, linkedin: false, instagramFound: false,
+    webMentions: 0, sources: [], summary: 'Análise web não disponível.',
+    socialProfiles: [], cnpjSources: []
+  };
+
+  if (!firecrawlKey) return emptyResult;
 
   try {
-    console.log('[WEB] Iniciando análise de presença web via Firecrawl...');
+    console.log('[WEB] Iniciando análise de presença web enriquecida via Firecrawl...');
 
-    // Busca 1: presença geral + Google Maps + LinkedIn
-    const [generalSearch, linkedinSearch] = await Promise.allSettled([
+    // 4 buscas em paralelo
+    const [generalSearch, linkedinSearch, instagramSearch, cnpjSearch] = await Promise.allSettled([
+      // Busca 1: presença geral + Google Meu Negócio
       fetch('https://api.firecrawl.dev/v1/search', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
@@ -276,6 +284,7 @@ async function searchWebPresence(brandName: string, businessArea: string, firecr
           scrapeOptions: { formats: ['markdown'] }
         })
       }),
+      // Busca 2: LinkedIn
       fetch('https://api.firecrawl.dev/v1/search', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
@@ -284,45 +293,143 @@ async function searchWebPresence(brandName: string, businessArea: string, firecr
           limit: 5,
           scrapeOptions: { formats: ['markdown'] }
         })
-      })
+      }),
+      // Busca 3: Instagram (nome exato)
+      fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `"${brandName}" site:instagram.com`,
+          limit: 3
+        })
+      }),
+      // Busca 4: CNPJá + CNPJ.ws + Serasa
+      fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${firecrawlKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `"${brandName}" site:cnpja.com OR site:cnpj.ws OR site:serasa.com.br OR site:cnpjcheck.com.br`,
+          limit: 5,
+          scrapeOptions: { formats: ['markdown'] }
+        })
+      }),
     ]);
 
     let allSources: Array<{ title: string; url: string; snippet: string }> = [];
     let googleFound = false;
     let linkedinFound = false;
+    let instagramFound = false;
+    const socialProfiles: Array<{ platform: string; profileName: string; url: string; followers?: string }> = [];
+    const cnpjSources: Array<{ source: string; name: string; cnpj?: string; city?: string; state?: string; status?: string }> = [];
 
+    // Processar busca geral
     if (generalSearch.status === 'fulfilled' && generalSearch.value.ok) {
       const data = await generalSearch.value.json();
       const results = data.data || [];
       for (const r of results) {
-        if (r.url?.includes('google.com/maps') || r.url?.includes('goo.gl/maps')) googleFound = true;
-        if (r.url?.includes('linkedin.com')) linkedinFound = true;
-        allSources.push({ title: r.metadata?.title || r.title || '', url: r.url || '', snippet: (r.markdown || '').substring(0, 200) });
+        const url = r.url || '';
+        if (url.includes('google.com/maps') || url.includes('goo.gl/maps') || url.includes('maps.app.goo.gl')) googleFound = true;
+        if (url.includes('linkedin.com')) {
+          linkedinFound = true;
+          const profileName = r.metadata?.title || r.title || brandName;
+          if (!socialProfiles.find(p => p.platform === 'LinkedIn')) {
+            socialProfiles.push({ platform: 'LinkedIn', profileName: profileName.substring(0, 40), url });
+          }
+        }
+        allSources.push({ title: r.metadata?.title || r.title || '', url, snippet: (r.markdown || '').substring(0, 200) });
       }
     }
 
+    // Processar busca LinkedIn dedicada
     if (linkedinSearch.status === 'fulfilled' && linkedinSearch.value.ok) {
       const data = await linkedinSearch.value.json();
       const results = data.data || [];
       for (const r of results) {
-        if (r.url?.includes('linkedin.com')) { linkedinFound = true; }
-        if (r.url?.includes('google.com/maps') || r.url?.includes('maps.')) { googleFound = true; }
+        const url = r.url || '';
+        if (url.includes('linkedin.com')) {
+          linkedinFound = true;
+          const profileName = r.metadata?.title || r.title || brandName;
+          if (!socialProfiles.find(p => p.platform === 'LinkedIn')) {
+            socialProfiles.push({ platform: 'LinkedIn', profileName: profileName.substring(0, 40), url });
+          }
+        }
+        if (url.includes('google.com/maps') || url.includes('maps.')) googleFound = true;
+      }
+    }
+
+    // Processar busca Instagram
+    if (instagramSearch.status === 'fulfilled' && instagramSearch.value.ok) {
+      const data = await instagramSearch.value.json();
+      const results = data.data || [];
+      for (const r of results) {
+        const url = r.url || '';
+        if (url.includes('instagram.com')) {
+          instagramFound = true;
+          const profileName = r.metadata?.title || r.title || brandName;
+          // Extrair @handle da URL se possível
+          const handleMatch = url.match(/instagram\.com\/([^/?#]+)/);
+          const handle = handleMatch ? `@${handleMatch[1]}` : profileName.substring(0, 40);
+          if (!socialProfiles.find(p => p.platform === 'Instagram')) {
+            socialProfiles.push({ platform: 'Instagram', profileName: handle, url });
+          }
+        }
+      }
+    }
+
+    // Processar busca CNPJ sources
+    if (cnpjSearch.status === 'fulfilled' && cnpjSearch.value.ok) {
+      const data = await cnpjSearch.value.json();
+      const results = data.data || [];
+      for (const r of results) {
+        const url = r.url || '';
+        const title = r.metadata?.title || r.title || '';
+        const snippet = r.markdown || r.description || '';
+
+        let source = 'Web';
+        if (url.includes('cnpja.com')) source = 'CNPJá';
+        else if (url.includes('cnpj.ws')) source = 'CNPJ.ws';
+        else if (url.includes('serasa.com.br')) source = 'Serasa Experian';
+        else if (url.includes('cnpjcheck.com.br')) source = 'CNPJCheck';
+
+        // Extrair CNPJ do snippet se presente (padrão XX.XXX.XXX/XXXX-XX)
+        const cnpjMatch = snippet.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/);
+        const cnpj = cnpjMatch ? cnpjMatch[0] : undefined;
+
+        // Extrair nome relevante
+        const nameClean = title
+          .replace(/- CNPJ.*$/i, '')
+          .replace(/\| .*$/i, '')
+          .trim()
+          .substring(0, 50);
+
+        if (nameClean && normalizeString(nameClean).includes(normalizeString(brandName).substring(0, 4))) {
+          cnpjSources.push({ source, name: nameClean, cnpj, status: 'Verificar no portal' });
+        }
       }
     }
 
     const webMentions = allSources.length;
-    console.log(`[WEB] Encontradas ${webMentions} menções web. Google: ${googleFound}, LinkedIn: ${linkedinFound}`);
+    console.log(`[WEB] Menções: ${webMentions} | Google: ${googleFound} | LinkedIn: ${linkedinFound} | Instagram: ${instagramFound} | CNPJ sources: ${cnpjSources.length}`);
 
     const summary = webMentions > 3
-      ? `A marca "${brandName}" possui presença consolidada na web com ${webMentions} menções identificadas.${googleFound ? ' Detectada no Google Maps/Negócios.' : ''}${linkedinFound ? ' Detectada no LinkedIn.' : ''}`
+      ? `A marca "${brandName}" possui presença consolidada na web com ${webMentions} menções identificadas.${googleFound ? ' Detectada no Google Maps/Negócios.' : ''}${linkedinFound ? ' Detectada no LinkedIn.' : ''}${instagramFound ? ' Detectada no Instagram.' : ''}`
       : webMentions > 0
-      ? `A marca "${brandName}" possui presença limitada na web com ${webMentions} menções.`
+      ? `A marca "${brandName}" possui presença limitada na web com ${webMentions} menções.${instagramFound ? ' Detectada no Instagram.' : ''}`
       : `Não foram encontradas menções significativas da marca "${brandName}" na web.`;
 
-    return { googleMeuNegocio: googleFound, linkedin: linkedinFound, webMentions, sources: allSources.slice(0, 6), summary };
+    return {
+      googleMeuNegocio: googleFound,
+      linkedin: linkedinFound,
+      instagramFound,
+      webMentions,
+      sources: allSources.slice(0, 6),
+      summary,
+      socialProfiles,
+      cnpjSources: cnpjSources.slice(0, 5),
+    };
   } catch (err) {
     console.error('[WEB] Erro análise web:', err);
-    return { googleMeuNegocio: false, linkedin: false, webMentions: 0, sources: [], summary: 'Análise web não disponível.' };
+    return emptyResult;
   }
 }
 
@@ -567,9 +674,12 @@ Deno.serve(async (req) => {
       webAnalysis: {
         googleMeuNegocio: webResult.googleMeuNegocio,
         linkedin: webResult.linkedin,
+        instagramFound: webResult.instagramFound,
         webMentions: webResult.webMentions,
         sources: webResult.sources,
-        summary: webResult.summary
+        summary: webResult.summary,
+        socialProfiles: webResult.socialProfiles,
+        cnpjSources: webResult.cnpjSources,
       }
     };
 

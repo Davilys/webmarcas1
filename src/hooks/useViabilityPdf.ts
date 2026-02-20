@@ -491,6 +491,95 @@ export async function generateViabilityPDF(
     y = statusBanner(doc, 'Pesquisa realizada na Receita Federal — Nenhuma colidencia empresarial encontrada.', y, M, CW, 'ok');
   }
 
+  // ─── SUB-BLOCO: Pesquisa de Uso no Mercado (Internet e CNPJ) ───────
+  y = pageGuard(doc, y, ph, M, 40, pw);
+
+  // Cabeçalho do sub-bloco
+  filledRect(doc, M, y, CW, 9, C.gray100, 2, C.gray200);
+  filledRect(doc, M, y, 3, 9, C.amber);
+  setFont(doc, 'bold', 7.5, C.amber);
+  doc.text('PESQUISA DE USO NO MERCADO (INTERNET E CNPJ)', M + 7, y + 6);
+  y += 13;
+
+  const webA = result.webAnalysis;
+  const cnpjSrcs = webA?.cnpjSources || [];
+  const socialPrfs = webA?.socialProfiles || [];
+  const hasMarketData = cnpjSrcs.length > 0 || socialPrfs.length > 0;
+
+  if (!hasMarketData) {
+    // Banner verde — nada encontrado
+    y = statusBanner(doc,
+      'Nao foram identificadas empresas ativas ou perfis relevantes com nome identico na internet ou bases publicas de CNPJ.',
+      y, M, CW, 'ok'
+    );
+  } else {
+    // Tabela de empresas encontradas via buscadores de CNPJ
+    if (cnpjSrcs.length > 0) {
+      y = pageGuard(doc, y, ph, M, 30, pw);
+      setFont(doc, 'bold', 7, C.gray700);
+      doc.text('Empresas encontradas:', M, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        margin: { left: M, right: M },
+        head: [['Nome Empresarial', 'CNPJ', 'Cidade/UF', 'Fonte', 'Situacao']],
+        body: cnpjSrcs.map(s => [
+          (s.name || '-').substring(0, 26),
+          s.cnpj || '-',
+          s.city ? `${s.city}/${s.state || ''}` : '-',
+          s.source || '-',
+          s.status || 'Verificar',
+        ]),
+        styles: { fontSize: 6.5, cellPadding: 2, lineColor: C.gray200, lineWidth: 0.2, textColor: C.gray700 },
+        headStyles: { fillColor: C.gray700, textColor: C.white, fontStyle: 'bold', fontSize: 6.5, cellPadding: 2.5 },
+        alternateRowStyles: { fillColor: C.gray50 },
+        theme: 'grid',
+      });
+      y = (doc as any).lastAutoTable.finalY + 5;
+    }
+
+    // Tabela de redes sociais encontradas
+    if (socialPrfs.length > 0) {
+      y = pageGuard(doc, y, ph, M, 30, pw);
+      setFont(doc, 'bold', 7, C.gray700);
+      doc.text('Redes Sociais Encontradas:', M, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        margin: { left: M, right: M },
+        head: [['Plataforma', 'Nome do Perfil', 'Link', 'Seguidores']],
+        body: socialPrfs.map(p => [
+          p.platform,
+          (p.profileName || '-').substring(0, 22),
+          (p.url || '-').substring(0, 40),
+          p.followers || '-',
+        ]),
+        styles: { fontSize: 6.5, cellPadding: 2, lineColor: C.gray200, lineWidth: 0.2, textColor: C.gray700 },
+        headStyles: { fillColor: C.blue, textColor: C.white, fontStyle: 'bold', fontSize: 6.5, cellPadding: 2.5 },
+        alternateRowStyles: { fillColor: C.blueLight },
+        theme: 'grid',
+      });
+      y = (doc as any).lastAutoTable.finalY + 5;
+    }
+  }
+
+  // Nota jurídica obrigatória (sempre exibida quando há dados de mercado mas sem conflito INPI)
+  {
+    const hasINPIConflict = result.inpiResults?.found && (result.inpiResults?.totalResults ?? 0) > 0;
+    y = pageGuard(doc, y, ph, M, 20, pw);
+    filledRect(doc, M, y, CW, 14, [255,251,235], 2, C.amber);
+    filledRect(doc, M, y, 3, 14, C.amber);
+    setFont(doc, 'bold', 6.5, C.amber);
+    doc.text('NOTA JURIDICA IMPORTANTE:', M + 7, y + 5);
+    setFont(doc, 'normal', 6, C.gray700);
+    const notaJuriText = hasINPIConflict
+      ? 'A analise juridica de colidencia marcaria e baseada EXCLUSIVAMENTE na pesquisa no INPI. Empresas abertas nao constituem direito marcario.'
+      : 'A existencia de empresas com nome identico no mercado NAO implica direito marcario, caso nao haja registro valido no INPI. O direito sobre a marca e adquirido pelo registro.';
+    const notaJuriLines = doc.splitTextToSize(notaJuriText, CW - 12);
+    doc.text(notaJuriLines, M + 7, y + 10.5);
+    y += 20;
+  }
+
   // ═══════════════════════════════════════
   // 6. PRESENCA WEB
   // ═══════════════════════════════════════
