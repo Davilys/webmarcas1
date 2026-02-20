@@ -502,7 +502,7 @@ export default function Documentos() {
   const fetchDocs = async (uid: string) => {
     setLoading(true);
     const [{ data: docs }, { data: contracts }] = await Promise.all([
-      supabase.from('documents').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+      supabase.from('documents').select('*').eq('user_id', uid).is('contract_id', null).order('created_at', { ascending: false }),
       supabase.from('contracts')
         .select('id, subject, signature_status, blockchain_hash, created_at, visible_to_client, document_type')
         .eq('user_id', uid).eq('visible_to_client', true)
