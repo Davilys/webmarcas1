@@ -84,10 +84,20 @@ function getDistinctivityScore(brandName: string): number {
 // Limpa artefatos do laudo gerado por IA
 function cleanLaudo(raw: string): string {
   return raw
+    // Remove linhas que contêm APENAS % (com ou sem espaços entre eles)
+    .replace(/^[\s%]+$/gm, '')
+    // Remove bloco de cabeçalho gerado pelo AI que duplica o cabeçalho do PDF
+    .replace(/^LAUDO T[ÉE]CNICO DE VIABILIDADE.*$/gim, '')
+    .replace(/^Protocolo:\s*WM-.*$/gim, '')
+    .replace(/^Data:\s*\d.*$/gim, '')
+    // Remove sequências de % sem espaços (3 ou mais)
     .replace(/[%]{3,}/g, '')
-    .replace(/={5,}/g, '---')
+    // Remove sequências de % com espaços entre eles  ex: % % % % %
+    .replace(/(% *){3,}/g, '')
+    .replace(/={5,}/g, '')
     .replace(/#{1,6}\s*/g, '')
     .replace(/\*{2,}/g, '')
+    // Colapsa múltiplas linhas em branco
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -220,57 +230,57 @@ export async function generateViabilityPDF(
   const logoData = await loadLogo();
 
   // ═══════════════════════════════════════
-  // CABEÇALHO PREMIUM — NAVY + GOLD
+  // PAPEL TIMBRADO — LIMPO (estilo contrato/INPI)
   // ═══════════════════════════════════════
-  const headerH = 54;
-  filledRect(doc, 0, 0, pw, headerH, C.navy);
-  // Faixa dourada lateral esquerda
-  filledRect(doc, 0, 0, 4, headerH, C.gold);
-  // Linha dourada inferior
-  filledRect(doc, 0, headerH, pw, 1.5, C.gold);
-  // Círculos decorativos no canto direito (sem texto)
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.25);
-  for (let i = 0; i < 3; i++) {
-    doc.circle(pw + 2, -2, 20 + i * 16, 'S');
-  }
 
-  // Logo (discreto, 20x20 mm, sem borda)
+  // Faixa azul-marinho fina no topo
+  filledRect(doc, 0, 0, pw, 6, C.navy);
+  // Linha dourada abaixo
+  filledRect(doc, 0, 6, pw, 1.5, C.gold);
+
+  let y = 11;
+
+  // Logo à esquerda
   if (logoData) {
-    try { doc.addImage(logoData, 'PNG', 10, 12, 22, 22); } catch { /* skip */ }
+    try { doc.addImage(logoData, 'PNG', M, y + 1, 18, 18); } catch { /* skip */ }
   }
 
-  // Nome WebMarcas + tagline
-  setFont(doc, 'bold', 20, C.white);
-  doc.text('WebMarcas', 38, 23);
-  setFont(doc, 'normal', 7, [180, 200, 240]);
-  doc.text('Registro Profissional de Marcas no INPI  |  www.webmarcas.net', 38, 30);
+  // Texto ao lado do logo
+  const textX = M + 22;
+  setFont(doc, 'bold', 18, C.navy);
+  doc.text('WEBMARCAS', textX, y + 8);
+  setFont(doc, 'normal', 7.5, [120, 130, 150]);
+  doc.text('Propriedade Intelectual e Registro de Marcas no INPI', textX, y + 14);
 
-  // Badge LAUDO TECNICO — canto superior direito
-  const bW = 50, bH = 30, bX = pw - M - bW, bY = 10;
-  filledRect(doc, bX, bY, bW, bH, C.navyMid, 3);
-  filledRect(doc, bX, bY, bW, 2, C.gold, 0);
-  filledRect(doc, bX, bY, 2, bH, C.gold, 0);
-  setFont(doc, 'bold', 9, C.white);
-  doc.text('LAUDO TECNICO', bX + bW / 2, bY + 11, { align: 'center' });
-  setFont(doc, 'normal', 6, [180, 210, 255]);
-  doc.text('VIABILIDADE DE MARCA', bX + bW / 2, bY + 18, { align: 'center' });
-  doc.text('INPI · Receita Federal · Web · IA', bX + bW / 2, bY + 24, { align: 'center' });
+  // Informações da empresa à direita
+  setFont(doc, 'bold', 7, C.navy);
+  doc.text('CNPJ: 39.528.012/0001-29', pw - M, y + 4, { align: 'right' });
+  setFont(doc, 'normal', 6.5, [150, 150, 150]);
+  doc.text('Av. Brigadeiro Luiz Antonio, 2696', pw - M, y + 9, { align: 'right' });
+  doc.text('Centro — Sao Paulo/SP', pw - M, y + 14, { align: 'right' });
+  doc.text('www.webmarcas.net', pw - M, y + 19, { align: 'right' });
 
-  // Protocolo + data no rodapé do header
-  setFont(doc, 'normal', 6, C.gray400);
-  doc.text(`Protocolo: ${protocol}    Data: ${dateStr}`, M, headerH - 4);
+  // Dupla linha separadora
+  y += 23;
+  doc.setDrawColor(...C.navy); doc.setLineWidth(0.8);
+  doc.line(M, y, pw - M, y);
+  doc.setDrawColor(...C.gold); doc.setLineWidth(0.3);
+  doc.line(M, y + 1.5, pw - M, y + 1.5);
+  y += 8;
 
-  let y = headerH + 9;
+  // Badge de título centralizado
+  const badgeText = 'LAUDO TECNICO DE VIABILIDADE DE MARCA';
+  setFont(doc, 'bold', 10, C.white);
+  const badgeW = doc.getTextWidth(badgeText) + 16;
+  const badgeX = (pw - badgeW) / 2;
+  filledRect(doc, badgeX, y, badgeW, 9, C.navy, 1);
+  doc.text(badgeText, pw / 2, y + 6, { align: 'center' });
+  y += 13;
 
-  // ═══════════════════════════════════════
-  // TÍTULO PRINCIPAL
-  // ═══════════════════════════════════════
-  setFont(doc, 'bold', 13, C.navy);
-  doc.text('LAUDO TECNICO DE VIABILIDADE DE MARCA', M, y);
-  y += 3;
-  filledRect(doc, M, y, 72, 0.8, C.gold);
-  y += 9;
+  // Protocolo + data abaixo do badge
+  setFont(doc, 'normal', 6.5, [140, 140, 140]);
+  doc.text(`Protocolo: ${protocol}   |   ${dateStr}`, pw / 2, y, { align: 'center' });
+  y += 8;
 
   // ═══════════════════════════════════════
   // 1. DADOS DA CONSULTA
