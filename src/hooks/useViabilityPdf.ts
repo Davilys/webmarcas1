@@ -2,70 +2,70 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { type ViabilityResult } from '@/lib/api/viability';
 
-// ─── Cores da identidade WebMarcas ────────────────────────────────
+// ─── Paleta WebMarcas ──────────────────────────────────────────────
 const C = {
-  navy:    [10, 24, 54] as [number,number,number],
-  blue:    [37, 99, 235] as [number,number,number],
-  blueLight:[219,234,254] as [number,number,number],
-  gold:    [200,175,55] as [number,number,number],
-  goldLight:[253,246,215] as [number,number,number],
-  white:   [255,255,255] as [number,number,number],
-  gray50:  [248,250,252] as [number,number,number],
-  gray100: [241,245,249] as [number,number,number],
-  gray200: [226,232,240] as [number,number,number],
-  gray400: [148,163,184] as [number,number,number],
-  gray500: [100,116,139] as [number,number,number],
-  gray700: [51, 65, 85] as [number,number,number],
-  gray900: [15, 23, 42] as [number,number,number],
-  green:   [22,163,74] as [number,number,number],
-  greenBg: [240,253,244] as [number,number,number],
-  amber:   [217,119,6] as [number,number,number],
-  amberBg: [255,251,235] as [number,number,number],
-  red:     [220,38,38] as [number,number,number],
-  redBg:   [254,242,242] as [number,number,number],
-  purple:  [109,40,217] as [number,number,number],
-  purpleBg:[245,243,255] as [number,number,number],
-  orange:  [234,88,12] as [number,number,number],
-  orangeBg:[255,237,213] as [number,number,number],
+  navy:     [10, 24, 54]   as [number,number,number],
+  navyMid:  [18, 40, 90]   as [number,number,number],
+  blue:     [37, 99, 235]  as [number,number,number],
+  blueLight:[219,234,254]  as [number,number,number],
+  gold:     [200,175,55]   as [number,number,number],
+  goldLight:[253,246,215]  as [number,number,number],
+  white:    [255,255,255]  as [number,number,number],
+  gray50:   [248,250,252]  as [number,number,number],
+  gray100:  [241,245,249]  as [number,number,number],
+  gray200:  [226,232,240]  as [number,number,number],
+  gray400:  [148,163,184]  as [number,number,number],
+  gray500:  [100,116,139]  as [number,number,number],
+  gray700:  [51,  65,  85] as [number,number,number],
+  gray900:  [15,  23,  42] as [number,number,number],
+  green:    [22, 163, 74]  as [number,number,number],
+  greenBg:  [240,253,244]  as [number,number,number],
+  greenDark:[14, 110, 50]  as [number,number,number],
+  amber:    [217,119,  6]  as [number,number,number],
+  amberBg:  [255,251,235]  as [number,number,number],
+  red:      [220, 38,  38] as [number,number,number],
+  redBg:    [254,242,242]  as [number,number,number],
+  redDark:  [153, 27,  27] as [number,number,number],
+  purple:   [109, 40, 217] as [number,number,number],
+  purpleBg: [245,243,255]  as [number,number,number],
+  orange:   [234, 88,  12] as [number,number,number],
+  orangeBg: [255,237,213]  as [number,number,number],
 };
 
-function toBase64FromUrl(url: string): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      canvas.getContext('2d')?.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = () => resolve('');
-    img.src = url;
-  });
+// ─── Lógica de viabilidade real (sincronizada com frontend) ────────
+function computePdfLevel(result: ViabilityResult): 'high' | 'medium' | 'low' | 'blocked' {
+  if (result.level === 'blocked') return 'blocked';
+  const hasINPI = result.inpiResults?.found === true && (result.inpiResults?.totalResults ?? 0) > 0;
+  const hasCNPJ = result.companiesResult?.found === true && (result.companiesResult?.total ?? 0) > 0;
+  const hasWeb  = (result.webAnalysis?.webMentions ?? 0) > 2;
+  if (!hasINPI && !hasCNPJ && !hasWeb) return 'high';
+  if (!hasINPI && !hasCNPJ) return 'medium';
+  return 'low';
 }
 
-function getLevelColor(level: string, urgency?: number): [number,number,number] {
-  if (level === 'blocked') return C.red;
-  if (level === 'high') return C.green;
-  if ((urgency ?? 50) <= 50) return C.green;
-  if (level === 'medium') return C.amber;
+function getLevelColor(level: 'high'|'medium'|'low'|'blocked'): [number,number,number] {
+  if (level === 'high')    return C.green;
+  if (level === 'medium')  return C.amber;
   return C.red;
 }
 
-function getLevelLabel(level: string, urgency?: number): string {
+function getLevelLabel(level: 'high'|'medium'|'low'|'blocked'): string {
+  if (level === 'high')    return 'ALTA VIABILIDADE';
+  if (level === 'medium')  return 'VIABILIDADE MEDIA';
   if (level === 'blocked') return 'MARCA BLOQUEADA';
-  if (level === 'high') return 'ALTA VIABILIDADE';
-  if ((urgency ?? 50) <= 50) return 'ALTA VIABILIDADE';
-  if (level === 'medium') return 'VIABILIDADE MÉDIA';
   return 'BAIXA VIABILIDADE';
 }
 
-function getLevelVerdict(level: string, urgency?: number): string {
-  if (level === 'blocked') return '✗  BLOQUEADA';
-  if (level === 'high' || (urgency ?? 50) <= 50) return '✓  VIÁVEL';
-  if (level === 'medium') return '~  ATENÇÃO';
-  return '✗  RISCO';
+function getLevelVerdict(level: 'high'|'medium'|'low'|'blocked'): string {
+  if (level === 'high')    return 'VIAVEL';
+  if (level === 'medium')  return 'ATENCAO';
+  return 'RISCO';
+}
+
+function getUrgencyLabel(level: 'high'|'medium'|'low'|'blocked'): string {
+  if (level === 'high')   return 'TRANQUILO';
+  if (level === 'medium') return 'MODERADO';
+  return 'URGENTE';
 }
 
 function getDistinctivityScore(brandName: string): number {
@@ -81,11 +81,15 @@ function getDistinctivityScore(brandName: string): number {
   return Math.min(score, 100);
 }
 
-function getUrgencyLabel(score?: number): string {
-  if (score === undefined) return 'MODERADO';
-  if (score > 70) return 'URGENTE';
-  if (score > 40) return 'MODERADO';
-  return 'TRANQUILO';
+// Limpa artefatos do laudo gerado por IA
+function cleanLaudo(raw: string): string {
+  return raw
+    .replace(/[%]{3,}/g, '')
+    .replace(/={5,}/g, '---')
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*{2,}/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // ─── Helpers de desenho ────────────────────────────────────────────
@@ -95,25 +99,29 @@ function setFont(doc: jsPDF, style: 'normal'|'bold'|'italic', size: number, colo
   doc.setTextColor(...color);
 }
 
-function filledRect(doc: jsPDF, x: number, y: number, w: number, h: number, fill: [number,number,number], r = 0, stroke?: [number,number,number]) {
+function filledRect(
+  doc: jsPDF, x: number, y: number, w: number, h: number,
+  fill: [number,number,number], r = 0, stroke?: [number,number,number]
+) {
   doc.setFillColor(...fill);
   if (stroke) { doc.setDrawColor(...stroke); doc.setLineWidth(0.3); }
   if (r > 0) doc.roundedRect(x, y, w, h, r, r, stroke ? 'FD' : 'F');
   else doc.rect(x, y, w, h, stroke ? 'FD' : 'F');
 }
 
-function sectionHeader(doc: jsPDF, label: string, y: number, margin: number, pageWidth: number, accent: [number,number,number] = C.blue): number {
-  // fundo tênue
-  filledRect(doc, margin, y, pageWidth - margin * 2, 8, [236, 242, 252]);
-  // barra lateral colorida
-  filledRect(doc, margin, y, 3, 8, accent);
+function sectionHeader(
+  doc: jsPDF, label: string, y: number,
+  margin: number, pageWidth: number,
+  accent: [number,number,number] = C.blue
+): number {
+  filledRect(doc, margin, y, pageWidth - margin * 2, 9, [236,242,252]);
+  filledRect(doc, margin, y, 3, 9, accent);
   setFont(doc, 'bold', 8, accent);
-  doc.text(label.toUpperCase(), margin + 6, y + 5.5);
-  // linha separadora
+  doc.text(label.toUpperCase(), margin + 7, y + 6);
   doc.setDrawColor(...C.gray200);
   doc.setLineWidth(0.2);
-  doc.line(margin, y + 8.2, pageWidth - margin, y + 8.2);
-  return y + 14;
+  doc.line(margin, y + 9.3, pageWidth - margin, y + 9.3);
+  return y + 15;
 }
 
 function statusBanner(
@@ -121,20 +129,20 @@ function statusBanner(
   type: 'ok'|'warn'|'error'|'info'
 ): number {
   const map = {
-    ok:    { bg: C.greenBg,  border: C.green,  text: C.green  },
-    warn:  { bg: C.amberBg,  border: C.amber,  text: C.amber  },
-    error: { bg: C.redBg,    border: C.red,    text: C.red    },
-    info:  { bg: C.gray100,  border: C.gray400, text: C.gray700 },
+    ok:    { bg: C.greenBg, border: C.green, text: C.greenDark },
+    warn:  { bg: C.amberBg, border: C.amber, text: C.amber },
+    error: { bg: C.redBg,   border: C.red,   text: C.redDark },
+    info:  { bg: C.gray100, border: C.gray400, text: C.gray700 },
   };
   const s = map[type];
-  filledRect(doc, margin, y, cw, 9, s.bg, 2, s.border);
-  filledRect(doc, margin, y, 3, 9, s.border);
-  setFont(doc, 'bold', 8, s.text);
-  doc.text(text, margin + 6, y + 6);
-  return y + 14;
+  filledRect(doc, margin, y, cw, 10, s.bg, 2, s.border);
+  filledRect(doc, margin, y, 3, 10, s.border);
+  setFont(doc, 'bold', 7.5, s.text);
+  doc.text(text, margin + 7, y + 6.5);
+  return y + 15;
 }
 
-function pageGuard(doc: jsPDF, y: number, pageH: number, margin: number, needed = 60, pw: number = 210): number {
+function pageGuard(doc: jsPDF, y: number, pageH: number, margin: number, needed = 60, pw = 210): number {
   if (y > pageH - needed) {
     doc.addPage();
     addPageStrip(doc, pw, pageH);
@@ -145,10 +153,42 @@ function pageGuard(doc: jsPDF, y: number, pageH: number, margin: number, needed 
 
 function addPageStrip(doc: jsPDF, pw: number, _ph: number) {
   filledRect(doc, 0, 0, pw, 10, C.navy);
-  filledRect(doc, 0, 0, 3, 10, C.blue);
-  filledRect(doc, 0, 10, pw, 0.8, C.gold);
-  setFont(doc, 'bold', 6.5, C.gray400);
-  doc.text('WebMarcas — Laudo Técnico de Viabilidade de Marca', pw / 2, 6.8, { align: 'center' });
+  filledRect(doc, 0, 0, 3, 10, C.gold);
+  filledRect(doc, 0, 10, pw, 0.6, C.gold);
+  setFont(doc, 'normal', 6, C.gray400);
+  doc.text('WebMarcas — Laudo Tecnico de Viabilidade de Marca', pw / 2, 6.5, { align: 'center' });
+}
+
+// Logo via URL absoluta com fallback robusto
+function loadLogo(): Promise<string> {
+  return new Promise((resolve) => {
+    // Tenta carregar o logo-mark da WebMarcas
+    const urls = [
+      'https://webmarcas1.lovable.app/favicon.png',
+      window.location.origin + '/favicon.png',
+    ];
+    let tried = 0;
+    const tryNext = () => {
+      if (tried >= urls.length) { resolve(''); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width || 64;
+          canvas.height = img.height || 64;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          } else resolve('');
+        } catch { resolve(''); }
+      };
+      img.onerror = () => { tried++; tryNext(); };
+      img.src = urls[tried++];
+    };
+    tryNext();
+  });
 }
 
 // ─── GERADOR PRINCIPAL ─────────────────────────────────────────────
@@ -158,188 +198,202 @@ export async function generateViabilityPDF(
   result: ViabilityResult
 ): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pw = doc.internal.pageSize.getWidth();
-  const ph = doc.internal.pageSize.getHeight();
-  const M = 16;          // margem
-  const CW = pw - M * 2; // content width
-  const levelColor = getLevelColor(result.level, result.urgencyScore);
-  const levelLabel = getLevelLabel(result.level, result.urgencyScore);
+  const pw  = doc.internal.pageSize.getWidth();   // 210
+  const ph  = doc.internal.pageSize.getHeight();  // 297
+  const M   = 16;
+  const CW  = pw - M * 2;
+
+  // Nível real derivado dos dados (não do urgencyScore)
+  const pdfLevel   = computePdfLevel(result);
+  const levelColor = getLevelColor(pdfLevel);
+  const levelLabel = getLevelLabel(pdfLevel);
+  const verdict    = getLevelVerdict(pdfLevel);
+  const urgLabel   = getUrgencyLabel(pdfLevel);
+
   const protocol = `WM-${Date.now().toString(36).toUpperCase()}`;
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const timeStr = now.toLocaleString('pt-BR');
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const timeStr  = now.toLocaleString('pt-BR');
   const distinctScore = getDistinctivityScore(brandName);
 
+  // Carrega logo (não bloqueia o PDF se falhar)
+  const logoData = await loadLogo();
+
   // ═══════════════════════════════════════
-  // CABEÇALHO — PREMIUM NAVY + GOLD
+  // CABEÇALHO PREMIUM — NAVY + GOLD
   // ═══════════════════════════════════════
-  const headerH = 58;
+  const headerH = 54;
   filledRect(doc, 0, 0, pw, headerH, C.navy);
-  // Faixa azul lateral
-  filledRect(doc, 0, 0, 5, headerH, C.blue);
+  // Faixa dourada lateral esquerda
+  filledRect(doc, 0, 0, 4, headerH, C.gold);
   // Linha dourada inferior
-  filledRect(doc, 0, headerH, pw, 1.2, C.gold);
-  // Padrão decorativo — círculos suaves no canto direito
-  doc.setDrawColor(255,255,255);
-  doc.setLineWidth(0.3);
-  for (let i = 0; i < 4; i++) {
-    doc.setDrawColor(255,255,255);
-    doc.circle(pw - 5, -5, 18 + i * 14, 'S');
+  filledRect(doc, 0, headerH, pw, 1.5, C.gold);
+  // Círculos decorativos no canto direito (sem texto)
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.25);
+  for (let i = 0; i < 3; i++) {
+    doc.circle(pw + 2, -2, 20 + i * 16, 'S');
   }
 
-  // Logo
-  try {
-    const logo = await toBase64FromUrl('/favicon.png');
-    if (logo) doc.addImage(logo, 'PNG', 14, 13, 24, 24);
-  } catch { /* sem logo */ }
+  // Logo (discreto, 20x20 mm, sem borda)
+  if (logoData) {
+    try { doc.addImage(logoData, 'PNG', 10, 12, 22, 22); } catch { /* skip */ }
+  }
 
-  // Nome e tagline
-  setFont(doc, 'bold', 22, C.white);
-  doc.text('WebMarcas', 44, 24);
-  setFont(doc, 'normal', 8, C.gray400);
-  doc.text('Registro Profissional de Marcas no INPI  ·  www.webmarcas.net', 44, 31);
+  // Nome WebMarcas + tagline
+  setFont(doc, 'bold', 20, C.white);
+  doc.text('WebMarcas', 38, 23);
+  setFont(doc, 'normal', 7, [180, 200, 240]);
+  doc.text('Registro Profissional de Marcas no INPI  |  www.webmarcas.net', 38, 30);
 
-  // Badge "LAUDO TÉCNICO" no canto
-  const badgeX = pw - M - 52;
-  filledRect(doc, badgeX, 10, 52, 30, C.blue, 3);
-  filledRect(doc, badgeX, 10, 52, 2, C.gold, 0);
-  setFont(doc, 'bold', 9.5, C.white);
-  doc.text('LAUDO TÉCNICO', badgeX + 26, 22, { align: 'center' });
-  setFont(doc, 'normal', 6.5, [180,210,255]);
-  doc.text('VIABILIDADE DE MARCA', badgeX + 26, 28, { align: 'center' });
-  doc.text('INPI · Receita Federal · Web · IA', badgeX + 26, 34, { align: 'center' });
+  // Badge LAUDO TECNICO — canto superior direito
+  const bW = 50, bH = 30, bX = pw - M - bW, bY = 10;
+  filledRect(doc, bX, bY, bW, bH, C.navyMid, 3);
+  filledRect(doc, bX, bY, bW, 2, C.gold, 0);
+  filledRect(doc, bX, bY, 2, bH, C.gold, 0);
+  setFont(doc, 'bold', 9, C.white);
+  doc.text('LAUDO TECNICO', bX + bW / 2, bY + 11, { align: 'center' });
+  setFont(doc, 'normal', 6, [180, 210, 255]);
+  doc.text('VIABILIDADE DE MARCA', bX + bW / 2, bY + 18, { align: 'center' });
+  doc.text('INPI · Receita Federal · Web · IA', bX + bW / 2, bY + 24, { align: 'center' });
 
-  // Protocolo + Data
-  setFont(doc, 'normal', 6.5, C.gray400);
-  doc.text(`Protocolo: ${protocol}    ·    Data: ${dateStr}`, M, 52);
+  // Protocolo + data no rodapé do header
+  setFont(doc, 'normal', 6, C.gray400);
+  doc.text(`Protocolo: ${protocol}    Data: ${dateStr}`, M, headerH - 4);
 
-  let y = headerH + 8;
+  let y = headerH + 9;
 
   // ═══════════════════════════════════════
-  // TÍTULO
+  // TÍTULO PRINCIPAL
   // ═══════════════════════════════════════
-  setFont(doc, 'bold', 14, C.navy);
-  doc.text('LAUDO TÉCNICO DE VIABILIDADE DE MARCA', M, y);
+  setFont(doc, 'bold', 13, C.navy);
+  doc.text('LAUDO TECNICO DE VIABILIDADE DE MARCA', M, y);
   y += 3;
-  filledRect(doc, M, y, 80, 0.8, C.gold);
-  y += 8;
+  filledRect(doc, M, y, 72, 0.8, C.gold);
+  y += 9;
 
   // ═══════════════════════════════════════
   // 1. DADOS DA CONSULTA
   // ═══════════════════════════════════════
   y = sectionHeader(doc, '1. Dados da Consulta', y, M, pw, C.blue);
 
-  filledRect(doc, M, y, CW, 30, C.gray50, 3, C.gray200);
-  // Linhas verticais divisoras
+  filledRect(doc, M, y, CW, 32, C.gray50, 3, C.gray200);
   doc.setDrawColor(...C.gray200);
-  doc.setLineWidth(0.2);
-  doc.line(M + 60, y + 3, M + 60, y + 27);
-  doc.line(M + 120, y + 3, M + 120, y + 27);
+  doc.setLineWidth(0.15);
+  doc.line(M + 62, y + 4, M + 62, y + 28);
+  doc.line(M + 124, y + 4, M + 124, y + 28);
 
-  const cols = [M + 5, M + 65, M + 125];
-  setFont(doc, 'bold', 6.5, C.gray500);
+  const cols = [M + 5, M + 67, M + 129];
+  setFont(doc, 'bold', 6, C.gray500);
   doc.text('MARCA PESQUISADA', cols[0], y + 7);
   doc.text('RAMO DE ATIVIDADE', cols[1], y + 7);
   doc.text('TIPO DE PESQUISA', cols[2], y + 7);
 
-  setFont(doc, 'bold', 10, C.navy);
-  doc.text(brandName.toUpperCase().substring(0, 18), cols[0], y + 15);
-  setFont(doc, 'bold', 8.5, C.gray700);
-  const areaShort = doc.splitTextToSize(businessArea, 52);
-  doc.text(areaShort[0] || businessArea, cols[1], y + 15);
-  setFont(doc, 'bold', 8.5, C.blue);
-  doc.text('EXATA', cols[2], y + 15);
+  setFont(doc, 'bold', 11, C.navy);
+  doc.text(brandName.toUpperCase().substring(0, 16), cols[0], y + 16);
+  setFont(doc, 'bold', 8, C.gray700);
+  const areaWords = doc.splitTextToSize(businessArea, 54);
+  doc.text(areaWords[0] || businessArea, cols[1], y + 16);
+  setFont(doc, 'bold', 8, C.blue);
+  doc.text('EXATA', cols[2], y + 16);
 
-  setFont(doc, 'normal', 6.5, C.gray400);
-  doc.text('CLASSES NCL', cols[0], y + 22);
-  doc.text('DATA / HORA', cols[1], y + 22);
+  setFont(doc, 'normal', 6, C.gray400);
+  doc.text('CLASSES NCL', cols[0], y + 23);
+  doc.text('DATA / HORA', cols[1], y + 23);
   setFont(doc, 'normal', 7, C.gray700);
-  doc.text((result.classes || []).join(', ') || 'A definir', cols[0], y + 27);
-  doc.text(timeStr.substring(0, 22), cols[1], y + 27);
-  y += 36;
+  doc.text((result.classes || []).join(', ') || 'A definir', cols[0], y + 29);
+  doc.text(timeStr.substring(0, 22), cols[1], y + 29);
+  y += 38;
 
   // ═══════════════════════════════════════
-  // 2. RESULTADO PRINCIPAL
+  // 2. RESULTADO PRINCIPAL — CARD REDESENHADO
   // ═══════════════════════════════════════
-  y = sectionHeader(doc, '2. Resultado da Análise', y, M, pw, levelColor);
+  y = sectionHeader(doc, '2. Resultado da Analise', y, M, pw, levelColor);
 
-  // Card grande colorido
-  filledRect(doc, M, y, CW, 36, levelColor, 4);
-  // Painel claro à direita
-  filledRect(doc, M + 62, y + 1, CW - 63, 34, C.white, 0);
-  filledRect(doc, M + 62, y + 1, CW - 63, 34, [0,0,0], 0);
-  // recolorir branco sujo
-  doc.setFillColor(250, 252, 255);
-  doc.roundedRect(M + 62, y + 1, CW - 63, 34, 3, 3, 'F');
+  const cardH = 38;
+  const leftW = 70;
 
-  // Veredicto (lado esquerdo colorido)
-  setFont(doc, 'bold', 13, C.white);
-  doc.text(getLevelVerdict(result.level, result.urgencyScore), M + 31, y + 14, { align: 'center' });
-  setFont(doc, 'bold', 7, C.white);
-  doc.text(levelLabel, M + 31, y + 21, { align: 'center' });
-  // Score urgência no lado colorido
-  if (result.urgencyScore !== undefined) {
-    setFont(doc, 'bold', 18, [255,255,255]);
-    doc.text(`${result.urgencyScore}`, M + 31, y + 32, { align: 'center' });
-  }
+  // Fundo total cinza claro
+  filledRect(doc, M, y, CW, cardH, C.gray50, 4, C.gray200);
 
-  // Texto direito
-  setFont(doc, 'bold', 10, C.navy);
-  const titleClean = (result.title || levelLabel).substring(0, 45);
-  doc.text(titleClean, M + 66, y + 10);
-  setFont(doc, 'normal', 8, C.gray700);
-  const descLines = doc.splitTextToSize(result.description || '', CW - 70);
-  doc.text(descLines.slice(0, 3), M + 66, y + 18);
+  // Painel colorido esquerdo
+  filledRect(doc, M, y, leftW, cardH, levelColor, 4);
+  // Recolorir canto direito do painel esquerdo (sem arredondamento)
+  filledRect(doc, M + leftW - 4, y, 4, cardH, levelColor);
 
-  // Label urgência
-  if (result.urgencyScore !== undefined) {
-    setFont(doc, 'bold', 6.5, C.gray500);
-    doc.text(`URGÊNCIA: ${getUrgencyLabel(result.urgencyScore)}`, M + 66, y + 33);
-  }
-  y += 42;
+  // Veredicto no painel colorido — texto ASCII limpo
+  setFont(doc, 'bold', 7, [255, 255, 255]);
+  doc.text(verdict, M + leftW / 2, y + 11, { align: 'center' });
+
+  // Linha divisória interna
+  filledRect(doc, M + leftW / 2 - 15, y + 14, 30, 0.5, [255, 255, 255, 0.5] as unknown as [number,number,number]);
+
+  setFont(doc, 'bold', 11, C.white);
+  doc.text(levelLabel, M + leftW / 2, y + 22, { align: 'center' });
+
+  // Urgência label embaixo
+  const urgBg: [number,number,number] = pdfLevel === 'high' ? [14,110,50] : pdfLevel === 'medium' ? [146,64,14] : [153,27,27];
+  filledRect(doc, M + 8, y + 28, leftW - 16, 7, urgBg, 2);
+  setFont(doc, 'bold', 6.5, C.white);
+  doc.text(`URGENCIA: ${urgLabel}`, M + leftW / 2, y + 33, { align: 'center' });
+
+  // Painel direito — título e descrição
+  const rightX = M + leftW + 6;
+  const rightW = CW - leftW - 8;
+  setFont(doc, 'bold', 9.5, C.navy);
+  const titleClean = (result.title || levelLabel).substring(0, 42);
+  doc.text(titleClean, rightX, y + 10);
+
+  doc.setDrawColor(...C.gray200);
+  doc.setLineWidth(0.2);
+  doc.line(rightX, y + 13, rightX + rightW, y + 13);
+
+  setFont(doc, 'normal', 7.5, C.gray700);
+  const descLines = doc.splitTextToSize(result.description || '', rightW);
+  doc.text(descLines.slice(0, 3), rightX, y + 19);
+
+  y += cardH + 8;
 
   // ═══════════════════════════════════════
-  // 3. ANÁLISE DE PADRÕES DA MARCA
+  // 3. ANALISE DE PADRÕES DA MARCA
   // ═══════════════════════════════════════
-  y = sectionHeader(doc, '3. Análise de Padrões da Marca', y, M, pw, C.blue);
+  y = sectionHeader(doc, '3. Analise de Padroes da Marca', y, M, pw, C.blue);
 
   filledRect(doc, M, y, CW, 38, C.gray50, 3, C.gray200);
 
   // Score badge
-  filledRect(doc, pw - M - 40, y + 4, 40, 14, C.greenBg, 2, C.green);
-  setFont(doc, 'bold', 9, C.green);
-  doc.text(`${distinctScore}/100  ALTO`, pw - M - 20, y + 13, { align: 'center' });
+  const scoreColor = distinctScore >= 75 ? C.green : distinctScore >= 50 ? C.amber : C.red;
+  const scoreBg    = distinctScore >= 75 ? C.greenBg : distinctScore >= 50 ? C.amberBg : C.redBg;
+  filledRect(doc, pw - M - 42, y + 4, 42, 14, scoreBg, 2, scoreColor);
+  setFont(doc, 'bold', 8.5, scoreColor);
+  doc.text(`${distinctScore}/100  ALTO`, pw - M - 21, y + 13, { align: 'center' });
 
-  setFont(doc, 'bold', 7, C.gray500);
+  setFont(doc, 'bold', 6.5, C.gray500);
   doc.text('SCORE DE DISTINTIVIDADE', M + 5, y + 9);
 
-  // Barra de progresso
   const barX = M + 5, barY = y + 13, barW = CW - 52;
-  filledRect(doc, barX, barY, barW, 5, C.gray200, 2.5);
-  filledRect(doc, barX, barY, barW * (distinctScore / 100), 5, C.green, 2.5);
+  filledRect(doc, barX, barY, barW, 5, C.gray200, 2);
+  filledRect(doc, barX, barY, barW * (distinctScore / 100), 5, scoreColor, 2);
 
-  // Checklist 2 colunas
   const checks = [
     `Comprimento adequado (${brandName.length} caracteres)`,
-    'Marca inventada/distintiva — maior proteção',
-    `"${brandName.toUpperCase()}" tem boas características`,
+    'Marca inventada/distintiva — maior protecao',
+    `"${brandName.toUpperCase()}" tem boas caracteristicas`,
     'Baixa probabilidade de conflitos',
     'Recomendamos prosseguir com o registro',
   ];
-  const col1Checks = checks.slice(0, 3);
-  const col2Checks = checks.slice(3);
   let cy = barY + 9;
-  col1Checks.forEach(c => {
+  checks.slice(0, 3).forEach(c => {
     setFont(doc, 'bold', 7, C.green);
-    doc.text('✓', M + 5, cy);
+    doc.text('+', M + 5, cy);
     setFont(doc, 'normal', 7, C.gray700);
     doc.text(c, M + 10, cy);
     cy += 5;
   });
   cy = barY + 9;
-  col2Checks.forEach(c => {
+  checks.slice(3).forEach(c => {
     setFont(doc, 'bold', 7, C.green);
-    doc.text('✓', M + CW / 2, cy);
+    doc.text('+', M + CW / 2, cy);
     setFont(doc, 'normal', 7, C.gray700);
     doc.text(c, M + CW / 2 + 5, cy);
     cy += 5;
@@ -353,17 +407,24 @@ export async function generateViabilityPDF(
   y = sectionHeader(doc, '4. Pesquisa na Base do INPI / WIPO', y, M, pw, C.navy);
 
   if (result.inpiResults) {
-    if (result.inpiResults.conflicts.length > 0) {
+    if (result.inpiResults.conflicts && result.inpiResults.conflicts.length > 0) {
       setFont(doc, 'italic', 7, C.gray500);
-      doc.text(`Fonte: ${result.inpiResults.source}  ·  ${result.inpiResults.totalResults} colidência(s) encontrada(s)`, M, y);
+      doc.text(
+        `Fonte: ${result.inpiResults.source || 'Base INPI'}  ·  ${result.inpiResults.totalResults} colidencia(s) encontrada(s)`,
+        M, y
+      );
       y += 5;
       autoTable(doc, {
         startY: y,
         margin: { left: M, right: M },
-        head: [['Nº Processo', 'Marca', 'Situação', 'Titular', 'País', 'Classe']],
+        head: [['No Processo', 'Marca', 'Situacao', 'Titular', 'Pais', 'Classe']],
         body: result.inpiResults.conflicts.slice(0, 8).map(c => [
-          c.processo || '-', c.marca || '-', c.situacao || '-',
-          (c.titular || 'Não informado').substring(0, 22), c.pais || '-', c.classe || '-'
+          c.processo || '-',
+          c.marca || '-',
+          c.situacao || '-',
+          (c.titular || 'Nao informado').substring(0, 22),
+          c.pais || '-',
+          c.classe || '-',
         ]),
         styles: { fontSize: 7, cellPadding: 2.5, lineColor: C.gray200, lineWidth: 0.2, textColor: C.gray700 },
         headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7, cellPadding: 3 },
@@ -372,32 +433,38 @@ export async function generateViabilityPDF(
       });
       y = (doc as any).lastAutoTable.finalY + 6;
     } else {
-      y = statusBanner(doc, '✓  Nenhuma colidência direta encontrada na base oficial do INPI para esta marca.', y, M, CW, 'ok');
+      y = statusBanner(doc, 'Nenhuma colidencia direta encontrada na base oficial do INPI para esta marca.', y, M, CW, 'ok');
       setFont(doc, 'italic', 6.5, C.gray400);
-      doc.text(`Fonte: ${result.inpiResults.source || 'Base INPI'}`, M, y - 8);
+      doc.text(`Fonte: ${result.inpiResults.source || 'Base INPI'}`, M, y - 9);
     }
   } else {
-    y = statusBanner(doc, '✓  Pesquisa realizada diretamente na base oficial do INPI — Nenhuma colidência encontrada.', y, M, CW, 'ok');
+    y = statusBanner(doc, 'Pesquisa realizada diretamente na base oficial do INPI — Nenhuma colidencia encontrada.', y, M, CW, 'ok');
   }
 
   // ═══════════════════════════════════════
-  // 5. COLIDÊNCIA EMPRESARIAL CNPJ
+  // 5. COLIDENCIA EMPRESARIAL CNPJ
   // ═══════════════════════════════════════
   y = pageGuard(doc, y, ph, M, 55, pw);
-  y = sectionHeader(doc, '5. Colidência Empresarial — Receita Federal (CNPJ)', y, M, pw, C.amber);
+  y = sectionHeader(doc, '5. Colidencia Empresarial — Receita Federal (CNPJ)', y, M, pw, C.amber);
 
   if (result.companiesResult) {
-    if (result.companiesResult.companies.length > 0) {
+    if (result.companiesResult.companies && result.companiesResult.companies.length > 0) {
       setFont(doc, 'italic', 7, C.gray500);
-      doc.text(`${result.companiesResult.total} empresa(s) com nome idêntico encontrada(s) — colidência por nome exato`, M, y);
+      doc.text(
+        `${result.companiesResult.total} empresa(s) com nome identico encontrada(s) — colidencia por nome exato`,
+        M, y
+      );
       y += 5;
       autoTable(doc, {
         startY: y,
         margin: { left: M, right: M },
-        head: [['Razão Social', 'CNPJ', 'Status', 'Cidade/UF', 'Abertura']],
+        head: [['Razao Social', 'CNPJ', 'Status', 'Cidade/UF', 'Abertura']],
         body: result.companiesResult.companies.slice(0, 6).map(c => [
-          (c.name || '-').substring(0, 30), c.cnpj || '-', c.status || '-',
-          `${c.city || '-'}/${c.state || '-'}`, c.opened || '-'
+          (c.name || '-').substring(0, 28),
+          c.cnpj || '-',
+          c.status || '-',
+          `${c.city || '-'}/${c.state || '-'}`,
+          c.opened || '-',
         ]),
         styles: { fontSize: 7, cellPadding: 2.5, lineColor: C.gray200, lineWidth: 0.2, textColor: C.gray700 },
         headStyles: { fillColor: C.amber, textColor: C.white, fontStyle: 'bold', fontSize: 7, cellPadding: 3 },
@@ -406,48 +473,49 @@ export async function generateViabilityPDF(
       });
       y = (doc as any).lastAutoTable.finalY + 4;
 
-      // Nota jurídica
       filledRect(doc, M, y, CW, 14, C.amberBg, 2, C.amber);
       filledRect(doc, M, y, 3, 14, C.amber);
       setFont(doc, 'bold', 7, C.amber);
-      doc.text('NOTA JURÍDICA:', M + 6, y + 5.5);
+      doc.text('NOTA JURIDICA:', M + 7, y + 5.5);
       setFont(doc, 'normal', 6.5, C.gray700);
-      doc.text('A colidência empresarial é avaliada por nome IDÊNTICO, não semelhante. Empresas ativas com CNPJ podem', M + 6, y + 10);
-      doc.text('gerar oposição ao pedido de registro de marca junto ao INPI.', M + 6, y + 14);
+      const notaLines = doc.splitTextToSize(
+        'A colidencia empresarial e avaliada por nome IDENTICO, nao semelhante. Empresas ativas com CNPJ podem gerar oposicao ao pedido de registro de marca junto ao INPI.',
+        CW - 12
+      );
+      doc.text(notaLines, M + 7, y + 10.5);
       y += 20;
     } else {
-      y = statusBanner(doc, '✓  Nenhuma empresa com nome idêntico encontrada na Receita Federal (CNPJ).', y, M, CW, 'ok');
+      y = statusBanner(doc, 'Nenhuma empresa com nome identico encontrada na Receita Federal (CNPJ).', y, M, CW, 'ok');
     }
   } else {
-    y = statusBanner(doc, '✓  Pesquisa realizada na Receita Federal — Nenhuma colidência empresarial encontrada.', y, M, CW, 'ok');
+    y = statusBanner(doc, 'Pesquisa realizada na Receita Federal — Nenhuma colidencia empresarial encontrada.', y, M, CW, 'ok');
   }
 
   // ═══════════════════════════════════════
-  // 6. PRESENÇA WEB
+  // 6. PRESENCA WEB
   // ═══════════════════════════════════════
   y = pageGuard(doc, y, ph, M, 60, pw);
-  y = sectionHeader(doc, '6. Análise de Presença Web e Mercado', y, M, pw, C.navy);
+  y = sectionHeader(doc, '6. Analise de Presenca Web e Mercado', y, M, pw, C.navy);
 
   if (result.webAnalysis) {
-    // Cards de canais
     const channels = [
-      { label: 'Google Meu Negócio / Maps', found: result.webAnalysis.googleMeuNegocio },
-      { label: 'LinkedIn', found: result.webAnalysis.linkedin },
-      { label: `Menções na Web (${result.webAnalysis.webMentions})`, found: result.webAnalysis.webMentions > 3 },
+      { label: 'Google Meu Negocio / Maps', found: result.webAnalysis.googleMeuNegocio },
+      { label: 'LinkedIn',                  found: result.webAnalysis.linkedin },
+      { label: `Mencoes na Web (${result.webAnalysis.webMentions})`, found: result.webAnalysis.webMentions > 2 },
     ];
     const cardW = (CW - 8) / 3;
     channels.forEach((ch, i) => {
       const cx = M + i * (cardW + 4);
-      const bg = ch.found ? C.redBg : C.greenBg;
-      const border = ch.found ? C.red : C.green;
-      const textC = ch.found ? C.red : C.green;
-      filledRect(doc, cx, y, cardW, 16, bg, 2, border);
-      setFont(doc, 'bold', 7.5, textC);
-      doc.text(ch.found ? 'DETECTADO' : 'NÃO DETECTADO', cx + cardW / 2, y + 7, { align: 'center' });
+      const bg  = ch.found ? C.redBg   : C.greenBg;
+      const bdr = ch.found ? C.red     : C.green;
+      const tc  = ch.found ? C.redDark : C.greenDark;
+      filledRect(doc, cx, y, cardW, 18, bg, 2, bdr);
+      setFont(doc, 'bold', 7, tc);
+      doc.text(ch.found ? 'DETECTADO' : 'NAO DETECTADO', cx + cardW / 2, y + 8, { align: 'center' });
       setFont(doc, 'normal', 6, C.gray700);
-      doc.text(ch.label, cx + cardW / 2, y + 13, { align: 'center' });
+      doc.text(ch.label, cx + cardW / 2, y + 14, { align: 'center' });
     });
-    y += 22;
+    y += 24;
 
     if (result.webAnalysis.summary) {
       setFont(doc, 'italic', 7, C.gray500);
@@ -456,26 +524,27 @@ export async function generateViabilityPDF(
       y += sumLines.slice(0, 3).length * 4.5 + 4;
     }
   } else {
-    y = statusBanner(doc, 'Análise de presença web realizada — dados não disponíveis nesta consulta.', y, M, CW, 'info');
+    y = statusBanner(doc, 'Analise de presenca web realizada — dados nao disponiveis nesta consulta.', y, M, CW, 'info');
   }
 
   // ═══════════════════════════════════════
-  // 7. CONCLUSÃO TÉCNICA
+  // 7. CONCLUSAO TECNICA
   // ═══════════════════════════════════════
-  y = pageGuard(doc, y, ph, M, 60, pw);
-  y = sectionHeader(doc, '7. Conclusão Técnica', y, M, pw, levelColor);
+  y = pageGuard(doc, y, ph, M, 55, pw);
+  y = sectionHeader(doc, '7. Conclusao Tecnica', y, M, pw, levelColor);
 
-  filledRect(doc, M, y, CW, 20, C.gray50, 3, levelColor);
-  filledRect(doc, M, y, 4, 20, levelColor);
-  setFont(doc, 'bold', 10, levelColor);
+  filledRect(doc, M, y, CW, 22, C.gray50, 3, levelColor);
+  filledRect(doc, M, y, 4, 22, levelColor);
+  setFont(doc, 'bold', 9.5, levelColor);
   doc.text(`A marca apresenta ${levelLabel} de registro.`, M + 8, y + 9);
-  setFont(doc, 'normal', 8, C.gray700);
-  const noConflict = !result.inpiResults?.found && !result.companiesResult?.found;
-  const concl = noConflict
-    ? 'Não foram encontradas marcas idênticas nas bases do INPI que possam impedir o registro.'
-    : 'Foram identificadas referências que merecem atenção antes do pedido de registro.';
-  doc.text(concl, M + 8, y + 16);
-  y += 26;
+  setFont(doc, 'normal', 7.5, C.gray700);
+  const hasConflict = (result.inpiResults?.found && (result.inpiResults?.totalResults ?? 0) > 0) ||
+                      (result.companiesResult?.found && (result.companiesResult?.total ?? 0) > 0);
+  const conclText = hasConflict
+    ? 'Foram identificadas referencias que merecem atencao antes do pedido de registro.'
+    : 'Nao foram encontradas marcas identicas nas bases do INPI que possam impedir o registro.';
+  doc.text(conclText, M + 8, y + 17);
+  y += 28;
 
   // ═══════════════════════════════════════
   // 8. CLASSES RECOMENDADAS
@@ -487,10 +556,10 @@ export async function generateViabilityPDF(
     autoTable(doc, {
       startY: y,
       margin: { left: M, right: M },
-      head: [['Classe NCL', 'Descrição e Abrangência']],
+      head: [['Classe NCL', 'Descricao e Abrangencia']],
       body: result.classes.map((cls, i) => [
         `Classe ${cls}`,
-        result.classDescriptions?.[i] || `Classe NCL ${cls} — conforme descrição do INPI para o ramo informado.`,
+        result.classDescriptions?.[i] || `Classe NCL ${cls} — conforme descricao do INPI para o ramo informado.`,
       ]),
       styles: { fontSize: 7.5, cellPadding: 3, lineColor: C.gray200, lineWidth: 0.2, textColor: C.gray700 },
       headStyles: { fillColor: C.blue, textColor: C.white, fontStyle: 'bold', fontSize: 8, cellPadding: 3 },
@@ -505,32 +574,34 @@ export async function generateViabilityPDF(
   }
 
   // ═══════════════════════════════════════
-  // 9. ORIENTAÇÃO JURÍDICA
+  // 9. ORIENTACAO JURIDICA
   // ═══════════════════════════════════════
   y = pageGuard(doc, y, ph, M, 55, pw);
-  y = sectionHeader(doc, '9. Orientação Jurídica', y, M, pw, C.purple);
+  y = sectionHeader(doc, '9. Orientacao Juridica', y, M, pw, C.purple);
 
-  filledRect(doc, M, y, CW, 26, C.purpleBg, 3, [167,139,250]);
-  filledRect(doc, M, y, 4, 26, C.purple);
+  filledRect(doc, M, y, CW, 28, C.purpleBg, 3, [167,139,250]);
+  filledRect(doc, M, y, 4, 28, C.purple);
   setFont(doc, 'bold', 8, C.purple);
-  doc.text('RECOMENDAÇÃO:', M + 8, y + 8);
+  doc.text('RECOMENDACAO:', M + 8, y + 9);
   setFont(doc, 'normal', 7.5, [49,46,129]);
   const oriText = result.classes && result.classes.length > 1
-    ? `O ideal é registrar nas ${result.classes.length} classes indicadas para máxima proteção legal. Se a questão for financeira, registre urgente na classe principal (Classe ${result.classes[0]}) e amplie o escopo posteriormente.`
-    : 'Registrar na classe principal identificada garante a proteção da marca. O direito de uso exclusivo é adquirido pelo registro validamente expedido pelo INPI.';
+    ? `O ideal e registrar nas ${result.classes.length} classes indicadas para maxima protecao legal. Se a questao for financeira, registre na classe principal (Classe ${result.classes[0]}) e amplie o escopo posteriormente.`
+    : 'Registrar na classe principal identificada garante a protecao da marca. O direito de uso exclusivo e adquirido pelo registro validamente expedido pelo INPI.';
   const oriLines = doc.splitTextToSize(oriText, CW - 14);
-  doc.text(oriLines, M + 8, y + 16);
-  y += 32;
+  doc.text(oriLines, M + 8, y + 18);
+  y += 34;
 
   // ═══════════════════════════════════════
-  // 10. PARECER TÉCNICO-JURÍDICO (laudo IA)
+  // 10. PARECER TECNICO-JURIDICO (laudo IA)
   // ═══════════════════════════════════════
   if (result.laudo) {
     y = pageGuard(doc, y, ph, M, 55, pw);
-    y = sectionHeader(doc, '10. Parecer Técnico-Jurídico Completo', y, M, pw, C.navy);
+    y = sectionHeader(doc, '10. Parecer Tecnico-Juridico Completo', y, M, pw, C.navy);
 
+    // Limpa artefatos do laudo IA
+    const laudoClean = cleanLaudo(result.laudo);
     setFont(doc, 'normal', 7.5, C.gray700);
-    const laudoLines = doc.splitTextToSize(result.laudo, CW);
+    const laudoLines = doc.splitTextToSize(laudoClean, CW);
     for (const line of laudoLines) {
       if (y > ph - M - 22) {
         doc.addPage();
@@ -538,34 +609,37 @@ export async function generateViabilityPDF(
         y = 22;
       }
       doc.text(line, M, y);
-      y += 4.2;
+      y += 4.5;
     }
     y += 6;
   }
 
   // ═══════════════════════════════════════
-  // BOX DE URGÊNCIA
+  // BOX URGENCIA
   // ═══════════════════════════════════════
   y = pageGuard(doc, y, ph, M, 30, pw);
-  filledRect(doc, M, y, CW, 22, C.orangeBg, 3, C.orange);
-  filledRect(doc, M, y, 4, 22, C.orange);
-  setFont(doc, 'bold', 9, [154,52,18]);
-  doc.text('⚠  IMPORTANTE — O DONO DA MARCA É QUEM REGISTRA PRIMEIRO!', M + 8, y + 8);
+  filledRect(doc, M, y, CW, 24, C.orangeBg, 3, C.orange);
+  filledRect(doc, M, y, 4, 24, C.orange);
+  setFont(doc, 'bold', 8.5, [154,52,18]);
+  doc.text('IMPORTANTE — O DONO DA MARCA E QUEM REGISTRA PRIMEIRO!', M + 8, y + 9);
   setFont(doc, 'normal', 7, C.gray700);
-  doc.text('Conforme art. 129 da Lei 9.279/96 (Lei de Propriedade Industrial) — o direito de uso exclusivo', M + 8, y + 14);
-  doc.text('da marca é adquirido pelo registro validamente expedido. Não perca tempo — protocole seu pedido.', M + 8, y + 19);
-  y += 28;
+  const urgLines = doc.splitTextToSize(
+    'Conforme art. 129 da Lei 9.279/96 (Lei de Propriedade Industrial) — o direito de uso exclusivo da marca e adquirido pelo registro validamente expedido. Nao perca tempo — protocole seu pedido.',
+    CW - 14
+  );
+  doc.text(urgLines, M + 8, y + 16);
+  y += 30;
 
   // ═══════════════════════════════════════
-  // FOOTER EM TODAS AS PÁGINAS
+  // FOOTER EM TODAS AS PAGINAS
   // ═══════════════════════════════════════
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    const fY = ph - 14;
+    const fY = ph - 13;
     filledRect(doc, 0, fY - 0.8, pw, 0.8, C.gold);
-    filledRect(doc, 0, fY, pw, 14, C.navy);
-    filledRect(doc, 0, fY, 4, 14, C.blue);
+    filledRect(doc, 0, fY, pw, 13, C.navy);
+    filledRect(doc, 0, fY, 4, 13, C.gold);
     setFont(doc, 'normal', 6.5, C.gray400);
     doc.text(
       `Protocolo: ${protocol}  ·  WebMarcas — www.webmarcas.net  ·  Gerado em: ${timeStr}`,
@@ -573,7 +647,7 @@ export async function generateViabilityPDF(
     );
     setFont(doc, 'normal', 5.5, C.gray500);
     doc.text(
-      'Este documento é um laudo técnico preliminar de viabilidade de marca. Não substitui consulta jurídica especializada.',
+      'Este documento e um laudo tecnico preliminar de viabilidade de marca. Nao substitui consulta juridica especializada.',
       pw / 2, fY + 11, { align: 'center' }
     );
     setFont(doc, 'bold', 6.5, C.gray400);
