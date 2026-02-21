@@ -108,6 +108,24 @@ export function EmailSettings() {
     mutationFn: async () => {
       if (!currentUser) throw new Error('Usuário não autenticado');
       if (!form.assigned_to) throw new Error('Selecione um administrador');
+      if (!form.smtp_host || !form.smtp_user || !form.smtp_password) {
+        throw new Error('Preencha todos os campos SMTP obrigatórios');
+      }
+
+      // Test SMTP connection before saving
+      const { data: testResult, error: testError } = await supabase.functions.invoke('test-smtp-connection', {
+        body: {
+          smtp_host: form.smtp_host,
+          smtp_port: form.smtp_port,
+          smtp_user: form.smtp_user,
+          smtp_password: form.smtp_password,
+        },
+      });
+
+      if (testError) throw new Error('Erro ao testar conexão: ' + testError.message);
+      if (!testResult?.success) {
+        throw new Error(testResult?.error || 'Falha na validação das credenciais SMTP');
+      }
 
       const { error } = await supabase.from('email_accounts').insert({
         user_id: currentUser.id,
@@ -127,7 +145,7 @@ export function EmailSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Conta de email adicionada!');
+      toast.success('✅ Conta de email verificada e adicionada com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['email-accounts'] });
       setIsAdding(false);
       setForm({
@@ -143,7 +161,7 @@ export function EmailSettings() {
       });
     },
     onError: (err: any) => {
-      toast.error(err.message || 'Erro ao adicionar conta');
+      toast.error('❌ ' + (err.message || 'Erro ao adicionar conta'));
     },
   });
 
@@ -181,18 +199,19 @@ export function EmailSettings() {
   const testConnection = async (config: { smtp_host: string; smtp_port: number; smtp_user: string; smtp_password: string; email_address: string }, id: string) => {
     setTestingConnection(id);
     try {
-      const { data, error } = await supabase.functions.invoke('send-email', {
+      const { data, error } = await supabase.functions.invoke('test-smtp-connection', {
         body: {
-          to: [config.email_address],
-          subject: '✅ Teste de Conexão - WebMarcas',
-          body: `<p>Este é um e-mail de teste para verificar a conexão SMTP.</p><p>Se você recebeu esta mensagem, a configuração está correta!</p><p><small>Enviado em ${new Date().toLocaleString('pt-BR')}</small></p>`,
+          smtp_host: config.smtp_host,
+          smtp_port: config.smtp_port,
+          smtp_user: config.smtp_user,
+          smtp_password: config.smtp_password,
         },
       });
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast.success('Conexão testada com sucesso! Um e-mail de teste foi enviado.');
+      if (!data?.success) throw new Error(data?.error || 'Falha na conexão');
+      toast.success('✅ Conexão SMTP verificada com sucesso! Credenciais válidas.');
     } catch (err: any) {
-      toast.error('Falha no teste: ' + (err.message || 'Erro desconhecido'));
+      toast.error('❌ ' + (err.message || 'Erro desconhecido'));
     } finally {
       setTestingConnection(null);
     }
