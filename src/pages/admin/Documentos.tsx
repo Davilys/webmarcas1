@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Search, Plus, FileText, Download, Eye, Trash2, MoreVertical,
@@ -354,17 +355,77 @@ function SkeletonRow({ i }: { i: number }) {
 
 // ─── Upload Form Dialog ────────────────────────────
 function UploadDialog({
-  clients, processes,
+  processes,
   onDone,
 }: {
-  clients: Client[];
   processes: Process[];
   onDone: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', document_type: 'outro', user_id: '', process_id: '' });
 
+  // Client autocomplete state
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientResults, setClientResults] = useState<Client[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [searchingClients, setSearchingClients] = useState(false);
+  const [showClientResults, setShowClientResults] = useState(false);
+  const clientSearchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
   const clientProcesses = processes.filter(p => p.user_id === form.user_id);
+
+  const searchClients = useCallback(async (term: string) => {
+    if (term.length < 2) {
+      setClientResults([]);
+      return;
+    }
+    setSearchingClients(true);
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`)
+        .limit(20);
+      setClientResults(data || []);
+    } catch {
+      setClientResults([]);
+    }
+    setSearchingClients(false);
+  }, []);
+
+  const handleClientSearchChange = (value: string) => {
+    setClientSearch(value);
+    setShowClientResults(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => searchClients(value), 400);
+  };
+
+  const handleSelectClient = (client: Client) => {
+    setSelectedClient(client);
+    setForm(prev => ({ ...prev, user_id: client.id, process_id: '' }));
+    setClientSearch('');
+    setShowClientResults(false);
+    setClientResults([]);
+  };
+
+  const handleClearClient = () => {
+    setSelectedClient(null);
+    setForm(prev => ({ ...prev, user_id: '', process_id: '' }));
+    setClientSearch('');
+    setClientResults([]);
+  };
+
+  // Close results on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientSearchRef.current && !clientSearchRef.current.contains(e.target as Node)) {
+        setShowClientResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const generateProtocol = () => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -390,12 +451,22 @@ function UploadDialog({
       toast.success(`Documento enviado! Protocolo: ${protocol}`);
       setOpen(false);
       setForm({ name: '', document_type: 'outro', user_id: '', process_id: '' });
+      setSelectedClient(null);
+      setClientSearch('');
       onDone();
     } catch { toast.error('Erro ao salvar documento'); }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => {
+      setOpen(v);
+      if (!v) {
+        setSelectedClient(null);
+        setClientSearch('');
+        setClientResults([]);
+        setForm({ name: '', document_type: 'outro', user_id: '', process_id: '' });
+      }
+    }}>
       <DialogTrigger asChild>
         <motion.button
           whileHover={{ scale: 1.04 }}
@@ -416,18 +487,81 @@ function UploadDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
+          {/* Client autocomplete */}
           <div>
             <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cliente *</Label>
-            <Select value={form.user_id} onValueChange={(v) => setForm({ ...form, user_id: v, process_id: '' })}>
-              <SelectTrigger className="mt-1.5 bg-muted/30 border-border/50">
-                <SelectValue placeholder="Selecione um cliente" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto bg-card/95 backdrop-blur-xl border-border/50">
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.full_name || c.email}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {selectedClient ? (
+              <div className="mt-1.5 flex items-center gap-2 px-3 py-2 rounded-md border border-border/50 bg-muted/30">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground text-[10px] font-black flex-shrink-0">
+                  {(selectedClient.full_name || selectedClient.email).charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{selectedClient.full_name || selectedClient.email}</p>
+                  {selectedClient.full_name && (
+                    <p className="text-[10px] text-muted-foreground truncate">{selectedClient.email}</p>
+                  )}
+                </div>
+                <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={handleClearClient}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div ref={clientSearchRef} className="relative mt-1.5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-9 bg-muted/30 border-border/50"
+                    placeholder="Buscar por nome, email ou telefone..."
+                    value={clientSearch}
+                    onChange={(e) => handleClientSearchChange(e.target.value)}
+                    onFocus={() => { if (clientSearch.length >= 2) setShowClientResults(true); }}
+                  />
+                  {searchingClients && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {showClientResults && clientSearch.length >= 2 && (
+                  <div className="absolute z-50 w-full mt-1 rounded-md border border-border/50 bg-card/95 backdrop-blur-xl shadow-lg overflow-hidden">
+                    <Command shouldFilter={false}>
+                      <CommandList>
+                        {clientResults.length === 0 && !searchingClients && (
+                          <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
+                            Nenhum cliente encontrado
+                          </CommandEmpty>
+                        )}
+                        {searchingClients && clientResults.length === 0 && (
+                          <div className="py-4 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Buscando...
+                          </div>
+                        )}
+                        {clientResults.length > 0 && (
+                          <CommandGroup>
+                            {clientResults.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.id}
+                                onSelect={() => handleSelectClient(c)}
+                                className="flex items-center gap-2 px-3 py-2 cursor-pointer"
+                              >
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground text-[10px] font-black flex-shrink-0">
+                                  {(c.full_name || c.email).charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-foreground truncate">{c.full_name || c.email}</p>
+                                  {c.full_name && (
+                                    <p className="text-[10px] text-muted-foreground truncate">{c.email}</p>
+                                  )}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {form.user_id && clientProcesses.length > 0 && (
@@ -686,7 +820,7 @@ export default function AdminDocumentos() {
               >
                 <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
               </motion.button>
-              <UploadDialog clients={clients} processes={processes} onDone={fetchDocuments} />
+              <UploadDialog processes={processes} onDone={fetchDocuments} />
             </div>
           </div>
         </motion.div>
