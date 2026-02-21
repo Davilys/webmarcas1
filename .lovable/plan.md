@@ -1,42 +1,60 @@
 
 
-# Busca com Autocomplete no Seletor de Cliente (Enviar Documento)
+# Correcao de Notificacoes de Contrato + Template de Link de Assinatura
 
-## Problema
+## Problemas Identificados
 
-O seletor de cliente no dialogo "Enviar Documento" da pagina admin de Documentos usa um dropdown simples (`Select`), dificultando encontrar clientes em uma base com mais de 2.300 registros. Precisa de um campo de busca com autocomplete.
+### 1. Notificacao nao envia ao criar contrato / clicar "Enviar para Cliente"
+O botao "Enviar para Cliente" (azul) e o icone de email (canto superior direito) chamam a Edge Function `send-signature-request`, que verifica se existe uma conta SMTP padrao na tabela `email_accounts`. Como nao ha conta cadastrada, o envio falha com "Conta de email nao configurada" -- mesmo que o Resend esteja funcionando perfeitamente.
 
-## Sobre o Tipo de Documento
+### 2. Template "Link de Assinatura" ausente nos E-mails Automaticos
+A aba de E-mails Automaticos nao possui o template `signature_request`, impedindo que o admin personalize o conteudo do email enviado com o link de assinatura.
 
-O mapeamento de tipos ja funciona corretamente. Quando o admin seleciona um tipo (ex: "Procuracao"), o documento e salvo com `document_type: 'procuracao'` e aparece automaticamente na aba correspondente na area do cliente. Nenhuma alteracao necessaria nessa parte.
+---
 
 ## Solucao
 
-Substituir o `<Select>` de cliente por um componente de busca com autocomplete usando `Command` (cmdk), com busca server-side no Supabase. Mesmo padrao ja utilizado no `CreateContractDialog.tsx`.
+### Etapa 1 - Migracao de Banco
+Inserir um registro na tabela `email_templates` com:
+- `trigger_event`: `signature_request`
+- `name`: "Link de Assinatura"
+- `subject` e `body` com variaveis como `{{nome}}`, `{{link_assinatura}}`, `{{data_expiracao}}`, `{{marca}}`
 
-## Mudancas Tecnicas
+### Etapa 2 - Edge Function `send-signature-request`
+Refatorar o bloco de envio de email:
+- **Remover** a consulta a `email_accounts` (causa do bug)
+- **Buscar** o template `signature_request` da tabela `email_templates`
+- **Substituir** as variaveis do template com os dados do contrato
+- **Chamar** `send-email` diretamente (Resend), sem condicional
+- Manter fallback com texto padrao caso o template esteja desativado
+- Corrigir campo `to` para array (`[recipientEmail]`)
 
-### Arquivo: `src/pages/admin/Documentos.tsx`
+### Etapa 3 - Frontend: `AutomatedEmailSettings.tsx`
+Adicionar no `triggerConfig`:
+```
+signature_request: {
+  label: 'Link de Assinatura',
+  description: 'Enviado quando o link de assinatura e gerado para o cliente',
+  icon: FileSignature,
+  color: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+}
+```
+Adicionar variaveis `{{link_assinatura}}` e `{{data_expiracao}}` na lista `availableVariables`.
 
-Dentro do componente `UploadDialog`:
+### Impacto nos botoes do ContractDetailSheet
+Nenhuma alteracao no frontend do ContractDetailSheet e necessaria. Ambos os botoes (azul "Enviar para Cliente" e icone de email) ja chamam `send-signature-request` corretamente -- o problema e exclusivamente na Edge Function que falha antes de enviar.
 
-1. **Remover** o `<Select>` de cliente (linhas 421-431)
-2. **Adicionar** um campo `<Input>` com busca por nome/email/telefone
-3. **Usar** `Command` com `shouldFilter={false}` para listar resultados do servidor
-4. **Busca server-side**: query ao Supabase com `ilike` no campo digitado, limitado a 20 resultados
-5. **Exibir** nome e email de cada resultado para facilitar identificacao
-6. **Ao selecionar**, preencher o `user_id` e mostrar o nome selecionado com botao de limpar (X)
+Apos a correcao:
+- Botao "Enviar para Cliente" -> envia email + WhatsApp com o link
+- Icone de email (topo) -> envia email com o link (para contratos pendentes) ou email de confirmacao (para contratos assinados, usando template `contract_signed`)
 
-### Comportamento esperado
+### Arquivos modificados
+- `supabase/functions/send-signature-request/index.ts`
+- `src/components/admin/settings/AutomatedEmailSettings.tsx`
+- Nova migracao SQL (insert template)
 
-- Campo vazio: placeholder "Buscar por nome ou email..."
-- Ao digitar (minimo 2 caracteres): lista de clientes filtrada aparece abaixo
-- Ao selecionar: campo mostra o nome do cliente com opcao de limpar
-- Clicar fora: lista fecha automaticamente
-
-### Nenhum outro arquivo modificado
-
-- Nenhuma migracao de banco necessaria
-- Nenhuma Edge Function alterada
-- A area do cliente ja categoriza documentos corretamente pelas abas
+### Nenhuma outra alteracao
+- Edge Function `send-email` ja funciona com Resend (testado)
+- Edge Function `trigger-email-automation` ja mapeia `signature_request`
+- Nenhuma alteracao no `ContractDetailSheet.tsx`
 
