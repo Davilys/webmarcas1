@@ -1,67 +1,98 @@
 
 
-# Dashboard de Analytics + Historico de E-mails Automaticos
+# Abas SMS e WhatsApp com Dashboard + Templates de Notificacoes
 
-## O que sera adicionado
+## O que sera criado
 
-Duas sub-abas internas na secao "E-mails Automaticos": **Dashboard** e **Templates** (conteudo atual). Nada do que existe sera alterado.
+Duas novas abas na secao "Comunicacao" das Configuracoes: **SMS Automatico** e **WhatsApp Automatico (BotConversa)**, cada uma com:
+1. Dashboard de analytics (igual ao de e-mails)
+2. Templates de notificacao (igual aos templates de e-mail automaticos)
 
-## Layout do Dashboard
+## Estrutura de Navegacao
 
-### Linha 1 - 4 Cards de Metricas (animados com framer-motion)
-- **Total Enviados** (icone Mail) - total geral de emails
-- **Entregues** (icone CheckCircle2, verde) - status = "sent"
-- **Com Erro** (icone AlertCircle, vermelho) - status = "error"/"failed"
-- **Taxa de Sucesso** (icone TrendingUp, azul) - percentual com barra de progresso
+A secao "Comunicacao" ficara:
+- E-mails Automaticos (existente)
+- **SMS Automatico** (NOVO) - icone Smartphone, cor cyan
+- **WhatsApp Automatico** (NOVO) - icone MessageCircle, cor emerald
+- E-mail (existente)
+- WhatsApp (existente)
+- Notificacoes (existente)
 
-### Linha 2 - 2 Graficos (Recharts, ja instalado)
-- **Coluna 1**: BarChart - Envios por tipo de notificacao (contract_signed, form_started, user_created, payment_received, signature_request, manual, etc.) com cores do triggerConfig
-- **Coluna 2**: AreaChart - Volume diario nos ultimos 30 dias (tendencia)
+## Alteracao no Banco de Dados
 
-### Linha 3 - Tabela de Historico
-- Ultimos 50 emails em tabela premium com ScrollArea
-- Colunas: Data/Hora, Destinatario, Assunto, Tipo (Badge colorido por trigger_type), Status (Badge verde/vermelho)
-- Tooltip no icone de erro mostrando a mensagem de erro
-- Cada tipo de notificacao tem badge com label e cor do triggerConfig
+Sera criada uma nova tabela `channel_notification_templates` para armazenar os templates de SMS e WhatsApp, com campos:
+- `id` (uuid)
+- `name` (text) - nome do template
+- `message` (text) - conteudo da mensagem
+- `trigger_event` (text) - gatilho (contrato_assinado, link_assinatura_gerado, pagamento_confirmado, etc.)
+- `channel` (text) - "sms" ou "whatsapp"
+- `is_active` (boolean)
+- `created_by` (uuid)
+- `created_at`, `updated_at` (timestamps)
+
+RLS: apenas admins podem gerenciar.
+
+## Layout de Cada Aba (SMS e WhatsApp)
+
+Cada aba tera sub-abas internas (identico ao E-mails Automaticos):
+
+### Sub-aba "Dashboard"
+Componente reutilizavel `ChannelAnalyticsDashboard` que recebe `channel` como prop:
+
+**4 Cards de Metricas** (animados com framer-motion):
+- Total Enviados
+- Entregues (status = "sent")
+- Com Erro (status = "failed")
+- Taxa de Sucesso (%)
+
+**2 Graficos** (Recharts):
+- BarChart: envios por tipo de evento (contrato_assinado, link_assinatura_gerado, pagamento_confirmado, manual)
+- AreaChart: volume diario dos ultimos 30 dias
+
+**Tabela de Historico**:
+- Ultimos 50 registros da tabela `notification_dispatch_logs` filtrados por canal
+- Colunas: Data/Hora, Destinatario (telefone), Tipo (badge colorido), Tentativas, Status
+
+### Sub-aba "Templates"
+Gerenciamento completo de templates do canal:
+- Lista de templates com badge de status (ativo/inativo), icone do gatilho, switch para ativar/desativar
+- Botao para criar novo template
+- Dialog de edicao com campos: Nome, Mensagem (com variaveis disponiveis), Gatilho, Switch ativo
+- Variaveis: nome, marca, numero_processo, link_assinatura, data_expiracao
 
 ## Detalhes Tecnicos
 
+### Arquivos criados
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/components/admin/settings/ChannelAnalyticsDashboard.tsx` | Dashboard reutilizavel (recebe channel como prop) |
+| `src/components/admin/settings/AutomatedSMSSettings.tsx` | Aba SMS com tabs Dashboard + Templates |
+| `src/components/admin/settings/AutomatedWhatsAppSettings.tsx` | Aba WhatsApp com tabs Dashboard + Templates |
+| `src/components/admin/settings/ChannelNotificationTemplates.tsx` | Componente de templates reutilizavel (recebe channel como prop) |
+
 ### Arquivo modificado
-`src/components/admin/settings/AutomatedEmailSettings.tsx`
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/admin/Configuracoes.tsx` | Adicionar 2 itens no nav + imports + mapeamento |
 
 ### Dados utilizados
-- Tabela `email_logs` (ja existe com 71+ registros): campos `status`, `trigger_type`, `to_email`, `subject`, `sent_at`, `error_message`
-- Nova query `useQuery(['email-logs-analytics'])` buscando todos os logs ordenados por `sent_at DESC`
+- **Dashboard**: tabela `notification_dispatch_logs` (ja existe com 138 registros), filtrada por `channel`
+- **Templates**: nova tabela `channel_notification_templates`
 
-### Dependencias (todas ja instaladas)
-- `Recharts` (BarChart, AreaChart, ResponsiveContainer)
-- `framer-motion` (animacao dos cards)
-- Shadcn: Tabs, Card, Badge, Table, ScrollArea, Progress, Tooltip
-
-### Estrutura interna
-```
-AutomatedEmailSettings
-  |-- Tabs (Dashboard | Templates)
-       |-- Dashboard tab
-       |    |-- MetricCards (4 cards)
-       |    |-- Charts (BarChart + AreaChart)
-       |    |-- HistoryTable (ultimos 50 emails)
-       |-- Templates tab
-            |-- (conteudo atual sem alteracoes)
-```
-
-### Mapeamento de tipos na tabela
-Todos os `trigger_type` existentes serao exibidos com label e cor:
-- `contract_signed` -> "Contrato Assinado" (verde)
-- `form_started` -> "Boas-Vindas" (azul)
-- `user_created` -> "Credenciais" (roxo)
-- `payment_received` -> "Pagamento" (sky)
-- `signature_request` -> "Link Assinatura" (indigo)
+### Mapeamento de tipos de evento
+Os `event_type` da tabela `notification_dispatch_logs`:
+- `contrato_assinado` -> "Contrato Assinado" (verde)
+- `link_assinatura_gerado` -> "Link Assinatura" (indigo)
+- `pagamento_confirmado` -> "Pagamento" (sky)
 - `manual` -> "Manual" (cinza)
-- `processual` -> "Processual" (amber)
-- Qualquer outro -> label capitalizado com cor neutra
+- `formulario_preenchido` -> "Formulario" (azul)
+- `cobranca_gerada` -> "Cobranca" (amber)
+- `fatura_vencida` -> "Fatura Vencida" (vermelho)
 
-### Nenhuma alteracao em banco de dados
-- Tabela `email_logs` ja possui todos os dados necessarios
-- Nenhuma migracao necessaria
+### Card informativo por canal
+- SMS: informacao sobre o provedor Zenvia e link para aba Integracoes
+- WhatsApp: informacao sobre o provedor BotConversa e link para aba Integracoes
+
+### Dependencias
+Todas ja instaladas: Recharts, framer-motion, shadcn (Tabs, Card, Badge, Table, ScrollArea, Dialog, Switch)
 
