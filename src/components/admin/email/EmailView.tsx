@@ -81,45 +81,46 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
       <div className="h-full flex flex-col w-full">
         <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
           {/* Top Toolbar */}
-          <CardHeader className="pb-0 pt-3 px-4 flex-shrink-0">
-            <div className="flex items-center gap-2 mb-3">
-              <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8 hover:bg-muted">
+          <CardHeader className="pb-0 pt-2 md:pt-3 px-3 md:px-4 flex-shrink-0">
+            <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3">
+              <Button variant="ghost" size="icon" onClick={onBack} className="h-9 w-9 md:h-8 md:w-8 hover:bg-muted">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="flex-1" />
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 md:gap-1">
                 <Button
                   variant={showAI ? 'default' : 'outline'}
                   size="sm"
                   className={cn(
-                    "gap-1.5 text-xs h-8 transition-all",
+                    "gap-1 md:gap-1.5 text-[10px] md:text-xs h-8 transition-all",
                     showAI ? "shadow-lg" : ""
                   )}
                   onClick={() => setShowAI(prev => !prev)}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  ✨ IA Assistente
+                  <span className="hidden md:inline">✨ IA Assistente</span>
+                  <span className="md:hidden">IA</span>
                 </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleToggleStar}>
                   <Star className={cn('h-4 w-4 transition-colors', isStarred ? 'fill-primary text-primary' : 'text-muted-foreground')} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hidden md:flex">
                   <Archive className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/70 hover:text-destructive">
                   <Trash2 className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hidden md:flex">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </div>
             </div>
 
             {/* Subject */}
-            <h2 className="text-lg font-bold leading-tight mb-3">{email.subject}</h2>
+            <h2 className="text-base md:text-lg font-bold leading-tight mb-2 md:mb-3">{email.subject}</h2>
 
-            {/* Tracking Bar */}
-            <div className="flex items-center gap-3 py-2 px-3 bg-muted/30 rounded-xl border border-border/30 text-[10px] text-muted-foreground mb-3">
+            {/* Tracking Bar — hidden on mobile */}
+            <div className="hidden md:flex items-center gap-3 py-2 px-3 bg-muted/30 rounded-xl border border-border/30 text-[10px] text-muted-foreground mb-3">
               <div className="flex items-center gap-1.5">
                 <Eye className="h-3 w-3 text-primary" />
                 <span className="font-semibold text-foreground">{TRACKING_MOCK.opens}x</span> aberto
@@ -212,24 +213,25 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
           <Separator />
 
           {/* Action Bar */}
-          <div className="p-3 flex items-center gap-2 flex-shrink-0 bg-background/50">
-            <Button onClick={onReply} className="gap-2 h-9 shadow-sm shadow-primary/20">
+          <div className="p-2.5 md:p-3 flex items-center gap-1.5 md:gap-2 flex-shrink-0 bg-background/50">
+            <Button onClick={onReply} className="gap-1.5 md:gap-2 h-9 shadow-sm shadow-primary/20 text-xs md:text-sm flex-1 md:flex-none">
               <Reply className="h-4 w-4" />
               Responder
             </Button>
-            <Button variant="outline" className="gap-2 h-9">
+            <Button variant="outline" className="gap-1.5 md:gap-2 h-9 text-xs md:text-sm flex-1 md:flex-none">
               <Forward className="h-4 w-4" />
               Encaminhar
             </Button>
-            <div className="flex-1" />
+            <div className="flex-1 hidden md:block" />
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 h-9 text-xs"
+              className="gap-1.5 h-9 text-xs flex-shrink-0"
               onClick={() => setShowAI(true)}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              ✨ IA
+              <span className="hidden md:inline">✨ IA</span>
+              <span className="md:hidden">IA</span>
             </Button>
           </div>
         </Card>

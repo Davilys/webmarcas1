@@ -14,8 +14,11 @@ import { EmailCampaigns } from '@/components/admin/email/EmailCampaigns';
 import { EmailSequences } from '@/components/admin/email/EmailSequences';
 import { EmailMetricsBar } from '@/components/admin/email/EmailMetricsBar';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
-  Mail, Zap, BarChart3, TrendingUp, Send, Inbox
+  Mail, Zap, BarChart3, TrendingUp, Send, Inbox, Menu, PenSquare
 } from 'lucide-react';
 
 export type EmailFolder =
@@ -47,6 +50,8 @@ export default function Emails() {
   const [initialTo, setInitialTo] = useState('');
   const [initialName, setInitialName] = useState('');
   const [aiDraftBody, setAiDraftBody] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
 
 
   // Read URL params to auto-open compose with client data
@@ -90,12 +95,14 @@ export default function Emails() {
     setIsComposing(false);
     setReplyTo(null);
     setCurrentFolder(folder);
+    setSidebarOpen(false);
   };
 
   const handleCompose = () => {
     setIsComposing(true);
     setSelectedEmail(null);
     setReplyTo(null);
+    setSidebarOpen(false);
   };
 
   const handleReply = (email: Email) => {
@@ -183,59 +190,94 @@ export default function Emails() {
     return map[currentFolder] || 'Email';
   };
 
+  const sidebarContent = (
+    <EmailSidebar
+      currentFolder={currentFolder}
+      onFolderChange={handleFolderChange}
+      onCompose={handleCompose}
+      stats={stats}
+    />
+  );
+
   return (
     <AdminLayout>
       <div className="flex flex-col h-[calc(100vh-4rem)] gap-0 -mx-4 -mt-4">
         {/* Hero Header */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/50 px-6 pt-5 pb-4 flex-shrink-0">
+        <div className="relative overflow-hidden bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/50 px-4 md:px-6 pt-4 md:pt-5 pb-3 md:pb-4 flex-shrink-0">
           <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.1))]" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {/* Mobile menu button */}
+              {isMobile && (
+                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 flex-shrink-0 md:hidden">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-72 p-4 pt-8">
+                    {sidebarContent}
+                  </SheetContent>
+                </Sheet>
+              )}
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-xl shadow-primary/30"
+                className="h-10 w-10 md:h-12 md:w-12 rounded-xl md:rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-xl shadow-primary/30 flex-shrink-0"
               >
-                <Mail className="h-6 w-6 text-primary-foreground" />
+                <Mail className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
               </motion.div>
-              <div>
+              <div className="min-w-0">
                 <motion.h1
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text"
+                  className="text-lg md:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text truncate"
                 >
                   Central de Email
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1, transition: { delay: 0.1 } }}
-                  className="text-sm text-muted-foreground"
+                  className="text-xs md:text-sm text-muted-foreground truncate"
                 >
-                  {getFolderLabel()} · Powered by Resend
+                  {getFolderLabel()}
                 </motion.p>
               </div>
             </div>
-            {/* Live indicator */}
-            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Sistema Ativo</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Mobile compose FAB */}
+              {isMobile && (
+                <Button
+                  onClick={handleCompose}
+                  size="icon"
+                  className="h-10 w-10 rounded-xl bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/20 md:hidden"
+                >
+                  <PenSquare className="h-5 w-5" />
+                </Button>
+              )}
+              {/* Live indicator */}
+              <div className="hidden md:flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Sistema Ativo</span>
+              </div>
+              {/* Mobile compact live dot */}
+              {isMobile && (
+                <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse md:hidden" />
+              )}
             </div>
           </div>
           {/* Metrics Bar */}
           <EmailMetricsBar stats={stats} />
         </div>
 
-        {/* Main 3-Panel Layout */}
+        {/* Main Layout */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background/50 overflow-y-auto p-3">
-            <EmailSidebar
-              currentFolder={currentFolder}
-              onFolderChange={handleFolderChange}
-              onCompose={handleCompose}
-              stats={stats}
-            />
-          </div>
+          {/* Desktop Sidebar */}
+          {!isMobile && (
+            <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background/50 overflow-y-auto p-3">
+              {sidebarContent}
+            </div>
+          )}
 
           {/* Content */}
           <div className="flex-1 overflow-hidden bg-muted/20">
@@ -246,7 +288,7 @@ export default function Emails() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.18 }}
-                className="h-full p-4"
+                className="h-full p-2 md:p-4"
               >
                 {renderContent()}
               </motion.div>

@@ -439,31 +439,32 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
   };
 
   return (
-    <div className="h-full flex flex-col bg-background rounded-xl border border-border/60 shadow-2xl overflow-hidden">
+    <div className="h-full flex flex-col bg-background rounded-none md:rounded-xl border-0 md:border md:border-border/60 shadow-none md:shadow-2xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/50 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+      <div className="flex items-center justify-between px-3 md:px-4 py-2.5 md:py-3 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/50 flex-shrink-0">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
             <Send className="h-4 w-4 text-primary" />
           </div>
-          <div>
-            <h3 className="font-semibold text-sm">{replyTo ? 'Responder Email' : 'Novo Email'}</h3>
-            <p className="text-[10px] text-muted-foreground">Compositor Enterprise</p>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm truncate">{replyTo ? 'Responder Email' : 'Novo Email'}</h3>
+            <p className="text-[10px] text-muted-foreground hidden md:block">Compositor Enterprise</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
           {/* Mode toggle */}
           <button
             onClick={() => setIsProcessualMode(!isProcessualMode)}
             className={cn(
-              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all",
+              "flex items-center gap-1 md:gap-1.5 text-[10px] md:text-xs px-2 md:px-3 py-1.5 rounded-full border transition-all",
               isProcessualMode
                 ? "bg-primary/10 border-primary/30 text-primary font-medium"
                 : "border-border/50 text-muted-foreground hover:bg-muted/50"
             )}
           >
-            <Scale className="h-3.5 w-3.5" />
-            Modo Processual
+            <Scale className="h-3 w-3 md:h-3.5 md:w-3.5" />
+            <span className="hidden md:inline">Modo Processual</span>
+            <span className="md:hidden">Proc.</span>
           </button>
           <button onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-muted/50 flex items-center justify-center transition-colors">
             <X className="h-4 w-4" />
@@ -598,7 +599,7 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
           </div>
 
           {/* Toolbar */}
-          <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/20 flex-shrink-0 flex-wrap">
+          <div className="flex items-center gap-0.5 md:gap-1 px-2 md:px-3 py-1.5 border-b border-border/30 bg-muted/20 flex-shrink-0 overflow-x-auto scrollbar-none">
             {[
               { icon: Bold, action: 'bold', title: 'Negrito' },
               { icon: Italic, action: 'italic', title: 'Itálico' },
@@ -717,13 +718,13 @@ Dica: Use **negrito**, _itálico_, {{nome_cliente}} para variáveis dinâmicas."
           )}
 
           {/* Footer Actions */}
-          <div className="border-t border-border/50 px-4 py-3 flex items-center justify-between flex-shrink-0 bg-muted/10">
-            <div className="flex items-center gap-2">
+          <div className="border-t border-border/50 px-3 md:px-4 py-2.5 md:py-3 flex items-center justify-between flex-shrink-0 bg-muted/10 gap-2">
+            <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto scrollbar-none flex-shrink min-w-0">
               {/* Schedule toggle */}
               <button onClick={() => setIsScheduled(!isScheduled)}
-                className={cn("flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all",
+                className={cn("flex items-center gap-1 md:gap-1.5 text-[10px] md:text-xs px-2 md:px-3 py-1.5 rounded-lg border transition-all whitespace-nowrap flex-shrink-0",
                   isScheduled ? "bg-amber-500/10 border-amber-500/30 text-amber-600" : "border-border/50 text-muted-foreground hover:bg-muted/50")}>
-                <Clock className="h-3.5 w-3.5" />
+                <Clock className="h-3 w-3 md:h-3.5 md:w-3.5" />
                 {isScheduled ? 'Agendado' : 'Agendar'}
               </button>
               {isScheduled && (
@@ -731,28 +732,28 @@ Dica: Use **negrito**, _itálico_, {{nome_cliente}} para variáveis dinâmicas."
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={e => setScheduledAt(e.target.value)}
-                  className="text-xs border border-border/50 rounded-lg px-2 py-1 bg-background"
+                  className="text-xs border border-border/50 rounded-lg px-2 py-1 bg-background w-auto"
                 />
               )}
               {/* LGPD */}
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <div className="hidden md:flex items-center gap-1.5 text-[10px] text-muted-foreground flex-shrink-0">
                 <Shield className="h-3 w-3 text-emerald-500" />
-                LGPD compliant
+                LGPD
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={onClose} className="text-xs h-8">
+            <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+              <Button variant="ghost" size="sm" onClick={onClose} className="text-xs h-8 hidden md:flex">
                 Cancelar
               </Button>
               <Button
                 onClick={handleSend}
                 disabled={sendEmail.isPending || !to.trim() || !subject.trim()}
                 size="sm"
-                className="gap-2 h-8 text-xs bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/20"
+                className="gap-1.5 md:gap-2 h-9 md:h-8 text-xs bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/20 px-4"
               >
                 {sendEmail.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                {sendEmail.isPending ? 'Enviando...' : isScheduled ? 'Agendar Envio' : 'Enviar Agora'}
+                {sendEmail.isPending ? 'Enviando...' : isScheduled ? 'Agendar' : 'Enviar'}
               </Button>
             </div>
           </div>
