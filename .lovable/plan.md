@@ -1,53 +1,45 @@
 
-# Adicionar Dashboard na Aba Notificacoes das Configuracoes
+
+# Criar Templates Pre-Populados para SMS e WhatsApp
 
 ## O que sera feito
 
-Adicionar um dashboard de analytics na aba "Notificacoes" das Configuracoes, igual ao que ja existe na aba "E-mails Automaticos". A aba passara a ter duas sub-abas internas: **Dashboard** e **Templates** (conteudo atual).
+Inserir templates prontos na tabela `channel_notification_templates` para os canais SMS e WhatsApp, equivalentes aos templates que ja existem nos E-mails Automaticos (Formulario Abandonado 24h, Formulario Concluido, Contrato Assinado, Link de Assinatura, Pagamento Confirmado, Credenciais de Acesso).
 
-## Dados Disponveis
+## Templates a criar (12 total: 6 SMS + 6 WhatsApp)
 
-A tabela `notifications` possui 42 registros com os campos: `id`, `user_id`, `title`, `message`, `type` (info/success/error/warning), `read`, `link`, `created_at`, `channels` (jsonb).
+### Para cada canal (SMS e WhatsApp):
 
-Distribuicao atual: 21 info, 20 success, 1 error.
+| Template | Gatilho | Mensagem |
+|----------|---------|----------|
+| Formulario Abandonado 24h | form_abandoned (sera adicionado ao triggerConfig) | {{nome}}, nao deixe sua marca desprotegida! Complete seu registro em webmarcas.net |
+| Formulario Concluido | formulario_preenchido | Ola {{nome}}! Recebemos sua solicitacao de registro da marca {{marca}}. Em breve entraremos em contato! |
+| Contrato Assinado | contrato_assinado | {{nome}}, seu contrato da marca {{marca}} foi assinado com sucesso! Processo: {{numero_processo}} |
+| Link de Assinatura | link_assinatura_gerado | {{nome}}, seu documento esta pronto para assinatura! Acesse: {{link_assinatura}} - Valido ate {{data_expiracao}} |
+| Pagamento Confirmado | pagamento_confirmado | {{nome}}, seu pagamento foi confirmado! Obrigado pela confianca. Marca: {{marca}} |
+| Credenciais de Acesso | user_created (sera adicionado ao triggerConfig) | {{nome}}, suas credenciais de acesso foram criadas! Acesse webmarcas.net para acompanhar seu processo. |
 
-## Layout
+### Mensagens WhatsApp (mais detalhadas, com emojis)
+As mensagens do WhatsApp serao levemente mais longas e com emojis, seguindo o padrao de comunicacao do canal.
 
-### Sub-aba Dashboard
-
-**4 Cards de Metricas** (animados com framer-motion):
-- Total de Notificacoes enviadas
-- Lidas (read = true)
-- Nao Lidas (read = false) 
-- Taxa de Leitura (%)
-
-**2 Graficos** (Recharts):
-- BarChart: notificacoes por tipo (info, success, warning, error) com cores correspondentes
-- AreaChart: volume diario nos ultimos 30 dias
-
-**Tabela de Historico**:
-- Ultimas 50 notificacoes
-- Colunas: Data/Hora, Destinatario (via profiles.full_name), Titulo, Tipo (badge colorido), Status (lida/nao lida)
-
-### Sub-aba Templates
-Conteudo atual do NotificationSettings (sem alteracoes)
+### Mensagens SMS (mais curtas, sem emojis)
+As mensagens SMS serao mais concisas respeitando o limite de caracteres do SMS.
 
 ## Detalhes Tecnicos
 
-### Arquivo criado
-- `src/components/admin/settings/NotificationAnalyticsDashboard.tsx` - Dashboard reutilizavel para notificacoes CRM
+### Migracao SQL
+- INSERT de 12 registros na tabela `channel_notification_templates` (6 para `sms`, 6 para `whatsapp`)
+- Todos com `is_active = true`
 
-### Arquivo modificado
-- `src/components/admin/settings/NotificationSettings.tsx` - Adicionar Tabs internas (Dashboard | Templates), wrapping o conteudo atual na aba Templates
+### Atualizacao do triggerConfig
+- Adicionar `form_abandoned` e `user_created` ao mapeamento de gatilhos no `ChannelNotificationTemplates.tsx` para que os novos templates aparecam com icone e cor corretos
 
-### Mapeamento de tipos
-- `info` -> "Informacao" (azul)
-- `success` -> "Sucesso" (verde)
-- `warning` -> "Aviso" (amber)
-- `error` -> "Urgente" (vermelho)
+### Arquivos modificados
+| Arquivo | Acao |
+|---------|------|
+| Migracao SQL | Criar (seed dos 12 templates) |
+| `src/components/admin/settings/ChannelNotificationTemplates.tsx` | Modificar (adicionar gatilhos form_abandoned e user_created ao triggerConfig) |
 
-### Dependencias (todas ja instaladas)
-- Recharts, framer-motion, shadcn (Tabs, Card, Badge, Table, ScrollArea, Progress, Tooltip)
+### Nenhum novo componente necessario
+A infraestrutura de templates (CRUD, ativacao/desativacao, edicao) ja existe e funciona.
 
-### Nenhuma alteracao em banco de dados
-- A tabela `notifications` ja possui todos os dados necessarios
