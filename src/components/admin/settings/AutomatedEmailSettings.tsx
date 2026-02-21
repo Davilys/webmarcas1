@@ -19,6 +19,9 @@ import {
   Variable, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EmailAnalyticsDashboard } from './EmailAnalyticsDashboard';
+import { BarChart3 } from 'lucide-react';
 
 interface EmailTemplate {
   id: string;
@@ -228,10 +231,29 @@ export function AutomatedEmailSettings() {
         <div>
           <h2 className="text-xl font-semibold">E-mails Automáticos</h2>
           <p className="text-sm text-muted-foreground">
-            Gerencie os templates de e-mails disparados automaticamente pelo sistema
+            Gerencie os templates e acompanhe o desempenho dos e-mails automáticos
           </p>
         </div>
       </div>
+
+      <Tabs defaultValue="dashboard" className="w-full">
+        <TabsList className="mb-4">
+          <TabsTrigger value="dashboard" className="gap-1.5">
+            <BarChart3 className="h-4 w-4" />
+            Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5">
+            <Mail className="h-4 w-4" />
+            Templates
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard">
+          <EmailAnalyticsDashboard />
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <div className="space-y-6">
 
       {/* Resend Info Card */}
       <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
@@ -508,6 +530,9 @@ export function AutomatedEmailSettings() {
           </div>
         </DialogContent>
       </Dialog>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
