@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Settings, Mail, Server, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Settings, Mail, Server, Check, Loader2, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EmailAccount {
@@ -29,6 +29,7 @@ interface EmailAccount {
 export function EmailSettings() {
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
+  const [testingConnection, setTestingConnection] = useState<string | null>(null); // null | 'form' | account_id
   const [form, setForm] = useState({
     email_address: '',
     display_name: '',
@@ -136,6 +137,49 @@ export function EmailSettings() {
       toast.error('Erro ao remover conta');
     },
   });
+
+  const testConnection = async (config: { smtp_host: string; smtp_port: number; smtp_user: string; smtp_password: string; imap_host?: string | null; imap_port?: number | null; email_address: string }, id: string) => {
+    setTestingConnection(id);
+    try {
+      // Test by sending an email to the configured address via the send-email edge function
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: [config.email_address],
+          subject: '✅ Teste de Conexão - WebMarcas',
+          body: `<p>Este é um e-mail de teste para verificar a conexão SMTP.</p><p>Se você recebeu esta mensagem, a configuração está correta!</p><p><small>Enviado em ${new Date().toLocaleString('pt-BR')}</small></p>`,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success('Conexão testada com sucesso! Um e-mail de teste foi enviado.');
+    } catch (err: any) {
+      toast.error('Falha no teste: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setTestingConnection(null);
+    }
+  };
+
+  const testFormConnection = () => {
+    if (!form.smtp_host || !form.smtp_user || !form.email_address) {
+      toast.error('Preencha os campos de SMTP e email antes de testar');
+      return;
+    }
+    testConnection(form, 'form');
+  };
+
+  const testAccountConnection = (account: EmailAccount) => {
+    testConnection({
+      smtp_host: account.smtp_host || '',
+      smtp_port: account.smtp_port || 587,
+      smtp_user: account.smtp_user || '',
+      smtp_password: account.smtp_password || '',
+      imap_host: account.imap_host,
+      imap_port: account.imap_port,
+      email_address: account.email_address,
+    }, account.id);
+  };
 
   return (
     <ScrollArea className="h-full">
@@ -272,7 +316,19 @@ export function EmailSettings() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={testFormConnection}
+                    disabled={testingConnection === 'form'}
+                  >
+                    {testingConnection === 'form' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Wifi className="h-4 w-4 mr-2" />
+                    )}
+                    Testar Conexão
+                  </Button>
                   <Button onClick={() => addAccount.mutate()} disabled={addAccount.isPending}>
                     {addAccount.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -320,6 +376,19 @@ export function EmailSettings() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => testAccountConnection(account)}
+                        disabled={testingConnection === account.id}
+                      >
+                        {testingConnection === account.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Wifi className="h-4 w-4 mr-1" />
+                        )}
+                        Testar
+                      </Button>
                       {!account.is_default && (
                         <Button
                           variant="outline"
