@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Plus, Edit, Save, Copy, Loader2, Trash2,
-  FileSignature, CreditCard, Bell, MessageCircle, Smartphone
+  FileSignature, CreditCard, Bell, MessageCircle, Smartphone,
+  AlertCircle, Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,6 +61,18 @@ const triggerConfig: Record<string, { label: string; description: string; icon: 
     description: 'Template para envio manual',
     icon: MessageCircle,
     color: 'bg-muted text-muted-foreground border-border'
+  },
+  form_abandoned: {
+    label: 'Formulário Abandonado',
+    description: 'Enviado quando o formulário é abandonado por 24h',
+    icon: AlertCircle,
+    color: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+  },
+  user_created: {
+    label: 'Credenciais de Acesso',
+    description: 'Enviado quando as credenciais do cliente são criadas',
+    icon: Key,
+    color: 'bg-purple-500/10 text-purple-500 border-purple-500/20'
   },
 };
 
