@@ -260,32 +260,6 @@ serve(async (req) => {
     }
 
     // ========================================
-    // STEP 4.1: Trigger payment_received email automation
-    // ========================================
-    try {
-      await fetch(`${SUPABASE_URL}/functions/v1/trigger-email-automation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-          body: JSON.stringify({
-            trigger_event: 'payment_received',
-            lead_id: leadId || null,
-            data: {
-              nome: personalData.fullName,
-              email: personalData.email,
-              marca: brandData.brandName,
-              base_url: 'https://webmarcas.net',
-            },
-          }),
-      });
-      console.log('Triggered payment_received email automation');
-    } catch (emailError) {
-      console.error('Error triggering payment_received email:', emailError);
-    }
-
-    // ========================================
     // STEP 5: Create Invoice
     // ========================================
     const dueDate = new Date();
