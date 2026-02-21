@@ -61,6 +61,12 @@ const triggerConfig: Record<string, { label: string; description: string; icon: 
     description: 'Enviado quando o pagamento é confirmado',
     icon: CreditCard,
     color: 'bg-sky-500/10 text-sky-500 border-sky-500/20'
+  },
+  signature_request: {
+    label: 'Link de Assinatura',
+    description: 'Enviado quando o link de assinatura é gerado para o cliente',
+    icon: FileSignature,
+    color: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
   }
 };
 
@@ -73,6 +79,9 @@ const availableVariables = [
   { key: '{{link_area_cliente}}', alias: '{{login_url}}', description: 'Link para área do cliente' },
   { key: '{{senha}}', alias: null, description: 'Senha temporária (apenas user_created)' },
   { key: '{{numero_processo}}', alias: null, description: 'Número do processo INPI' },
+  { key: '{{link_assinatura}}', alias: null, description: 'Link para assinatura do documento' },
+  { key: '{{data_expiracao}}', alias: null, description: 'Data de expiração do link' },
+  { key: '{{documento_tipo}}', alias: null, description: 'Tipo do documento (Contrato, Procuração, etc.)' },
 ];
 
 export function AutomatedEmailSettings() {
@@ -188,7 +197,10 @@ export function AutomatedEmailSettings() {
       '{{link_area_cliente}}': 'https://webmarcas.com/cliente/login',
       '{{login_url}}': 'https://webmarcas.com/cliente/login',
       '{{senha}}': 'Senha@123',
-      '{{numero_processo}}': '123456789'
+      '{{numero_processo}}': '123456789',
+      '{{link_assinatura}}': 'https://webmarcas.net/assinar/abc-123-def',
+      '{{data_expiracao}}': new Date(Date.now() + 7 * 86400000).toLocaleDateString('pt-BR'),
+      '{{documento_tipo}}': 'Contrato',
     };
 
     let preview = html;
