@@ -1018,6 +1018,7 @@ export type Database = {
       }
       email_accounts: {
         Row: {
+          assigned_to: string | null
           created_at: string | null
           display_name: string | null
           email_address: string
@@ -1034,6 +1035,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          assigned_to?: string | null
           created_at?: string | null
           display_name?: string | null
           email_address: string
@@ -1050,6 +1052,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          assigned_to?: string | null
           created_at?: string | null
           display_name?: string | null
           email_address?: string
