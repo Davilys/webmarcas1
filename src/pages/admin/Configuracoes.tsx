@@ -15,11 +15,13 @@ import { FinancialSettings } from '@/components/admin/settings/FinancialSettings
 import { BackupSettings } from '@/components/admin/settings/BackupSettings';
 import { PricingSettings } from '@/components/admin/settings/PricingSettings';
 import { AutomatedEmailSettings } from '@/components/admin/settings/AutomatedEmailSettings';
+import { AutomatedSMSSettings } from '@/components/admin/settings/AutomatedSMSSettings';
+import { AutomatedWhatsAppSettings } from '@/components/admin/settings/AutomatedWhatsAppSettings';
 import { cn } from '@/lib/utils';
 import {
   Settings, Database, Webhook, Mail, MessageCircle, Bell, Shield,
   Palette, FileSignature, GitBranch, Wallet, HardDrive, Tag, Zap,
-  ChevronRight, Cpu, Activity
+  ChevronRight, Cpu, Activity, Smartphone, MessageSquare
 } from 'lucide-react';
 
 // ─── Nav config ───────────────────────────────────
@@ -46,6 +48,8 @@ const NAV_GROUPS = [
     label: 'Comunicação',
     items: [
       { value: 'email-auto', label: 'E-mails Automáticos', icon: Zap,           color: '#f97316', glow: '#f9731618', desc: 'Fluxos automatizados', badge: 'Novo' },
+      { value: 'sms-auto',   label: 'SMS Automático',     icon: Smartphone,     color: '#06b6d4', glow: '#06b6d418', desc: 'Notificações SMS', badge: 'Novo' },
+      { value: 'whatsapp-auto', label: 'WhatsApp Automático', icon: MessageSquare, color: '#10b981', glow: '#10b98118', desc: 'BotConversa', badge: 'Novo' },
       { value: 'email',      label: 'E-mail',             icon: Mail,           color: '#3b82f6', glow: '#3b82f618', desc: 'Contas e SMTP' },
       { value: 'whatsapp',   label: 'WhatsApp',           icon: MessageCircle,  color: '#22c55e', glow: '#22c55e18', desc: 'Integração WhatsApp' },
       { value: 'notificacoes', label: 'Notificações',     icon: Bell,           color: '#f59e0b', glow: '#f59e0b18', desc: 'Alertas do sistema' },
@@ -211,6 +215,8 @@ function SettingsContent({ active }: { active: string }) {
     geral:       <GeneralSettings />,
     precos:      <PricingSettings />,
     'email-auto':<AutomatedEmailSettings />,
+    'sms-auto':  <AutomatedSMSSettings />,
+    'whatsapp-auto': <AutomatedWhatsAppSettings />,
     integracoes: <IntegrationSettings />,
     api:         <APIWebhooksSettings />,
     email:       <EmailSettings />,
