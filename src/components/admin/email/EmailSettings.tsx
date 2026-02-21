@@ -189,10 +189,10 @@ export function EmailSettings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Configurações de Email
+              Contas de E-mail dos Administradores
             </CardTitle>
             <CardDescription>
-              Configure suas contas de email para envio e recebimento
+              Configure contas SMTP/IMAP para cada administrador enviar e receber e-mails de trabalho
             </CardDescription>
           </CardHeader>
         </Card>
@@ -419,46 +419,6 @@ export function EmailSettings() {
           </CardContent>
         </Card>
 
-        {/* Automation Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Automação de Emails</CardTitle>
-            <CardDescription>
-              Configure quando os emails automáticos serão enviados
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Email de boas-vindas</Label>
-                <p className="text-sm text-muted-foreground">
-                  Enviar email quando um lead preencher o formulário
-                </p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Email de follow-up</Label>
-                <p className="text-sm text-muted-foreground">
-                  Enviar lembrete após 24h se formulário não for concluído
-                </p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Confirmação de contrato</Label>
-                <p className="text-sm text-muted-foreground">
-                  Enviar email após assinatura de contrato
-                </p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </ScrollArea>
   );

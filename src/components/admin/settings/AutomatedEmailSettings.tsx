@@ -221,6 +221,20 @@ export function AutomatedEmailSettings() {
         </div>
       </div>
 
+      {/* Resend Info Card */}
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
+        <Mail className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="font-medium text-primary">Serviço de Envio: Resend</p>
+          <p className="text-muted-foreground mt-1">
+            Os e-mails automáticos são enviados pelo serviço <strong>Resend</strong>, configurado na aba{' '}
+            <strong>Configurações → Integrações</strong>. O remetente é sempre{' '}
+            <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">noreply@webmarcas.net</code>{' '}
+            (domínio verificado no Resend).
+          </p>
+        </div>
+      </div>
+
       {/* Info Alert */}
       <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
         <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
