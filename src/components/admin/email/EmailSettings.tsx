@@ -5,12 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Settings, Mail, Server, Check, Loader2, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Settings, Mail, Server, Check, Loader2, AlertCircle, Wifi, User } from 'lucide-react';
 import { toast } from 'sonner';
+
+const MASTER_EMAIL = 'davillys@gmail.com';
 
 interface EmailAccount {
   id: string;
@@ -24,12 +26,19 @@ interface EmailAccount {
   imap_host: string | null;
   imap_port: number | null;
   is_default: boolean;
+  assigned_to: string | null;
+}
+
+interface AdminProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
 }
 
 export function EmailSettings() {
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
-  const [testingConnection, setTestingConnection] = useState<string | null>(null); // null | 'form' | account_id
+  const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [form, setForm] = useState({
     email_address: '',
     display_name: '',
@@ -39,28 +48,69 @@ export function EmailSettings() {
     smtp_password: '',
     imap_host: 'imap.gmail.com',
     imap_port: 993,
+    assigned_to: '',
   });
 
-  const { data: accounts, isLoading } = useQuery({
-    queryKey: ['email-accounts'],
+  // Get current user
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    },
+  });
+
+  const isMaster = currentUser?.email === MASTER_EMAIL;
+
+  // Fetch admin users
+  const { data: admins } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin');
+      if (rolesError) throw rolesError;
+      if (!roles || roles.length === 0) return [] as AdminProfile[];
+
+      const adminIds = roles.map(r => r.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', adminIds);
+      if (profilesError) throw profilesError;
+      return (profiles || []) as AdminProfile[];
+    },
+  });
+
+  // Fetch email accounts (filtered by permission)
+  const { data: accounts, isLoading } = useQuery({
+    queryKey: ['email-accounts', currentUser?.id, isMaster],
+    queryFn: async () => {
+      let query = supabase
         .from('email_accounts')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
+      // Non-master admins only see their assigned accounts
+      if (!isMaster && currentUser?.id) {
+        query = query.eq('assigned_to', currentUser.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as EmailAccount[];
     },
+    enabled: !!currentUser,
   });
 
   const addAccount = useMutation({
     mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Usuário não autenticado');
+      if (!currentUser) throw new Error('Usuário não autenticado');
+      if (!form.assigned_to) throw new Error('Selecione um administrador');
 
       const { error } = await supabase.from('email_accounts').insert({
-        user_id: user.id,
+        user_id: currentUser.id,
         email_address: form.email_address,
         display_name: form.display_name || null,
         provider: 'smtp',
@@ -71,6 +121,7 @@ export function EmailSettings() {
         imap_host: form.imap_host || null,
         imap_port: form.imap_port || 993,
         is_default: !accounts || accounts.length === 0,
+        assigned_to: form.assigned_to,
       });
 
       if (error) throw error;
@@ -88,60 +139,48 @@ export function EmailSettings() {
         smtp_password: '',
         imap_host: 'imap.gmail.com',
         imap_port: 993,
+        assigned_to: '',
       });
     },
-    onError: () => {
-      toast.error('Erro ao adicionar conta');
+    onError: (err: any) => {
+      toast.error(err.message || 'Erro ao adicionar conta');
     },
   });
 
   const setDefault = useMutation({
     mutationFn: async (accountId: string) => {
-      // First, set all accounts to non-default
       await supabase
         .from('email_accounts')
         .update({ is_default: false })
         .neq('id', accountId);
-
-      // Then set the selected account as default
       const { error } = await supabase
         .from('email_accounts')
         .update({ is_default: true })
         .eq('id', accountId);
-
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success('Conta padrão atualizada!');
       queryClient.invalidateQueries({ queryKey: ['email-accounts'] });
     },
-    onError: () => {
-      toast.error('Erro ao definir conta padrão');
-    },
+    onError: () => toast.error('Erro ao definir conta padrão'),
   });
 
   const deleteAccount = useMutation({
     mutationFn: async (accountId: string) => {
-      const { error } = await supabase
-        .from('email_accounts')
-        .delete()
-        .eq('id', accountId);
-
+      const { error } = await supabase.from('email_accounts').delete().eq('id', accountId);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success('Conta removida!');
       queryClient.invalidateQueries({ queryKey: ['email-accounts'] });
     },
-    onError: () => {
-      toast.error('Erro ao remover conta');
-    },
+    onError: () => toast.error('Erro ao remover conta'),
   });
 
-  const testConnection = async (config: { smtp_host: string; smtp_port: number; smtp_user: string; smtp_password: string; imap_host?: string | null; imap_port?: number | null; email_address: string }, id: string) => {
+  const testConnection = async (config: { smtp_host: string; smtp_port: number; smtp_user: string; smtp_password: string; email_address: string }, id: string) => {
     setTestingConnection(id);
     try {
-      // Test by sending an email to the configured address via the send-email edge function
       const { data, error } = await supabase.functions.invoke('send-email', {
         body: {
           to: [config.email_address],
@@ -149,10 +188,8 @@ export function EmailSettings() {
           body: `<p>Este é um e-mail de teste para verificar a conexão SMTP.</p><p>Se você recebeu esta mensagem, a configuração está correta!</p><p><small>Enviado em ${new Date().toLocaleString('pt-BR')}</small></p>`,
         },
       });
-
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
       toast.success('Conexão testada com sucesso! Um e-mail de teste foi enviado.');
     } catch (err: any) {
       toast.error('Falha no teste: ' + (err.message || 'Erro desconhecido'));
@@ -175,16 +212,19 @@ export function EmailSettings() {
       smtp_port: account.smtp_port || 587,
       smtp_user: account.smtp_user || '',
       smtp_password: account.smtp_password || '',
-      imap_host: account.imap_host,
-      imap_port: account.imap_port,
       email_address: account.email_address,
     }, account.id);
+  };
+
+  const getAdminName = (adminId: string | null) => {
+    if (!adminId || !admins) return null;
+    const admin = admins.find(a => a.id === adminId);
+    return admin ? (admin.full_name || admin.email) : null;
   };
 
   return (
     <ScrollArea className="h-full">
       <div className="space-y-6 p-1">
-        {/* Header Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -197,7 +237,6 @@ export function EmailSettings() {
           </CardHeader>
         </Card>
 
-        {/* Info Card */}
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
@@ -213,18 +252,19 @@ export function EmailSettings() {
           </CardContent>
         </Card>
 
-        {/* Accounts List */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Contas Configuradas</CardTitle>
-              <Button 
-                variant={isAdding ? "secondary" : "default"}
-                size="sm" 
-                onClick={() => setIsAdding(!isAdding)}
-              >
-                {isAdding ? 'Cancelar' : 'Adicionar Conta'}
-              </Button>
+              {isMaster && (
+                <Button
+                  variant={isAdding ? "secondary" : "default"}
+                  size="sm"
+                  onClick={() => setIsAdding(!isAdding)}
+                >
+                  {isAdding ? 'Cancelar' : 'Adicionar Conta'}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -248,6 +288,32 @@ export function EmailSettings() {
                       onChange={(e) => setForm(f => ({ ...f, display_name: e.target.value }))}
                     />
                   </div>
+                </div>
+
+                {/* Admin selector */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <User className="h-4 w-4" />
+                    Administrador Vinculado
+                  </Label>
+                  <Select
+                    value={form.assigned_to}
+                    onValueChange={(value) => setForm(f => ({ ...f, assigned_to: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o administrador..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {admins?.map((admin) => (
+                        <SelectItem key={admin.id} value={admin.id}>
+                          {admin.full_name || admin.email} ({admin.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Este administrador terá acesso exclusivo a essa conta de e-mail no painel
+                  </p>
                 </div>
 
                 <Separator />
@@ -293,9 +359,8 @@ export function EmailSettings() {
                 </div>
 
                 <Separator />
-                
                 <p className="text-sm font-medium text-muted-foreground">Configurações IMAP (Recebimento)</p>
-                
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Servidor IMAP</Label>
@@ -317,24 +382,12 @@ export function EmailSettings() {
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={testFormConnection}
-                    disabled={testingConnection === 'form'}
-                  >
-                    {testingConnection === 'form' ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Wifi className="h-4 w-4 mr-2" />
-                    )}
+                  <Button variant="outline" onClick={testFormConnection} disabled={testingConnection === 'form'}>
+                    {testingConnection === 'form' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wifi className="h-4 w-4 mr-2" />}
                     Testar Conexão
                   </Button>
                   <Button onClick={() => addAccount.mutate()} disabled={addAccount.isPending}>
-                    {addAccount.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
+                    {addAccount.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                     Salvar Conta
                   </Button>
                 </div>
@@ -342,28 +395,27 @@ export function EmailSettings() {
             )}
 
             {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Carregando contas...
-              </div>
+              <div className="text-center py-8 text-muted-foreground">Carregando contas...</div>
             ) : accounts && accounts.length > 0 ? (
               <div className="space-y-3">
                 {accounts.map((account) => (
-                  <div
-                    key={account.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
-                  >
+                  <div key={account.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Mail className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium">{account.email_address}</p>
-                          {account.is_default && (
-                            <Badge variant="secondary">Padrão</Badge>
-                          )}
+                          {account.is_default && <Badge variant="secondary">Padrão</Badge>}
                         </div>
                         <div className="flex flex-col gap-0.5">
+                          {account.assigned_to && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              Atribuído a: <span className="font-medium">{getAdminName(account.assigned_to)}</span>
+                            </p>
+                          )}
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
                             <Server className="h-3 w-3" />
                             SMTP: {account.smtp_host}:{account.smtp_port}
@@ -376,35 +428,20 @@ export function EmailSettings() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => testAccountConnection(account)}
-                        disabled={testingConnection === account.id}
-                      >
-                        {testingConnection === account.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                          <Wifi className="h-4 w-4 mr-1" />
-                        )}
+                      <Button variant="outline" size="sm" onClick={() => testAccountConnection(account)} disabled={testingConnection === account.id}>
+                        {testingConnection === account.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Wifi className="h-4 w-4 mr-1" />}
                         Testar
                       </Button>
-                      {!account.is_default && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDefault.mutate(account.id)}
-                        >
+                      {!account.is_default && isMaster && (
+                        <Button variant="outline" size="sm" onClick={() => setDefault.mutate(account.id)}>
                           Definir Padrão
                         </Button>
                       )}
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteAccount.mutate(account.id)}
-                      >
-                        Remover
-                      </Button>
+                      {isMaster && (
+                        <Button variant="destructive" size="sm" onClick={() => deleteAccount.mutate(account.id)}>
+                          Remover
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -413,12 +450,13 @@ export function EmailSettings() {
               <div className="text-center py-8 text-muted-foreground">
                 <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhuma conta configurada</p>
-                <p className="text-sm">Adicione uma conta para começar a enviar emails</p>
+                <p className="text-sm">
+                  {isMaster ? 'Adicione uma conta para começar a enviar emails' : 'Nenhuma conta atribuída a você'}
+                </p>
               </div>
             )}
           </CardContent>
         </Card>
-
       </div>
     </ScrollArea>
   );
