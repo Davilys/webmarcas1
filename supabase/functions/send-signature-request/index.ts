@@ -102,54 +102,75 @@ serve(async (req) => {
     // Send via Email
     if (channels.includes('email') && recipientEmail) {
       try {
-        // Fetch default email account
-        const { data: emailAccount } = await supabase
-          .from('email_accounts')
+        // Fetch signature_request template from email_templates
+        const { data: emailTemplate } = await supabase
+          .from('email_templates')
           .select('*')
-          .eq('is_default', true)
+          .eq('trigger_event', 'signature_request')
+          .eq('is_active', true)
           .single();
 
-        if (emailAccount) {
-          // Use send-email edge function
-          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              to: recipientEmail,
-              subject: `[WebMarcas] ${documentTypeName} pendente de assinatura - ${contract.subject}`,
-              body: `Olá ${recipientName},
+        const expirationDate = contract.signature_expires_at
+          ? new Date(contract.signature_expires_at).toLocaleDateString('pt-BR')
+          : '7 dias';
 
-Você possui um documento pendente de assinatura eletrônica:
+        let emailSubject: string;
+        let emailBody: string;
 
-📄 ${documentTypeName}: ${contract.subject}
+        if (emailTemplate) {
+          // Use customizable template from database
+          emailSubject = emailTemplate.subject
+            .replace(/\{\{nome\}\}/g, recipientName)
+            .replace(/\{\{nome_cliente\}\}/g, recipientName)
+            .replace(/\{\{marca\}\}/g, contract.subject || '')
+            .replace(/\{\{documento_tipo\}\}/g, documentTypeName)
+            .replace(/\{\{link_assinatura\}\}/g, signatureUrl)
+            .replace(/\{\{data_expiracao\}\}/g, expirationDate);
 
-Clique no link abaixo para assinar digitalmente:
-${signatureUrl}
-
-⚠️ Este link expira em ${new Date(contract.signature_expires_at!).toLocaleDateString('pt-BR')}.
-
-A assinatura eletrônica tem validade jurídica conforme Lei 14.063/2020 e será registrada em blockchain para garantir autenticidade.
-
-Dúvidas? Entre em contato:
-📞 (11) 4200-1656
-📧 contato@webmarcas.com.br
-
-Atenciosamente,
-Equipe WebMarcas`,
-            }),
-          });
-
-          results.push({ 
-            channel: 'email', 
-            success: emailResponse.ok,
-            error: emailResponse.ok ? undefined : 'Erro ao enviar email'
-          });
+          emailBody = emailTemplate.body
+            .replace(/\{\{nome\}\}/g, recipientName)
+            .replace(/\{\{nome_cliente\}\}/g, recipientName)
+            .replace(/\{\{marca\}\}/g, contract.subject || '')
+            .replace(/\{\{documento_tipo\}\}/g, documentTypeName)
+            .replace(/\{\{link_assinatura\}\}/g, signatureUrl)
+            .replace(/\{\{data_expiracao\}\}/g, expirationDate);
         } else {
-          results.push({ channel: 'email', success: false, error: 'Conta de email não configurada' });
+          // Fallback: default content if template is missing or inactive
+          emailSubject = `[WebMarcas] ${documentTypeName} pendente de assinatura - ${contract.subject}`;
+          emailBody = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+<p>Olá <strong>${recipientName}</strong>,</p>
+<p>Você possui um documento pendente de assinatura eletrônica:</p>
+<p>📄 <strong>${documentTypeName}</strong>: ${contract.subject}</p>
+<p><a href="${signatureUrl}" style="display:inline-block;background:#4f46e5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">✍️ Assinar Documento</a></p>
+<p style="color:#e74c3c;">⚠️ Este link expira em ${expirationDate}.</p>
+<p>A assinatura eletrônica tem validade jurídica conforme Lei 14.063/2020.</p>
+<hr/>
+<p style="font-size:13px;color:#888;">📞 (11) 4200-1656 | 📧 contato@webmarcas.com.br</p>
+</div>`;
         }
+
+        // Call send-email directly (uses Resend - no SMTP dependency)
+        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            to: [recipientEmail],
+            subject: emailSubject,
+            html: emailBody,
+          }),
+        });
+
+        const emailResult = await emailResponse.json().catch(() => ({}));
+        console.log('Email send result:', emailResult);
+
+        results.push({ 
+          channel: 'email', 
+          success: emailResponse.ok,
+          error: emailResponse.ok ? undefined : (emailResult?.error || 'Erro ao enviar email')
+        });
       } catch (emailError) {
         console.error('Email error:', emailError);
         results.push({ channel: 'email', success: false, error: 'Erro ao enviar email' });
