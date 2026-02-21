@@ -1,26 +1,40 @@
 
-# ✅ Correcao de Notificacoes de Contrato + Template de Link de Assinatura
+# Correcao: Notificacao "Pagamento Recebido" enviada antes do pagamento
 
-## Status: CONCLUÍDO
+## Problema
 
-### O que foi feito:
+A Edge Function `confirm-payment` dispara o email `payment_received` (linha 266) assim que o cliente conclui o formulario de checkout. Nesse momento o cliente **ainda nao pagou** - ele apenas assinou o contrato e escolheu a forma de pagamento. O email de "Pagamento confirmado! Seu processo esta em andamento" e enviado prematuramente.
 
-1. **Migração de Banco** — Template `signature_request` inserido na tabela `email_templates` com HTML profissional e variáveis `{{nome}}`, `{{link_assinatura}}`, `{{data_expiracao}}`, `{{marca}}`, `{{documento_tipo}}`
+O webhook do Asaas (`asaas-webhook/index.ts`) **ja dispara** `payment_received` corretamente quando o pagamento e de fato confirmado (status RECEIVED/CONFIRMED). Portanto o disparo em `confirm-payment` e duplicado e prematuro.
 
-2. **Edge Function `send-signature-request`** — Refatorada:
-   - Removida dependência da tabela `email_accounts` (causa do bug "Conta de email não configurada")
-   - Busca template `signature_request` do banco de dados
-   - Substitui variáveis dinamicamente
-   - Chama `send-email` (Resend) diretamente, sem condicional
-   - Fallback com texto padrão se template estiver desativado
-   - Campo `to` corrigido para array
+## Solucao
 
-3. **Frontend `AutomatedEmailSettings.tsx`** — Atualizado:
-   - `signature_request` adicionado ao `triggerConfig`
-   - Variáveis `{{link_assinatura}}`, `{{data_expiracao}}`, `{{documento_tipo}}` adicionadas
-   - Preview com dados de exemplo atualizado
+### Arquivo: `supabase/functions/confirm-payment/index.ts`
 
-### Resultado:
-- Botão "Enviar para Cliente" (azul) → envia email + WhatsApp com o link ✅
-- Ícone de email (topo) → envia email com o link ✅
-- Template editável na aba E-mails Automáticos ✅
+**Remover** o bloco de disparo do `payment_received` (linhas 262-286). Este bloco:
+
+```
+// STEP 4.1: Trigger payment_received email automation
+try {
+  await fetch(...trigger-email-automation..., {
+    body: JSON.stringify({
+      trigger_event: 'payment_received',
+      ...
+    }),
+  });
+} catch (emailError) { ... }
+```
+
+Sera **removido por completo**. O disparo de `contract_signed` (linhas 234-259) continua, pois esse evento de fato ocorre nesse momento.
+
+### Nenhum outro arquivo alterado
+
+- `asaas-webhook/index.ts` ja dispara `payment_received` corretamente quando o Asaas confirma o pagamento
+- O template "Pagamento Recebido" nos E-mails Automaticos continua funcionando normalmente
+- Nenhuma alteracao no frontend
+
+## Resultado
+
+- Ao assinar e concluir: envia apenas `contract_signed` (correto)
+- Ao Asaas confirmar pagamento via webhook: envia `payment_received` (correto)
+- Nenhum email prematuro de "Pagamento confirmado"
