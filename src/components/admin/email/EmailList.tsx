@@ -97,37 +97,38 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
   const title = folder === 'inbox' ? 'Caixa de Entrada' : folder === 'sent' ? 'Enviados' : 'Rascunhos';
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
+    <Card className="h-full flex flex-col border-0 md:border shadow-none md:shadow-sm">
+      <CardHeader className="pb-3 flex-shrink-0 px-3 md:px-6">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+            <Mail className="h-4 w-4 md:h-5 md:w-5" />
             {title}
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 md:gap-2">
             {folder === 'inbox' && (
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
+                className="h-8 text-xs"
               >
-                <RefreshCw className={cn("h-4 w-4 mr-1", syncMutation.isPending && "animate-spin")} />
-                Sincronizar
+                <RefreshCw className={cn("h-3.5 w-3.5 md:mr-1", syncMutation.isPending && "animate-spin")} />
+                <span className="hidden md:inline">Sincronizar</span>
               </Button>
             )}
-            <Badge variant="secondary">
-              {emails?.length || 0} {emails?.length === 1 ? 'email' : 'emails'}
+            <Badge variant="secondary" className="text-[10px] md:text-xs">
+              {emails?.length || 0}
             </Badge>
           </div>
         </div>
-        <div className="relative mt-3">
+        <div className="relative mt-2 md:mt-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar emails..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9 md:h-10"
           />
         </div>
       </CardHeader>
