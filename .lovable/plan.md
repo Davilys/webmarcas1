@@ -1,40 +1,67 @@
 
-# Correcao: Notificacao "Pagamento Recebido" enviada antes do pagamento
 
-## Problema
+# Dashboard de Analytics + Historico de E-mails Automaticos
 
-A Edge Function `confirm-payment` dispara o email `payment_received` (linha 266) assim que o cliente conclui o formulario de checkout. Nesse momento o cliente **ainda nao pagou** - ele apenas assinou o contrato e escolheu a forma de pagamento. O email de "Pagamento confirmado! Seu processo esta em andamento" e enviado prematuramente.
+## O que sera adicionado
 
-O webhook do Asaas (`asaas-webhook/index.ts`) **ja dispara** `payment_received` corretamente quando o pagamento e de fato confirmado (status RECEIVED/CONFIRMED). Portanto o disparo em `confirm-payment` e duplicado e prematuro.
+Duas sub-abas internas na secao "E-mails Automaticos": **Dashboard** e **Templates** (conteudo atual). Nada do que existe sera alterado.
 
-## Solucao
+## Layout do Dashboard
 
-### Arquivo: `supabase/functions/confirm-payment/index.ts`
+### Linha 1 - 4 Cards de Metricas (animados com framer-motion)
+- **Total Enviados** (icone Mail) - total geral de emails
+- **Entregues** (icone CheckCircle2, verde) - status = "sent"
+- **Com Erro** (icone AlertCircle, vermelho) - status = "error"/"failed"
+- **Taxa de Sucesso** (icone TrendingUp, azul) - percentual com barra de progresso
 
-**Remover** o bloco de disparo do `payment_received` (linhas 262-286). Este bloco:
+### Linha 2 - 2 Graficos (Recharts, ja instalado)
+- **Coluna 1**: BarChart - Envios por tipo de notificacao (contract_signed, form_started, user_created, payment_received, signature_request, manual, etc.) com cores do triggerConfig
+- **Coluna 2**: AreaChart - Volume diario nos ultimos 30 dias (tendencia)
 
+### Linha 3 - Tabela de Historico
+- Ultimos 50 emails em tabela premium com ScrollArea
+- Colunas: Data/Hora, Destinatario, Assunto, Tipo (Badge colorido por trigger_type), Status (Badge verde/vermelho)
+- Tooltip no icone de erro mostrando a mensagem de erro
+- Cada tipo de notificacao tem badge com label e cor do triggerConfig
+
+## Detalhes Tecnicos
+
+### Arquivo modificado
+`src/components/admin/settings/AutomatedEmailSettings.tsx`
+
+### Dados utilizados
+- Tabela `email_logs` (ja existe com 71+ registros): campos `status`, `trigger_type`, `to_email`, `subject`, `sent_at`, `error_message`
+- Nova query `useQuery(['email-logs-analytics'])` buscando todos os logs ordenados por `sent_at DESC`
+
+### Dependencias (todas ja instaladas)
+- `Recharts` (BarChart, AreaChart, ResponsiveContainer)
+- `framer-motion` (animacao dos cards)
+- Shadcn: Tabs, Card, Badge, Table, ScrollArea, Progress, Tooltip
+
+### Estrutura interna
 ```
-// STEP 4.1: Trigger payment_received email automation
-try {
-  await fetch(...trigger-email-automation..., {
-    body: JSON.stringify({
-      trigger_event: 'payment_received',
-      ...
-    }),
-  });
-} catch (emailError) { ... }
+AutomatedEmailSettings
+  |-- Tabs (Dashboard | Templates)
+       |-- Dashboard tab
+       |    |-- MetricCards (4 cards)
+       |    |-- Charts (BarChart + AreaChart)
+       |    |-- HistoryTable (ultimos 50 emails)
+       |-- Templates tab
+            |-- (conteudo atual sem alteracoes)
 ```
 
-Sera **removido por completo**. O disparo de `contract_signed` (linhas 234-259) continua, pois esse evento de fato ocorre nesse momento.
+### Mapeamento de tipos na tabela
+Todos os `trigger_type` existentes serao exibidos com label e cor:
+- `contract_signed` -> "Contrato Assinado" (verde)
+- `form_started` -> "Boas-Vindas" (azul)
+- `user_created` -> "Credenciais" (roxo)
+- `payment_received` -> "Pagamento" (sky)
+- `signature_request` -> "Link Assinatura" (indigo)
+- `manual` -> "Manual" (cinza)
+- `processual` -> "Processual" (amber)
+- Qualquer outro -> label capitalizado com cor neutra
 
-### Nenhum outro arquivo alterado
+### Nenhuma alteracao em banco de dados
+- Tabela `email_logs` ja possui todos os dados necessarios
+- Nenhuma migracao necessaria
 
-- `asaas-webhook/index.ts` ja dispara `payment_received` corretamente quando o Asaas confirma o pagamento
-- O template "Pagamento Recebido" nos E-mails Automaticos continua funcionando normalmente
-- Nenhuma alteracao no frontend
-
-## Resultado
-
-- Ao assinar e concluir: envia apenas `contract_signed` (correto)
-- Ao Asaas confirmar pagamento via webhook: envia `payment_received` (correto)
-- Nenhum email prematuro de "Pagamento confirmado"
