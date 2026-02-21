@@ -1,98 +1,53 @@
 
+# Adicionar Dashboard na Aba Notificacoes das Configuracoes
 
-# Abas SMS e WhatsApp com Dashboard + Templates de Notificacoes
+## O que sera feito
 
-## O que sera criado
+Adicionar um dashboard de analytics na aba "Notificacoes" das Configuracoes, igual ao que ja existe na aba "E-mails Automaticos". A aba passara a ter duas sub-abas internas: **Dashboard** e **Templates** (conteudo atual).
 
-Duas novas abas na secao "Comunicacao" das Configuracoes: **SMS Automatico** e **WhatsApp Automatico (BotConversa)**, cada uma com:
-1. Dashboard de analytics (igual ao de e-mails)
-2. Templates de notificacao (igual aos templates de e-mail automaticos)
+## Dados Disponveis
 
-## Estrutura de Navegacao
+A tabela `notifications` possui 42 registros com os campos: `id`, `user_id`, `title`, `message`, `type` (info/success/error/warning), `read`, `link`, `created_at`, `channels` (jsonb).
 
-A secao "Comunicacao" ficara:
-- E-mails Automaticos (existente)
-- **SMS Automatico** (NOVO) - icone Smartphone, cor cyan
-- **WhatsApp Automatico** (NOVO) - icone MessageCircle, cor emerald
-- E-mail (existente)
-- WhatsApp (existente)
-- Notificacoes (existente)
+Distribuicao atual: 21 info, 20 success, 1 error.
 
-## Alteracao no Banco de Dados
+## Layout
 
-Sera criada uma nova tabela `channel_notification_templates` para armazenar os templates de SMS e WhatsApp, com campos:
-- `id` (uuid)
-- `name` (text) - nome do template
-- `message` (text) - conteudo da mensagem
-- `trigger_event` (text) - gatilho (contrato_assinado, link_assinatura_gerado, pagamento_confirmado, etc.)
-- `channel` (text) - "sms" ou "whatsapp"
-- `is_active` (boolean)
-- `created_by` (uuid)
-- `created_at`, `updated_at` (timestamps)
-
-RLS: apenas admins podem gerenciar.
-
-## Layout de Cada Aba (SMS e WhatsApp)
-
-Cada aba tera sub-abas internas (identico ao E-mails Automaticos):
-
-### Sub-aba "Dashboard"
-Componente reutilizavel `ChannelAnalyticsDashboard` que recebe `channel` como prop:
+### Sub-aba Dashboard
 
 **4 Cards de Metricas** (animados com framer-motion):
-- Total Enviados
-- Entregues (status = "sent")
-- Com Erro (status = "failed")
-- Taxa de Sucesso (%)
+- Total de Notificacoes enviadas
+- Lidas (read = true)
+- Nao Lidas (read = false) 
+- Taxa de Leitura (%)
 
 **2 Graficos** (Recharts):
-- BarChart: envios por tipo de evento (contrato_assinado, link_assinatura_gerado, pagamento_confirmado, manual)
-- AreaChart: volume diario dos ultimos 30 dias
+- BarChart: notificacoes por tipo (info, success, warning, error) com cores correspondentes
+- AreaChart: volume diario nos ultimos 30 dias
 
 **Tabela de Historico**:
-- Ultimos 50 registros da tabela `notification_dispatch_logs` filtrados por canal
-- Colunas: Data/Hora, Destinatario (telefone), Tipo (badge colorido), Tentativas, Status
+- Ultimas 50 notificacoes
+- Colunas: Data/Hora, Destinatario (via profiles.full_name), Titulo, Tipo (badge colorido), Status (lida/nao lida)
 
-### Sub-aba "Templates"
-Gerenciamento completo de templates do canal:
-- Lista de templates com badge de status (ativo/inativo), icone do gatilho, switch para ativar/desativar
-- Botao para criar novo template
-- Dialog de edicao com campos: Nome, Mensagem (com variaveis disponiveis), Gatilho, Switch ativo
-- Variaveis: nome, marca, numero_processo, link_assinatura, data_expiracao
+### Sub-aba Templates
+Conteudo atual do NotificationSettings (sem alteracoes)
 
 ## Detalhes Tecnicos
 
-### Arquivos criados
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/components/admin/settings/ChannelAnalyticsDashboard.tsx` | Dashboard reutilizavel (recebe channel como prop) |
-| `src/components/admin/settings/AutomatedSMSSettings.tsx` | Aba SMS com tabs Dashboard + Templates |
-| `src/components/admin/settings/AutomatedWhatsAppSettings.tsx` | Aba WhatsApp com tabs Dashboard + Templates |
-| `src/components/admin/settings/ChannelNotificationTemplates.tsx` | Componente de templates reutilizavel (recebe channel como prop) |
+### Arquivo criado
+- `src/components/admin/settings/NotificationAnalyticsDashboard.tsx` - Dashboard reutilizavel para notificacoes CRM
 
 ### Arquivo modificado
-| Arquivo | Descricao |
-|---------|-----------|
-| `src/pages/admin/Configuracoes.tsx` | Adicionar 2 itens no nav + imports + mapeamento |
+- `src/components/admin/settings/NotificationSettings.tsx` - Adicionar Tabs internas (Dashboard | Templates), wrapping o conteudo atual na aba Templates
 
-### Dados utilizados
-- **Dashboard**: tabela `notification_dispatch_logs` (ja existe com 138 registros), filtrada por `channel`
-- **Templates**: nova tabela `channel_notification_templates`
+### Mapeamento de tipos
+- `info` -> "Informacao" (azul)
+- `success` -> "Sucesso" (verde)
+- `warning` -> "Aviso" (amber)
+- `error` -> "Urgente" (vermelho)
 
-### Mapeamento de tipos de evento
-Os `event_type` da tabela `notification_dispatch_logs`:
-- `contrato_assinado` -> "Contrato Assinado" (verde)
-- `link_assinatura_gerado` -> "Link Assinatura" (indigo)
-- `pagamento_confirmado` -> "Pagamento" (sky)
-- `manual` -> "Manual" (cinza)
-- `formulario_preenchido` -> "Formulario" (azul)
-- `cobranca_gerada` -> "Cobranca" (amber)
-- `fatura_vencida` -> "Fatura Vencida" (vermelho)
+### Dependencias (todas ja instaladas)
+- Recharts, framer-motion, shadcn (Tabs, Card, Badge, Table, ScrollArea, Progress, Tooltip)
 
-### Card informativo por canal
-- SMS: informacao sobre o provedor Zenvia e link para aba Integracoes
-- WhatsApp: informacao sobre o provedor BotConversa e link para aba Integracoes
-
-### Dependencias
-Todas ja instaladas: Recharts, framer-motion, shadcn (Tabs, Card, Badge, Table, ScrollArea, Dialog, Switch)
-
+### Nenhuma alteracao em banco de dados
+- A tabela `notifications` ja possui todos os dados necessarios
