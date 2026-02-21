@@ -1,50 +1,42 @@
 
 
-# Vincular Contas de E-mail a Administradores
+# Busca com Autocomplete no Seletor de Cliente (Enviar Documento)
 
-## Resumo
+## Problema
 
-Adicionar um seletor de administrador no formulario de adicionar conta de e-mail, permitindo que o ADM Master atribua cada conta a um administrador especifico. O ADM Master ve todas as contas; os demais so veem as contas atribuidas a eles.
+O seletor de cliente no dialogo "Enviar Documento" da pagina admin de Documentos usa um dropdown simples (`Select`), dificultando encontrar clientes em uma base com mais de 2.300 registros. Precisa de um campo de busca com autocomplete.
 
-## Mudancas no Banco de Dados
+## Sobre o Tipo de Documento
 
-Adicionar coluna `assigned_to` (uuid, nullable) na tabela `email_accounts` para vincular a conta a um administrador especifico. A coluna `user_id` continua registrando quem criou a conta.
+O mapeamento de tipos ja funciona corretamente. Quando o admin seleciona um tipo (ex: "Procuracao"), o documento e salvo com `document_type: 'procuracao'` e aparece automaticamente na aba correspondente na area do cliente. Nenhuma alteracao necessaria nessa parte.
 
-```text
-email_accounts
-  + assigned_to (uuid, nullable) -- ID do admin que tem acesso a essa conta
-```
+## Solucao
 
-## Mudancas no Frontend (EmailSettings.tsx)
+Substituir o `<Select>` de cliente por um componente de busca com autocomplete usando `Command` (cmdk), com busca server-side no Supabase. Mesmo padrao ja utilizado no `CreateContractDialog.tsx`.
 
-### 1. Carregar lista de administradores
+## Mudancas Tecnicas
 
-Buscar todos os usuarios com role `admin` na tabela `user_roles`, depois buscar seus nomes/emails na tabela `profiles`. Mesmo padrao ja usado em `ClientDetailSheet.tsx` e `AdminChatWidget.tsx`.
+### Arquivo: `src/pages/admin/Documentos.tsx`
 
-### 2. Novo campo "Administrador Vinculado" no formulario
+Dentro do componente `UploadDialog`:
 
-Adicionar um `<Select>` entre os campos de Email/Nome e os campos SMTP, com a lista de administradores. Campo obrigatorio.
+1. **Remover** o `<Select>` de cliente (linhas 421-431)
+2. **Adicionar** um campo `<Input>` com busca por nome/email/telefone
+3. **Usar** `Command` com `shouldFilter={false}` para listar resultados do servidor
+4. **Busca server-side**: query ao Supabase com `ilike` no campo digitado, limitado a 20 resultados
+5. **Exibir** nome e email de cada resultado para facilitar identificacao
+6. **Ao selecionar**, preencher o `user_id` e mostrar o nome selecionado com botao de limpar (X)
 
-### 3. Filtrar contas por permissao
+### Comportamento esperado
 
-- ADM Master (`davillys@gmail.com`): ve todas as contas
-- Outros admins: veem apenas contas onde `assigned_to` = seu proprio `user_id`
+- Campo vazio: placeholder "Buscar por nome ou email..."
+- Ao digitar (minimo 2 caracteres): lista de clientes filtrada aparece abaixo
+- Ao selecionar: campo mostra o nome do cliente com opcao de limpar
+- Clicar fora: lista fecha automaticamente
 
-### 4. Exibir nome do admin vinculado na lista
+### Nenhum outro arquivo modificado
 
-Cada conta na lista mostra o nome do administrador atribuido com um badge (ex: "Atribuido a: Joao Silva").
-
-## Arquivos Modificados
-
-| Arquivo | Alteracao |
-|---|---|
-| Migracao SQL | Adicionar coluna `assigned_to` na tabela `email_accounts` |
-| `src/components/admin/email/EmailSettings.tsx` | Adicionar seletor de admin, filtro por permissao, exibir admin vinculado na lista |
-
-## O que NAO muda
-
+- Nenhuma migracao de banco necessaria
 - Nenhuma Edge Function alterada
-- Logica de teste de conexao permanece igual
-- Logica de envio de e-mails permanece igual
-- Nenhuma outra pagina e modificada
+- A area do cliente ja categoriza documentos corretamente pelas abas
 
