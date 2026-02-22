@@ -408,20 +408,27 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[chat-inpi-legal] Sending to OpenAI: ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const aiApiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
+    const aiUrl = LOVABLE_API_KEY 
+      ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
+      : 'https://api.openai.com/v1/chat/completions';
+    const aiModel = LOVABLE_API_KEY ? 'google/gemini-2.5-flash' : 'gpt-4o';
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    console.log(`[chat-inpi-legal] Sending to AI (${aiModel}): ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
+
+    const response = await fetch(aiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${aiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: aiModel,
         messages: apiMessages,
         stream: true,
         max_tokens: 4096,
-        temperature: 0.7,
+        temperature: 0.5,
       }),
     });
 

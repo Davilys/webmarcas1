@@ -126,14 +126,21 @@ async function aiExtractFromBlocks(args: {
 
   const combinedText = blocks.join("\n\n---BLOCO---\n\n");
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const aiApiKey = LOVABLE_API_KEY || apiKey;
+  const aiUrl = LOVABLE_API_KEY 
+    ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
+    : 'https://api.openai.com/v1/chat/completions';
+  const aiModel = LOVABLE_API_KEY ? 'google/gemini-2.5-flash' : 'gpt-4o-mini';
+
+  const resp = await fetch(aiUrl, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${aiApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: aiModel,
       messages: [
         {
           role: "system",
