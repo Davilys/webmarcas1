@@ -28,7 +28,7 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
   const syncMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('sync-imap-inbox', {
-        body: { limit: 10, account_id: accountId }
+        body: { account_id: accountId }
       });
       if (error) throw error;
       return data;

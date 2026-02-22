@@ -81,12 +81,11 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { account_id, limit = 10 }: SyncRequest = await req
+    const { account_id }: SyncRequest = await req
       .json()
       .catch(() => ({}));
 
-    // Cap at 10 to stay within CPU budget
-    const fetchLimit = Math.min(limit, 10);
+    const batchSize = 10; // process 10 at a time to stay within CPU budget
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -154,61 +153,66 @@ const handler = async (req: Request): Promise<Response> => {
     const syncedEmails: { subject: string; from: string }[] = [];
 
     if (totalMessages > 0) {
-      const startSeq = Math.max(1, totalMessages - fetchLimit + 1);
+      // Process ALL messages in batches of batchSize (oldest to newest)
+      let currentStart = 1;
+      
+      while (currentStart <= totalMessages) {
+        const currentEnd = Math.min(currentStart + batchSize - 1, totalMessages);
+        console.log(`Fetching batch ${currentStart}:${currentEnd} of ${totalMessages}`);
 
-      // Fetch ONLY headers (not full RFC822) to save CPU
-      const fetchResp = await sendCommand(
-        conn,
-        "A003",
-        `FETCH ${startSeq}:${totalMessages} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])`
-      );
+        const fetchResp = await sendCommand(
+          conn,
+          `A${100 + currentStart}`,
+          `FETCH ${currentStart}:${currentEnd} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])`
+        );
 
-      // Parse individual header blocks
-      const headerBlocks = fetchResp.split(/\* \d+ FETCH/);
+        const headerBlocks = fetchResp.split(/\* \d+ FETCH/);
 
-      for (const block of headerBlocks) {
-        if (!block.trim() || block.length < 30) continue;
+        for (const block of headerBlocks) {
+          if (!block.trim() || block.length < 30) continue;
 
-        try {
-          const headers = parseEnvelopeHeaders(block);
+          try {
+            const headers = parseEnvelopeHeaders(block);
 
-          // Check if already exists
-          const { data: existing } = await supabase
-            .from("email_inbox")
-            .select("id")
-            .eq("message_id", headers.messageId)
-            .single();
-
-          if (!existing) {
-            const emailData = {
-              account_id: emailAccount.id,
-              message_id: headers.messageId,
-              from_email: headers.from,
-              from_name: headers.fromName || null,
-              to_email: emailAccount.email_address,
-              subject: headers.subject,
-              body_text: null,
-              body_html: null,
-              received_at: new Date(headers.date).toISOString(),
-              is_read: false,
-              is_starred: false,
-              is_archived: false,
-            };
-
-            const { error: insertError } = await supabase
+            const { data: existing } = await supabase
               .from("email_inbox")
-              .insert(emailData);
+              .select("id")
+              .eq("message_id", headers.messageId)
+              .single();
 
-            if (!insertError) {
-              syncedEmails.push({
+            if (!existing) {
+              const emailData = {
+                account_id: emailAccount.id,
+                message_id: headers.messageId,
+                from_email: headers.from,
+                from_name: headers.fromName || null,
+                to_email: emailAccount.email_address,
                 subject: headers.subject,
-                from: headers.from,
-              });
+                body_text: null,
+                body_html: null,
+                received_at: new Date(headers.date).toISOString(),
+                is_read: false,
+                is_starred: false,
+                is_archived: false,
+              };
+
+              const { error: insertError } = await supabase
+                .from("email_inbox")
+                .insert(emailData);
+
+              if (!insertError) {
+                syncedEmails.push({
+                  subject: headers.subject,
+                  from: headers.from,
+                });
+              }
             }
+          } catch (parseError) {
+            console.error("Error parsing message:", parseError);
           }
-        } catch (parseError) {
-          console.error("Error parsing message:", parseError);
         }
+
+        currentStart = currentEnd + 1;
       }
     }
 
