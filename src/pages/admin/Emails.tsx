@@ -38,8 +38,10 @@ export interface Email {
   body_html?: string;
   is_read: boolean;
   is_starred: boolean;
+  is_archived?: boolean;
   received_at?: string;
   sent_at?: string;
+  folder?: string;
 }
 
 export interface EmailAccount {
@@ -211,14 +213,23 @@ export default function Emails() {
           email={selectedEmail}
           onBack={handleBack}
           onReply={() => handleReply(selectedEmail)}
+          onForward={(email) => {
+            setIsComposing(true);
+            setSelectedEmail(null);
+            setReplyTo(null);
+            setInitialTo('');
+            setInitialName('');
+            setAiDraftBody(`\n\n--- Encaminhado ---\nDe: ${email.from_name || email.from_email}\nAssunto: ${email.subject}\n\n${email.body_text || ''}`);
+          }}
           onUseDraftFromAI={(text) => handleAiDraft(text, selectedEmail)}
         />
       );
     }
 
     const listFolder = currentFolder.startsWith('filter-') ? 'inbox' : currentFolder;
-    const validListFolders: EmailFolder[] = ['inbox', 'sent', 'drafts', 'starred', 'archived', 'trash', 'scheduled', 'automated'];
-    const folderToShow = validListFolders.includes(listFolder as EmailFolder) ? listFolder as 'inbox' | 'sent' | 'drafts' : 'inbox';
+    const validListFolders = ['inbox', 'sent', 'drafts', 'starred', 'archived', 'trash', 'scheduled', 'automated'] as const;
+    type ValidFolder = typeof validListFolders[number];
+    const folderToShow: ValidFolder = validListFolders.includes(listFolder as ValidFolder) ? listFolder as ValidFolder : 'inbox';
 
     return (
       <EmailList
