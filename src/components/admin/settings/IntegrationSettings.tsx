@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   CreditCard, CheckCircle2, XCircle, Loader2, Save, RefreshCw,
-  Mail, MessageCircle, MessageSquare, Brain, Shield, Eye, EyeOff, Send,
-  Sparkles, Globe, FolderSync,
+  Mail, MessageCircle, MessageSquare, Brain, Shield, Send,
+  Sparkles, Globe, FolderSync, Trash2,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ function useSystemSetting<T>(key: string, fallback: T) {
     onError: () => toast.error('Erro ao salvar configurações'),
   });
 
-  return { local, setLocal, isLoading, save: () => mutation.mutate(local), isSaving: mutation.isPending };
+  return { local, setLocal, isLoading, save: () => mutation.mutate(local), isSaving: mutation.isPending, saved: data ?? fallback };
 }
 
 // ── Card wrapper ─────────────────────────────────────────────
@@ -78,23 +78,43 @@ function IntegrationCard({
   );
 }
 
-// ── Password input ───────────────────────────────────────────
-function SecretInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  const [show, setShow] = useState(false);
+// ── Secure API Key input ─────────────────────────────────────
+// Once saved (savedValue has content), the key is masked and cannot be viewed, copied or edited.
+// The user can only delete it to enter a new one.
+function SecretInput({ value, onChange, placeholder, savedValue }: { 
+  value: string; onChange: (v: string) => void; placeholder?: string; savedValue?: string;
+}) {
+  const isSaved = !!(savedValue && savedValue.length > 0 && value === savedValue);
+
+  if (isSaved) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          type="password"
+          value="••••••••••••••••"
+          readOnly
+          className="font-mono text-sm bg-muted/40 cursor-not-allowed"
+          tabIndex={-1}
+        />
+        <Button variant="destructive" size="sm" type="button"
+          onClick={() => onChange('')}
+          className="shrink-0">
+          <Trash2 className="h-4 w-4 mr-1" />
+          Apagar
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <Input
-        type={show ? 'text' : 'password'}
+        type="password"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pr-10 font-mono text-sm"
+        className="font-mono text-sm"
       />
-      <Button variant="ghost" size="icon" type="button"
-        className="absolute right-0 top-0 h-full px-3"
-        onClick={() => setShow(s => !s)}>
-        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </Button>
     </div>
   );
 }
@@ -268,7 +288,7 @@ export function IntegrationSettings() {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>API Key Asaas</Label>
-            <SecretInput value={asaas.local.api_key} onChange={v => asaas.setLocal({ ...asaas.local, api_key: v })} placeholder="$aact_xxxxxxxxxxxxxxxx" />
+            <SecretInput value={asaas.local.api_key} onChange={v => asaas.setLocal({ ...asaas.local, api_key: v })} placeholder="$aact_xxxxxxxxxxxxxxxx" savedValue={(asaas.saved as AsaasSettings).api_key} />
             <p className="text-xs text-muted-foreground">Obtenha em asaas.com → Configurações → Integrações → API. O secret do servidor (ASAAS_API_KEY) tem prioridade.</p>
           </div>
           <div className="space-y-1.5">
@@ -320,7 +340,7 @@ export function IntegrationSettings() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>API Key Resend</Label>
-            <SecretInput value={email.local.api_key} onChange={v => email.setLocal({ ...email.local, api_key: v })} placeholder="re_xxxxxxxxxxxxxxxxxx" />
+            <SecretInput value={email.local.api_key} onChange={v => email.setLocal({ ...email.local, api_key: v })} placeholder="re_xxxxxxxxxxxxxxxxxx" savedValue={(email.saved as EmailProviderSettings).api_key} />
             <p className="text-xs text-muted-foreground">Obtenha em resend.com → API Keys</p>
           </div>
           <div className="space-y-1.5">
@@ -370,7 +390,7 @@ export function IntegrationSettings() {
           </div>
           <div className="space-y-1.5">
             <Label>Token de Autenticação (opcional)</Label>
-            <SecretInput value={botconversa.local.auth_token} onChange={v => botconversa.setLocal({ ...botconversa.local, auth_token: v })} placeholder="Bearer token se necessário" />
+            <SecretInput value={botconversa.local.auth_token} onChange={v => botconversa.setLocal({ ...botconversa.local, auth_token: v })} placeholder="Bearer token se necessário" savedValue={(botconversa.saved as BotconversaSettings).auth_token} />
           </div>
           <div className="space-y-1.5">
             <Label>Telefone para Teste (com DDD)</Label>
@@ -410,7 +430,7 @@ export function IntegrationSettings() {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>API Key Zenvia</Label>
-            <SecretInput value={sms.local.api_key} onChange={v => sms.setLocal({ ...sms.local, api_key: v })} placeholder="Seu token da Zenvia" />
+            <SecretInput value={sms.local.api_key} onChange={v => sms.setLocal({ ...sms.local, api_key: v })} placeholder="Seu token da Zenvia" savedValue={(sms.saved as SmsSettings).api_key} />
             <p className="text-xs text-muted-foreground">Obtenha em zenvia.com → Integrações → API Token. Plano gratuito disponível.</p>
           </div>
           <div className="space-y-1.5">
@@ -482,7 +502,7 @@ export function IntegrationSettings() {
         </div>
         <div className="space-y-1.5">
           <Label>API Key OpenAI</Label>
-          <SecretInput value={openai.local.api_key} onChange={v => openai.setLocal({ ...openai.local, api_key: v })} placeholder="sk-proj-..." />
+          <SecretInput value={openai.local.api_key} onChange={v => openai.setLocal({ ...openai.local, api_key: v })} placeholder="sk-proj-..." savedValue={(openai.saved as OpenAISettings).api_key} />
           <p className="text-xs text-muted-foreground">Obtenha em platform.openai.com → API Keys. O secret do servidor (OPENAI_API_KEY) tem prioridade.</p>
         </div>
         <div className="space-y-1.5">
@@ -562,7 +582,7 @@ export function IntegrationSettings() {
         </div>
         <div className="space-y-1.5">
           <Label>API Key Firecrawl</Label>
-          <SecretInput value={firecrawl.local.api_key} onChange={v => firecrawl.setLocal({ ...firecrawl.local, api_key: v })} placeholder="fc-xxxxxxxxxxxxxxxx" />
+          <SecretInput value={firecrawl.local.api_key} onChange={v => firecrawl.setLocal({ ...firecrawl.local, api_key: v })} placeholder="fc-xxxxxxxxxxxxxxxx" savedValue={(firecrawl.saved as FirecrawlSettings).api_key} />
           <p className="text-xs text-muted-foreground">Obtenha em firecrawl.dev → Dashboard → API Keys. O secret do servidor (FIRECRAWL_API_KEY) tem prioridade.</p>
         </div>
         <div className="space-y-1.5">
@@ -606,7 +626,7 @@ export function IntegrationSettings() {
           </div>
           <div className="space-y-1.5">
             <Label>Token da API</Label>
-            <SecretInput value={perfex.local.api_token} onChange={v => perfex.setLocal({ ...perfex.local, api_token: v })} placeholder="Token de autenticação Perfex" />
+            <SecretInput value={perfex.local.api_token} onChange={v => perfex.setLocal({ ...perfex.local, api_token: v })} placeholder="Token de autenticação Perfex" savedValue={(perfex.saved as PerfexSettings).api_token} />
             <p className="text-xs text-muted-foreground">Obtenha em Perfex → Configurações → API. Os secrets do servidor (PERFEX_API_URL / PERFEX_API_TOKEN) têm prioridade.</p>
           </div>
         </div>
