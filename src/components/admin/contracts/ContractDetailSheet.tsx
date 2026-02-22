@@ -427,16 +427,29 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     }
     setGeneratingNewLink(true);
     try {
-      // 1. Fetch active template
+      const docType = contract.document_type || 'contract';
+
+      // 1. Fetch the correct active template based on document type
+      // Map document_type to template name patterns
+      const templateNamePatterns: Record<string, string[]> = {
+        'contract': ['%Registro de Marca%', '%Contrato Padrão%'],
+        'procuracao': ['%Procura%'],
+        'distrato_multa': ['%Distrato com Multa%', '%Distrato%Multa%'],
+        'distrato_sem_multa': ['%Distrato sem Multa%'],
+      };
+
+      const patterns = templateNamePatterns[docType] || templateNamePatterns['contract'];
+      const orFilter = patterns.map(p => `name.ilike.${p}`).join(',');
+
       const { data: templateData, error: templateError } = await supabase
         .from('contract_templates')
         .select('content')
         .eq('is_active', true)
-        .or('name.ilike.%Registro de Marca%,name.ilike.%Contrato Padrão%')
+        .or(orFilter)
         .order('created_at', { ascending: false })
         .limit(1);
       
-      if (templateError || !templateData?.length) throw new Error('Template padrão não encontrado');
+      if (templateError || !templateData?.length) throw new Error(`Template ativo não encontrado para tipo: ${DOCUMENT_TYPE_LABELS[docType] || docType}`);
 
       // 2. Fetch client profile
       const { data: profile, error: profileError } = await supabase
@@ -471,12 +484,15 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
         paymentMethod: contract.payment_method || '',
       });
 
-      // 4. Generate full HTML
+      // 4. Generate full HTML using the correct document type
       const newHtml = generateContractPrintHTML(
         replacedContent,
         contract.subject || '',
         profile.full_name || '',
         profile.cpf || '',
+        undefined, // no blockchain signature
+        true,
+        docType as any,
       );
 
       // 5. Update contract_html in database
