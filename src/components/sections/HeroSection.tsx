@@ -63,7 +63,7 @@ const HeroSection = () => {
   ];
 
   return (
-    <section id="home" className="relative min-h-[85vh] flex items-center hero-glow overflow-hidden">
+    <section id="home" className="relative min-h-[85vh] flex items-center hero-glow overflow-x-clip overflow-y-visible">
       {/* Background elements */}
       <div className="absolute inset-0 bg-hero-gradient" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
@@ -172,7 +172,7 @@ const HeroSection = () => {
         </div>
 
         {/* Stats */}
-        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 max-w-3xl mx-auto">
+        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-10 max-w-4xl mx-auto">
           {stats.map((stat, index) => (
             <motion.div 
               key={index} 
