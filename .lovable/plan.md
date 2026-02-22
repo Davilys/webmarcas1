@@ -1,93 +1,68 @@
 
 
-# Implementar Buscas REAIS com Brave Search API
+# Buscas REAIS via DuckDuckGo (sem chave API)
 
-## Problema Atual
+## Problema
 
-O motor de viabilidade pede ao GPT-5.2 "voce conhece essa marca?" -- a IA nao tem acesso em tempo real ao INPI, entao sempre responde "nao encontrei nada". Resultado: tudo aparece como "viavel" mesmo para marcas ja registradas.
+As 3 funcoes de busca (INPI, CNPJ, Internet) perguntam ao GPT-5.2 "voce conhece essa marca?" -- a IA nao tem acesso em tempo real, entao sempre responde "nao encontrei". Tudo aparece como "viavel".
 
 ## Solucao
 
-Usar Brave Search API para fazer buscas reais na internet, incluindo no site do INPI, bases de CNPJ e redes sociais.
+Usar DuckDuckGo HTML Search -- gratuito, sem cadastro, sem chave API. Fazemos fetch da pagina de resultados e parseamos o HTML para extrair titulos, URLs e descricoes reais.
 
-## Etapas
+## Como funciona
 
-### 1. Configurar BRAVE_API_KEY como secret
-
-Armazenar a chave API do Brave Search como secret do projeto para uso na edge function.
-
-### 2. Reescrever a edge function `inpi-viability-check/index.ts`
-
-Substituir as 3 funcoes de busca que hoje usam IA por buscas reais via Brave Search:
-
-**searchINPI (Etapa 3) -- BUSCA REAL:**
-```
-Brave Search: "webmarcas" site:busca.inpi.gov.br
-Brave Search: "webmarcas" INPI registro marca
-```
-- Parsear os resultados para encontrar processos, situacoes, classes
-- Enviar os resultados reais ao GPT-5.2 para estruturar em JSON
-
-**searchCNPJ (Etapa 4) -- BUSCA REAL:**
-```
-Brave Search: "webmarcas" CNPJ empresa
-Brave Search: "webmarcas" cnpj.info OR cnpja.com OR casadosdados.com
-```
-- Extrair nomes de empresas, CNPJs e situacoes dos resultados
-
-**searchInternet (Etapa 5) -- BUSCA REAL:**
-```
-Brave Search: "webmarcas" site:instagram.com
-Brave Search: "webmarcas" site:facebook.com
-Brave Search: "webmarcas" site:linkedin.com
-Brave Search: "webmarcas" (busca geral)
-```
-- Verificar presenca real em cada rede social e web
-
-### 3. Fluxo completo
-
-1. Verificacao de marca famosa (manter existente)
-2. Mapeamento NCL via IA (manter existente, ja funciona)
-3. **3 buscas reais via Brave Search em PARALELO**
-4. Enviar resultados reais ao GPT-5.2 para analise e geracao do laudo
-5. Retornar dados estruturados + laudo
-
-### 4. Como funciona o Brave Search API
-
-```typescript
-const response = await fetch(
-  `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`,
-  {
-    headers: { 
-      'X-Subscription-Token': BRAVE_API_KEY,
-      'Accept': 'application/json'
-    }
-  }
-);
-const data = await response.json();
-// data.web.results[] -> titulo, url, description de cada resultado
+```text
+fetch("https://html.duckduckgo.com/html/?q=webmarcas+INPI+registro+marca")
+  -> HTML com resultados reais
+  -> Parsear com regex: titulo, URL, snippet
+  -> Enviar dados reais ao GPT-5.2 para estruturar
 ```
 
-Cada resultado tem: `title`, `url`, `description` -- dados reais da internet, nao simulacao.
+## Mudancas no arquivo `supabase/functions/inpi-viability-check/index.ts`
 
-## Detalhes Tecnicos
+### Nova funcao utilitaria: `searchDuckDuckGo(query)`
+- Faz fetch em `https://html.duckduckgo.com/html/?q=...`
+- Parseia o HTML com regex para extrair resultados (classe `result`, tags `a.result__a`, `a.result__snippet`)
+- Retorna array de `{title, url, description}`
+- Timeout de 8 segundos, retorna array vazio se falhar
 
-### Arquivo: `supabase/functions/inpi-viability-check/index.ts`
+### searchINPI (linhas 131-198) -- REESCRITA COMPLETA
+Substitui chamada IA pura por:
+1. DuckDuckGo: `"webmarcas" site:busca.inpi.gov.br`
+2. DuckDuckGo: `"webmarcas" INPI registro marca classe 45`
+3. Envia resultados reais ao GPT-5.2 para estruturar em JSON (processo, marca, situacao, classe, titular)
 
-- **searchINPI**: substituir chamada IA por 2 buscas Brave (`site:busca.inpi.gov.br` + `INPI registro marca`) + IA para estruturar resultados
-- **searchCNPJ**: substituir chamada IA por 2 buscas Brave (`CNPJ empresa` + sites de CNPJ) + IA para extrair dados
-- **searchInternet**: substituir chamada IA por 4 buscas Brave (Instagram, Facebook, LinkedIn, geral)
-- **generateFinalAnalysis**: manter igual (recebe dados reais agora)
-- Total de chamadas Brave por consulta: ~8 (bem dentro do limite gratuito de 2000/mes)
+### searchCNPJ (linhas 201-253) -- REESCRITA COMPLETA
+Substitui chamada IA pura por:
+1. DuckDuckGo: `"webmarcas" CNPJ empresa razao social`
+2. DuckDuckGo: `"webmarcas" cnpj.info OR cnpja.com OR casadosdados.com`
+3. Envia resultados reais ao GPT-5.2 para extrair dados empresariais
 
-### Secret necessario
+### searchInternet (linhas 257-348) -- REESCRITA COMPLETA
+Substitui chamada IA pura por:
+1. DuckDuckGo: `"webmarcas" site:instagram.com`
+2. DuckDuckGo: `"webmarcas" site:facebook.com`
+3. DuckDuckGo: `"webmarcas" site:linkedin.com`
+4. DuckDuckGo: `"webmarcas"` (busca geral)
+5. Parseia diretamente os resultados para verificar presenca real (sem IA nesta etapa)
 
-- `BRAVE_API_KEY`: chave API do Brave Search (gratuita em brave.com/search/api)
+### Demais funcoes -- SEM ALTERACAO
+- `suggestClassesWithAI` (mapeamento NCL): mantida
+- `generateFinalAnalysis` (laudo final): mantida (agora recebe dados reais)
+- `buildFallbackAnalysis`: mantida
+- Handler principal: mantido
 
-### Impacto
+## Total de buscas DuckDuckGo por consulta: ~8
+- 2 para INPI
+- 2 para CNPJ
+- 4 para Internet (3 redes sociais + geral)
 
+Todas executadas em paralelo dentro de cada etapa.
+
+## Impacto
 - Apenas a edge function `inpi-viability-check` sera alterada
-- Nenhuma tabela, API ou frontend modificado
-- Compatibilidade total mantida
-- Resultados passam a ser REAIS em vez de simulacao
+- Nenhuma tabela, frontend ou secret necessario
+- Zero custo, zero cadastro
+- Resultados passam a ser REAIS (dados da internet) em vez de simulacao
 
