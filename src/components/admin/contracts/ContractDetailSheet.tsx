@@ -25,6 +25,8 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DocumentRenderer, generateDocumentPrintHTML, getLogoBase64ForPDF } from '@/components/contracts/DocumentRenderer';
 import { cn } from '@/lib/utils';
+import { replaceContractVariables } from '@/hooks/useContractTemplate';
+import { generateContractPrintHTML } from '@/components/contracts/ContractRenderer';
 
 interface Contract {
   id: string;
@@ -52,6 +54,7 @@ interface Contract {
   blockchain_tx_id?: string | null;
   blockchain_network?: string | null;
   signature_ip?: string | null;
+  payment_method?: string | null;
 }
 
 interface ContractType { id: string; name: string; }
@@ -144,6 +147,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
   const [sendingEmail, setSendingEmail] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [generatingNewLink, setGeneratingNewLink] = useState(false);
 
   // Comments
   const [newComment, setNewComment] = useState('');
@@ -415,6 +419,96 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
     }
   };
 
+  // ─── Generate New Link (update template + new token) ───────────────────
+  const generateNewContractLink = async () => {
+    if (!contract || !contract.user_id) {
+      toast.error('Contrato sem cliente associado');
+      return;
+    }
+    setGeneratingNewLink(true);
+    try {
+      // 1. Fetch active template
+      const { data: templateData, error: templateError } = await supabase
+        .from('contract_templates')
+        .select('content')
+        .eq('is_active', true)
+        .or('name.ilike.%Registro de Marca%,name.ilike.%Contrato Padrão%')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (templateError || !templateData?.length) throw new Error('Template padrão não encontrado');
+
+      // 2. Fetch client profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('full_name, email, phone, cpf, cnpj, company_name, address, neighborhood, city, state, zip_code')
+        .eq('id', contract.user_id)
+        .single();
+      
+      if (profileError || !profile) throw new Error('Dados do cliente não encontrados');
+
+      // 3. Build data for variable replacement
+      const hasCNPJ = !!(profile.cnpj && profile.cnpj.trim());
+      const replacedContent = replaceContractVariables(templateData[0].content, {
+        personalData: {
+          fullName: profile.full_name || '',
+          email: profile.email || '',
+          phone: profile.phone || '',
+          cpf: profile.cpf || '',
+          cep: profile.zip_code || '',
+          address: profile.address || '',
+          neighborhood: profile.neighborhood || '',
+          city: profile.city || '',
+          state: profile.state || '',
+        },
+        brandData: {
+          brandName: contract.subject || '',
+          businessArea: '',
+          hasCNPJ,
+          cnpj: profile.cnpj || '',
+          companyName: profile.company_name || '',
+        },
+        paymentMethod: contract.payment_method || '',
+      });
+
+      // 4. Generate full HTML
+      const newHtml = generateContractPrintHTML(
+        replacedContent,
+        contract.subject || '',
+        profile.full_name || '',
+        profile.cpf || '',
+      );
+
+      // 5. Update contract_html in database
+      const { error: updateError } = await supabase
+        .from('contracts')
+        .update({ contract_html: newHtml })
+        .eq('id', contract.id);
+      
+      if (updateError) throw updateError;
+
+      // 6. Generate new signature link
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-signature-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({ contractId: contract.id, expiresInDays: 7, baseUrl: getProductionBaseUrl() }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || 'Erro ao gerar link');
+
+      toast.success('Contrato atualizado com template vigente e novo link gerado!');
+      onUpdate();
+    } catch (error: any) {
+      console.error('Error generating new contract link:', error);
+      toast.error(error.message || 'Erro ao gerar novo link');
+    } finally {
+      setGeneratingNewLink(false);
+    }
+  };
+
   const sendSignatureRequest = async () => {
     if (!contract) return;
     setSendingRequest(true);
@@ -682,6 +776,12 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
                     {generatingLink ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <Link className="h-3 w-3 mr-1.5" />}
                     {signatureUrl ? 'Regenerar' : 'Gerar Link'}
                   </Button>
+                  {isExpired && !isSigned && (
+                    <Button size="sm" className="h-7 text-xs" onClick={generateNewContractLink} disabled={generatingNewLink}>
+                      {generatingNewLink ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1.5" />}
+                      Gerar Novo Link
+                    </Button>
+                  )}
                   {signatureUrl && !isExpired && (
                     <Button size="sm" className="h-7 text-xs" onClick={sendSignatureRequest} disabled={sendingRequest}>
                       {sendingRequest ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <Send className="h-3 w-3 mr-1.5" />}
