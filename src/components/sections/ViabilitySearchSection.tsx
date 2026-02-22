@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, AlertCircle, CheckCircle, AlertTriangle, ArrowRight, MessageCircle, ShieldX, Printer, Shield, Zap, TrendingUp } from "lucide-react";
+import { Search, AlertCircle, CheckCircle, AlertTriangle, ArrowRight, MessageCircle, ShieldX, Printer, Shield, Zap, TrendingUp, Globe, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -81,20 +81,30 @@ const ViabilitySearchSection = () => {
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível abrir a janela de impressão. Verifique se pop-ups estão habilitados.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Não foi possível abrir a janela de impressão.", variant: "destructive" });
       return;
     }
+
+    // Build INPI table rows
+    const inpiRows = (result?.inpiData?.resultados || []).map((r, i) =>
+      `<tr><td>${i + 1}</td><td>${r.marca}</td><td>${r.processo}</td><td>${r.situacao}</td><td>${r.classe}</td></tr>`
+    ).join('');
+
+    // Build CNPJ rows
+    const cnpjRows = (result?.cnpjData?.matches || []).map((m, i) =>
+      `<tr><td>${i + 1}</td><td>${m.nome}</td><td>${m.cnpj}</td><td>${m.situacao}</td></tr>`
+    ).join('');
+
+    // Build social rows
+    const socialRows = (result?.internetData?.socialMatches || []).map(s =>
+      `<tr><td>${s.plataforma}</td><td>${s.encontrado ? '✅ Encontrado' : '❌ Não encontrado'}</td><td>${s.url || '-'}</td></tr>`
+    ).join('');
 
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Laudo Técnico de Viabilidade - WebMarcas</title>
         <style>
           @page { size: A4; margin: 20mm; }
@@ -116,9 +126,11 @@ const ViabilitySearchSection = () => {
           .result-high { background: #dcfce7; color: #166534; border: 2px solid #22c55e; }
           .result-medium { background: #fef9c3; color: #854d0e; border: 2px solid #eab308; }
           .result-low, .result-blocked { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
+          table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+          th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+          th { background: #f0f9ff; color: #0369a1; font-weight: 600; }
           .laudo-content { background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 25px; white-space: pre-wrap; font-size: 14px; line-height: 1.8; }
           .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; text-align: center; color: #64748b; font-size: 12px; }
-          .footer p { margin-bottom: 5px; }
           .footer .site { color: #0ea5e9; font-weight: 600; }
           .footer .disclaimer { margin-top: 15px; padding: 10px; background: #dcfce7; border-radius: 6px; color: #166534; font-style: italic; }
           @media print { body { padding: 0; } }
@@ -127,33 +139,76 @@ const ViabilitySearchSection = () => {
       <body>
         <div class="header">
           <img src="${webmarcasIcon}" alt="WebMarcas" class="logo" />
-          <div class="company-info">
-            <h1>WebMarcas</h1>
-            <p>Registro de Marcas</p>
-          </div>
+          <div class="company-info"><h1>WebMarcas</h1><p>Registro de Marcas</p></div>
         </div>
-        <div class="official-badge">📋 PESQUISA REAL NA BASE DO INPI</div>
+        <div class="official-badge">📋 PESQUISA REAL – INPI + MERCADO + INTERNET</div>
         <div class="title">📋 Laudo Técnico de Viabilidade de Marca</div>
+
         <div class="info-section">
-          <h3>Dados da Consulta</h3>
+          <h3>📋 Dados da Consulta</h3>
           <div class="info-grid">
             <div class="info-item"><label>Nome da Marca</label><span>${brandName}</span></div>
             <div class="info-item"><label>Ramo de Atividade</label><span>${businessArea}</span></div>
+            <div class="info-item"><label>Data da Consulta</label><span>${result?.searchDate || currentDate}</span></div>
+            <div class="info-item"><label>Tipo de Pesquisa</label><span>Completa (INPI + CNPJ + Internet)</span></div>
           </div>
         </div>
+
         <div class="info-section">
-          <h3>Resultado da Análise</h3>
+          <h3>📊 Resultado da Análise</h3>
           <div class="result-box result-${result?.level || 'low'}">${viabilityText}</div>
         </div>
+
+        ${(result?.inpiData?.totalResultados ?? 0) > 0 ? `
         <div class="info-section">
-          <h3>Parecer Técnico Completo</h3>
+          <h3>🔍 Resultado da Pesquisa no INPI</h3>
+          <p style="margin-bottom:10px;font-size:14px;">Total de resultados: <strong>${result?.inpiData?.totalResultados}</strong></p>
+          <table>
+            <thead><tr><th>#</th><th>Marca</th><th>Processo</th><th>Situação</th><th>Classe</th></tr></thead>
+            <tbody>${inpiRows}</tbody>
+          </table>
+        </div>` : `
+        <div class="info-section">
+          <h3>🔍 Resultado da Pesquisa no INPI</h3>
+          <p style="font-size:14px;">✅ Nenhuma marca idêntica encontrada na base do INPI.</p>
+        </div>`}
+
+        ${(result?.cnpjData?.total ?? 0) > 0 ? `
+        <div class="info-section">
+          <h3>🏢 Colidência Empresarial (CNPJ)</h3>
+          <table>
+            <thead><tr><th>#</th><th>Empresa</th><th>CNPJ</th><th>Situação</th></tr></thead>
+            <tbody>${cnpjRows}</tbody>
+          </table>
+        </div>` : `
+        <div class="info-section">
+          <h3>🏢 Colidência Empresarial (CNPJ)</h3>
+          <p style="font-size:14px;">✅ Nenhuma empresa com nome idêntico encontrada.</p>
+        </div>`}
+
+        <div class="info-section">
+          <h3>🌐 Colidência na Internet</h3>
+          ${socialRows ? `<table><thead><tr><th>Plataforma</th><th>Status</th><th>URL</th></tr></thead><tbody>${socialRows}</tbody></table>` : '<p style="font-size:14px;">Nenhuma presença identificada.</p>'}
+        </div>
+
+        ${result?.classDescriptions ? `
+        <div class="info-section">
+          <h3>🏷️ Classes NCL Recomendadas</h3>
+          <ul style="list-style:none;padding:0;">
+            ${result.classDescriptions.map(d => `<li style="background:#f8fafc;padding:10px 16px;border-radius:6px;border-left:3px solid #0ea5e9;margin-bottom:8px;font-size:14px;">${d}</li>`).join('')}
+          </ul>
+        </div>` : ''}
+
+        <div class="info-section">
+          <h3>⚖️ Parecer Técnico Completo</h3>
           <div class="laudo-content">${result?.laudo || result?.description || 'Análise não disponível'}</div>
         </div>
+
         <div class="footer">
           <p>Documento gerado automaticamente pelo sistema WebMarcas</p>
           <p class="site">www.webmarcas.net</p>
           <p>Data e hora da geração: ${currentDate}</p>
-          <div class="disclaimer">✅ Pesquisa realizada diretamente na base oficial do INPI.</div>
+          <div class="disclaimer">✅ Pesquisa realizada diretamente na base oficial do INPI + análise de mercado.</div>
         </div>
       </body>
       </html>
@@ -161,10 +216,7 @@ const ViabilitySearchSection = () => {
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
+    printWindow.onload = () => { printWindow.focus(); printWindow.print(); };
   };
 
   const handleRegisterClick = () => {
@@ -179,53 +231,21 @@ const ViabilitySearchSection = () => {
 
   const getResultStyles = (level: ViabilityLevel) => {
     switch (level) {
-      case "high":
-        return {
-          icon: CheckCircle,
-          bgClass: "bg-accent/10 border-accent/30",
-          iconClass: "text-accent",
-          textClass: "text-accent",
-        };
-      case "medium":
-        return {
-          icon: AlertTriangle,
-          bgClass: "bg-yellow-500/10 border-yellow-500/30",
-          iconClass: "text-yellow-500",
-          textClass: "text-yellow-500",
-        };
-      case "low":
-        return {
-          icon: AlertCircle,
-          bgClass: "bg-destructive/10 border-destructive/30",
-          iconClass: "text-destructive",
-          textClass: "text-destructive",
-        };
-      case "blocked":
-        return {
-          icon: ShieldX,
-          bgClass: "bg-destructive/20 border-destructive/50",
-          iconClass: "text-destructive",
-          textClass: "text-destructive",
-        };
-      default:
-        return {
-          icon: Search,
-          bgClass: "",
-          iconClass: "",
-          textClass: "",
-        };
+      case "high": return { icon: CheckCircle, bgClass: "bg-accent/10 border-accent/30", iconClass: "text-accent", textClass: "text-accent" };
+      case "medium": return { icon: AlertTriangle, bgClass: "bg-yellow-500/10 border-yellow-500/30", iconClass: "text-yellow-500", textClass: "text-yellow-500" };
+      case "low": return { icon: AlertCircle, bgClass: "bg-destructive/10 border-destructive/30", iconClass: "text-destructive", textClass: "text-destructive" };
+      case "blocked": return { icon: ShieldX, bgClass: "bg-destructive/20 border-destructive/50", iconClass: "text-destructive", textClass: "text-destructive" };
+      default: return { icon: Search, bgClass: "", iconClass: "", textClass: "" };
     }
   };
 
   return (
     <section id="consultar" className="py-12 md:py-16 lg:py-24 relative overflow-hidden">
-      {/* Background */}
       <div className="absolute inset-0 bg-hero-gradient opacity-30" />
       <div className="absolute top-1/4 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/3 rounded-full blur-3xl" />
 
       <div className="container mx-auto px-4 relative z-10">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -349,39 +369,112 @@ const ViabilitySearchSection = () => {
               {(() => {
                 const styles = getResultStyles(result.level);
                 const Icon = styles.icon;
-
                 return (
                   <div className={`rounded-xl border p-6 mb-6 ${styles.bgClass}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <Icon className={`w-6 h-6 ${styles.iconClass}`} />
-                      <h3 className={`font-display text-xl font-bold ${styles.textClass}`}>
-                        {result.title}
-                      </h3>
+                      <h3 className={`font-display text-xl font-bold ${styles.textClass}`}>{result.title}</h3>
                     </div>
                     <p className="text-muted-foreground">{result.description}</p>
                   </div>
                 );
               })()}
 
+              {/* INPI Results Section */}
+              {result.inpiData && (
+                <div className="mb-6">
+                  <h4 className="font-display font-semibold text-base mb-3 flex items-center gap-2">
+                    <Search className="w-4 h-4 text-primary" />
+                    Resultado INPI ({result.inpiData.totalResultados} encontrado{result.inpiData.totalResultados !== 1 ? 's' : ''})
+                  </h4>
+                  {result.inpiData.totalResultados > 0 ? (
+                    <div className="overflow-x-auto rounded-lg border border-border/40">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Marca</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Processo</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Situação</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Classe</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.inpiData.resultados.map((r, i) => (
+                            <tr key={i} className="border-t border-border/30">
+                              <td className="px-3 py-2 font-medium">{r.marca}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{r.processo || '-'}</td>
+                              <td className="px-3 py-2">{r.situacao}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{r.classe}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground bg-muted/30 rounded-lg p-3">
+                      ✅ Nenhuma marca idêntica encontrada na base do INPI.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* CNPJ + Internet Summary */}
+              {(result.cnpjData || result.internetData) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  {result.cnpjData && (
+                    <div className="rounded-lg border border-border/40 p-4">
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-primary" />
+                        Colidência Empresarial
+                      </h4>
+                      {result.cnpjData.total > 0 ? (
+                        <div className="space-y-2">
+                          {result.cnpjData.matches.map((m, i) => (
+                            <div key={i} className="text-xs bg-muted/30 rounded p-2">
+                              <p className="font-medium">{m.nome}</p>
+                              {m.cnpj && <p className="text-muted-foreground">{m.cnpj} • {m.situacao}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">✅ Nenhuma empresa encontrada</p>
+                      )}
+                    </div>
+                  )}
+
+                  {result.internetData && (
+                    <div className="rounded-lg border border-border/40 p-4">
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-primary" />
+                        Presença na Internet
+                      </h4>
+                      <div className="space-y-1.5">
+                        {result.internetData.socialMatches.map((s, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span className="font-medium">{s.plataforma}</span>
+                            <span className={s.encontrado ? 'text-yellow-600' : 'text-accent'}>
+                              {s.encontrado ? '⚠️ Encontrado' : '✅ Livre'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Laudo Completo */}
               {result.laudo && (
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-display font-semibold text-lg">Laudo Técnico de Viabilidade</h4>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={printLaudo}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
+                    <Button variant="ghost" size="sm" onClick={printLaudo} className="text-muted-foreground hover:text-foreground">
                       <Printer className="w-4 h-4 mr-1" />
                       Imprimir / Salvar Laudo
                     </Button>
                   </div>
                   <div className="bg-muted/40 rounded-xl p-4 max-h-80 overflow-y-auto border border-border/40">
-                    <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-sans leading-relaxed">
-                      {result.laudo}
-                    </pre>
+                    <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-sans leading-relaxed">{result.laudo}</pre>
                   </div>
                 </div>
               )}
@@ -390,8 +483,8 @@ const ViabilitySearchSection = () => {
               {result.level !== 'blocked' && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6">
                   <p className="text-sm text-muted-foreground">
-                    <strong className="text-primary">⚠️ Importante:</strong> O dono da marca é quem 
-                    registra primeiro. Mesmo com alta viabilidade, a situação pode mudar a qualquer 
+                    <strong className="text-primary">⚠️ Importante:</strong> O dono da marca é quem
+                    registra primeiro. Mesmo com alta viabilidade, a situação pode mudar a qualquer
                     momento se outra pessoa protocolar antes de você.
                   </p>
                 </div>
