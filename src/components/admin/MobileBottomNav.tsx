@@ -45,7 +45,7 @@ interface MoreItem {
 const primaryNavItems: NavItem[] = [
   {
     icon: LayoutDashboard,
-    label: 'CEO',
+    label: 'Dashboard',
     href: '/admin/dashboard',
     permissionKey: 'dashboard',
     color: 'text-blue-500',

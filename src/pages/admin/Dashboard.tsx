@@ -595,7 +595,7 @@ export default function AdminDashboard() {
                         transition={{ duration: 1.4, repeat: Infinity }}
                         className="w-1.5 h-1.5 rounded-full bg-primary"
                       />
-                      🧠 Painel CEO · Inteligência Executiva
+                      🧠 Inteligência Executiva
                     </div>
                   </motion.div>
 
