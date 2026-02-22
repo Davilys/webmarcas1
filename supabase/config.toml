@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.email-ai-assistant]
 verify_jwt = false
+
+[functions.ai-engine]
+verify_jwt = false

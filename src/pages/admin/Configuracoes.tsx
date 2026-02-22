@@ -17,11 +17,12 @@ import { PricingSettings } from '@/components/admin/settings/PricingSettings';
 import { AutomatedEmailSettings } from '@/components/admin/settings/AutomatedEmailSettings';
 import { AutomatedSMSSettings } from '@/components/admin/settings/AutomatedSMSSettings';
 import { AutomatedWhatsAppSettings } from '@/components/admin/settings/AutomatedWhatsAppSettings';
+import { AISettings } from '@/components/admin/settings/AISettings';
 import { cn } from '@/lib/utils';
 import {
   Settings, Database, Webhook, Mail, MessageCircle, Bell, Shield,
   Palette, FileSignature, GitBranch, Wallet, HardDrive, Tag, Zap,
-  ChevronRight, Cpu, Activity, Smartphone, MessageSquare
+  ChevronRight, Cpu, Activity, Smartphone, MessageSquare, Brain
 } from 'lucide-react';
 
 // ─── Nav config ───────────────────────────────────
@@ -53,6 +54,12 @@ const NAV_GROUPS = [
       { value: 'email',      label: 'E-mail',             icon: Mail,           color: '#3b82f6', glow: '#3b82f618', desc: 'Contas e SMTP' },
       { value: 'whatsapp',   label: 'WhatsApp',           icon: MessageCircle,  color: '#22c55e', glow: '#22c55e18', desc: 'Integração WhatsApp' },
       { value: 'notificacoes', label: 'Notificações',     icon: Bell,           color: '#f59e0b', glow: '#f59e0b18', desc: 'Alertas do sistema' },
+    ],
+  },
+  {
+    label: 'Inteligência Artificial',
+    items: [
+      { value: 'ia',          label: 'Sistema de IAs',    icon: Brain,          color: '#a855f7', glow: '#a855f718', desc: 'Provedores e modelos', badge: 'Novo' },
     ],
   },
   {
@@ -217,6 +224,7 @@ function SettingsContent({ active }: { active: string }) {
     'email-auto':<AutomatedEmailSettings />,
     'sms-auto':  <AutomatedSMSSettings />,
     'whatsapp-auto': <AutomatedWhatsAppSettings />,
+    ia:          <AISettings />,
     integracoes: <IntegrationSettings />,
     api:         <APIWebhooksSettings />,
     email:       <EmailSettings />,

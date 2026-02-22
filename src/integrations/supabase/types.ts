@@ -47,6 +47,78 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_providers: {
+        Row: {
+          api_key: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_fallback: boolean
+          model: string
+          name: string
+          provider_type: string
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_fallback?: boolean
+          model: string
+          name: string
+          provider_type: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_fallback?: boolean
+          model?: string
+          name?: string
+          provider_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_usage_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          module: string
+          provider: string
+          response_time_ms: number | null
+          success: boolean
+          task_type: string | null
+          tokens_used: number | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          module: string
+          provider: string
+          response_time_ms?: number | null
+          success?: boolean
+          task_type?: string | null
+          tokens_used?: number | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          module?: string
+          provider?: string
+          response_time_ms?: number | null
+          success?: boolean
+          task_type?: string | null
+          tokens_used?: number | null
+        }
+        Relationships: []
+      }
       award_entries: {
         Row: {
           brand_name: string | null
