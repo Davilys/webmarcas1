@@ -670,8 +670,10 @@ export function IntegrationSettings() {
               <SelectItem value="o4-mini">o4-mini (Raciocínio avançado)</SelectItem>
               <SelectItem value="o3">o3 (Raciocínio complexo)</SelectItem>
               <SelectItem value="o3-mini">o3-mini (Raciocínio econômico)</SelectItem>
-              <SelectItem value="gpt-5.1">GPT-5.1 (Mais avançado)</SelectItem>
-              <SelectItem value="gpt-5.1-mini">GPT-5.1 Mini (Avançado e econômico)</SelectItem>
+              <SelectItem value="gpt-5">GPT-5 (Mais avançado)</SelectItem>
+              <SelectItem value="gpt-5-mini">GPT-5 Mini (Avançado e econômico)</SelectItem>
+              <SelectItem value="gpt-5-nano">GPT-5 Nano (Ultra rápido)</SelectItem>
+              <SelectItem value="gpt-5.2">GPT-5.2 (Último lançamento)</SelectItem>
               <SelectItem value="o1">o1 (Raciocínio profundo)</SelectItem>
               <SelectItem value="o1-mini">o1-mini (Raciocínio leve)</SelectItem>
             </SelectContent>
