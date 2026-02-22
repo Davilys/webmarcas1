@@ -6,10 +6,10 @@ import {
   Inbox, Send, FileText, Layout, Settings, PenSquare, Clock,
   Star, Archive, Trash2, Zap, BarChart3, Users, Briefcase,
   Scale, DollarSign, HeadphonesIcon, ChevronDown, ChevronRight,
-  Mail, Filter, Layers
+  Mail, Filter, Layers, AtSign
 } from 'lucide-react';
 import { useState } from 'react';
-import type { EmailFolder } from '@/pages/admin/Emails';
+import type { EmailFolder, EmailAccount } from '@/pages/admin/Emails';
 
 interface EmailSidebarProps {
   currentFolder: EmailFolder;
@@ -23,6 +23,9 @@ interface EmailSidebarProps {
     scheduled: number;
     automated: number;
   };
+  emailAccounts?: EmailAccount[];
+  selectedAccountId?: string | null;
+  onAccountChange?: (accountId: string) => void;
 }
 
 const mainFolders: { id: EmailFolder; label: string; icon: React.ComponentType<{ className?: string }>; badge?: keyof EmailSidebarProps['stats'] }[] = [
@@ -52,9 +55,10 @@ const quickFilters: { id: EmailFolder; label: string; icon: React.ComponentType<
   { id: 'filter-support', label: 'Suporte', icon: HeadphonesIcon, color: 'text-rose-500' },
 ];
 
-export function EmailSidebar({ currentFolder, onFolderChange, onCompose, stats }: EmailSidebarProps) {
+export function EmailSidebar({ currentFolder, onFolderChange, onCompose, stats, emailAccounts, selectedAccountId, onAccountChange }: EmailSidebarProps) {
   const [showFilters, setShowFilters] = useState(true);
   const [showTools, setShowTools] = useState(true);
+  const [showAccounts, setShowAccounts] = useState(true);
 
   return (
     <motion.div
@@ -73,6 +77,61 @@ export function EmailSidebar({ currentFolder, onFolderChange, onCompose, stats }
           Novo Email
         </Button>
       </motion.div>
+
+      {/* Email Accounts Section */}
+      {emailAccounts && emailAccounts.length > 0 && (
+        <div className="space-y-0.5">
+          <button
+            onClick={() => setShowAccounts(!showAccounts)}
+            className="w-full flex items-center gap-1 px-3 pb-1 group"
+          >
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest flex-1 text-left">
+              <AtSign className="inline h-2.5 w-2.5 mr-1" />
+              Contas de Email
+            </p>
+            {showAccounts ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+          </button>
+          {showAccounts && emailAccounts.map((account, i) => {
+            const isActive = selectedAccountId === account.id;
+            return (
+              <motion.button
+                key={account.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.04 }}
+                type="button"
+                onClick={() => onAccountChange?.(account.id)}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all cursor-pointer group',
+                  isActive
+                    ? 'bg-primary/15 text-primary border border-primary/30 shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                )}
+              >
+                <div className={cn(
+                  'h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
+                  isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                )}>
+                  {(account.display_name || account.email_address).charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  {account.display_name && (
+                    <p className={cn('text-xs font-medium truncate', isActive && 'text-primary')}>
+                      {account.display_name}
+                    </p>
+                  )}
+                  <p className={cn('text-[10px] truncate', account.display_name ? 'text-muted-foreground' : 'text-xs font-medium')}>
+                    {account.email_address}
+                  </p>
+                </div>
+                {isActive && (
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Quick Stats Pills */}
       {stats && (

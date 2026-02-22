@@ -38,6 +38,8 @@ interface EmailComposeProps {
   initialTo?: string;
   initialName?: string;
   initialBody?: string;
+  accountId?: string | null;
+  accountEmail?: string;
 }
 
 
@@ -141,7 +143,7 @@ function replaceTemplateVariables(text: string, client: ClientWithProcess | null
     .replace(/\{\{link_portal\}\}/g, 'https://webmarcas1.lovable.app/cliente');
 }
 
-export function EmailCompose({ onClose, replyTo, initialTo, initialName, initialBody }: EmailComposeProps) {
+export function EmailCompose({ onClose, replyTo, initialTo, initialName, initialBody, accountId, accountEmail }: EmailComposeProps) {
   const queryClient = useQueryClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -362,8 +364,7 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
-      const { data: profile } = await supabase.from('profiles').select('email').eq('id', user.id).single();
-      const fromEmail = profile?.email || user.email || 'admin@webmarcas.com.br';
+      const fromEmail = accountEmail || user.email || 'admin@webmarcas.com.br';
       const htmlBody = body.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/_(.*?)_/g, '<em>$1</em>')
         .replace(/\n/g, '<br/>');
