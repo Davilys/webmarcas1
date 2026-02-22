@@ -17,16 +17,18 @@ import { toast } from 'sonner';
 interface EmailListProps {
   folder: 'inbox' | 'sent' | 'drafts';
   onSelectEmail: (email: Email) => void;
+  accountId?: string | null;
+  accountEmail?: string;
 }
 
-export function EmailList({ folder, onSelectEmail }: EmailListProps) {
+export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: EmailListProps) {
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
   const syncMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('sync-imap-inbox', {
-        body: { limit: 10 }
+        body: { limit: 10, account_id: accountId }
       });
       if (error) throw error;
       return data;
@@ -42,13 +44,16 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
   });
 
   const { data: emails, isLoading } = useQuery({
-    queryKey: ['emails', folder],
+    queryKey: ['emails', folder, accountId, accountEmail],
     queryFn: async () => {
+      if (!accountId) return [];
+
       if (folder === 'inbox') {
         const { data, error } = await supabase
           .from('email_inbox')
           .select('*')
           .eq('is_archived', false)
+          .eq('account_id', accountId)
           .order('received_at', { ascending: false });
         
         if (error) throw error;
@@ -65,10 +70,12 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
           received_at: e.received_at,
         })) as Email[];
       } else if (folder === 'sent') {
+        if (!accountEmail) return [];
         const { data, error } = await supabase
           .from('email_logs')
           .select('*')
           .eq('status', 'sent')
+          .eq('from_email', accountEmail)
           .order('sent_at', { ascending: false });
         
         if (error) throw error;
@@ -86,6 +93,7 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
       }
       return [];
     },
+    enabled: !!accountId,
   });
 
   const filteredEmails = emails?.filter(email =>
@@ -95,6 +103,18 @@ export function EmailList({ folder, onSelectEmail }: EmailListProps) {
   );
 
   const title = folder === 'inbox' ? 'Caixa de Entrada' : folder === 'sent' ? 'Enviados' : 'Rascunhos';
+
+  if (!accountId) {
+    return (
+      <Card className="h-full flex flex-col border-0 md:border shadow-none md:shadow-sm">
+        <CardContent className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+          <Mail className="h-12 w-12 mb-4 opacity-50" />
+          <p className="text-lg font-medium">Selecione uma conta</p>
+          <p className="text-sm">Escolha uma conta de email no painel lateral</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="h-full flex flex-col border-0 md:border shadow-none md:shadow-sm">

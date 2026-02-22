@@ -13,6 +13,7 @@ import { EmailAutomations } from '@/components/admin/email/EmailAutomations';
 import { EmailCampaigns } from '@/components/admin/email/EmailCampaigns';
 import { EmailSequences } from '@/components/admin/email/EmailSequences';
 import { EmailMetricsBar } from '@/components/admin/email/EmailMetricsBar';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,13 @@ export interface Email {
   sent_at?: string;
 }
 
+export interface EmailAccount {
+  id: string;
+  email_address: string;
+  display_name: string | null;
+  assigned_to: string | null;
+}
+
 export default function Emails() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentFolder, setCurrentFolder] = useState<EmailFolder>('inbox');
@@ -51,8 +59,36 @@ export default function Emails() {
   const [initialName, setInitialName] = useState('');
   const [aiDraftBody, setAiDraftBody] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const { isMasterAdmin, userId } = useAdminPermissions();
 
+  // Fetch email accounts for current user
+  const { data: emailAccounts = [] } = useQuery({
+    queryKey: ['email-accounts-list', userId, isMasterAdmin],
+    queryFn: async () => {
+      if (!userId) return [];
+      let query = supabase.from('email_accounts').select('id, email_address, display_name, assigned_to');
+      // Admin master sees all, others see only assigned
+      if (!isMasterAdmin) {
+        query = query.eq('assigned_to', userId);
+      }
+      const { data, error } = await query.order('email_address');
+      if (error) throw error;
+      return (data || []) as EmailAccount[];
+    },
+    enabled: !!userId,
+  });
+
+  // Auto-select first account when accounts load
+  useEffect(() => {
+    if (emailAccounts.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(emailAccounts[0].id);
+    }
+  }, [emailAccounts, selectedAccountId]);
+
+  // Get selected account email for filtering sent emails
+  const selectedAccount = emailAccounts.find(a => a.id === selectedAccountId);
 
   // Read URL params to auto-open compose with client data
   useEffect(() => {
@@ -69,14 +105,20 @@ export default function Emails() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Stats query for sidebar
+  // Stats query filtered by selected account
   const { data: stats } = useQuery({
-    queryKey: ['email-stats'],
+    queryKey: ['email-stats', selectedAccountId, selectedAccount?.email_address],
     queryFn: async () => {
+      if (!selectedAccountId) {
+        return { inbox: 0, sent: 0, unread: 0, drafts: 0, scheduled: 0, automated: 0 };
+      }
       const [inboxRes, sentRes, unreadRes] = await Promise.all([
-        supabase.from('email_inbox').select('id', { count: 'exact', head: true }).eq('is_archived', false),
-        supabase.from('email_logs').select('id', { count: 'exact', head: true }).eq('status', 'sent'),
-        supabase.from('email_inbox').select('id', { count: 'exact', head: true }).eq('is_read', false).eq('is_archived', false),
+        supabase.from('email_inbox').select('id', { count: 'exact', head: true })
+          .eq('is_archived', false).eq('account_id', selectedAccountId),
+        supabase.from('email_logs').select('id', { count: 'exact', head: true })
+          .eq('status', 'sent').eq('from_email', selectedAccount?.email_address || ''),
+        supabase.from('email_inbox').select('id', { count: 'exact', head: true })
+          .eq('is_read', false).eq('is_archived', false).eq('account_id', selectedAccountId),
       ]);
       return {
         inbox: inboxRes.count || 0,
@@ -87,6 +129,7 @@ export default function Emails() {
         automated: 0,
       };
     },
+    enabled: !!selectedAccountId,
     refetchInterval: 60000,
   });
 
@@ -96,6 +139,13 @@ export default function Emails() {
     setReplyTo(null);
     setCurrentFolder(folder);
     setSidebarOpen(false);
+  };
+
+  const handleAccountChange = (accountId: string) => {
+    setSelectedAccountId(accountId);
+    setSelectedEmail(null);
+    setIsComposing(false);
+    setReplyTo(null);
   };
 
   const handleCompose = () => {
@@ -125,7 +175,6 @@ export default function Emails() {
     setSelectedEmail(null);
   };
 
-  // Called when AI assistant generates a draft → open compose with the text pre-filled
   const handleAiDraft = (text: string, email: Email) => {
     setAiDraftBody(text);
     setReplyTo(email);
@@ -150,6 +199,8 @@ export default function Emails() {
           initialTo={initialTo}
           initialName={initialName}
           initialBody={aiDraftBody || undefined}
+          accountId={selectedAccountId}
+          accountEmail={selectedAccount?.email_address}
         />
       );
     }
@@ -165,7 +216,6 @@ export default function Emails() {
       );
     }
 
-
     const listFolder = currentFolder.startsWith('filter-') ? 'inbox' : currentFolder;
     const validListFolders: EmailFolder[] = ['inbox', 'sent', 'drafts', 'starred', 'archived', 'trash', 'scheduled', 'automated'];
     const folderToShow = validListFolders.includes(listFolder as EmailFolder) ? listFolder as 'inbox' | 'sent' | 'drafts' : 'inbox';
@@ -174,6 +224,8 @@ export default function Emails() {
       <EmailList
         folder={folderToShow}
         onSelectEmail={handleSelectEmail}
+        accountId={selectedAccountId}
+        accountEmail={selectedAccount?.email_address}
       />
     );
   };
@@ -196,6 +248,9 @@ export default function Emails() {
       onFolderChange={handleFolderChange}
       onCompose={handleCompose}
       stats={stats}
+      emailAccounts={emailAccounts}
+      selectedAccountId={selectedAccountId}
+      onAccountChange={handleAccountChange}
     />
   );
 
@@ -207,7 +262,6 @@ export default function Emails() {
           <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.1))]" />
           <div className="relative flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              {/* Mobile menu button */}
               {isMobile && (
                 <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
                   <SheetTrigger asChild>
@@ -240,12 +294,11 @@ export default function Emails() {
                   animate={{ opacity: 1, transition: { delay: 0.1 } }}
                   className="text-xs md:text-sm text-muted-foreground truncate"
                 >
-                  {getFolderLabel()}
+                  {selectedAccount ? selectedAccount.email_address : getFolderLabel()}
                 </motion.p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Mobile compose FAB */}
               {isMobile && (
                 <Button
                   onClick={handleCompose}
@@ -255,35 +308,29 @@ export default function Emails() {
                   <PenSquare className="h-5 w-5" />
                 </Button>
               )}
-              {/* Live indicator */}
               <div className="hidden md:flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1.5">
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Sistema Ativo</span>
               </div>
-              {/* Mobile compact live dot */}
               {isMobile && (
                 <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse md:hidden" />
               )}
             </div>
           </div>
-          {/* Metrics Bar */}
           <EmailMetricsBar stats={stats} />
         </div>
 
         {/* Main Layout */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Desktop Sidebar */}
           {!isMobile && (
             <div className="w-64 flex-shrink-0 border-r border-border/50 bg-background/50 overflow-y-auto p-3">
               {sidebarContent}
             </div>
           )}
-
-          {/* Content */}
           <div className="flex-1 overflow-hidden bg-muted/20">
             <AnimatePresence mode="wait">
               <motion.div
-                key={currentFolder + (isComposing ? '-compose' : '') + (selectedEmail?.id || '')}
+                key={currentFolder + (isComposing ? '-compose' : '') + (selectedEmail?.id || '') + (selectedAccountId || '')}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
