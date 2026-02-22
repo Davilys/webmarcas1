@@ -33,6 +33,7 @@ interface Contract {
   start_date: string | null;
   end_date: string | null;
   signature_status: string | null;
+  signature_expires_at: string | null;
   signed_at: string | null;
   visible_to_client: boolean | null;
   user_id: string | null;
@@ -432,7 +433,7 @@ export default function AdminContratos() {
     }
   };
 
-  const getSignatureBadge = (status: string | null) => {
+  const getSignatureBadge = (status: string | null, expiresAt: string | null) => {
     if (status === 'signed') {
       return (
         <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-medium gap-1.5">
@@ -441,6 +442,16 @@ export default function AdminContratos() {
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           Assinado
+        </Badge>
+      );
+    }
+    // Check if link is expired
+    const isExpired = expiresAt && new Date(expiresAt) < new Date();
+    if (isExpired) {
+      return (
+        <Badge className="bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/20 font-medium gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-orange-500/60"></span>
+          Expirado
         </Badge>
       );
     }
@@ -783,7 +794,7 @@ export default function AdminContratos() {
                           : '-'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{contract.profile?.phone || '-'}</TableCell>
-                      <TableCell>{getSignatureBadge(contract.signature_status)}</TableCell>
+                      <TableCell>{getSignatureBadge(contract.signature_status, contract.signature_expires_at)}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
