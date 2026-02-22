@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,9 +41,9 @@ serve(async (req) => {
       });
     }
 
-    const aiConfig = await getAIConfig();
-    if (!aiConfig.apiKey) {
-      return new Response(JSON.stringify({ error: "Nenhuma chave de IA configurada" }), {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY não configurada" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -74,16 +73,16 @@ REGRAS DE QUALIDADE OBRIGATÓRIAS:
       ...messages,
     ];
 
-    console.log(`[email-ai-assistant] provider=${aiConfig.provider}, model=${aiConfig.model}, action=${action}, messages=${messages.length}`);
+    console.log(`email-ai-assistant: action=${action}, messages=${messages.length}`);
 
-    const response = await fetch(aiConfig.url, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${aiConfig.apiKey}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model: "google/gemini-3-flash-preview",
         messages: allMessages,
         stream: false,
         max_tokens: 800,
@@ -93,7 +92,7 @@ REGRAS DE QUALIDADE OBRIGATÓRIAS:
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("AI error:", response.status, errText);
+      console.error("AI gateway error:", response.status, errText);
 
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Muitas requisições. Aguarde e tente novamente." }), {
@@ -119,7 +118,9 @@ REGRAS DE QUALIDADE OBRIGATÓRIAS:
       });
     }
 
+    // Post-process: remove any footer/signature the AI might have added despite instructions
     const cleanedContent = removeAIFooter(content);
+
     console.log("email-ai-assistant: success, chars=", cleanedContent.length);
 
     return new Response(JSON.stringify({ content: cleanedContent, action }), {
@@ -135,16 +136,25 @@ REGRAS DE QUALIDADE OBRIGATÓRIAS:
 });
 
 function removeAIFooter(text: string): string {
+  // Remove any footer patterns the AI might add despite instructions
   let cleaned = text;
+  
+  // Remove "Equipe WebMarcas | Propriedade Intelectual" and variations
   cleaned = cleaned.replace(/\n*Equipe WebMarcas\s*[\|·\-]\s*Propriedade Intelectual\.?\s*$/gi, '');
+  
+  // Remove footer block with www/WhatsApp
   cleaned = cleaned.replace(/\n*---\n*🌐?\s*www\.webmarcas\.net.*$/gis, '');
   cleaned = cleaned.replace(/\n*www\.webmarcas\.net.*$/gis, '');
   cleaned = cleaned.replace(/\n*📱?\s*WhatsApp:?\s*\(?\d+\)?\s*[\d\-]+.*$/gi, '');
+  
+  // Remove trailing dashes/separators
   cleaned = cleaned.replace(/\n*-{3,}\s*$/g, '');
   
+  // Remove duplicate "Atenciosamente" at the end
   const atenciosamentePattern = /Atenciosamente,?\s*/gi;
   const matches = cleaned.match(atenciosamentePattern);
   if (matches && matches.length > 1) {
+    // Keep only the last one
     let count = 0;
     cleaned = cleaned.replace(atenciosamentePattern, (match) => {
       count++;

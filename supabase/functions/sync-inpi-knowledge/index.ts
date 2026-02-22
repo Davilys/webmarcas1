@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -260,17 +259,17 @@ async function scrapeJurisprudencia(): Promise<ScrapedItem | null> {
 // ─────────────────────────────────────────────
 
 async function enrichWithAI(rawContent: string, category: string): Promise<string> {
+  if (!OPENAI_API_KEY || rawContent.length < 200) return rawContent;
+
   try {
-    const aiConfig = await getAIConfig();
-    if (!aiConfig.apiKey || rawContent.length < 200) return rawContent;
-    const res = await fetch(aiConfig.url, {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model: 'gpt-4o-mini',
         max_tokens: 1500,
         temperature: 0.1,
         messages: [

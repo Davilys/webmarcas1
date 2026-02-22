@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,8 +116,7 @@ Se a dúvida for jurídica complexa, envolver contestação/oposição ou estive
 - Nunca improvise frases diferentes das fornecidas.
 - Seja objetiva, clara e acolhedora.
 - Use emojis com moderação para tornar a conversa amigável.
-- Sempre finalize com "Posso ajudar com mais alguma coisa?" quando apropriado.
-- Português perfeito, sem erros de gramática ou ortografia.`;
+- Sempre finalize com "Posso ajudar com mais alguma coisa?" quando apropriado.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -159,40 +157,37 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    // Get AI config from system_settings
-    const aiConfig = await getAIConfig();
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     
-    if (!aiConfig.apiKey) {
-      throw new Error("Nenhuma chave de IA configurada");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY não configurada");
     }
 
     const systemMessage = userName 
       ? `${SYSTEM_PROMPT}\n\nO nome do cliente é ${userName}. Use o nome dele para tornar a conversa mais pessoal e acolhedora.`
       : SYSTEM_PROMPT;
 
-    console.log(`[chat-support] Using provider: ${aiConfig.provider}, model: ${aiConfig.model}`);
+    console.log("Iniciando chat com mensagens:", messages?.length || 0);
 
-    const response = await fetch(aiConfig.url, {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${aiConfig.apiKey}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemMessage },
           ...messages,
         ],
         stream: true,
-        temperature: 0.4,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI error:", response.status, errorText);
+      console.error("AI gateway error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -212,6 +207,8 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("Resposta recebida, iniciando streaming");
 
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },

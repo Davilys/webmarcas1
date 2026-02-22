@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
-import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,26 +118,22 @@ type AttorneyProcess = {
 };
 
 async function aiExtractFromBlocks(args: {
+  apiKey: string;
   blocks: string[];
 }): Promise<AttorneyProcess[]> {
-  const { blocks } = args;
+  const { apiKey, blocks } = args;
   if (blocks.length === 0) return [];
 
   const combinedText = blocks.join("\n\n---BLOCO---\n\n");
 
-  const aiConfig = await getAIConfig();
-  if (!aiConfig.apiKey) throw new Error("Nenhuma chave de IA configurada");
-
-  console.log(`[process-rpi] Using provider: ${aiConfig.provider}, model: ${aiConfig.model}`);
-
-  const resp = await fetch(aiConfig.url, {
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${aiConfig.apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: aiConfig.model,
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -193,7 +188,13 @@ serve(async (req) => {
       });
     }
 
-    // AI config is loaded dynamically inside aiExtractFromBlocks
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY não configurada" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -314,7 +315,7 @@ serve(async (req) => {
       const batch = blocks.slice(i, i + batchSize);
       console.log(`AI batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(blocks.length / batchSize)}`);
       try {
-        const found = await aiExtractFromBlocks({ blocks: batch });
+        const found = await aiExtractFromBlocks({ apiKey: OPENAI_API_KEY, blocks: batch });
         collected.push(...found);
       } catch (e) {
         const status = (e as any)?.status;

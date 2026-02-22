@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
-import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -341,9 +340,9 @@ serve(async (req) => {
       });
     }
 
-    const aiConfig = await getAIConfig();
-    if (!aiConfig.apiKey) {
-      throw new Error('Nenhuma chave de IA configurada');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
     }
 
     // Busca conhecimento dinâmico do INPI
@@ -409,20 +408,20 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[chat-inpi-legal] provider=${aiConfig.provider}, model=${aiConfig.model}, ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
+    console.log(`[chat-inpi-legal] Sending to OpenAI: ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
 
-    const response = await fetch(aiConfig.url, {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model: 'gpt-4o',
         messages: apiMessages,
         stream: true,
         max_tokens: 4096,
-        temperature: 0.5,
+        temperature: 0.7,
       }),
     });
 

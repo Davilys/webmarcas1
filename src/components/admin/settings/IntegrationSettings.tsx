@@ -21,11 +21,6 @@ interface EmailProviderSettings { enabled: boolean; provider: string; api_key: s
 interface BotconversaSettings { enabled: boolean; webhook_url: string; auth_token: string; test_phone: string; }
 interface SmsSettings { enabled: boolean; provider: string; api_key: string; sender_name: string; test_phone: string; }
 interface OpenAISettings { enabled: boolean; api_key: string; model: string; }
-interface GeminiSettings { enabled: boolean; api_key: string; model: string; }
-interface DeepSeekSettings { enabled: boolean; api_key: string; model: string; }
-interface KimiSettings { enabled: boolean; api_key: string; model: string; }
-interface ZhipuSettings { enabled: boolean; api_key: string; model: string; }
-interface AIProviderConfig { provider: 'openai' | 'gemini' | 'deepseek' | 'kimi' | 'zhipu' | 'lovable'; }
 interface INPISettings { enabled: boolean; sync_interval_hours: number; last_sync_at: string | null; }
 interface FirecrawlSettings { enabled: boolean; api_key: string; }
 interface LovableAISettings { enabled: boolean; }
@@ -236,111 +231,6 @@ export function IntegrationSettings() {
   const [testingOpenai, setTestingOpenai] = useState(false);
   const [openaiStatus, setOpenaiStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // ── Gemini ──────────────────────────────────────────────
-  const gemini = useSystemSetting<GeminiSettings>('gemini_config', { enabled: false, api_key: '', model: 'gemini-2.5-flash' });
-  const [testingGemini, setTestingGemini] = useState(false);
-  const [geminiStatus, setGeminiStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // ── DeepSeek ────────────────────────────────────────────
-  const deepseek = useSystemSetting<DeepSeekSettings>('deepseek_config', { enabled: false, api_key: '', model: 'deepseek-chat' });
-  const [testingDeepseek, setTestingDeepseek] = useState(false);
-  const [deepseekStatus, setDeepseekStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // ── Kimi (Moonshot AI) ──────────────────────────────────
-  const kimi = useSystemSetting<KimiSettings>('kimi_config', { enabled: false, api_key: '', model: 'moonshot-v1-8k' });
-  const [testingKimi, setTestingKimi] = useState(false);
-  const [kimiStatus, setKimiStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // ── Zhipu AI (GLM) ─────────────────────────────────────
-  const zhipu = useSystemSetting<ZhipuSettings>('zhipu_config', { enabled: false, api_key: '', model: 'glm-4-flash' });
-  const [testingZhipu, setTestingZhipu] = useState(false);
-  const [zhipuStatus, setZhipuStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // ── AI Active Provider ──────────────────────────────────
-  const aiProvider = useSystemSetting<AIProviderConfig>('ai_active_provider', { provider: 'lovable' });
-
-  const qc = useQueryClient();
-
-  const activateProvider = async (provider: AIProviderConfig['provider']) => {
-    aiProvider.setLocal({ provider });
-    // Save provider selection
-    const { error } = await supabase.from('system_settings')
-      .upsert({ key: 'ai_active_provider', value: JSON.parse(JSON.stringify({ provider })), updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (error) { toast.error('Erro ao salvar provedor ativo'); return; }
-
-    // Enable/disable providers accordingly
-    if (provider === 'openai') {
-      openai.setLocal({ ...openai.local, enabled: true });
-      gemini.setLocal({ ...gemini.local, enabled: false });
-      deepseek.setLocal({ ...deepseek.local, enabled: false });
-      kimi.setLocal({ ...kimi.local, enabled: false });
-      zhipu.setLocal({ ...zhipu.local, enabled: false });
-    } else if (provider === 'gemini') {
-      openai.setLocal({ ...openai.local, enabled: false });
-      gemini.setLocal({ ...gemini.local, enabled: true });
-      deepseek.setLocal({ ...deepseek.local, enabled: false });
-      kimi.setLocal({ ...kimi.local, enabled: false });
-      zhipu.setLocal({ ...zhipu.local, enabled: false });
-    } else if (provider === 'deepseek') {
-      openai.setLocal({ ...openai.local, enabled: false });
-      gemini.setLocal({ ...gemini.local, enabled: false });
-      deepseek.setLocal({ ...deepseek.local, enabled: true });
-      kimi.setLocal({ ...kimi.local, enabled: false });
-      zhipu.setLocal({ ...zhipu.local, enabled: false });
-    } else if (provider === 'kimi') {
-      openai.setLocal({ ...openai.local, enabled: false });
-      gemini.setLocal({ ...gemini.local, enabled: false });
-      deepseek.setLocal({ ...deepseek.local, enabled: false });
-      kimi.setLocal({ ...kimi.local, enabled: true });
-      zhipu.setLocal({ ...zhipu.local, enabled: false });
-    } else if (provider === 'zhipu') {
-      openai.setLocal({ ...openai.local, enabled: false });
-      gemini.setLocal({ ...gemini.local, enabled: false });
-      deepseek.setLocal({ ...deepseek.local, enabled: false });
-      kimi.setLocal({ ...kimi.local, enabled: false });
-      zhipu.setLocal({ ...zhipu.local, enabled: true });
-    } else {
-      openai.setLocal({ ...openai.local, enabled: false });
-      gemini.setLocal({ ...gemini.local, enabled: false });
-      deepseek.setLocal({ ...deepseek.local, enabled: false });
-      kimi.setLocal({ ...kimi.local, enabled: false });
-      zhipu.setLocal({ ...zhipu.local, enabled: false });
-    }
-
-    qc.invalidateQueries({ queryKey: ['system-settings', 'ai_active_provider'] });
-    toast.success(`Provedor de IA alterado para: ${provider === 'lovable' ? 'Lovable AI' : provider === 'openai' ? 'OpenAI' : provider === 'gemini' ? 'Google Gemini' : provider === 'deepseek' ? 'DeepSeek' : provider === 'kimi' ? 'Kimi (Moonshot)' : 'Zhipu AI (GLM)'}`);
-  };
-
-  const testKimi = async () => {
-    if (!kimi.local.api_key) { toast.error('Configure a API Key do Kimi primeiro'); return; }
-    setTestingKimi(true); setKimiStatus('idle');
-    try {
-      const res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${kimi.local.api_key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: kimi.local.model || 'moonshot-v1-8k', messages: [{ role: 'user', content: 'test' }], max_tokens: 10 }),
-      });
-      if (res.ok) { setKimiStatus('success'); toast.success('Conexão com Kimi funcionando!'); }
-      else { setKimiStatus('error'); toast.error('Falha na conexão com Kimi'); }
-    } catch { setKimiStatus('error'); toast.error('Erro ao testar Kimi'); }
-    finally { setTestingKimi(false); }
-  };
-
-  const testZhipu = async () => {
-    if (!zhipu.local.api_key) { toast.error('Configure a API Key do Zhipu AI primeiro'); return; }
-    setTestingZhipu(true); setZhipuStatus('idle');
-    try {
-      const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${zhipu.local.api_key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: zhipu.local.model || 'glm-4-flash', messages: [{ role: 'user', content: 'test' }], max_tokens: 10 }),
-      });
-      if (res.ok) { setZhipuStatus('success'); toast.success('Conexão com Zhipu AI funcionando!'); }
-      else { setZhipuStatus('error'); toast.error('Falha na conexão com Zhipu AI'); }
-    } catch { setZhipuStatus('error'); toast.error('Erro ao testar Zhipu AI'); }
-    finally { setTestingZhipu(false); }
-  };
-
   const testOpenai = async () => {
     setTestingOpenai(true); setOpenaiStatus('idle');
     try {
@@ -351,37 +241,6 @@ export function IntegrationSettings() {
       else { setOpenaiStatus('success'); toast.success('Conexão com OpenAI funcionando!'); }
     } catch { setOpenaiStatus('error'); toast.error('Erro ao testar OpenAI'); }
     finally { setTestingOpenai(false); }
-  };
-
-  const testGemini = async () => {
-    if (!gemini.local.api_key) { toast.error('Configure a API Key do Gemini primeiro'); return; }
-    setTestingGemini(true); setGeminiStatus('idle');
-    try {
-      // Test via direct Gemini API
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${gemini.local.api_key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: gemini.local.model || 'gemini-2.5-flash', messages: [{ role: 'user', content: 'test' }], max_tokens: 10 }),
-      });
-      if (res.ok) { setGeminiStatus('success'); toast.success('Conexão com Gemini funcionando!'); }
-      else { setGeminiStatus('error'); toast.error('Falha na conexão com Gemini'); }
-    } catch { setGeminiStatus('error'); toast.error('Erro ao testar Gemini'); }
-    finally { setTestingGemini(false); }
-  };
-
-  const testDeepseek = async () => {
-    if (!deepseek.local.api_key) { toast.error('Configure a API Key do DeepSeek primeiro'); return; }
-    setTestingDeepseek(true); setDeepseekStatus('idle');
-    try {
-      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${deepseek.local.api_key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: deepseek.local.model || 'deepseek-chat', messages: [{ role: 'user', content: 'test' }], max_tokens: 10 }),
-      });
-      if (res.ok) { setDeepseekStatus('success'); toast.success('Conexão com DeepSeek funcionando!'); }
-      else { setDeepseekStatus('error'); toast.error('Falha na conexão com DeepSeek'); }
-    } catch { setDeepseekStatus('error'); toast.error('Erro ao testar DeepSeek'); }
-    finally { setTestingDeepseek(false); }
   };
 
   // ── Firecrawl ───────────────────────────────────────────
@@ -600,44 +459,7 @@ export function IntegrationSettings() {
       {/* ═══════════════════════ INTELIGÊNCIA ARTIFICIAL ═══════════════════════ */}
       <SectionTitle>🤖 Inteligência Artificial</SectionTitle>
 
-      {/* ── Seletor Global de Provedor IA ─────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Provedor de IA Ativo</CardTitle>
-          </div>
-          <CardDescription>Selecione qual provedor será usado em todos os serviços de IA do sistema (chat, e-mail, recursos INPI, RPI)</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-            {([
-              { value: 'lovable' as const, label: 'Lovable AI', desc: 'Automático (padrão)' },
-              { value: 'openai' as const, label: 'OpenAI / ChatGPT', desc: 'Requer API Key' },
-              { value: 'gemini' as const, label: 'Google Gemini', desc: 'Requer API Key' },
-              { value: 'deepseek' as const, label: 'DeepSeek', desc: 'Requer API Key' },
-              { value: 'kimi' as const, label: 'Kimi (Moonshot)', desc: 'Requer API Key' },
-              { value: 'zhipu' as const, label: 'Zhipu AI (GLM)', desc: 'Requer API Key' },
-            ]).map(p => (
-              <button
-                key={p.value}
-                onClick={() => activateProvider(p.value)}
-                className={`rounded-lg border-2 p-3 text-left transition-all ${
-                  aiProvider.local.provider === p.value
-                    ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                    : 'border-border hover:border-primary/40'
-                }`}
-              >
-                <p className="text-sm font-medium">{p.label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{p.desc}</p>
-                {aiProvider.local.provider === p.value && (
-                  <Badge variant="default" className="mt-2 text-[10px]">Ativo</Badge>
-                )}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* ── OpenAI ───────────────────────────────────────── */}
       <IntegrationCard
         icon={Brain}
         iconColor="text-emerald-500"
@@ -670,10 +492,8 @@ export function IntegrationSettings() {
               <SelectItem value="o4-mini">o4-mini (Raciocínio avançado)</SelectItem>
               <SelectItem value="o3">o3 (Raciocínio complexo)</SelectItem>
               <SelectItem value="o3-mini">o3-mini (Raciocínio econômico)</SelectItem>
-              <SelectItem value="gpt-5">GPT-5 (Mais avançado)</SelectItem>
-              <SelectItem value="gpt-5-mini">GPT-5 Mini (Avançado e econômico)</SelectItem>
-              <SelectItem value="gpt-5-nano">GPT-5 Nano (Ultra rápido)</SelectItem>
-              <SelectItem value="gpt-5.2">GPT-5.2 (Último lançamento)</SelectItem>
+              <SelectItem value="gpt-5.1">GPT-5.1 (Mais avançado)</SelectItem>
+              <SelectItem value="gpt-5.1-mini">GPT-5.1 Mini (Avançado e econômico)</SelectItem>
               <SelectItem value="o1">o1 (Raciocínio profundo)</SelectItem>
               <SelectItem value="o1-mini">o1-mini (Raciocínio leve)</SelectItem>
             </SelectContent>
@@ -707,171 +527,7 @@ export function IntegrationSettings() {
         <StatusBadge ok={openai.local.enabled} />
       </IntegrationCard>
 
-      {/* ── Google Gemini ────────────────────────────────── */}
-      <IntegrationCard
-        icon={Brain}
-        iconColor="text-blue-500"
-        title="Google Gemini"
-        description="IA do Google para chat, e-mails, recursos jurídicos INPI e análise de documentos"
-        badge={aiProvider.local.provider === 'gemini' ? 'Ativo' : 'Inativo'}
-        badgeVariant={aiProvider.local.provider === 'gemini' ? 'default' : 'secondary'}
-      >
-        <div className="space-y-1.5">
-          <Label>Modelo Padrão</Label>
-          <Select value={gemini.local.model || 'gemini-2.5-flash'}
-            onValueChange={v => gemini.setLocal({ ...gemini.local, model: v })}>
-            <SelectTrigger><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash (Rápido e econômico)</SelectItem>
-              <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro (Mais capaz)</SelectItem>
-              <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash (Estável)</SelectItem>
-              <SelectItem value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Ultra rápido)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>API Key Google Gemini</Label>
-          <SecretInput value={gemini.local.api_key} onChange={v => gemini.setLocal({ ...gemini.local, api_key: v })} placeholder="AIzaSy..." savedValue={(gemini.saved as GeminiSettings).api_key} />
-          <p className="text-xs text-muted-foreground">Obtenha em aistudio.google.com → Get API Key</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={testGemini} disabled={testingGemini}>
-            {testingGemini ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Testar Conexão
-          </Button>
-          {geminiStatus === 'success' && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="h-4 w-4" />Conectado</span>}
-          {geminiStatus === 'error' && <span className="flex items-center gap-1 text-sm text-destructive"><XCircle className="h-4 w-4" />Falha</span>}
-          <Button onClick={gemini.save} disabled={gemini.isSaving} className="ml-auto">
-            {gemini.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar
-          </Button>
-        </div>
-        <StatusBadge ok={aiProvider.local.provider === 'gemini' && !!gemini.local.api_key} />
-      </IntegrationCard>
-
-      {/* ── DeepSeek ─────────────────────────────────────── */}
-      <IntegrationCard
-        icon={Brain}
-        iconColor="text-cyan-500"
-        title="DeepSeek"
-        description="IA chinesa de alto desempenho para chat, e-mails e recursos jurídicos"
-        badge={aiProvider.local.provider === 'deepseek' ? 'Ativo' : 'Inativo'}
-        badgeVariant={aiProvider.local.provider === 'deepseek' ? 'default' : 'secondary'}
-      >
-        <div className="space-y-1.5">
-          <Label>Modelo Padrão</Label>
-          <Select value={deepseek.local.model || 'deepseek-chat'}
-            onValueChange={v => deepseek.setLocal({ ...deepseek.local, model: v })}>
-            <SelectTrigger><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="deepseek-chat">DeepSeek Chat (V3, geral)</SelectItem>
-              <SelectItem value="deepseek-reasoner">DeepSeek Reasoner (R1, raciocínio)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>API Key DeepSeek</Label>
-          <SecretInput value={deepseek.local.api_key} onChange={v => deepseek.setLocal({ ...deepseek.local, api_key: v })} placeholder="sk-..." savedValue={(deepseek.saved as DeepSeekSettings).api_key} />
-          <p className="text-xs text-muted-foreground">Obtenha em platform.deepseek.com → API Keys</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={testDeepseek} disabled={testingDeepseek}>
-            {testingDeepseek ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Testar Conexão
-          </Button>
-          {deepseekStatus === 'success' && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="h-4 w-4" />Conectado</span>}
-          {deepseekStatus === 'error' && <span className="flex items-center gap-1 text-sm text-destructive"><XCircle className="h-4 w-4" />Falha</span>}
-          <Button onClick={deepseek.save} disabled={deepseek.isSaving} className="ml-auto">
-            {deepseek.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar
-          </Button>
-        </div>
-        <StatusBadge ok={aiProvider.local.provider === 'deepseek' && !!deepseek.local.api_key} />
-      </IntegrationCard>
-
-      {/* ── Kimi (Moonshot AI) ────────────────────────────── */}
-      <IntegrationCard
-        icon={Brain}
-        iconColor="text-rose-500"
-        title="Kimi — Moonshot AI"
-        description="IA chinesa avançada da Moonshot para chat, e-mails e recursos jurídicos"
-        badge={aiProvider.local.provider === 'kimi' ? 'Ativo' : 'Inativo'}
-        badgeVariant={aiProvider.local.provider === 'kimi' ? 'default' : 'secondary'}
-      >
-        <div className="space-y-1.5">
-          <Label>Modelo Padrão</Label>
-          <Select value={kimi.local.model || 'moonshot-v1-8k'}
-            onValueChange={v => kimi.setLocal({ ...kimi.local, model: v })}>
-            <SelectTrigger><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="moonshot-v1-8k">Moonshot V1 8K (Rápido)</SelectItem>
-              <SelectItem value="moonshot-v1-32k">Moonshot V1 32K (Contexto médio)</SelectItem>
-              <SelectItem value="moonshot-v1-128k">Moonshot V1 128K (Contexto longo)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>API Key Kimi (Moonshot)</Label>
-          <SecretInput value={kimi.local.api_key} onChange={v => kimi.setLocal({ ...kimi.local, api_key: v })} placeholder="sk-..." savedValue={(kimi.saved as KimiSettings).api_key} />
-          <p className="text-xs text-muted-foreground">Obtenha em platform.moonshot.cn → API Keys</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={testKimi} disabled={testingKimi}>
-            {testingKimi ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Testar Conexão
-          </Button>
-          {kimiStatus === 'success' && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="h-4 w-4" />Conectado</span>}
-          {kimiStatus === 'error' && <span className="flex items-center gap-1 text-sm text-destructive"><XCircle className="h-4 w-4" />Falha</span>}
-          <Button onClick={kimi.save} disabled={kimi.isSaving} className="ml-auto">
-            {kimi.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar
-          </Button>
-        </div>
-        <StatusBadge ok={aiProvider.local.provider === 'kimi' && !!kimi.local.api_key} />
-      </IntegrationCard>
-
-      {/* ── Zhipu AI (GLM) ───────────────────────────────── */}
-      <IntegrationCard
-        icon={Brain}
-        iconColor="text-teal-500"
-        title="Zhipu AI — GLM"
-        description="IA chinesa da Zhipu (ChatGLM) para chat, e-mails e recursos jurídicos"
-        badge={aiProvider.local.provider === 'zhipu' ? 'Ativo' : 'Inativo'}
-        badgeVariant={aiProvider.local.provider === 'zhipu' ? 'default' : 'secondary'}
-      >
-        <div className="space-y-1.5">
-          <Label>Modelo Padrão</Label>
-          <Select value={zhipu.local.model || 'glm-4-flash'}
-            onValueChange={v => zhipu.setLocal({ ...zhipu.local, model: v })}>
-            <SelectTrigger><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="glm-4-flash">GLM-4 Flash (Rápido e econômico)</SelectItem>
-              <SelectItem value="glm-4">GLM-4 (Mais capaz)</SelectItem>
-              <SelectItem value="glm-4-plus">GLM-4 Plus (Premium)</SelectItem>
-              <SelectItem value="glm-4-long">GLM-4 Long (Contexto longo)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>API Key Zhipu AI</Label>
-          <SecretInput value={zhipu.local.api_key} onChange={v => zhipu.setLocal({ ...zhipu.local, api_key: v })} placeholder="xxxxxxxx.xxxxxxxxxxxxxxxx" savedValue={(zhipu.saved as ZhipuSettings).api_key} />
-          <p className="text-xs text-muted-foreground">Obtenha em open.bigmodel.cn → API Keys</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="outline" onClick={testZhipu} disabled={testingZhipu}>
-            {testingZhipu ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Testar Conexão
-          </Button>
-          {zhipuStatus === 'success' && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="h-4 w-4" />Conectado</span>}
-          {zhipuStatus === 'error' && <span className="flex items-center gap-1 text-sm text-destructive"><XCircle className="h-4 w-4" />Falha</span>}
-          <Button onClick={zhipu.save} disabled={zhipu.isSaving} className="ml-auto">
-            {zhipu.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar
-          </Button>
-        </div>
-        <StatusBadge ok={aiProvider.local.provider === 'zhipu' && !!zhipu.local.api_key} />
-      </IntegrationCard>
-
+      {/* ── Lovable AI ───────────────────────────────────── */}
       <IntegrationCard
         icon={Sparkles}
         iconColor="text-purple-500"
