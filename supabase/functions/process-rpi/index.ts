@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
+import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,29 +119,26 @@ type AttorneyProcess = {
 };
 
 async function aiExtractFromBlocks(args: {
-  apiKey: string;
   blocks: string[];
 }): Promise<AttorneyProcess[]> {
-  const { apiKey, blocks } = args;
+  const { blocks } = args;
   if (blocks.length === 0) return [];
 
   const combinedText = blocks.join("\n\n---BLOCO---\n\n");
 
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  const aiApiKey = LOVABLE_API_KEY || apiKey;
-  const aiUrl = LOVABLE_API_KEY 
-    ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
-    : 'https://api.openai.com/v1/chat/completions';
-  const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o-mini';
+  const aiConfig = await getAIConfig();
+  if (!aiConfig.apiKey) throw new Error("Nenhuma chave de IA configurada");
 
-  const resp = await fetch(aiUrl, {
+  console.log(`[process-rpi] Using provider: ${aiConfig.provider}, model: ${aiConfig.model}`);
+
+  const resp = await fetch(aiConfig.url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${aiApiKey}`,
+      Authorization: `Bearer ${aiConfig.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: aiModel,
+      model: aiConfig.model,
       messages: [
         {
           role: "system",
@@ -195,13 +193,7 @@ serve(async (req) => {
       });
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY não configurada" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // AI config is loaded dynamically inside aiExtractFromBlocks
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -322,7 +314,7 @@ serve(async (req) => {
       const batch = blocks.slice(i, i + batchSize);
       console.log(`AI batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(blocks.length / batchSize)}`);
       try {
-        const found = await aiExtractFromBlocks({ apiKey: OPENAI_API_KEY, blocks: batch });
+        const found = await aiExtractFromBlocks({ blocks: batch });
         collected.push(...found);
       } catch (e) {
         const status = (e as any)?.status;

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -159,27 +160,27 @@ serve(async (req) => {
       );
     }
 
-    // Use Lovable AI gateway instead of direct OpenAI
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    // Get AI config from system_settings
+    const aiConfig = await getAIConfig();
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY não configurada");
+    if (!aiConfig.apiKey) {
+      throw new Error("Nenhuma chave de IA configurada");
     }
 
     const systemMessage = userName 
       ? `${SYSTEM_PROMPT}\n\nO nome do cliente é ${userName}. Use o nome dele para tornar a conversa mais pessoal e acolhedora.`
       : SYSTEM_PROMPT;
 
-    console.log("Iniciando chat com mensagens:", messages?.length || 0);
+    console.log(`[chat-support] Using provider: ${aiConfig.provider}, model: ${aiConfig.model}`);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(aiConfig.url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: aiConfig.model,
         messages: [
           { role: "system", content: systemMessage },
           ...messages,
@@ -191,7 +192,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("AI error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -211,8 +212,6 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log("Resposta recebida, iniciando streaming");
 
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },

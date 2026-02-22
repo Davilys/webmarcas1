@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -294,10 +295,10 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
+    const aiConfig = await getAIConfig();
+    if (!aiConfig.apiKey) {
       return new Response(
-        JSON.stringify({ error: 'OPENAI_API_KEY não configurada' }),
+        JSON.stringify({ error: 'Nenhuma chave de IA configurada' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -336,26 +337,17 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const aiApiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
-    const aiUrl = LOVABLE_API_KEY 
-      ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
-      : 'https://api.openai.com/v1/chat/completions';
-    const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o';
+    console.log(`[process-inpi-resource] provider=${aiConfig.provider}, model=${aiConfig.model}, agent: ${agentName || 'default'}`);
 
-    console.log('Calling AI with elite legal prompt, agent:', agentName || 'default');
-
-    const aiResponse = await fetch(aiUrl, {
+    const aiResponse = await fetch(aiConfig.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent }
+        model: aiConfig.model,
+
         ],
         max_tokens: 16000,
         temperature: 0.25,
