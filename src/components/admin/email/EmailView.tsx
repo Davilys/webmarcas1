@@ -5,10 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft, Reply, Forward, Trash2, Star, Clock, Sparkles,
-  MoreHorizontal, Archive, Eye, ChevronDown
+  MoreHorizontal, Archive, Eye, ChevronDown, MailOpen, MailX,
+  AlertTriangle, Copy, Printer
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -17,11 +22,18 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { AIEmailAssistant } from './AIEmailAssistant';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 
 interface EmailViewProps {
   email: Email;
   onBack: () => void;
   onReply: () => void;
+  onForward?: (email: Email) => void;
   onUseDraftFromAI?: (text: string) => void;
 }
 
@@ -33,22 +45,27 @@ const TRACKING_MOCK = {
   clicks: 1,
 };
 
-export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailViewProps) {
+export function EmailView({ email, onBack, onReply, onForward, onUseDraftFromAI }: EmailViewProps) {
   const [showAI, setShowAI] = useState(false);
   const [isStarred, setIsStarred] = useState(email.is_starred);
   const [draftText, setDraftText] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!email.is_read) {
-      supabase.from('email_inbox').update({ is_read: true }).eq('id', email.id).then(() => {});
+      supabase.from('email_inbox').update({ is_read: true }).eq('id', email.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['emails'] });
+        queryClient.invalidateQueries({ queryKey: ['email-stats'] });
+      });
     }
-  }, [email.id, email.is_read]);
+  }, [email.id, email.is_read, queryClient]);
 
   const emailDate = email.received_at || email.sent_at;
 
   const handleUseDraft = (text: string) => {
     setDraftText(text);
-    setShowAI(false); // Close the AI modal
+    setShowAI(false);
     if (onUseDraftFromAI) {
       onUseDraftFromAI(text);
     } else {
@@ -57,15 +74,107 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
     }
   };
 
-
-  const handleToggleStar = async () => {
+  const handleToggleStar = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setIsStarred(prev => !prev);
     await supabase.from('email_inbox').update({ is_starred: !isStarred }).eq('id', email.id);
+    queryClient.invalidateQueries({ queryKey: ['emails'] });
     toast.success(isStarred ? 'Removido dos favoritos' : '⭐ Adicionado aos favoritos');
+  };
+
+  const handleDelete = async () => {
+    const { error } = await supabase.from('email_inbox').delete().eq('id', email.id);
+    if (error) {
+      toast.error('Erro ao excluir email: ' + error.message);
+      return;
+    }
+    toast.success('🗑️ Email excluído com sucesso');
+    queryClient.invalidateQueries({ queryKey: ['emails'] });
+    queryClient.invalidateQueries({ queryKey: ['email-stats'] });
+    onBack();
+  };
+
+  const handleArchive = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const { error } = await supabase.from('email_inbox').update({ is_archived: true }).eq('id', email.id);
+    if (error) {
+      toast.error('Erro ao arquivar email: ' + error.message);
+      return;
+    }
+    toast.success('📦 Email arquivado');
+    queryClient.invalidateQueries({ queryKey: ['emails'] });
+    queryClient.invalidateQueries({ queryKey: ['email-stats'] });
+    onBack();
+  };
+
+  const handleMarkUnread = async () => {
+    await supabase.from('email_inbox').update({ is_read: false }).eq('id', email.id);
+    queryClient.invalidateQueries({ queryKey: ['emails'] });
+    toast.success('Marcado como não lido');
+    onBack();
+  };
+
+  const handleForward = () => {
+    if (onForward) {
+      onForward(email);
+    } else {
+      toast.info('Funcionalidade de encaminhar em desenvolvimento');
+    }
+  };
+
+  const handleCopyContent = () => {
+    const text = email.body_text || email.subject || '';
+    navigator.clipboard.writeText(text);
+    toast.success('Conteúdo copiado para a área de transferência');
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html><head><title>${email.subject}</title>
+        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}
+        .header{border-bottom:1px solid #ccc;padding-bottom:10px;margin-bottom:20px}
+        .meta{color:#666;font-size:14px}</style></head>
+        <body><div class="header"><h1>${email.subject}</h1>
+        <p class="meta">De: ${email.from_name || email.from_email}</p>
+        <p class="meta">Para: ${email.to_email}</p>
+        <p class="meta">Data: ${emailDate ? format(new Date(emailDate), "dd MMM yyyy, HH:mm", { locale: ptBR }) : ''}</p>
+        </div><div>${email.body_html || email.body_text || '(Sem conteúdo)'}</div></body></html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
   };
 
   return (
     <>
+      {/* Delete Confirmation */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Excluir Email
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este email? Esta ação não pode ser desfeita.
+              <br /><br />
+              <strong>Assunto:</strong> {email.subject}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* AI Assistant as Dialog/Modal */}
       <Dialog open={showAI} onOpenChange={setShowAI}>
         <DialogContent className="max-w-2xl w-full p-0 gap-0 overflow-hidden max-h-[90vh]">
@@ -77,7 +186,7 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
         </DialogContent>
       </Dialog>
 
-      {/* Main Email View — always full width */}
+      {/* Main Email View */}
       <div className="h-full flex flex-col w-full">
         <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
           {/* Top Toolbar */}
@@ -101,25 +210,73 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
                   <span className="hidden md:inline">✨ IA Assistente</span>
                   <span className="md:hidden">IA</span>
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleToggleStar}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => handleToggleStar(e)}>
                   <Star className={cn('h-4 w-4 transition-colors', isStarred ? 'fill-primary text-primary' : 'text-muted-foreground')} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hidden md:flex">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground hidden md:flex"
+                  onClick={(e) => handleArchive(e)}
+                  title="Arquivar"
+                >
                   <Archive className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/70 hover:text-destructive">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteConfirm(true);
+                  }}
+                  title="Excluir"
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hidden md:flex">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
+
+                {/* 3-dot Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hidden md:flex">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={handleMarkUnread} className="gap-2">
+                      <MailX className="h-4 w-4" />
+                      Marcar como não lido
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleCopyContent} className="gap-2">
+                      <Copy className="h-4 w-4" />
+                      Copiar conteúdo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handlePrint} className="gap-2">
+                      <Printer className="h-4 w-4" />
+                      Imprimir
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleArchive()} className="gap-2">
+                      <Archive className="h-4 w-4" />
+                      Arquivar
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Excluir email
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
             {/* Subject */}
             <h2 className="text-base md:text-lg font-bold leading-tight mb-2 md:mb-3">{email.subject}</h2>
 
-            {/* Tracking Bar — hidden on mobile */}
+            {/* Tracking Bar */}
             <div className="hidden md:flex items-center gap-3 py-2 px-3 bg-muted/30 rounded-xl border border-border/30 text-[10px] text-muted-foreground mb-3">
               <div className="flex items-center gap-1.5">
                 <Eye className="h-3 w-3 text-primary" />
@@ -162,9 +319,6 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
                     <Clock className="h-3.5 w-3.5" />
                     {emailDate && format(new Date(emailDate), "dd MMM yyyy, HH:mm", { locale: ptBR })}
-                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
                   </div>
                 </div>
 
@@ -218,7 +372,7 @@ export function EmailView({ email, onBack, onReply, onUseDraftFromAI }: EmailVie
               <Reply className="h-4 w-4" />
               Responder
             </Button>
-            <Button variant="outline" className="gap-1.5 md:gap-2 h-9 text-xs md:text-sm flex-1 md:flex-none">
+            <Button variant="outline" className="gap-1.5 md:gap-2 h-9 text-xs md:text-sm flex-1 md:flex-none" onClick={handleForward}>
               <Forward className="h-4 w-4" />
               Encaminhar
             </Button>
