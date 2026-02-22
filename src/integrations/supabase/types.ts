@@ -1540,6 +1540,59 @@ export type Database = {
         }
         Relationships: []
       }
+      intelligence_process_history: {
+        Row: {
+          ano_finalizacao: number | null
+          classe: string | null
+          created_at: string
+          id: string
+          process_id: string | null
+          resultado_final: string | null
+          tempo_total_dias: number | null
+          teve_exigencia: boolean | null
+          teve_oposicao: boolean | null
+          teve_recurso: boolean | null
+          tipo_marca: string | null
+          updated_at: string
+        }
+        Insert: {
+          ano_finalizacao?: number | null
+          classe?: string | null
+          created_at?: string
+          id?: string
+          process_id?: string | null
+          resultado_final?: string | null
+          tempo_total_dias?: number | null
+          teve_exigencia?: boolean | null
+          teve_oposicao?: boolean | null
+          teve_recurso?: boolean | null
+          tipo_marca?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ano_finalizacao?: number | null
+          classe?: string | null
+          created_at?: string
+          id?: string
+          process_id?: string | null
+          resultado_final?: string | null
+          tempo_total_dias?: number | null
+          teve_exigencia?: boolean | null
+          teve_oposicao?: boolean | null
+          teve_recurso?: boolean | null
+          tipo_marca?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_process_history_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: true
+            referencedRelation: "brand_processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount: number
@@ -2397,6 +2450,9 @@ export type Database = {
     }
     Functions: {
       add_admin_role: { Args: { target_user_id: string }; Returns: undefined }
+      calculate_predictive_score: { Args: { p_classe?: string }; Returns: Json }
+      get_annual_evolution: { Args: never; Returns: Json }
+      get_class_ranking: { Args: never; Returns: Json }
       has_current_user_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: boolean
@@ -2424,6 +2480,7 @@ export type Database = {
         Args: { keep_id: string; merge_id: string }
         Returns: undefined
       }
+      sync_intelligence_history: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
