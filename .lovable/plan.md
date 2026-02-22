@@ -1,68 +1,72 @@
 
+# Separar Emails por Conta (estilo Outlook)
 
-# Buscas REAIS via DuckDuckGo (sem chave API)
+## Problema Atual
 
-## Problema
+Todos os emails recebidos e enviados aparecem misturados numa unica lista, sem separacao por conta de email. Um administrador com 2 contas atribuidas ve tudo junto. Alem disso, admins comuns veem emails de contas que nao sao deles.
 
-As 3 funcoes de busca (INPI, CNPJ, Internet) perguntam ao GPT-5.2 "voce conhece essa marca?" -- a IA nao tem acesso em tempo real, entao sempre responde "nao encontrei". Tudo aparece como "viavel".
+## Como vai funcionar
 
-## Solucao
+### Comportamento por tipo de usuario
 
-Usar DuckDuckGo HTML Search -- gratuito, sem cadastro, sem chave API. Fazemos fetch da pagina de resultados e parseamos o HTML para extrair titulos, URLs e descricoes reais.
+- **Admin Master (davillys@gmail.com)**: ve TODAS as contas de email no painel lateral, cada uma separada. Clica em "juridico@webmarcas.net" e ve so os emails dessa conta. Clica em "financeiro@webmarcas.net" e ve so os dessa.
+- **Admin comum**: ve apenas as contas atribuidas a ele (campo `assigned_to`). Se tem 2 contas, ve 2 opcoes separadas no painel lateral.
 
-## Como funciona
+### Interface (estilo Outlook)
+
+No sidebar de email, ANTES das pastas (Caixa de Entrada, Enviados, etc.), aparece uma secao "Contas de Email" listando cada conta com seu endereco. O admin clica numa conta para seleciona-la, e todas as pastas (inbox, sent, etc.) filtram apenas por aquela conta.
+
+## Mudancas Tecnicas
+
+### 1. `src/pages/admin/Emails.tsx`
+- Adicionar estado `selectedAccountId` (conta selecionada)
+- Buscar contas de email do usuario atual (master ve todas, admin ve apenas `assigned_to = seu ID`)
+- Passar `selectedAccountId` para `EmailList`, `EmailSidebar`, `EmailCompose`
+- Passar lista de contas para `EmailSidebar`
+
+### 2. `src/components/admin/email/EmailSidebar.tsx`
+- Adicionar secao "Contas de Email" no topo (abaixo do botao "Novo Email")
+- Cada conta aparece como botao clicavel com o endereco de email e nome de exibicao
+- Indicador visual de conta selecionada
+- Ao clicar, chama callback `onAccountChange(accountId)`
+
+### 3. `src/components/admin/email/EmailList.tsx`
+- Receber prop `accountId` (conta selecionada)
+- Filtrar `email_inbox` por `account_id = accountId`
+- Filtrar `email_logs` por `from_email = email da conta selecionada`
+- Sincronizacao IMAP passa o `account_id` correto
+
+### 4. `src/components/admin/email/EmailCompose.tsx`
+- Receber prop `accountId` para saber de qual conta enviar
+- Usar as credenciais SMTP da conta selecionada
+
+### 5. Queries de stats (`email-stats`)
+- Filtrar por `account_id` da conta selecionada para mostrar contagem correta
+
+### 6. Sincronizacao IMAP (`sync-imap-inbox`)
+- Ja funciona por `account_id` -- nenhuma alteracao necessaria na edge function
+
+## Fluxo do Usuario
 
 ```text
-fetch("https://html.duckduckgo.com/html/?q=webmarcas+INPI+registro+marca")
-  -> HTML com resultados reais
-  -> Parsear com regex: titulo, URL, snippet
-  -> Enviar dados reais ao GPT-5.2 para estruturar
+Sidebar                          Conteudo
++----------------------------+   +---------------------------+
+| [Novo Email]               |   |                           |
+|                            |   |  Emails da conta          |
+| CONTAS DE EMAIL            |   |  selecionada              |
+| > juridico@webmarcas.net   |   |                           |
+|   financeiro@webmarcas.net |   |  - Email 1                |
+|                            |   |  - Email 2                |
+| PASTAS                     |   |  - Email 3                |
+|   Caixa de Entrada (3)     |   |                           |
+|   Enviados (12)            |   |                           |
+|   Rascunhos                |   |                           |
+|   ...                      |   |                           |
++----------------------------+   +---------------------------+
 ```
 
-## Mudancas no arquivo `supabase/functions/inpi-viability-check/index.ts`
-
-### Nova funcao utilitaria: `searchDuckDuckGo(query)`
-- Faz fetch em `https://html.duckduckgo.com/html/?q=...`
-- Parseia o HTML com regex para extrair resultados (classe `result`, tags `a.result__a`, `a.result__snippet`)
-- Retorna array de `{title, url, description}`
-- Timeout de 8 segundos, retorna array vazio se falhar
-
-### searchINPI (linhas 131-198) -- REESCRITA COMPLETA
-Substitui chamada IA pura por:
-1. DuckDuckGo: `"webmarcas" site:busca.inpi.gov.br`
-2. DuckDuckGo: `"webmarcas" INPI registro marca classe 45`
-3. Envia resultados reais ao GPT-5.2 para estruturar em JSON (processo, marca, situacao, classe, titular)
-
-### searchCNPJ (linhas 201-253) -- REESCRITA COMPLETA
-Substitui chamada IA pura por:
-1. DuckDuckGo: `"webmarcas" CNPJ empresa razao social`
-2. DuckDuckGo: `"webmarcas" cnpj.info OR cnpja.com OR casadosdados.com`
-3. Envia resultados reais ao GPT-5.2 para extrair dados empresariais
-
-### searchInternet (linhas 257-348) -- REESCRITA COMPLETA
-Substitui chamada IA pura por:
-1. DuckDuckGo: `"webmarcas" site:instagram.com`
-2. DuckDuckGo: `"webmarcas" site:facebook.com`
-3. DuckDuckGo: `"webmarcas" site:linkedin.com`
-4. DuckDuckGo: `"webmarcas"` (busca geral)
-5. Parseia diretamente os resultados para verificar presenca real (sem IA nesta etapa)
-
-### Demais funcoes -- SEM ALTERACAO
-- `suggestClassesWithAI` (mapeamento NCL): mantida
-- `generateFinalAnalysis` (laudo final): mantida (agora recebe dados reais)
-- `buildFallbackAnalysis`: mantida
-- Handler principal: mantido
-
-## Total de buscas DuckDuckGo por consulta: ~8
-- 2 para INPI
-- 2 para CNPJ
-- 4 para Internet (3 redes sociais + geral)
-
-Todas executadas em paralelo dentro de cada etapa.
-
 ## Impacto
-- Apenas a edge function `inpi-viability-check` sera alterada
-- Nenhuma tabela, frontend ou secret necessario
-- Zero custo, zero cadastro
-- Resultados passam a ser REAIS (dados da internet) em vez de simulacao
-
+- Nenhuma tabela ou schema alterado (email_inbox ja tem `account_id`)
+- Nenhuma edge function alterada
+- Apenas componentes de frontend: Emails.tsx, EmailSidebar.tsx, EmailList.tsx, EmailCompose.tsx
+- Compatibilidade total mantida
