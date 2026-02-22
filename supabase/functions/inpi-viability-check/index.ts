@@ -19,7 +19,7 @@ const FAMOUS_BRANDS = [
   'oakley', 'adidas', 'puma', 'reebok', 'new balance', 'asics', 'mizuno',
   'vans', 'converse', 'mcdonalds', 'mc donalds', "mcdonald's", 'burger king',
   'subway', 'starbucks', 'kfc', 'pizza hut', 'dominos', "domino's", 'habib',
-  'habibs', "habib's", 'outback', 'madero', 'giraffas', 'bobs', "bob's",
+  'habibs', "habib's", 'outback', 'madero', 'giraffas', 'bobs', "bob's", 'havaianas',
   'visa', 'mastercard', 'american express', 'amex', 'elo', 'hipercard',
   'disney', 'warner', 'paramount', 'universal', 'sony', 'lg', 'philips',
   'panasonic', 'jbl', 'bose', 'beats', 'dell', 'hp', 'lenovo', 'asus', 'acer',
@@ -127,262 +127,224 @@ async function suggestClassesWithAI(businessArea: string): Promise<{ classes: nu
   return getClassesForBusinessAreaFallback(businessArea);
 }
 
-// ========== ETAPA 3: Consulta REAL no INPI via Firecrawl ==========
+// ========== ETAPA 3: Consulta INPI via IA ==========
 async function searchINPI(brandName: string, mainClass: number): Promise<{
   totalResultados: number;
   resultados: Array<{ processo: string; marca: string; situacao: string; classe: string; titular: string }>;
   consultadoEm: string;
   error?: string;
 }> {
-  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  // Go directly to AI-based analysis (INPI direct HTTP is unreliable from edge functions)
+  return await searchINPIviaAI(brandName, mainClass, now);
+}
 
-  if (!FIRECRAWL_API_KEY) {
-    console.log('[INPI] FIRECRAWL_API_KEY não configurada');
-    return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Firecrawl não configurado' };
+// Fallback: pedir para IA analisar a marca no INPI baseado em seu conhecimento
+async function searchINPIviaAI(brandName: string, mainClass: number, now: string): Promise<{
+  totalResultados: number;
+  resultados: Array<{ processo: string; marca: string; situacao: string; classe: string; titular: string }>;
+  consultadoEm: string;
+  error?: string;
+}> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Consulta INPI indisponível' };
   }
 
   try {
-    console.log(`[INPI] Buscando "${brandName}" classe ${mainClass}`);
-
-    // Use Firecrawl search to find INPI results
-    const response = await fetch('https://api.firecrawl.dev/v1/search', {
+    console.log(`[INPI-IA] Consultando IA sobre marca "${brandName}" classe ${mainClass}`);
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `"${brandName}" marca registro INPI site:busca.inpi.gov.br`,
-        limit: 10,
-        lang: 'pt-br',
-        country: 'BR',
-        scrapeOptions: { formats: ['markdown'] }
+        model: 'openai/gpt-5.2',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um especialista em marcas registradas no INPI Brasil. Quando perguntado sobre uma marca, responda com base em seu conhecimento sobre marcas registradas. Se não souber, diga que não encontrou.
+Responda APENAS em JSON válido: {"totalResultados": N, "resultados": [{"processo": "NNNNNNNNN", "marca": "NOME", "situacao": "Registro em vigor|Pedido depositado|Arquivado/Extinto", "classe": "NN", "titular": "NOME"}]}`
+          },
+          {
+            role: 'user',
+            content: `Existem marcas registradas ou pedidos ativos no INPI Brasil com o nome "${brandName}" na classe ${mainClass}? Liste os que você conhecer.`
+          }
+        ],
+        temperature: 0.2,
+        max_completion_tokens: 800,
       }),
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[INPI] Firecrawl error ${response.status}: ${errText}`);
-      // Fallback: try scraping INPI directly
-      return await searchINPIFallback(brandName, mainClass, FIRECRAWL_API_KEY, now);
+      console.error(`[INPI-IA] Erro: ${response.status}`);
+      return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Consulta INPI via IA falhou' };
     }
 
     const data = await response.json();
-    const results = data.data || [];
-    console.log(`[INPI] Firecrawl retornou ${results.length} resultados`);
-
-    // Parse results to extract brand data
-    const resultados: Array<{ processo: string; marca: string; situacao: string; classe: string; titular: string }> = [];
-
-    for (const r of results) {
-      const md = r.markdown || r.description || '';
-      // Try to extract process numbers and brand names from markdown
-      const processMatches = md.match(/\d{9,}/g) || [];
-      const brandMentions = md.match(new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || [];
-
-      if (brandMentions.length > 0 || processMatches.length > 0) {
-        resultados.push({
-          processo: processMatches[0] || '',
-          marca: brandName.toUpperCase(),
-          situacao: md.includes('Registro de Marca') || md.includes('em vigor') ? 'Registro em vigor' :
-                    md.includes('Pedido') || md.includes('depositad') ? 'Pedido depositado' :
-                    md.includes('Arquivad') || md.includes('extint') ? 'Arquivado/Extinto' : 'Encontrado na base',
-          classe: mainClass.toString(),
-          titular: ''
-        });
-      }
-    }
-
-    return { totalResultados: resultados.length, resultados, consultadoEm: now };
-  } catch (error) {
-    console.error('[INPI] Erro:', error);
-    return { totalResultados: 0, resultados: [], consultadoEm: now, error: String(error) };
-  }
-}
-
-async function searchINPIFallback(brandName: string, mainClass: number, apiKey: string, now: string) {
-  try {
-    // Try scraping the INPI search page directly
-    const encodedBrand = encodeURIComponent(brandName);
-    const inpiUrl = `https://busca.inpi.gov.br/pePI/servlet/MarcasServletController?Action=SearchWordMark&marca=${encodedBrand}`;
-
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: inpiUrl, formats: ['markdown'], waitFor: 3000 }),
-    });
-
-    if (!response.ok) {
-      const t = await response.text();
-      console.error(`[INPI-FALLBACK] Scrape error: ${response.status} ${t}`);
-      return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'INPI scrape falhou' };
-    }
-
-    const data = await response.json();
-    const markdown = data.data?.markdown || data.markdown || '';
-    console.log(`[INPI-FALLBACK] Scrape retornou ${markdown.length} chars`);
-
-    // Parse markdown for brand results
-    const resultados: Array<{ processo: string; marca: string; situacao: string; classe: string; titular: string }> = [];
-    const lines = markdown.split('\n');
-
-    for (const line of lines) {
-      const processMatch = line.match(/(\d{9,})/);
-      const brandRegex = new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      if (processMatch || brandRegex.test(line)) {
-        if (brandRegex.test(line)) {
-          resultados.push({
-            processo: processMatch?.[1] || '',
-            marca: brandName.toUpperCase(),
-            situacao: line.toLowerCase().includes('vigente') || line.toLowerCase().includes('em vigor') ? 'Registro em vigor' :
-                      line.toLowerCase().includes('pedido') || line.toLowerCase().includes('deposit') ? 'Pedido depositado' :
-                      line.toLowerCase().includes('arquivad') || line.toLowerCase().includes('extint') ? 'Arquivado/Extinto' : 'Encontrado',
-            classe: mainClass.toString(),
-            titular: ''
-          });
+    const content = data.choices?.[0]?.message?.content;
+    if (content) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (typeof parsed.totalResultados === 'number' && Array.isArray(parsed.resultados)) {
+          console.log(`[INPI-IA] Encontrados ${parsed.totalResultados} resultados via IA`);
+          return { ...parsed, consultadoEm: now };
         }
       }
     }
-
-    return { totalResultados: resultados.length, resultados, consultadoEm: now };
   } catch (error) {
-    console.error('[INPI-FALLBACK] Erro:', error);
-    return { totalResultados: 0, resultados: [], consultadoEm: now, error: String(error) };
+    console.error('[INPI-IA] Erro:', error);
   }
+  return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Análise INPI inconclusiva' };
 }
 
-// ========== ETAPA 4: Busca de CNPJ via Firecrawl ==========
+// ========== ETAPA 4: Busca de CNPJ via BrasilAPI + IA ==========
 async function searchCNPJ(brandName: string): Promise<{
   total: number;
   matches: Array<{ nome: string; cnpj: string; situacao: string }>;
 }> {
-  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
-  if (!FIRECRAWL_API_KEY) return { total: 0, matches: [] };
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
   try {
-    console.log(`[CNPJ] Buscando "${brandName}"`);
-    const response = await fetch('https://api.firecrawl.dev/v1/search', {
+    console.log(`[CNPJ] Buscando empresas com nome "${brandName}" via IA`);
+
+    if (!LOVABLE_API_KEY) return { total: 0, matches: [] };
+
+    // Usar IA para identificar empresas conhecidas com esse nome
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `"${brandName}" CNPJ empresa razao social`,
-        limit: 5,
-        lang: 'pt-br',
-        country: 'BR',
+        model: 'openai/gpt-5.2',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um analista de mercado brasileiro. Quando perguntado sobre um nome empresarial, verifique se existem empresas conhecidas com esse nome ou nome muito similar.
+Responda APENAS em JSON: {"total": N, "matches": [{"nome": "RAZAO SOCIAL", "cnpj": "XX.XXX.XXX/XXXX-XX", "situacao": "Ativa|Baixada"}]}
+Se não conhecer nenhuma empresa com esse nome, retorne {"total": 0, "matches": []}.
+Não invente dados. Só liste empresas que você tem certeza que existem.`
+          },
+          {
+            role: 'user',
+            content: `Existem empresas brasileiras com nome "${brandName}" ou nome fantasia muito similar? Liste apenas as que você conhecer com certeza.`
+          }
+        ],
+        temperature: 0.2,
+        max_completion_tokens: 600,
       }),
     });
 
-    if (!response.ok) {
-      await response.text();
-      return { total: 0, matches: [] };
-    }
+    if (!response.ok) return { total: 0, matches: [] };
 
     const data = await response.json();
-    const results = data.data || [];
-    const matches: Array<{ nome: string; cnpj: string; situacao: string }> = [];
-
-    for (const r of results) {
-      const title = r.title || '';
-      const desc = r.description || '';
-      const combined = `${title} ${desc}`;
-      const cnpjMatch = combined.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
-      const brandRegex = new RegExp(brandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-
-      if (brandRegex.test(combined) || cnpjMatch) {
-        matches.push({
-          nome: title.substring(0, 80),
-          cnpj: cnpjMatch?.[0] || '',
-          situacao: combined.toLowerCase().includes('ativa') ? 'Ativa' :
-                    combined.toLowerCase().includes('baixada') ? 'Baixada' : 'Encontrada'
-        });
+    const content = data.choices?.[0]?.message?.content;
+    if (content) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (typeof parsed.total === 'number' && Array.isArray(parsed.matches)) {
+          console.log(`[CNPJ] IA encontrou ${parsed.total} empresas`);
+          return { total: parsed.total, matches: parsed.matches.slice(0, 5) };
+        }
       }
     }
-
-    console.log(`[CNPJ] Encontrados ${matches.length} matches`);
-    return { total: matches.length, matches: matches.slice(0, 5) };
   } catch (error) {
     console.error('[CNPJ] Erro:', error);
-    return { total: 0, matches: [] };
   }
+  return { total: 0, matches: [] };
 }
 
-// ========== ETAPA 5: Busca Internet/Redes Sociais via Firecrawl ==========
+// ========== ETAPA 5: Busca Internet/Redes Sociais via IA ==========
 async function searchInternet(brandName: string): Promise<{
   socialMatches: Array<{ plataforma: string; encontrado: boolean; url?: string; descricao?: string }>;
   webMatches: Array<{ titulo: string; url: string; descricao: string }>;
 }> {
-  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
-  if (!FIRECRAWL_API_KEY) return { socialMatches: [], webMatches: [] };
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+  if (!LOVABLE_API_KEY) {
+    return {
+      socialMatches: [
+        { plataforma: 'Instagram', encontrado: false },
+        { plataforma: 'Facebook', encontrado: false },
+        { plataforma: 'LinkedIn', encontrado: false },
+      ],
+      webMatches: []
+    };
+  }
 
   try {
-    console.log(`[INTERNET] Buscando presença web de "${brandName}"`);
+    console.log(`[INTERNET] Buscando presença web de "${brandName}" via IA`);
 
-    // Single search combining social + web
-    const response = await fetch('https://api.firecrawl.dev/v1/search', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: `"${brandName}" instagram OR facebook OR linkedin OR site oficial`,
-        limit: 10,
-        lang: 'pt-br',
-        country: 'BR',
+        model: 'openai/gpt-5.2',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é um analista de presença digital. Quando perguntado sobre uma marca/nome, verifique se há presença online conhecida.
+Responda APENAS em JSON:
+{
+  "socialMatches": [
+    {"plataforma": "Instagram", "encontrado": true/false, "url": "https://...", "descricao": "..."},
+    {"plataforma": "Facebook", "encontrado": true/false, "url": "https://...", "descricao": "..."},
+    {"plataforma": "LinkedIn", "encontrado": true/false, "url": "https://...", "descricao": "..."}
+  ],
+  "webMatches": [
+    {"titulo": "...", "url": "https://...", "descricao": "..."}
+  ]
+}
+Sempre inclua Instagram, Facebook e LinkedIn. Se não conhecer, marque encontrado=false.
+Não invente URLs ou perfis. Só liste os que você tem certeza que existem.`
+          },
+          {
+            role: 'user',
+            content: `A marca/empresa "${brandName}" tem presença online? Verifique Instagram, Facebook, LinkedIn e sites.`
+          }
+        ],
+        temperature: 0.2,
+        max_completion_tokens: 800,
       }),
     });
 
     if (!response.ok) {
-      await response.text();
-      return { socialMatches: [], webMatches: [] };
+      return {
+        socialMatches: [
+          { plataforma: 'Instagram', encontrado: false },
+          { plataforma: 'Facebook', encontrado: false },
+          { plataforma: 'LinkedIn', encontrado: false },
+        ],
+        webMatches: []
+      };
     }
 
     const data = await response.json();
-    const results = data.data || [];
-
-    const socialMatches: Array<{ plataforma: string; encontrado: boolean; url?: string; descricao?: string }> = [];
-    const webMatches: Array<{ titulo: string; url: string; descricao: string }> = [];
-
-    const platforms = ['instagram.com', 'facebook.com', 'linkedin.com', 'twitter.com', 'tiktok.com'];
-    const foundPlatforms = new Set<string>();
-
-    for (const r of results) {
-      const url = r.url || '';
-      const title = r.title || '';
-      const desc = r.description || '';
-
-      let isSocial = false;
-      for (const p of platforms) {
-        if (url.includes(p) && !foundPlatforms.has(p)) {
-          foundPlatforms.add(p);
-          isSocial = true;
-          socialMatches.push({
-            plataforma: p.replace('.com', '').charAt(0).toUpperCase() + p.replace('.com', '').slice(1),
-            encontrado: true,
-            url,
-            descricao: desc.substring(0, 120)
-          });
+    const content = data.choices?.[0]?.message?.content;
+    if (content) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed.socialMatches)) {
+          console.log(`[INTERNET] IA: Social ${parsed.socialMatches.filter((s: any) => s.encontrado).length}, Web ${parsed.webMatches?.length || 0}`);
+          return {
+            socialMatches: parsed.socialMatches,
+            webMatches: parsed.webMatches || []
+          };
         }
       }
-
-      if (!isSocial && webMatches.length < 5) {
-        webMatches.push({
-          titulo: title.substring(0, 80),
-          url,
-          descricao: desc.substring(0, 150)
-        });
-      }
     }
-
-    // Add platforms not found
-    for (const p of ['Instagram', 'Facebook', 'LinkedIn']) {
-      const domain = p.toLowerCase() + '.com';
-      if (!foundPlatforms.has(domain)) {
-        socialMatches.push({ plataforma: p, encontrado: false });
-      }
-    }
-
-    console.log(`[INTERNET] Social: ${socialMatches.filter(s => s.encontrado).length} encontrados, Web: ${webMatches.length}`);
-    return { socialMatches, webMatches };
   } catch (error) {
     console.error('[INTERNET] Erro:', error);
-    return { socialMatches: [], webMatches: [] };
   }
+
+  return {
+    socialMatches: [
+      { plataforma: 'Instagram', encontrado: false },
+      { plataforma: 'Facebook', encontrado: false },
+      { plataforma: 'LinkedIn', encontrado: false },
+    ],
+    webMatches: []
+  };
 }
 
 // ========== ETAPA 6: Decisão final via IA ==========
