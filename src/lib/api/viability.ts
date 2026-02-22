@@ -1,5 +1,32 @@
 import { supabase } from '@/integrations/supabase/client';
 
+export interface INPIResultado {
+  processo: string;
+  marca: string;
+  situacao: string;
+  classe: string;
+  titular: string;
+}
+
+export interface CNPJMatch {
+  nome: string;
+  cnpj: string;
+  situacao: string;
+}
+
+export interface SocialMatch {
+  plataforma: string;
+  encontrado: boolean;
+  url?: string;
+  descricao?: string;
+}
+
+export interface WebMatch {
+  titulo: string;
+  url: string;
+  descricao: string;
+}
+
 export interface ViabilityResult {
   success: boolean;
   isFamousBrand?: boolean;
@@ -11,6 +38,21 @@ export interface ViabilityResult {
   classDescriptions?: string[];
   searchDate?: string;
   error?: string;
+  // Novos campos estruturados
+  viabilidade?: 'VIAVEL_INICIAL' | 'POSSIVEL_COM_ALERTA' | 'INDISPONIVEL';
+  inpiData?: {
+    totalResultados: number;
+    resultados: INPIResultado[];
+    consultadoEm: string;
+  };
+  cnpjData?: {
+    total: number;
+    matches: CNPJMatch[];
+  };
+  internetData?: {
+    socialMatches: SocialMatch[];
+    webMatches: WebMatch[];
+  };
 }
 
 export async function checkViability(brandName: string, businessArea: string): Promise<ViabilityResult> {
