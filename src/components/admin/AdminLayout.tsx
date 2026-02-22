@@ -67,7 +67,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { 
     icon: LayoutDashboard, 
-    label: '🧠 Painel CEO', 
+    label: 'Dashboard', 
     subtitle: 'Inteligência executiva',
     href: '/admin/dashboard',
     iconColor: 'text-blue-500',
@@ -291,7 +291,7 @@ function AdminSidebar() {
             <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10">
               <Shield className="h-3.5 w-3.5 text-primary" />
             </div>
-            <span className="font-medium text-muted-foreground">CRM WebMarcas</span>
+            <span className="font-medium text-muted-foreground">Painel do CEO</span>
           </div>
         )}
       </SidebarHeader>
@@ -455,10 +455,10 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
                     backgroundClip: 'text',
                   }}
                 >
-                  WebMarcas
+                  Painel CEO
                 </span>
                 <span className="text-[8px] md:text-[9px] font-semibold tracking-[0.2em] uppercase text-muted-foreground/60">
-                  CRM · v2026
+                  ADM Master · v2026
                 </span>
               </div>
 
