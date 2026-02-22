@@ -266,7 +266,7 @@ async function enrichWithAI(rawContent: string, category: string): Promise<strin
   const aiUrl = LOVABLE_API_KEY 
     ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
     : 'https://api.openai.com/v1/chat/completions';
-  const aiModel = LOVABLE_API_KEY ? 'google/gemini-2.5-flash-lite' : 'gpt-4o-mini';
+  const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o-mini';
 
   try {
     const res = await fetch(aiUrl, {

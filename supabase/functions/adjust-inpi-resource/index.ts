@@ -91,7 +91,7 @@ Responda APENAS com o texto completo do recurso ajustado, sem explicações adic
     const aiUrl = LOVABLE_API_KEY 
       ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
       : 'https://api.openai.com/v1/chat/completions';
-    const aiModel = LOVABLE_API_KEY ? 'google/gemini-2.5-flash' : 'gpt-4o-mini';
+    const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o-mini';
 
     console.log('Calling AI to adjust INPI resource...');
 
