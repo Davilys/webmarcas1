@@ -4,7 +4,7 @@ export interface AIConfig {
   url: string;
   model: string;
   apiKey: string;
-  provider: 'openai' | 'gemini' | 'deepseek' | 'lovable';
+  provider: 'openai' | 'gemini' | 'deepseek' | 'kimi' | 'zhipu' | 'lovable';
 }
 
 interface ProviderSettings {
@@ -59,6 +59,10 @@ export async function getAIConfig(): Promise<AIConfig> {
         ? "gemini_config"
         : activeProvider === "deepseek"
         ? "deepseek_config"
+        : activeProvider === "kimi"
+        ? "kimi_config"
+        : activeProvider === "zhipu"
+        ? "zhipu_config"
         : null;
 
     if (!configKey) return fallback;
@@ -104,6 +108,28 @@ export async function getAIConfig(): Promise<AIConfig> {
         model: config.model || "deepseek-chat",
         apiKey: key,
         provider: "deepseek",
+      };
+    }
+
+    if (activeProvider === "kimi") {
+      const key = config.api_key || "";
+      if (!key) return fallback;
+      return {
+        url: "https://api.moonshot.cn/v1/chat/completions",
+        model: config.model || "moonshot-v1-8k",
+        apiKey: key,
+        provider: "kimi",
+      };
+    }
+
+    if (activeProvider === "zhipu") {
+      const key = config.api_key || "";
+      if (!key) return fallback;
+      return {
+        url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        model: config.model || "glm-4-flash",
+        apiKey: key,
+        provider: "zhipu",
       };
     }
 
