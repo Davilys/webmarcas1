@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -101,6 +101,20 @@ export default function AdminFinanceiro() {
   const [installments, setInstallments] = useState(1);
   const [invoiceResult, setInvoiceResult] = useState<{ success: boolean; invoice_url?: string; pix_code?: string; pix_qr_code?: string } | null>(null);
 
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientSearchRef.current && !clientSearchRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const [stats, setStats] = useState({ total: 0, pending: 0, paid: 0, overdue: 0, pendingCount: 0, paidCount: 0, overdueCount: 0 });
 
   useEffect(() => { fetchInvoices(); fetchClients(); fetchProcesses(); }, []);
@@ -172,6 +186,7 @@ export default function AdminFinanceiro() {
   const resetForm = () => {
     setFormData({ description: '', amount: '', due_date: '', user_id: '', process_id: '', observation: '' });
     setPaymentMethod('pix'); setPaymentType('avista'); setInstallments(1); setInvoiceResult(null);
+    setClientSearch(''); setClientDropdownOpen(false);
   };
 
   const handleDialogClose = (open: boolean) => { setDialogOpen(open); if (!open) resetForm(); };
@@ -273,21 +288,67 @@ export default function AdminFinanceiro() {
                       </motion.div>
                     ) : (
                       <motion.form key="form" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} onSubmit={handleSubmit} className="space-y-5">
-                        <div>
+                        <div className="relative" ref={clientSearchRef}>
                           <Label className="text-sm font-medium">Cliente *</Label>
-                          <Select value={formData.user_id} onValueChange={(v) => setFormData({ ...formData, user_id: v, process_id: '' })}>
-                            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
-                            <SelectContent>
-                              {clients.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  <div className="flex items-center gap-2">
-                                    <span>{c.full_name || c.email}</span>
-                                    {!c.cpf_cnpj && <Badge variant="destructive" className="text-[10px]">Sem CPF</Badge>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="relative mt-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                            <Input
+                              value={clientSearch}
+                              onChange={(e) => {
+                                setClientSearch(e.target.value);
+                                setClientDropdownOpen(true);
+                                if (!e.target.value) setFormData({ ...formData, user_id: '', process_id: '' });
+                              }}
+                              onFocus={() => setClientDropdownOpen(true)}
+                              placeholder="Buscar por nome, e-mail ou CPF/CNPJ..."
+                              className="pl-9"
+                            />
+                            {formData.user_id && clientSearch && (
+                              <button
+                                type="button"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                onClick={() => { setClientSearch(''); setFormData({ ...formData, user_id: '', process_id: '' }); }}
+                              >✕</button>
+                            )}
+                          </div>
+                          {clientDropdownOpen && (
+                            <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg">
+                              {clients
+                                .filter(c => {
+                                  if (!clientSearch) return true;
+                                  const q = clientSearch.toLowerCase();
+                                  return (c.full_name?.toLowerCase().includes(q)) ||
+                                    c.email.toLowerCase().includes(q) ||
+                                    (c.cpf_cnpj?.toLowerCase().includes(q));
+                                })
+                                .slice(0, 50)
+                                .map(c => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    className={cn(
+                                      "w-full text-left px-3 py-2.5 text-sm hover:bg-accent flex items-center justify-between gap-2 transition-colors",
+                                      formData.user_id === c.id && "bg-primary/10 font-medium"
+                                    )}
+                                    onClick={() => {
+                                      setFormData({ ...formData, user_id: c.id, process_id: '' });
+                                      setClientSearch(c.full_name || c.email);
+                                      setClientDropdownOpen(false);
+                                    }}
+                                  >
+                                    <span className="truncate">{c.full_name || c.email}</span>
+                                    {!c.cpf_cnpj && <Badge variant="destructive" className="text-[10px] shrink-0">Sem CPF</Badge>}
+                                  </button>
+                                ))}
+                              {clients.filter(c => {
+                                if (!clientSearch) return true;
+                                const q = clientSearch.toLowerCase();
+                                return (c.full_name?.toLowerCase().includes(q)) || c.email.toLowerCase().includes(q) || (c.cpf_cnpj?.toLowerCase().includes(q));
+                              }).length === 0 && (
+                                <div className="px-3 py-4 text-sm text-muted-foreground text-center">Nenhum cliente encontrado</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                         {formData.user_id && clientProcesses.length > 0 && (
                           <div>
