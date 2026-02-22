@@ -347,7 +347,9 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: aiConfig.model,
-
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent }
         ],
         max_tokens: 16000,
         temperature: 0.25,
