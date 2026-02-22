@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface EmailListProps {
-  folder: 'inbox' | 'sent' | 'drafts';
+  folder: 'inbox' | 'sent' | 'drafts' | 'starred' | 'archived' | 'trash' | 'scheduled' | 'automated';
   onSelectEmail: (email: Email) => void;
   accountId?: string | null;
   accountEmail?: string;
@@ -49,6 +49,47 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
     queryKey: ['emails', folder, accountId, accountEmail],
     queryFn: async () => {
       if (!accountId) return [];
+
+      // Handle special folders
+      if (folder === 'starred') {
+        const { data, error } = await supabase
+          .from('email_inbox')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('is_starred', true)
+          .eq('is_archived', false)
+          .order('received_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(e => ({
+          id: e.id, from_email: e.from_email, from_name: e.from_name,
+          to_email: e.to_email, subject: e.subject || '(Sem assunto)',
+          body_text: e.body_text, body_html: e.body_html,
+          is_read: e.is_read || false, is_starred: e.is_starred || false,
+          received_at: e.received_at,
+        })) as Email[];
+      }
+
+      if (folder === 'archived') {
+        const { data, error } = await supabase
+          .from('email_inbox')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('is_archived', true)
+          .order('received_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(e => ({
+          id: e.id, from_email: e.from_email, from_name: e.from_name,
+          to_email: e.to_email, subject: e.subject || '(Sem assunto)',
+          body_text: e.body_text, body_html: e.body_html,
+          is_read: e.is_read || false, is_starred: e.is_starred || false,
+          is_archived: true, received_at: e.received_at,
+        })) as Email[];
+      }
+
+      if (folder === 'trash' || folder === 'scheduled' || folder === 'automated') {
+        // These folders have no backend data yet — return empty
+        return [] as Email[];
+      }
 
       const folderFilter = folder === 'inbox' ? 'inbox' : folder === 'sent' ? 'sent' : 'drafts';
 
@@ -124,7 +165,12 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
     email.to_email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const title = folder === 'inbox' ? 'Caixa de Entrada' : folder === 'sent' ? 'Enviados' : 'Rascunhos';
+  const folderLabels: Record<string, string> = {
+    inbox: 'Caixa de Entrada', sent: 'Enviados', drafts: 'Rascunhos',
+    starred: 'Favoritos', archived: 'Arquivados', trash: 'Lixeira',
+    scheduled: 'Programados', automated: 'Automáticos',
+  };
+  const title = folderLabels[folder] || 'Emails';
 
   if (!accountId) {
     return (
@@ -234,10 +280,13 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
               <Mail className="h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">Nenhum email encontrado</p>
               <p className="text-sm">
-                {folder === 'inbox' 
-                  ? 'Sua caixa de entrada está vazia' 
-                  : folder === 'sent'
-                  ? 'Você ainda não enviou nenhum email'
+                {folder === 'inbox' ? 'Sua caixa de entrada está vazia' 
+                  : folder === 'sent' ? 'Você ainda não enviou nenhum email'
+                  : folder === 'starred' ? 'Nenhum email favorito'
+                  : folder === 'archived' ? 'Nenhum email arquivado'
+                  : folder === 'trash' ? 'A lixeira está vazia'
+                  : folder === 'scheduled' ? 'Nenhum email programado'
+                  : folder === 'automated' ? 'Nenhum email automático'
                   : 'Nenhum rascunho salvo'}
               </p>
             </div>

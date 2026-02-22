@@ -318,25 +318,6 @@ export function EmailCompose({ onClose, replyTo, initialTo, initialName, initial
     } finally {
       setIsAIGenerating(false);
     }
-    try {
-      const context = selectedClient
-        ? `Cliente: ${selectedClient.full_name}, Marca: ${selectedClient.brand_name || 'N/A'}, Processo: ${selectedClient.process_number || 'N/A'}`
-        : 'Email genérico para cliente de escritório de marcas e patentes';
-      const { data, error } = await supabase.functions.invoke('chat-support', {
-        body: {
-          message: `Escreva um email profissional em português brasileiro para um escritório de registro de marcas e patentes (WebMarcas). Assunto: "${subject}". Contexto: ${context}. O email deve ser jurídico, formal, empático e persuasivo. Use variáveis {{nome_cliente}}, {{nome_marca}} onde apropriado. Inclua assinatura da WebMarcas. Retorne apenas o corpo do email, sem assunto.`,
-          conversationId: 'ai-email-gen',
-          isAdmin: true,
-        },
-      });
-      if (error) throw error;
-      if (data?.response) setBody(data.response);
-      else toast.info('IA não retornou conteúdo. Tente novamente.');
-    } catch {
-      toast.error('Erro ao gerar com IA. Verifique sua conexão.');
-    } finally {
-      setIsAIGenerating(false);
-    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
