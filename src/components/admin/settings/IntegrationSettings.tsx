@@ -20,7 +20,7 @@ interface AsaasSettings { environment: 'sandbox' | 'production'; enabled: boolea
 interface EmailProviderSettings { enabled: boolean; provider: string; api_key: string; from_email: string; from_name: string; }
 interface BotconversaSettings { enabled: boolean; webhook_url: string; auth_token: string; test_phone: string; }
 interface SmsSettings { enabled: boolean; provider: string; api_key: string; sender_name: string; test_phone: string; }
-interface OpenAISettings { enabled: boolean; api_key: string; }
+interface OpenAISettings { enabled: boolean; api_key: string; model: string; }
 interface INPISettings { enabled: boolean; sync_interval_hours: number; last_sync_at: string | null; }
 interface FirecrawlSettings { enabled: boolean; api_key: string; }
 interface LovableAISettings { enabled: boolean; }
@@ -207,7 +207,7 @@ export function IntegrationSettings() {
   };
 
   // ── OpenAI ──────────────────────────────────────────────
-  const openai = useSystemSetting<OpenAISettings>('openai_config', { enabled: true, api_key: '' });
+  const openai = useSystemSetting<OpenAISettings>('openai_config', { enabled: true, api_key: '', model: 'gpt-4o-mini' });
   const [testingOpenai, setTestingOpenai] = useState(false);
   const [openaiStatus, setOpenaiStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -454,6 +454,29 @@ export function IntegrationSettings() {
             <p className="text-xs text-muted-foreground mt-0.5">Usar OpenAI para automação e respostas inteligentes</p>
           </div>
           <Switch checked={openai.local.enabled} onCheckedChange={v => openai.setLocal({ ...openai.local, enabled: v })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Modelo Padrão</Label>
+          <Select value={openai.local.model || 'gpt-4o-mini'}
+            onValueChange={v => openai.setLocal({ ...openai.local, model: v })}>
+            <SelectTrigger><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gpt-4o">GPT-4o (Mais capaz, multimodal)</SelectItem>
+              <SelectItem value="gpt-4o-mini">GPT-4o Mini (Rápido e econômico)</SelectItem>
+              <SelectItem value="gpt-4.1">GPT-4.1 (Última geração)</SelectItem>
+              <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini (Rápido, última geração)</SelectItem>
+              <SelectItem value="gpt-4.1-nano">GPT-4.1 Nano (Ultra rápido)</SelectItem>
+              <SelectItem value="gpt-4-turbo">GPT-4 Turbo (128k contexto)</SelectItem>
+              <SelectItem value="gpt-4">GPT-4 (Clássico)</SelectItem>
+              <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Mais barato)</SelectItem>
+              <SelectItem value="o4-mini">o4-mini (Raciocínio avançado)</SelectItem>
+              <SelectItem value="o3">o3 (Raciocínio complexo)</SelectItem>
+              <SelectItem value="o3-mini">o3-mini (Raciocínio econômico)</SelectItem>
+              <SelectItem value="o1">o1 (Raciocínio profundo)</SelectItem>
+              <SelectItem value="o1-mini">o1-mini (Raciocínio leve)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Este modelo será usado em todos os serviços que dependem da OpenAI.</p>
         </div>
         <div className="space-y-1.5">
           <Label>API Key OpenAI</Label>
