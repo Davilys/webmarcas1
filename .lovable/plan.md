@@ -1,72 +1,60 @@
 
-# Separar Emails por Conta (estilo Outlook)
+# Botao "Gerar Novo Link" com Atualizacao de Template
 
-## Problema Atual
+## O que muda
 
-Todos os emails recebidos e enviados aparecem misturados numa unica lista, sem separacao por conta de email. Um administrador com 2 contas atribuidas ve tudo junto. Alem disso, admins comuns veem emails de contas que nao sao deles.
+Na ficha de detalhes do contrato (ContractDetailSheet), quando o contrato esta **nao assinado** e com link **expirado**, adicionar um botao "Gerar Novo Link" ao lado do botao "Regenerar". Este botao:
 
-## Como vai funcionar
+1. Busca o template de contrato padrao ativo no momento (tabela `contract_templates`)
+2. Reprocessa o HTML do contrato com os dados do cliente (profiles) e da marca (contracts), aplicando o template atual em vigor
+3. Atualiza o `contract_html` do contrato no banco
+4. Gera um novo `signature_token` e `signature_expires_at` (chamando a edge function `generate-signature-link`)
+5. Resultado: contrato atualizado para a versao vigente + novo link pronto para envio
 
-### Comportamento por tipo de usuario
+## Onde aparece
 
-- **Admin Master (davillys@gmail.com)**: ve TODAS as contas de email no painel lateral, cada uma separada. Clica em "juridico@webmarcas.net" e ve so os emails dessa conta. Clica em "financeiro@webmarcas.net" e ve so os dessa.
-- **Admin comum**: ve apenas as contas atribuidas a ele (campo `assigned_to`). Se tem 2 contas, ve 2 opcoes separadas no painel lateral.
+Somente quando:
+- Contrato **nao esta assinado** (`signature_status != 'signed'`)
+- Link esta **expirado** (`isExpired = true`)
 
-### Interface (estilo Outlook)
+O botao aparece ao lado do "Regenerar" existente.
 
-No sidebar de email, ANTES das pastas (Caixa de Entrada, Enviados, etc.), aparece uma secao "Contas de Email" listando cada conta com seu endereco. O admin clica numa conta para seleciona-la, e todas as pastas (inbox, sent, etc.) filtram apenas por aquela conta.
+## Diferenca entre os botoes
+
+- **Regenerar**: apenas cria novo token/link, mantendo o HTML do contrato como esta
+- **Gerar Novo Link**: atualiza o conteudo do contrato para o template padrao atual E cria novo link
 
 ## Mudancas Tecnicas
 
-### 1. `src/pages/admin/Emails.tsx`
-- Adicionar estado `selectedAccountId` (conta selecionada)
-- Buscar contas de email do usuario atual (master ve todas, admin ve apenas `assigned_to = seu ID`)
-- Passar `selectedAccountId` para `EmailList`, `EmailSidebar`, `EmailCompose`
-- Passar lista de contas para `EmailSidebar`
+### 1. `src/components/admin/contracts/ContractDetailSheet.tsx`
 
-### 2. `src/components/admin/email/EmailSidebar.tsx`
-- Adicionar secao "Contas de Email" no topo (abaixo do botao "Novo Email")
-- Cada conta aparece como botao clicavel com o endereco de email e nome de exibicao
-- Indicador visual de conta selecionada
-- Ao clicar, chama callback `onAccountChange(accountId)`
+Nova funcao `generateNewContractLink`:
+- Busca o template ativo: `SELECT content FROM contract_templates WHERE is_active = true AND name ILIKE '%Registro de Marca%' LIMIT 1`
+- Busca os dados do cliente: `SELECT * FROM profiles WHERE id = contract.user_id`
+- Busca os dados do contrato (subject = marca, payment_method, etc.)
+- Aplica `replaceContractVariables` (importado de `useContractTemplate`) com os dados reais
+- Gera o HTML completo com `generateContractPrintHTML` (importado de `ContractRenderer`)
+- Atualiza o contrato: `UPDATE contracts SET contract_html = novoHtml WHERE id = contractId`
+- Chama `generate-signature-link` para gerar novo token
+- Exibe toast de sucesso e atualiza a view
 
-### 3. `src/components/admin/email/EmailList.tsx`
-- Receber prop `accountId` (conta selecionada)
-- Filtrar `email_inbox` por `account_id = accountId`
-- Filtrar `email_logs` por `from_email = email da conta selecionada`
-- Sincronizacao IMAP passa o `account_id` correto
-
-### 4. `src/components/admin/email/EmailCompose.tsx`
-- Receber prop `accountId` para saber de qual conta enviar
-- Usar as credenciais SMTP da conta selecionada
-
-### 5. Queries de stats (`email-stats`)
-- Filtrar por `account_id` da conta selecionada para mostrar contagem correta
-
-### 6. Sincronizacao IMAP (`sync-imap-inbox`)
-- Ja funciona por `account_id` -- nenhuma alteracao necessaria na edge function
-
-## Fluxo do Usuario
-
-```text
-Sidebar                          Conteudo
-+----------------------------+   +---------------------------+
-| [Novo Email]               |   |                           |
-|                            |   |  Emails da conta          |
-| CONTAS DE EMAIL            |   |  selecionada              |
-| > juridico@webmarcas.net   |   |                           |
-|   financeiro@webmarcas.net |   |  - Email 1                |
-|                            |   |  - Email 2                |
-| PASTAS                     |   |  - Email 3                |
-|   Caixa de Entrada (3)     |   |                           |
-|   Enviados (12)            |   |                           |
-|   Rascunhos                |   |                           |
-|   ...                      |   |                           |
-+----------------------------+   +---------------------------+
+Novo botao no JSX (linha ~680-691), dentro do `div.flex.gap-2`, ao lado de "Regenerar":
+```
+{isExpired && (
+  <Button size="sm" className="h-7 text-xs" onClick={generateNewContractLink} disabled={generatingNewLink}>
+    {generatingNewLink ? <Loader2 /> : <RefreshCw />}
+    Gerar Novo Link
+  </Button>
+)}
 ```
 
-## Impacto
-- Nenhuma tabela ou schema alterado (email_inbox ja tem `account_id`)
-- Nenhuma edge function alterada
-- Apenas componentes de frontend: Emails.tsx, EmailSidebar.tsx, EmailList.tsx, EmailCompose.tsx
-- Compatibilidade total mantida
+Novo estado: `generatingNewLink` (boolean)
+
+### 2. Import adicional
+
+Importar `replaceContractVariables` de `@/hooks/useContractTemplate` e `generateContractPrintHTML` de `@/components/contracts/ContractRenderer` (ja importado como `generateDocumentPrintHTML`).
+
+### Nenhuma outra mudanca
+- Sem alteracao em tabelas
+- Sem alteracao em edge functions
+- Sem novos secrets
