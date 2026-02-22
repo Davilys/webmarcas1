@@ -247,6 +247,7 @@ export default function Emails() {
       currentFolder={currentFolder}
       onFolderChange={handleFolderChange}
       onCompose={handleCompose}
+      isMasterAdmin={isMasterAdmin}
       stats={stats}
       emailAccounts={emailAccounts}
       selectedAccountId={selectedAccountId}
