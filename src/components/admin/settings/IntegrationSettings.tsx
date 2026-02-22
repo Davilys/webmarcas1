@@ -12,15 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   CreditCard, CheckCircle2, XCircle, Loader2, Save, RefreshCw,
   Mail, MessageCircle, MessageSquare, Brain, Shield, Eye, EyeOff, Send,
+  Sparkles, Globe, FolderSync,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────
-interface AsaasSettings { environment: 'sandbox' | 'production'; enabled: boolean; }
+interface AsaasSettings { environment: 'sandbox' | 'production'; enabled: boolean; api_key: string; }
 interface EmailProviderSettings { enabled: boolean; provider: string; api_key: string; from_email: string; from_name: string; }
 interface BotconversaSettings { enabled: boolean; webhook_url: string; auth_token: string; test_phone: string; }
 interface SmsSettings { enabled: boolean; provider: string; api_key: string; sender_name: string; test_phone: string; }
 interface OpenAISettings { enabled: boolean; api_key: string; }
 interface INPISettings { enabled: boolean; sync_interval_hours: number; last_sync_at: string | null; }
+interface FirecrawlSettings { enabled: boolean; api_key: string; }
+interface LovableAISettings { enabled: boolean; }
+interface PerfexSettings { enabled: boolean; api_url: string; api_token: string; }
 
 // ── Helpers ──────────────────────────────────────────────────
 function useSystemSetting<T>(key: string, fallback: T) {
@@ -96,16 +100,34 @@ function SecretInput({ value, onChange, placeholder }: { value: string; onChange
 }
 
 // ── STATUS BADGE ─────────────────────────────────────────────
-function StatusBadge({ ok }: { ok: boolean }) {
+function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
   return ok
-    ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 className="h-3.5 w-3.5" />Configurado</span>
-    : <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><XCircle className="h-3.5 w-3.5" />Não configurado</span>;
+    ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 className="h-3.5 w-3.5" />{label || 'Configurado'}</span>
+    : <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><XCircle className="h-3.5 w-3.5" />{label || 'Não configurado'}</span>;
+}
+
+// ── Section title ────────────────────────────────────────────
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4 first:pt-0">{children}</h3>;
+}
+
+// ── Service chips ────────────────────────────────────────────
+function ServiceChips({ services }: { services: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {services.map(s => (
+        <span key={s} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border/50">
+          {s}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 // ════════════════════════════════════════════════════════════
 export function IntegrationSettings() {
   // ── Asaas ────────────────────────────────────────────────
-  const asaas = useSystemSetting<AsaasSettings>('asaas', { environment: 'sandbox', enabled: false });
+  const asaas = useSystemSetting<AsaasSettings>('asaas', { environment: 'sandbox', enabled: false, api_key: '' });
   const [testingAsaas, setTestingAsaas] = useState(false);
   const [asaasStatus, setAsaasStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -186,6 +208,29 @@ export function IntegrationSettings() {
 
   // ── OpenAI ──────────────────────────────────────────────
   const openai = useSystemSetting<OpenAISettings>('openai_config', { enabled: true, api_key: '' });
+  const [testingOpenai, setTestingOpenai] = useState(false);
+  const [openaiStatus, setOpenaiStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const testOpenai = async () => {
+    setTestingOpenai(true); setOpenaiStatus('idle');
+    try {
+      const { error } = await supabase.functions.invoke('chat-support', {
+        body: { message: 'Olá, teste de conexão.', conversation_id: 'test', test: true },
+      });
+      if (error) { setOpenaiStatus('error'); toast.error('Falha na conexão com OpenAI'); }
+      else { setOpenaiStatus('success'); toast.success('Conexão com OpenAI funcionando!'); }
+    } catch { setOpenaiStatus('error'); toast.error('Erro ao testar OpenAI'); }
+    finally { setTestingOpenai(false); }
+  };
+
+  // ── Firecrawl ───────────────────────────────────────────
+  const firecrawl = useSystemSetting<FirecrawlSettings>('firecrawl_config', { enabled: true, api_key: '' });
+
+  // ── Lovable AI ──────────────────────────────────────────
+  const lovableAI = useSystemSetting<LovableAISettings>('lovable_ai_config', { enabled: true });
+
+  // ── Perfex CRM ──────────────────────────────────────────
+  const perfex = useSystemSetting<PerfexSettings>('perfex_config', { enabled: false, api_url: '', api_token: '' });
 
   // ── INPI ────────────────────────────────────────────────
   const inpi = useSystemSetting<INPISettings>('inpi_sync', { enabled: true, sync_interval_hours: 24, last_sync_at: null });
@@ -200,6 +245,9 @@ export function IntegrationSettings() {
 
   return (
     <div className="space-y-6">
+
+      {/* ═══════════════════════ PAGAMENTOS ═══════════════════════ */}
+      <SectionTitle>💳 Pagamentos</SectionTitle>
 
       {/* ── Asaas ─────────────────────────────────────────── */}
       <IntegrationCard
@@ -217,17 +265,23 @@ export function IntegrationSettings() {
           </div>
           <Switch checked={asaas.local.enabled} onCheckedChange={v => asaas.setLocal({ ...asaas.local, enabled: v })} />
         </div>
-        <div className="space-y-2">
-          <Label>Ambiente</Label>
-          <Select value={asaas.local.environment}
-            onValueChange={(v: 'sandbox' | 'production') => asaas.setLocal({ ...asaas.local, environment: v })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sandbox">Sandbox (Testes)</SelectItem>
-              <SelectItem value="production">Produção</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">A API Key é configurada nos secrets do servidor (ASAAS_API_KEY).</p>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>API Key Asaas</Label>
+            <SecretInput value={asaas.local.api_key} onChange={v => asaas.setLocal({ ...asaas.local, api_key: v })} placeholder="$aact_xxxxxxxxxxxxxxxx" />
+            <p className="text-xs text-muted-foreground">Obtenha em asaas.com → Configurações → Integrações → API. O secret do servidor (ASAAS_API_KEY) tem prioridade.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Ambiente</Label>
+            <Select value={asaas.local.environment}
+              onValueChange={(v: 'sandbox' | 'production') => asaas.setLocal({ ...asaas.local, environment: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sandbox">Sandbox (Testes)</SelectItem>
+                <SelectItem value="production">Produção</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <Button variant="outline" onClick={testAsaas} disabled={testingAsaas}>
@@ -241,7 +295,11 @@ export function IntegrationSettings() {
             Salvar
           </Button>
         </div>
+        <StatusBadge ok={!!(asaas.local.api_key || asaas.local.enabled)} />
       </IntegrationCard>
+
+      {/* ═══════════════════════ COMUNICAÇÃO ═══════════════════════ */}
+      <SectionTitle>📧 Comunicação</SectionTitle>
 
       {/* ── Resend (E-mail) ───────────────────────────────── */}
       <IntegrationCard
@@ -378,32 +436,166 @@ export function IntegrationSettings() {
         <StatusBadge ok={!!(sms.local.api_key)} />
       </IntegrationCard>
 
+      {/* ═══════════════════════ INTELIGÊNCIA ARTIFICIAL ═══════════════════════ */}
+      <SectionTitle>🤖 Inteligência Artificial</SectionTitle>
+
       {/* ── OpenAI ───────────────────────────────────────── */}
       <IntegrationCard
         icon={Brain}
         iconColor="text-emerald-500"
-        title="OpenAI — Inteligência Artificial"
-        description="Assistente de IA para suporte ao cliente, rascunho de e-mails e análise jurídica INPI"
+        title="OpenAI — ChatGPT / Whisper"
+        description="IA para chat, e-mails, recursos jurídicos INPI e transcrição de áudio"
         badge={openai.local.enabled ? 'Ativo' : 'Inativo'}
         badgeVariant={openai.local.enabled ? 'default' : 'secondary'}
       >
         <div className="flex items-center justify-between">
           <div>
             <Label>Ativar Respostas com IA</Label>
-            <p className="text-xs text-muted-foreground mt-0.5">Usar IA para automação e respostas inteligentes</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Usar OpenAI para automação e respostas inteligentes</p>
           </div>
           <Switch checked={openai.local.enabled} onCheckedChange={v => openai.setLocal({ ...openai.local, enabled: v })} />
         </div>
         <div className="space-y-1.5">
           <Label>API Key OpenAI</Label>
           <SecretInput value={openai.local.api_key} onChange={v => openai.setLocal({ ...openai.local, api_key: v })} placeholder="sk-proj-..." />
-          <p className="text-xs text-muted-foreground">A chave do servidor (OPENAI_API_KEY) já está configurada. Use este campo para sobrescrever.</p>
+          <p className="text-xs text-muted-foreground">Obtenha em platform.openai.com → API Keys. O secret do servidor (OPENAI_API_KEY) tem prioridade.</p>
         </div>
-        <Button onClick={openai.save} disabled={openai.isSaving}>
-          {openai.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-          Salvar
-        </Button>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Serviços que utilizam esta chave:</Label>
+          <ServiceChips services={[
+            'Chat Suporte', 'Assistente de E-mail', 'Recursos INPI',
+            'Transcrição de Áudio', 'Análise RPI', 'Chat Jurídico INPI',
+          ]} />
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button variant="outline" onClick={testOpenai} disabled={testingOpenai}>
+            {testingOpenai ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Testar Conexão
+          </Button>
+          {openaiStatus === 'success' && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="h-4 w-4" />Conectado</span>}
+          {openaiStatus === 'error' && <span className="flex items-center gap-1 text-sm text-destructive"><XCircle className="h-4 w-4" />Falha</span>}
+          <Button onClick={openai.save} disabled={openai.isSaving} className="ml-auto">
+            {openai.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar
+          </Button>
+        </div>
         <StatusBadge ok={openai.local.enabled} />
+      </IntegrationCard>
+
+      {/* ── Lovable AI ───────────────────────────────────── */}
+      <IntegrationCard
+        icon={Sparkles}
+        iconColor="text-purple-500"
+        title="Lovable AI — IA Integrada"
+        description="IA integrada para viabilidade de marca, extração de documentos e notificações multicanal"
+        badge={lovableAI.local.enabled ? 'Ativo' : 'Inativo'}
+        badgeVariant={lovableAI.local.enabled ? 'default' : 'secondary'}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Ativar Lovable AI</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">IA com modelos Gemini e GPT-5 para tarefas internas</p>
+          </div>
+          <Switch checked={lovableAI.local.enabled} onCheckedChange={v => lovableAI.setLocal({ ...lovableAI.local, enabled: v })} />
+        </div>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950/30 p-3">
+          <p className="text-xs text-purple-700 dark:text-purple-300">
+            🔑 A chave da API Lovable AI (LOVABLE_API_KEY) é provisionada automaticamente pelo sistema. Não é necessário configurar manualmente.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Serviços que utilizam esta chave:</Label>
+          <ServiceChips services={[
+            'Viabilidade de Marca', 'Extração de Documentos',
+            'Processamento de Documentos INPI', 'Notificações Multicanal',
+          ]} />
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={lovableAI.save} disabled={lovableAI.isSaving}>
+            {lovableAI.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar
+          </Button>
+        </div>
+        <StatusBadge ok={true} label="Configurado automaticamente" />
+      </IntegrationCard>
+
+      {/* ── Firecrawl ────────────────────────────────────── */}
+      <IntegrationCard
+        icon={Globe}
+        iconColor="text-orange-500"
+        title="Firecrawl — Web Scraping"
+        description="Usado para busca de viabilidade de marca (scraping de sites do INPI e bases públicas)"
+        badge={firecrawl.local.enabled && firecrawl.local.api_key ? 'Ativo' : 'Inativo'}
+        badgeVariant={firecrawl.local.enabled && firecrawl.local.api_key ? 'default' : 'secondary'}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Ativar Firecrawl</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">Habilitar web scraping para viabilidade de marca</p>
+          </div>
+          <Switch checked={firecrawl.local.enabled} onCheckedChange={v => firecrawl.setLocal({ ...firecrawl.local, enabled: v })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>API Key Firecrawl</Label>
+          <SecretInput value={firecrawl.local.api_key} onChange={v => firecrawl.setLocal({ ...firecrawl.local, api_key: v })} placeholder="fc-xxxxxxxxxxxxxxxx" />
+          <p className="text-xs text-muted-foreground">Obtenha em firecrawl.dev → Dashboard → API Keys. O secret do servidor (FIRECRAWL_API_KEY) tem prioridade.</p>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Serviços que utilizam esta chave:</Label>
+          <ServiceChips services={['Viabilidade de Marca (Scraping)']} />
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={firecrawl.save} disabled={firecrawl.isSaving}>
+            {firecrawl.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar
+          </Button>
+        </div>
+        <StatusBadge ok={!!(firecrawl.local.api_key)} />
+      </IntegrationCard>
+
+      {/* ═══════════════════════ SISTEMAS EXTERNOS ═══════════════════════ */}
+      <SectionTitle>🔗 Sistemas Externos</SectionTitle>
+
+      {/* ── Perfex CRM ───────────────────────────────────── */}
+      <IntegrationCard
+        icon={FolderSync}
+        iconColor="text-blue-500"
+        title="Perfex CRM — Sincronização"
+        description="Sincronização de projetos e clientes com Perfex CRM externo"
+        badge={perfex.local.enabled && perfex.local.api_url ? 'Ativo' : 'Inativo'}
+        badgeVariant={perfex.local.enabled && perfex.local.api_url ? 'default' : 'secondary'}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Ativar Perfex CRM</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">Sincronizar projetos automaticamente</p>
+          </div>
+          <Switch checked={perfex.local.enabled} onCheckedChange={v => perfex.setLocal({ ...perfex.local, enabled: v })} />
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>URL da API Perfex</Label>
+            <Input value={perfex.local.api_url} onChange={e => perfex.setLocal({ ...perfex.local, api_url: e.target.value })}
+              placeholder="https://seudominio.com/perfex/api" />
+            <p className="text-xs text-muted-foreground">URL base da API do seu Perfex CRM</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Token da API</Label>
+            <SecretInput value={perfex.local.api_token} onChange={v => perfex.setLocal({ ...perfex.local, api_token: v })} placeholder="Token de autenticação Perfex" />
+            <p className="text-xs text-muted-foreground">Obtenha em Perfex → Configurações → API. Os secrets do servidor (PERFEX_API_URL / PERFEX_API_TOKEN) têm prioridade.</p>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Serviços que utilizam esta integração:</Label>
+          <ServiceChips services={['Sincronização de Projetos', 'Sincronização de Clientes']} />
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={perfex.save} disabled={perfex.isSaving}>
+            {perfex.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar
+          </Button>
+        </div>
+        <StatusBadge ok={!!(perfex.local.api_url && perfex.local.api_token)} />
       </IntegrationCard>
 
       {/* ── INPI ─────────────────────────────────────────── */}
@@ -440,6 +632,10 @@ export function IntegrationSettings() {
         <p className="text-xs text-muted-foreground">
           Credenciais INPI (usuário/senha) são configuradas nos secrets do servidor (INPI_USERNAME / INPI_PASSWORD).
         </p>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Serviços que utilizam esta integração:</Label>
+          <ServiceChips services={['Revista da Propriedade Industrial', 'Base de Conhecimento', 'Monitoramento de Processos']} />
+        </div>
         <Button onClick={inpi.save} disabled={inpi.isSaving}>
           {inpi.isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
           Salvar
