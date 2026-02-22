@@ -512,29 +512,6 @@ export function generateDocumentPrintHTML(
     return trimmed;
   }
 
-  let documentTitle = 'DOCUMENTO';
-  if (documentType === 'procuracao') {
-    documentTitle = 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI';
-  } else if (documentType === 'contract') {
-    documentTitle = 'CONTRATO';
-  } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
-    documentTitle = 'Acordo de Distrato de Parceria - Anexo I';
-  }
-
-  // Legal notice box
-  let legalNotice = '';
-  if (documentType === 'contract') {
-    legalNotice = `<div class="highlight-box">
-      <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
-      <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
-    </div>`;
-  } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
-    legalNotice = `<div class="highlight-box">
-      <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
-      <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
-    </div>`;
-  }
-
   // Format plain text content as HTML
   const cleanedContent = content.replace(/\{contract_signature\}/g, '').trim();
   const isHtmlContent = cleanedContent.includes('<') && cleanedContent.includes('>') &&
@@ -560,11 +537,42 @@ export function generateDocumentPrintHTML(
   const htmlContent = isHtmlContent ? cleanedContent : formatAsHtml(cleanedContent);
   const logoSrc = logoBase64 || WEBMARCAS_LOGO_FALLBACK;
 
-  const contractTitleBox = documentType === 'contract'
-    ? `<div class="contract-title-box"><p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p></div>`
+  // Build the header section per document type (matching ContractRenderer standard templates)
+  let headerSection = '';
+  if (documentType === 'procuracao') {
+    headerSection = `
+    <h1 class="main-title" style="text-decoration: none;">PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI</h1>
+    <p style="text-align: center; color: #4B5563; font-size: 14px; font-style: italic; margin-bottom: 24px;">Instrumento Particular de Procuração para fins de Registro de Marca</p>
+    <div class="highlight-box">
+      <p>Pelo presente instrumento particular de PROCURAÇÃO, o(a) outorgante abaixo identificado(a) nomeia e constitui como seu bastante PROCURADOR o(a) Sr(a). Davilys Danques de Oliveira Cunha, para representá-lo(a) de forma exclusiva junto ao INSTITUTO NACIONAL DA PROPRIEDADE INDUSTRIAL – INPI, podendo praticar todos os atos necessários, legais e administrativos relacionados ao pedido, acompanhamento, defesa e manutenção do registro de marca, inclusive apresentação de requerimentos, cumprimento de exigências, interposição de recursos e recebimento de notificações.</p>
+    </div>`;
+  } else if (documentType === 'distrato_multa' || documentType === 'distrato_sem_multa') {
+    headerSection = `
+    <h1 class="main-title">ACORDO DE DISTRATO</h1>
+    <div class="contract-title-box">
+      <p>INSTRUMENTO PARTICULAR DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
+    </div>
+    <div class="highlight-box">
+      <p>As partes abaixo qualificadas resolvem, de comum acordo, distratar o contrato de prestação de serviços firmado anteriormente, nos termos e condições a seguir estabelecidos.</p>
+    </div>`;
+  } else {
+    // contract (default)
+    headerSection = `
+    <h1 class="main-title">CONTRATO</h1>
+    <div class="contract-title-box">
+      <p>CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS DE ASSESSORAMENTO<br/>PARA REGISTRO DE MARCA JUNTO AO INPI</p>
+    </div>
+    <div class="highlight-box">
+      <p>Os termos deste instrumento aplicam-se apenas a contratações com negociações personalizadas, tratadas diretamente com a equipe comercial da Web Marcas e Patentes Eireli.</p>
+      <p style="margin-top: 12px;">Os termos aqui celebrados são adicionais ao "Contrato de Prestação de Serviços e Gestão de Pagamentos e Outras Avenças" com aceite integral no momento do envio da Proposta.</p>
+    </div>`;
+  }
+
+  const documentTitle = documentType === 'procuracao'
+    ? 'PROCURAÇÃO PARA REPRESENTAÇÃO JUNTO AO INPI'
     : documentType === 'distrato_multa' || documentType === 'distrato_sem_multa'
-    ? `<div class="contract-title-box"><p>INSTRUMENTO PARTICULAR DE DISTRATO DE CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p></div>`
-    : '';
+    ? 'ACORDO DE DISTRATO'
+    : 'CONTRATO';
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -602,9 +610,7 @@ export function generateDocumentPrintHTML(
     <span class="header-url">www.webmarcas.net</span>
   </div>
   <div class="gradient-bar"></div>
-  <h1 class="main-title">${documentTitle}</h1>
-  ${contractTitleBox}
-  ${legalNotice}
+  ${headerSection}
   <div class="content">
     ${htmlContent}
   </div>
