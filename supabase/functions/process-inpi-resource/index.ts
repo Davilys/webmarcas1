@@ -341,7 +341,7 @@ serve(async (req) => {
     const aiUrl = LOVABLE_API_KEY 
       ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
       : 'https://api.openai.com/v1/chat/completions';
-    const aiModel = LOVABLE_API_KEY ? 'google/gemini-2.5-pro' : 'gpt-4o';
+    const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o';
 
     console.log('Calling AI with elite legal prompt, agent:', agentName || 'default');
 
