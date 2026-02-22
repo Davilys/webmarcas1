@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
+import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -340,9 +341,9 @@ serve(async (req) => {
       });
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY não configurada');
+    const aiConfig = await getAIConfig();
+    if (!aiConfig.apiKey) {
+      throw new Error('Nenhuma chave de IA configurada');
     }
 
     // Busca conhecimento dinâmico do INPI
@@ -408,23 +409,16 @@ serve(async (req) => {
       }
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const aiApiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
-    const aiUrl = LOVABLE_API_KEY 
-      ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
-      : 'https://api.openai.com/v1/chat/completions';
-    const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o';
+    console.log(`[chat-inpi-legal] provider=${aiConfig.provider}, model=${aiConfig.model}, ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
 
-    console.log(`[chat-inpi-legal] Sending to AI (${aiModel}): ${apiMessages.length} messages, system prompt: ${SYSTEM_PROMPT.length} chars`);
-
-    const response = await fetch(aiUrl, {
+    const response = await fetch(aiConfig.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiModel,
+        model: aiConfig.model,
         messages: apiMessages,
         stream: true,
         max_tokens: 4096,

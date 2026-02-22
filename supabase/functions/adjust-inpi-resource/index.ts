@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +13,6 @@ serve(async (req) => {
   }
 
   try {
-    // Verificar autenticação
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -37,7 +37,6 @@ serve(async (req) => {
       );
     }
 
-    // Verificar se é admin
     const { data: isAdmin, error: roleError } = await supabase.rpc('has_role', {
       _user_id: userData.user.id,
       _role: 'admin'
@@ -59,10 +58,10 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
+    const aiConfig = await getAIConfig();
+    if (!aiConfig.apiKey) {
       return new Response(
-        JSON.stringify({ error: 'OPENAI_API_KEY não configurada' }),
+        JSON.stringify({ error: 'Nenhuma chave de IA configurada' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -86,23 +85,16 @@ ${currentContent}
 
 Responda APENAS com o texto completo do recurso ajustado, sem explicações adicionais.`;
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const aiApiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
-    const aiUrl = LOVABLE_API_KEY 
-      ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
-      : 'https://api.openai.com/v1/chat/completions';
-    const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o-mini';
+    console.log(`[adjust-inpi-resource] provider=${aiConfig.provider}, model=${aiConfig.model}`);
 
-    console.log('Calling AI to adjust INPI resource...');
-
-    const aiResponse = await fetch(aiUrl, {
+    const aiResponse = await fetch(aiConfig.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiModel,
+        model: aiConfig.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Aplique os ajustes solicitados ao recurso.' }
@@ -114,7 +106,7 @@ Responda APENAS com o texto completo do recurso ajustado, sem explicações adic
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
+      console.error('AI error:', aiResponse.status, errorText);
       
       if (aiResponse.status === 429) {
         return new Response(

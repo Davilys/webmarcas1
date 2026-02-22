@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getAIConfig } from "../_shared/ai-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -259,24 +260,17 @@ async function scrapeJurisprudencia(): Promise<ScrapedItem | null> {
 // ─────────────────────────────────────────────
 
 async function enrichWithAI(rawContent: string, category: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  const aiApiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
-  if (!aiApiKey || rawContent.length < 200) return rawContent;
-  
-  const aiUrl = LOVABLE_API_KEY 
-    ? 'https://ai.gateway.lovable.dev/v1/chat/completions' 
-    : 'https://api.openai.com/v1/chat/completions';
-  const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5-mini' : 'gpt-4o-mini';
-
   try {
-    const res = await fetch(aiUrl, {
+    const aiConfig = await getAIConfig();
+    if (!aiConfig.apiKey || rawContent.length < 200) return rawContent;
+    const res = await fetch(aiConfig.url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${aiApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: aiModel,
+        model: aiConfig.model,
         max_tokens: 1500,
         temperature: 0.1,
         messages: [
