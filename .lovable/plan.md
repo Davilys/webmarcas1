@@ -1,36 +1,93 @@
 
 
-# Corrigir Motor de Viabilidade - 2 Bugs + Melhoria de Seguranca
+# Implementar Buscas REAIS com Brave Search API
 
-## Problema Diagnosticado
+## Problema Atual
 
-Os logs revelam dois erros que fazem TODAS as consultas cairem no fallback (simulacao):
+O motor de viabilidade pede ao GPT-5.2 "voce conhece essa marca?" -- a IA nao tem acesso em tempo real ao INPI, entao sempre responde "nao encontrei nada". Resultado: tudo aparece como "viavel" mesmo para marcas ja registradas.
 
-### Bug 1: Parametro `max_tokens` invalido para GPT-5.2
-O modelo `openai/gpt-5.2` exige `max_completion_tokens`, nao `max_tokens`. Isso causa erro 400 em:
-- Linha 100: mapeamento de classes NCL
-- Linha 477: geracao do laudo final
+## Solucao
 
-### Bug 2: Firecrawl sem creditos (HTTP 402)
-Todas as buscas (INPI, CNPJ, Internet) retornam 0 resultados. O sistema conclui "Alta Viabilidade" para qualquer marca, inclusive marcas ja registradas.
+Usar Brave Search API para fazer buscas reais na internet, incluindo no site do INPI, bases de CNPJ e redes sociais.
 
-### Acao do usuario necessaria
-Recarregar creditos do Firecrawl em https://firecrawl.dev/pricing. Sem creditos, as buscas reais continuarao vazias.
+## Etapas
 
-## Correcoes no Codigo
+### 1. Configurar BRAVE_API_KEY como secret
+
+Armazenar a chave API do Brave Search como secret do projeto para uso na edge function.
+
+### 2. Reescrever a edge function `inpi-viability-check/index.ts`
+
+Substituir as 3 funcoes de busca que hoje usam IA por buscas reais via Brave Search:
+
+**searchINPI (Etapa 3) -- BUSCA REAL:**
+```
+Brave Search: "webmarcas" site:busca.inpi.gov.br
+Brave Search: "webmarcas" INPI registro marca
+```
+- Parsear os resultados para encontrar processos, situacoes, classes
+- Enviar os resultados reais ao GPT-5.2 para estruturar em JSON
+
+**searchCNPJ (Etapa 4) -- BUSCA REAL:**
+```
+Brave Search: "webmarcas" CNPJ empresa
+Brave Search: "webmarcas" cnpj.info OR cnpja.com OR casadosdados.com
+```
+- Extrair nomes de empresas, CNPJs e situacoes dos resultados
+
+**searchInternet (Etapa 5) -- BUSCA REAL:**
+```
+Brave Search: "webmarcas" site:instagram.com
+Brave Search: "webmarcas" site:facebook.com
+Brave Search: "webmarcas" site:linkedin.com
+Brave Search: "webmarcas" (busca geral)
+```
+- Verificar presenca real em cada rede social e web
+
+### 3. Fluxo completo
+
+1. Verificacao de marca famosa (manter existente)
+2. Mapeamento NCL via IA (manter existente, ja funciona)
+3. **3 buscas reais via Brave Search em PARALELO**
+4. Enviar resultados reais ao GPT-5.2 para analise e geracao do laudo
+5. Retornar dados estruturados + laudo
+
+### 4. Como funciona o Brave Search API
+
+```typescript
+const response = await fetch(
+  `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`,
+  {
+    headers: { 
+      'X-Subscription-Token': BRAVE_API_KEY,
+      'Accept': 'application/json'
+    }
+  }
+);
+const data = await response.json();
+// data.web.results[] -> titulo, url, description de cada resultado
+```
+
+Cada resultado tem: `title`, `url`, `description` -- dados reais da internet, nao simulacao.
+
+## Detalhes Tecnicos
 
 ### Arquivo: `supabase/functions/inpi-viability-check/index.ts`
 
-1. **Linha 100**: `max_tokens: 600` -> `max_completion_tokens: 600`
-2. **Linha 477**: `max_tokens: 3000` -> `max_completion_tokens: 3000`
-3. **Funcao `buildFallbackAnalysis`** (linha 513+): Quando `inpiData.error` existir (busca falhou por erro de API, nao por resultado zero real):
-   - Marcar `level` como `medium` (nao `high`)
-   - Marcar `viabilidade` como `POSSIVEL_COM_ALERTA`
-   - Adicionar aviso no laudo: "A consulta ao banco do INPI nao pode ser completada. Os resultados sao parciais."
-   - Alterar `description` para indicar pesquisa incompleta
+- **searchINPI**: substituir chamada IA por 2 buscas Brave (`site:busca.inpi.gov.br` + `INPI registro marca`) + IA para estruturar resultados
+- **searchCNPJ**: substituir chamada IA por 2 buscas Brave (`CNPJ empresa` + sites de CNPJ) + IA para extrair dados
+- **searchInternet**: substituir chamada IA por 4 buscas Brave (Instagram, Facebook, LinkedIn, geral)
+- **generateFinalAnalysis**: manter igual (recebe dados reais agora)
+- Total de chamadas Brave por consulta: ~8 (bem dentro do limite gratuito de 2000/mes)
+
+### Secret necessario
+
+- `BRAVE_API_KEY`: chave API do Brave Search (gratuita em brave.com/search/api)
 
 ### Impacto
+
 - Apenas a edge function `inpi-viability-check` sera alterada
-- Nenhuma tabela, API ou integracao externa modificada
-- Compatibilidade total com frontend mantida
+- Nenhuma tabela, API ou frontend modificado
+- Compatibilidade total mantida
+- Resultados passam a ser REAIS em vez de simulacao
 
