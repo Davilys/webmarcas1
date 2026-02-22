@@ -127,7 +127,80 @@ async function suggestClassesWithAI(businessArea: string): Promise<{ classes: nu
   return getClassesForBusinessAreaFallback(businessArea);
 }
 
-// ========== ETAPA 3: Consulta INPI via IA ==========
+// ========== UTILIDADE: Busca DuckDuckGo (sem API key) ==========
+async function searchDuckDuckGo(query: string): Promise<Array<{ title: string; url: string; description: string }>> {
+  try {
+    console.log(`[DDG] Buscando: "${query}"`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(
+      `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+      {
+        method: 'POST',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `q=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      console.error(`[DDG] HTTP ${response.status}`);
+      return [];
+    }
+
+    const html = await response.text();
+    const results: Array<{ title: string; url: string; description: string }> = [];
+
+    // Parse DuckDuckGo HTML results
+    const resultBlocks = html.split('class="result ');
+    for (let i = 1; i < resultBlocks.length && results.length < 10; i++) {
+      const block = resultBlocks[i];
+      
+      // Extract title from result__a
+      const titleMatch = block.match(/class="result__a"[^>]*>([\s\S]*?)<\/a>/);
+      const title = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, '').trim() : '';
+      
+      // Extract URL from result__url or href
+      const urlMatch = block.match(/href="([^"]*)"/) || block.match(/class="result__url"[^>]*>([\s\S]*?)<\/a>/);
+      let url = '';
+      if (urlMatch) {
+        url = urlMatch[1].replace(/<[^>]*>/g, '').trim();
+        // DuckDuckGo wraps URLs in redirect links
+        if (url.includes('uddg=')) {
+          const decoded = decodeURIComponent(url.split('uddg=')[1]?.split('&')[0] || '');
+          url = decoded || url;
+        }
+        if (!url.startsWith('http')) url = `https://${url}`;
+      }
+      
+      // Extract description/snippet
+      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/) ||
+                           block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/span>/);
+      const description = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '';
+
+      if (title && url) {
+        results.push({ title, url, description });
+      }
+    }
+
+    console.log(`[DDG] Encontrados ${results.length} resultados para "${query}"`);
+    return results;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.warn(`[DDG] Timeout para "${query}"`);
+    } else {
+      console.error(`[DDG] Erro:`, error);
+    }
+    return [];
+  }
+}
+
+// ========== ETAPA 3: Consulta INPI via DuckDuckGo + IA ==========
 async function searchINPI(brandName: string, mainClass: number): Promise<{
   totalResultados: number;
   resultados: Array<{ processo: string; marca: string; situacao: string; classe: string; titular: string }>;
@@ -135,24 +208,29 @@ async function searchINPI(brandName: string, mainClass: number): Promise<{
   error?: string;
 }> {
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  // Go directly to AI-based analysis (INPI direct HTTP is unreliable from edge functions)
-  return await searchINPIviaAI(brandName, mainClass, now);
-}
-
-// Fallback: pedir para IA analisar a marca no INPI baseado em seu conhecimento
-async function searchINPIviaAI(brandName: string, mainClass: number, now: string): Promise<{
-  totalResultados: number;
-  resultados: Array<{ processo: string; marca: string; situacao: string; classe: string; titular: string }>;
-  consultadoEm: string;
-  error?: string;
-}> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  if (!LOVABLE_API_KEY) {
-    return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Consulta INPI indisponível' };
-  }
 
   try {
-    console.log(`[INPI-IA] Consultando IA sobre marca "${brandName}" classe ${mainClass}`);
+    // Duas buscas DuckDuckGo em paralelo
+    const [inpiResults, generalResults] = await Promise.all([
+      searchDuckDuckGo(`"${brandName}" site:busca.inpi.gov.br`),
+      searchDuckDuckGo(`"${brandName}" INPI registro marca classe ${mainClass}`),
+    ]);
+
+    const allResults = [...inpiResults, ...generalResults];
+    console.log(`[INPI] DuckDuckGo: ${allResults.length} resultados combinados`);
+
+    if (allResults.length === 0) {
+      return { totalResultados: 0, resultados: [], consultadoEm: now };
+    }
+
+    // Enviar resultados reais ao GPT-5.2 para estruturar
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      return { totalResultados: allResults.length, resultados: [], consultadoEm: now, error: 'IA indisponível para estruturar resultados' };
+    }
+
+    const searchData = allResults.map(r => `- ${r.title}\n  URL: ${r.url}\n  ${r.description}`).join('\n\n');
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
@@ -161,22 +239,24 @@ async function searchINPIviaAI(brandName: string, mainClass: number, now: string
         messages: [
           {
             role: 'system',
-            content: `Você é um especialista em marcas registradas no INPI Brasil. Quando perguntado sobre uma marca, responda com base em seu conhecimento sobre marcas registradas. Se não souber, diga que não encontrou.
-Responda APENAS em JSON válido: {"totalResultados": N, "resultados": [{"processo": "NNNNNNNNN", "marca": "NOME", "situacao": "Registro em vigor|Pedido depositado|Arquivado/Extinto", "classe": "NN", "titular": "NOME"}]}`
+            content: `Você é um especialista em marcas do INPI. Analise os resultados de busca abaixo e extraia APENAS registros de marca que sejam relevantes para a marca "${brandName}".
+Responda APENAS em JSON: {"totalResultados": N, "resultados": [{"processo": "NNNNNNNNN", "marca": "NOME", "situacao": "Registro em vigor|Pedido depositado|Arquivado/Extinto", "classe": "NN", "titular": "NOME"}]}
+Se os resultados não contiverem dados de processos INPI reais, retorne {"totalResultados": 0, "resultados": []}.
+NÃO invente números de processo ou dados. Extraia apenas do que está nos resultados de busca.`
           },
           {
             role: 'user',
-            content: `Existem marcas registradas ou pedidos ativos no INPI Brasil com o nome "${brandName}" na classe ${mainClass}? Liste os que você conhecer.`
+            content: `Resultados de busca para a marca "${brandName}" (classe principal ${mainClass}):\n\n${searchData}`
           }
         ],
-        temperature: 0.2,
+        temperature: 0.1,
         max_completion_tokens: 800,
       }),
     });
 
     if (!response.ok) {
-      console.error(`[INPI-IA] Erro: ${response.status}`);
-      return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Consulta INPI via IA falhou' };
+      console.error(`[INPI] IA erro: ${response.status}`);
+      return { totalResultados: allResults.length, resultados: [], consultadoEm: now, error: 'Erro ao estruturar resultados INPI' };
     }
 
     const data = await response.json();
@@ -186,30 +266,41 @@ Responda APENAS em JSON válido: {"totalResultados": N, "resultados": [{"process
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         if (typeof parsed.totalResultados === 'number' && Array.isArray(parsed.resultados)) {
-          console.log(`[INPI-IA] Encontrados ${parsed.totalResultados} resultados via IA`);
+          console.log(`[INPI] IA estruturou ${parsed.totalResultados} resultados dos dados reais`);
           return { ...parsed, consultadoEm: now };
         }
       }
     }
   } catch (error) {
-    console.error('[INPI-IA] Erro:', error);
+    console.error('[INPI] Erro:', error);
   }
-  return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Análise INPI inconclusiva' };
+  return { totalResultados: 0, resultados: [], consultadoEm: now, error: 'Consulta INPI inconclusiva' };
 }
 
-// ========== ETAPA 4: Busca de CNPJ via BrasilAPI + IA ==========
+// ========== ETAPA 4: Busca CNPJ via DuckDuckGo + IA ==========
 async function searchCNPJ(brandName: string): Promise<{
   total: number;
   matches: Array<{ nome: string; cnpj: string; situacao: string }>;
 }> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-
   try {
-    console.log(`[CNPJ] Buscando empresas com nome "${brandName}" via IA`);
+    // Duas buscas DuckDuckGo em paralelo
+    const [generalResults, siteResults] = await Promise.all([
+      searchDuckDuckGo(`"${brandName}" CNPJ empresa razao social`),
+      searchDuckDuckGo(`"${brandName}" cnpj.info OR cnpja.com OR casadosdados.com.br`),
+    ]);
 
+    const allResults = [...generalResults, ...siteResults];
+    console.log(`[CNPJ] DuckDuckGo: ${allResults.length} resultados combinados`);
+
+    if (allResults.length === 0) {
+      return { total: 0, matches: [] };
+    }
+
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) return { total: 0, matches: [] };
 
-    // Usar IA para identificar empresas conhecidas com esse nome
+    const searchData = allResults.map(r => `- ${r.title}\n  URL: ${r.url}\n  ${r.description}`).join('\n\n');
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
@@ -218,17 +309,16 @@ async function searchCNPJ(brandName: string): Promise<{
         messages: [
           {
             role: 'system',
-            content: `Você é um analista de mercado brasileiro. Quando perguntado sobre um nome empresarial, verifique se existem empresas conhecidas com esse nome ou nome muito similar.
-Responda APENAS em JSON: {"total": N, "matches": [{"nome": "RAZAO SOCIAL", "cnpj": "XX.XXX.XXX/XXXX-XX", "situacao": "Ativa|Baixada"}]}
-Se não conhecer nenhuma empresa com esse nome, retorne {"total": 0, "matches": []}.
-Não invente dados. Só liste empresas que você tem certeza que existem.`
+            content: `Analise os resultados de busca e extraia dados de empresas brasileiras com nome "${brandName}" ou similar.
+Responda APENAS em JSON: {"total": N, "matches": [{"nome": "RAZAO SOCIAL", "cnpj": "XX.XXX.XXX/XXXX-XX", "situacao": "Ativa|Baixada|Inapta"}]}
+Extraia APENAS dados reais dos resultados. Se não houver dados de CNPJ nos resultados, retorne {"total": 0, "matches": []}.`
           },
           {
             role: 'user',
-            content: `Existem empresas brasileiras com nome "${brandName}" ou nome fantasia muito similar? Liste apenas as que você conhecer com certeza.`
+            content: `Resultados de busca para empresas com nome "${brandName}":\n\n${searchData}`
           }
         ],
-        temperature: 0.2,
+        temperature: 0.1,
         max_completion_tokens: 600,
       }),
     });
@@ -242,7 +332,7 @@ Não invente dados. Só liste empresas que você tem certeza que existem.`
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         if (typeof parsed.total === 'number' && Array.isArray(parsed.matches)) {
-          console.log(`[CNPJ] IA encontrou ${parsed.total} empresas`);
+          console.log(`[CNPJ] IA extraiu ${parsed.total} empresas dos dados reais`);
           return { total: parsed.total, matches: parsed.matches.slice(0, 5) };
         }
       }
@@ -253,86 +343,47 @@ Não invente dados. Só liste empresas que você tem certeza que existem.`
   return { total: 0, matches: [] };
 }
 
-// ========== ETAPA 5: Busca Internet/Redes Sociais via IA ==========
+// ========== ETAPA 5: Busca Internet via DuckDuckGo (sem IA) ==========
 async function searchInternet(brandName: string): Promise<{
   socialMatches: Array<{ plataforma: string; encontrado: boolean; url?: string; descricao?: string }>;
   webMatches: Array<{ titulo: string; url: string; descricao: string }>;
 }> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-
-  if (!LOVABLE_API_KEY) {
-    return {
-      socialMatches: [
-        { plataforma: 'Instagram', encontrado: false },
-        { plataforma: 'Facebook', encontrado: false },
-        { plataforma: 'LinkedIn', encontrado: false },
-      ],
-      webMatches: []
-    };
-  }
-
   try {
-    console.log(`[INTERNET] Buscando presença web de "${brandName}" via IA`);
+    // 4 buscas DuckDuckGo em paralelo (3 redes sociais + geral)
+    const [igResults, fbResults, liResults, webResults] = await Promise.all([
+      searchDuckDuckGo(`"${brandName}" site:instagram.com`),
+      searchDuckDuckGo(`"${brandName}" site:facebook.com`),
+      searchDuckDuckGo(`"${brandName}" site:linkedin.com`),
+      searchDuckDuckGo(`"${brandName}"`),
+    ]);
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'openai/gpt-5.2',
-        messages: [
-          {
-            role: 'system',
-            content: `Você é um analista de presença digital. Quando perguntado sobre uma marca/nome, verifique se há presença online conhecida.
-Responda APENAS em JSON:
-{
-  "socialMatches": [
-    {"plataforma": "Instagram", "encontrado": true/false, "url": "https://...", "descricao": "..."},
-    {"plataforma": "Facebook", "encontrado": true/false, "url": "https://...", "descricao": "..."},
-    {"plataforma": "LinkedIn", "encontrado": true/false, "url": "https://...", "descricao": "..."}
-  ],
-  "webMatches": [
-    {"titulo": "...", "url": "https://...", "descricao": "..."}
-  ]
-}
-Sempre inclua Instagram, Facebook e LinkedIn. Se não conhecer, marque encontrado=false.
-Não invente URLs ou perfis. Só liste os que você tem certeza que existem.`
-          },
-          {
-            role: 'user',
-            content: `A marca/empresa "${brandName}" tem presença online? Verifique Instagram, Facebook, LinkedIn e sites.`
-          }
-        ],
-        temperature: 0.2,
-        max_completion_tokens: 800,
-      }),
-    });
-
-    if (!response.ok) {
+    // Parsear presença em redes sociais diretamente (sem IA)
+    const checkSocial = (results: Array<{ title: string; url: string; description: string }>, platform: string, domain: string) => {
+      const match = results.find(r => r.url.includes(domain));
       return {
-        socialMatches: [
-          { plataforma: 'Instagram', encontrado: false },
-          { plataforma: 'Facebook', encontrado: false },
-          { plataforma: 'LinkedIn', encontrado: false },
-        ],
-        webMatches: []
+        plataforma: platform,
+        encontrado: !!match,
+        url: match?.url,
+        descricao: match ? match.title : undefined,
       };
-    }
+    };
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (content) {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (Array.isArray(parsed.socialMatches)) {
-          console.log(`[INTERNET] IA: Social ${parsed.socialMatches.filter((s: any) => s.encontrado).length}, Web ${parsed.webMatches?.length || 0}`);
-          return {
-            socialMatches: parsed.socialMatches,
-            webMatches: parsed.webMatches || []
-          };
-        }
-      }
-    }
+    const socialMatches = [
+      checkSocial(igResults, 'Instagram', 'instagram.com'),
+      checkSocial(fbResults, 'Facebook', 'facebook.com'),
+      checkSocial(liResults, 'LinkedIn', 'linkedin.com'),
+    ];
+
+    // Web matches: filtrar resultados gerais removendo redes sociais
+    const socialDomains = ['instagram.com', 'facebook.com', 'linkedin.com', 'twitter.com', 'tiktok.com'];
+    const webMatches = webResults
+      .filter(r => !socialDomains.some(d => r.url.includes(d)))
+      .slice(0, 5)
+      .map(r => ({ titulo: r.title, url: r.url, descricao: r.description }));
+
+    console.log(`[INTERNET] Social: ${socialMatches.filter(s => s.encontrado).length}/3 | Web: ${webMatches.length}`);
+
+    return { socialMatches, webMatches };
   } catch (error) {
     console.error('[INTERNET] Erro:', error);
   }
