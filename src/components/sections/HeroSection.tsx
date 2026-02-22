@@ -181,7 +181,7 @@ const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
             >
-              <div className="font-display text-4xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2 whitespace-nowrap">
+              <div className="font-display text-3xl sm:text-5xl md:text-6xl font-bold gradient-text mb-2">
                 <AnimatedCounter 
                   value={stat.value} 
                   suffix={stat.suffix}
