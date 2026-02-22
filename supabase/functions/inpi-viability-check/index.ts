@@ -97,7 +97,7 @@ async function suggestClassesWithAI(businessArea: string): Promise<{ classes: nu
           { role: 'user', content: `Sugira EXATAMENTE 3 classes NCL (1-45) para o ramo "${businessArea}". JSON: {"classes":[n1,n2,n3],"descriptions":["Classe XX – desc1","Classe XX – desc2","Classe XX – desc3"]}` }
         ],
         temperature: 0.3,
-        max_tokens: 600,
+        max_completion_tokens: 600,
       }),
     });
 
@@ -474,7 +474,7 @@ Use separadores ━━━ entre seções. Use emojis nos títulos das seções. 
           }
         ],
         temperature: 0.3,
-        max_tokens: 3000,
+        max_completion_tokens: 3000,
       }),
     });
 
@@ -517,8 +517,14 @@ function buildFallbackAnalysis(
   // Determine level based on INPI results
   let level: 'high' | 'medium' | 'low' = 'high';
   let viabilidade = 'VIAVEL_INICIAL';
+  let searchIncomplete = false;
 
-  if (inpiData.totalResultados > 0) {
+  // Se houve erro na busca INPI (ex: Firecrawl sem créditos), não concluir "alta viabilidade"
+  if (inpiData.error) {
+    level = 'medium';
+    viabilidade = 'POSSIVEL_COM_ALERTA';
+    searchIncomplete = true;
+  } else if (inpiData.totalResultados > 0) {
     const hasActive = inpiData.resultados.some((r: any) =>
       r.situacao?.toLowerCase().includes('vigor') || r.situacao?.toLowerCase().includes('pedido') || r.situacao?.toLowerCase().includes('deposit'));
     if (hasActive) {
@@ -532,6 +538,8 @@ function buildFallbackAnalysis(
 
   const inpiSection = inpiData.totalResultados > 0
     ? inpiData.resultados.map((r: any, i: number) => `${i + 1}. ${r.marca} | Processo: ${r.processo} | Situação: ${r.situacao} | Classe: ${r.classe}`).join('\n')
+    : searchIncomplete
+    ? '⚠️ A consulta ao banco do INPI não pôde ser completada nesta sessão. Os resultados são parciais. Recomendamos nova consulta.'
     : 'Nenhuma marca idêntica encontrada na base do INPI.';
 
   const cnpjSection = cnpjData.total > 0
@@ -620,8 +628,10 @@ www.webmarcas.net`;
   return {
     level,
     viabilidade,
-    title: level === 'high' ? 'Alta Viabilidade' : level === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
-    description: level === 'high'
+    title: searchIncomplete ? 'Pesquisa Parcial' : level === 'high' ? 'Alta Viabilidade' : level === 'medium' ? 'Média Viabilidade' : 'Baixa Viabilidade',
+    description: searchIncomplete
+      ? 'A consulta ao INPI não pôde ser completada. Os resultados são parciais — recomendamos nova consulta ou fale com nossos especialistas.'
+      : level === 'high'
       ? 'Sua marca está disponível para registro! Não encontramos conflitos na base do INPI.'
       : level === 'medium'
       ? 'Existem registros similares. Recomendamos consulta especializada antes de prosseguir.'
