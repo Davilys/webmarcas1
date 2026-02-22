@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Key, Webhook, Zap, Box, Brain, Plus, Trash2, Edit, Copy, 
-  RefreshCw, CheckCircle2, Loader2, Save, ExternalLink, Eye, EyeOff,
+  RefreshCw, CheckCircle2, Loader2, Save, ExternalLink,
   CreditCard, Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,7 +51,6 @@ const webhookEvents = [
 
 export function APIWebhooksSettings() {
   const queryClient = useQueryClient();
-  const [showApiKey, setShowApiKey] = useState(false);
   const [isWebhookDialogOpen, setIsWebhookDialogOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfig | null>(null);
   const [webhookForm, setWebhookForm] = useState({ name: '', url: '', event: 'lead.created' });
@@ -212,34 +211,34 @@ export function APIWebhooksSettings() {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Chave de API</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            {apiKeysData?.system_key && apiKeys.system_key === apiKeysData.system_key ? (
+              <div className="flex gap-2">
+                <Input type="password" value="••••••••••••••••" readOnly className="font-mono text-sm bg-muted/40 cursor-not-allowed flex-1" tabIndex={-1} />
+                <Button variant="destructive" size="sm" onClick={() => setApiKeys({ ...apiKeys, system_key: null })}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Apagar
+                </Button>
+                <Button variant="outline" onClick={generateApiKey}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Regenerar
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
                 <Input
                   value={apiKeys.system_key || ''}
                   readOnly
-                  type={showApiKey ? 'text' : 'password'}
+                  type="text"
                   placeholder="Clique em gerar para criar uma nova chave"
-                  className="pr-10 font-mono text-sm"
+                  className="font-mono text-sm flex-1"
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                >
-                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <Button variant="outline" onClick={generateApiKey}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {apiKeys.system_key ? 'Regenerar' : 'Gerar'}
                 </Button>
               </div>
-              {apiKeys.system_key && (
-                <Button variant="outline" size="icon" onClick={() => copyToClipboard(apiKeys.system_key!)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              )}
-              <Button variant="outline" onClick={generateApiKey}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {apiKeys.system_key ? 'Regenerar' : 'Gerar'}
-              </Button>
-            </div>
+            )}
+            <p className="text-xs text-muted-foreground">Uma vez salva, a chave não poderá mais ser visualizada. Guarde-a em local seguro.</p>
           </div>
 
           <Button onClick={() => saveApiKeysMutation.mutate(apiKeys)} disabled={saveApiKeysMutation.isPending}>
@@ -437,12 +436,22 @@ export function APIWebhooksSettings() {
           <p className="text-sm text-muted-foreground mb-3">Use IA para automatizar respostas</p>
           <div className="space-y-2">
             <Label>API Key</Label>
-            <Input
-              value={apiKeys.openai_key}
-              onChange={(e) => setApiKeys({ ...apiKeys, openai_key: e.target.value })}
-              type="password"
-              placeholder="sk-proj-..."
-            />
+            {apiKeysData?.openai_key && apiKeys.openai_key === apiKeysData.openai_key ? (
+              <div className="flex gap-2">
+                <Input type="password" value="••••••••••••••••" readOnly className="font-mono text-sm bg-muted/40 cursor-not-allowed" tabIndex={-1} />
+                <Button variant="destructive" size="sm" onClick={() => setApiKeys({ ...apiKeys, openai_key: '' })}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Apagar
+                </Button>
+              </div>
+            ) : (
+              <Input
+                value={apiKeys.openai_key}
+                onChange={(e) => setApiKeys({ ...apiKeys, openai_key: e.target.value })}
+                type="password"
+                placeholder="sk-proj-..."
+              />
+            )}
           </div>
           <Button size="sm" onClick={() => saveApiKeysMutation.mutate(apiKeys)} disabled={saveApiKeysMutation.isPending} className="mt-3">
             <Save className="h-4 w-4 mr-2" />
