@@ -55,6 +55,7 @@ interface Contract {
   blockchain_network?: string | null;
   signature_ip?: string | null;
   payment_method?: string | null;
+  penalty_value?: number | null;
 }
 
 interface ContractType { id: string; name: string; }
@@ -430,7 +431,6 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       const docType = contract.document_type || 'contract';
 
       // 1. Fetch the correct active template based on document type
-      // Map document_type to template name patterns
       const templateNamePatterns: Record<string, string[]> = {
         'contract': ['%Registro de Marca%', '%Contrato Padrão%'],
         'procuracao': ['%Procura%'],
@@ -460,39 +460,70 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       
       if (profileError || !profile) throw new Error('Dados do cliente não encontrados');
 
-      // 3. Build data for variable replacement
+      // 3. Replace variables based on document type
+      let replacedContent: string;
       const hasCNPJ = !!(profile.cnpj && profile.cnpj.trim());
-      const replacedContent = replaceContractVariables(templateData[0].content, {
-        personalData: {
-          fullName: profile.full_name || '',
-          email: profile.email || '',
-          phone: profile.phone || '',
-          cpf: profile.cpf || '',
-          cep: profile.zip_code || '',
-          address: profile.address || '',
-          neighborhood: profile.neighborhood || '',
-          city: profile.city || '',
-          state: profile.state || '',
-        },
-        brandData: {
-          brandName: contract.subject || '',
-          businessArea: '',
-          hasCNPJ,
-          cnpj: profile.cnpj || '',
-          companyName: profile.company_name || '',
-        },
-        paymentMethod: contract.payment_method || '',
-      });
+      const currentDateFormatted = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+      const enderecoCompleto = [profile.address, profile.neighborhood, profile.city ? `${profile.city} - ${profile.state}` : profile.state, profile.zip_code ? `CEP ${profile.zip_code}` : ''].filter(Boolean).join(', ');
+      const nomeEmpresa = hasCNPJ && profile.company_name ? profile.company_name : profile.full_name || '';
 
-      // 4. Generate full HTML using the correct document type
-      const newHtml = generateContractPrintHTML(
-        replacedContent,
-        contract.subject || '',
-        profile.full_name || '',
-        profile.cpf || '',
-        undefined, // no blockchain signature
-        true,
+      if (docType === 'procuracao' || docType === 'distrato_multa' || docType === 'distrato_sem_multa') {
+        // These templates use {{nome_empresa}}, {{nome_representante}}, {{cpf_representante}}, etc.
+        replacedContent = templateData[0].content
+          .replace(/\{\{nome_empresa\}\}/g, nomeEmpresa)
+          .replace(/\{\{endereco_empresa\}\}/g, enderecoCompleto)
+          .replace(/\{\{cidade\}\}/g, profile.city || '')
+          .replace(/\{\{estado\}\}/g, profile.state || '')
+          .replace(/\{\{cep\}\}/g, profile.zip_code || '')
+          .replace(/\{\{cnpj\}\}/g, profile.cnpj || '')
+          .replace(/\{\{nome_representante\}\}/g, profile.full_name || '')
+          .replace(/\{\{cpf_representante\}\}/g, profile.cpf || '')
+          .replace(/\{\{email\}\}/g, profile.email || '')
+          .replace(/\{\{telefone\}\}/g, profile.phone || '')
+          .replace(/\{\{marca\}\}/g, contract.subject || '')
+          .replace(/\{\{data_procuracao\}\}/g, currentDateFormatted)
+          .replace(/\{\{data_distrato\}\}/g, currentDateFormatted)
+          .replace(/\{\{numero_parcelas\}\}/g, contract.penalty_value ? '1' : '')
+          .replace(/\{\{valor_multa\}\}/g, contract.penalty_value ? contract.penalty_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00')
+          .replace(/\{\{data\}\}/g, new Date().toLocaleDateString('pt-BR'));
+      } else {
+        // Contract type uses replaceContractVariables
+        replacedContent = replaceContractVariables(templateData[0].content, {
+          personalData: {
+            fullName: profile.full_name || '',
+            email: profile.email || '',
+            phone: profile.phone || '',
+            cpf: profile.cpf || '',
+            cep: profile.zip_code || '',
+            address: profile.address || '',
+            neighborhood: profile.neighborhood || '',
+            city: profile.city || '',
+            state: profile.state || '',
+          },
+          brandData: {
+            brandName: contract.subject || '',
+            businessArea: '',
+            hasCNPJ,
+            cnpj: profile.cnpj || '',
+            companyName: profile.company_name || '',
+          },
+          paymentMethod: contract.payment_method || '',
+        });
+      }
+
+      // 4. Generate full HTML using generateDocumentPrintHTML (handles all doc types correctly)
+      const logoBase64 = await getLogoBase64ForPDF();
+      const newHtml = generateDocumentPrintHTML(
         docType as any,
+        replacedContent,
+        null, // no client signature
+        undefined, // no blockchain signature
+        profile.full_name || undefined,
+        profile.cpf || undefined,
+        profile.cnpj || undefined,
+        undefined,
+        getProductionBaseUrl(),
+        logoBase64,
       );
 
       // 5. Update contract_html in database
@@ -515,7 +546,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Erro ao gerar link');
 
-      toast.success('Contrato atualizado com template vigente e novo link gerado!');
+      toast.success('Documento atualizado com template vigente e novo link gerado!');
       onUpdate();
     } catch (error: any) {
       console.error('Error generating new contract link:', error);
