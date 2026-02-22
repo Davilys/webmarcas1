@@ -144,7 +144,23 @@ export default function AdminFinanceiro() {
     setLoading(false);
   };
 
-  const fetchClients  = async () => { const { data } = await supabase.from('profiles').select('id, full_name, email, cpf_cnpj'); setClients(data || []); };
+  const fetchClients = async () => {
+    let allClients: Client[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      const { data } = await supabase.from('profiles').select('id, full_name, email, cpf_cnpj').range(from, from + pageSize - 1);
+      if (data && data.length > 0) {
+        allClients = [...allClients, ...data];
+        from += pageSize;
+        if (data.length < pageSize) hasMore = false;
+      } else {
+        hasMore = false;
+      }
+    }
+    setClients(allClients);
+  };
   const fetchProcesses = async () => { const { data } = await supabase.from('brand_processes').select('id, brand_name, user_id'); setProcesses(data || []); };
 
   const handleSubmit = async (e: React.FormEvent) => {
