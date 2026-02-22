@@ -89,12 +89,15 @@ INSTRUÇÕES DE TOM: ${toneInstructions}
 
 REGRAS OBRIGATÓRIAS:
 1. Sempre use saudação profissional com o nome do remetente se disponível
-2. Assine como "Equipe WebMarcas | Propriedade Intelectual"
-3. Não invente dados de processos, prazos ou valores
-4. Use variáveis entre colchetes quando precisar de dados específicos: [NÚMERO_PROCESSO], [PRAZO], [VALOR]
-5. Responda SOMENTE em português brasileiro
-6. Resposta deve ser imediatamente utilizável pelo admin
-7. Máximo 300 palavras para respostas normais, 3 linhas para tom curto`;
+2. NÃO inclua assinatura, rodapé, dados de contato (www, WhatsApp, telefone) nem "Equipe WebMarcas" — o sistema adiciona automaticamente
+3. NÃO inclua "---" nem separadores no final
+4. Termine com "Atenciosamente," e NADA mais depois disso
+5. Não invente dados de processos, prazos ou valores
+6. Use variáveis entre colchetes quando precisar de dados específicos: [NÚMERO_PROCESSO], [PRAZO], [VALOR]
+7. Responda SOMENTE em português brasileiro PERFEITO — sem erros de ortografia, gramática ou acentuação
+8. Resposta deve ser imediatamente utilizável pelo admin
+9. Máximo 300 palavras para respostas normais, 3 linhas para tom curto
+10. NÃO duplique saudações, despedidas ou qualquer bloco de texto`;
 }
 
 function buildActionPrompt(action: AIAction, emailContent: string, tone: ToneMode): string {
