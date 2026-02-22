@@ -15,6 +15,7 @@ interface EmailSidebarProps {
   currentFolder: EmailFolder;
   onFolderChange: (folder: EmailFolder) => void;
   onCompose: () => void;
+  isMasterAdmin?: boolean;
   stats?: {
     inbox: number;
     unread: number;
@@ -55,7 +56,7 @@ const quickFilters: { id: EmailFolder; label: string; icon: React.ComponentType<
   { id: 'filter-support', label: 'Suporte', icon: HeadphonesIcon, color: 'text-rose-500' },
 ];
 
-export function EmailSidebar({ currentFolder, onFolderChange, onCompose, stats, emailAccounts, selectedAccountId, onAccountChange }: EmailSidebarProps) {
+export function EmailSidebar({ currentFolder, onFolderChange, onCompose, stats, isMasterAdmin = false, emailAccounts, selectedAccountId, onAccountChange }: EmailSidebarProps) {
   const [showFilters, setShowFilters] = useState(true);
   const [showTools, setShowTools] = useState(true);
   const [showAccounts, setShowAccounts] = useState(true);
@@ -219,39 +220,41 @@ export function EmailSidebar({ currentFolder, onFolderChange, onCompose, stats, 
         })}
       </div>
 
-      {/* Tools */}
-      <div className="space-y-0.5 flex-1">
-        <button
-          onClick={() => setShowTools(!showTools)}
-          className="w-full flex items-center gap-1 px-3 pb-1 group"
-        >
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest flex-1 text-left">Ferramentas</p>
-          {showTools ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-        </button>
-        {showTools && toolFolders.map((folder, i) => {
-          const Icon = folder.icon;
-          const isActive = currentFolder === folder.id;
-          return (
-            <motion.button
-              key={folder.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: i * 0.04 }}
-              type="button"
-              onClick={() => onFolderChange(folder.id)}
-              className={cn(
-                'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer',
-                isActive
-                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <Icon className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left">{folder.label}</span>
-            </motion.button>
-          );
-        })}
-      </div>
+      {/* Tools - Only visible for master admin */}
+      {isMasterAdmin && (
+        <div className="space-y-0.5 flex-1">
+          <button
+            onClick={() => setShowTools(!showTools)}
+            className="w-full flex items-center gap-1 px-3 pb-1 group"
+          >
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest flex-1 text-left">Ferramentas</p>
+            {showTools ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+          </button>
+          {showTools && toolFolders.map((folder, i) => {
+            const Icon = folder.icon;
+            const isActive = currentFolder === folder.id;
+            return (
+              <motion.button
+                key={folder.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.04 }}
+                type="button"
+                onClick={() => onFolderChange(folder.id)}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer',
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">{folder.label}</span>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Footer hint */}
       <div className="px-3 py-2 rounded-lg bg-muted/40 border border-border/50">
