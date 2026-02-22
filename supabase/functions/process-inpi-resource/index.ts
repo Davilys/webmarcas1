@@ -2,6 +2,40 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { getAIConfig } from "../_shared/ai-config.ts";
 
+// PDF text extraction helper
+async function extractPdfTextFromBase64(base64: string): Promise<string> {
+  try {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    // Try to extract readable text from raw PDF bytes
+    const text = new TextDecoder('latin1').decode(bytes);
+    // Extract text between BT and ET markers (PDF text objects)
+    const textBlocks: string[] = [];
+    const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+    let match;
+    while ((match = streamRegex.exec(text)) !== null) {
+      const block = match[1];
+      // Extract parenthesized strings (common PDF text encoding)
+      const parenRegex = /\(([^)]*)\)/g;
+      let pm;
+      while ((pm = parenRegex.exec(block)) !== null) {
+        if (pm[1].trim().length > 1) {
+          textBlocks.push(pm[1]);
+        }
+      }
+    }
+    const extracted = textBlocks.join(' ').replace(/\s+/g, ' ').trim();
+    console.log(`[pdf-extract] extracted ${extracted.length} chars from raw PDF`);
+    return extracted;
+  } catch (e) {
+    console.error('[pdf-extract] failed:', e);
+    return '';
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -313,29 +347,50 @@ serve(async (req) => {
 
     const systemPrompt = buildSystemPrompt(resourceTypeLabel, currentDate, agentStrategy, agentName);
 
-    const userContent: any[] = [
-      {
-        type: "text",
-        text: "Analise o documento PDF anexado do INPI e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras, seguindo rigorosamente TODAS as 8 seções obrigatórias com a extensão mínima especificada para cada uma. NÃO simplifique, NÃO encurte, NÃO produza texto genérico. Cada argumento deve ser desenvolvido em múltiplos parágrafos com profundidade jurídica real."
-      }
-    ];
-
+    // Build user content - extract text from PDF for compatibility with all providers
+    let documentContent = '';
+    
     if (fileType === 'application/pdf') {
+      documentContent = await extractPdfTextFromBase64(fileBase64);
+    }
+
+    const userContent: any[] = [];
+    
+    if (documentContent && documentContent.length > 100) {
+      // Text-based approach - works with ALL providers
       userContent.push({
-        type: "file",
-        file: {
-          filename: "documento_inpi.pdf",
-          file_data: `data:application/pdf;base64,${fileBase64}`
-        }
+        type: "text",
+        text: `Analise o documento PDF do INPI abaixo e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras, seguindo rigorosamente TODAS as 8 seções obrigatórias com a extensão mínima especificada para cada uma. NÃO simplifique, NÃO encurte, NÃO produza texto genérico. Cada argumento deve ser desenvolvido em múltiplos parágrafos com profundidade jurídica real.\n\n═══ CONTEÚDO DO DOCUMENTO INPI ═══\n${documentContent.substring(0, 30000)}\n═══ FIM DO DOCUMENTO ═══`
       });
-    } else {
+    } else if (fileType !== 'application/pdf') {
+      // Image-based approach for non-PDF files
+      userContent.push({
+        type: "text",
+        text: "Analise o documento do INPI na imagem e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras."
+      });
       userContent.push({
         type: "image_url",
         image_url: {
-          url: `data:${fileType};base64,${fileBase64}`
+          url: `data:${fileType};base64,${fileBase64}`,
+          detail: "high"
+        }
+      });
+    } else {
+      // PDF but couldn't extract text - try as image for vision models
+      userContent.push({
+        type: "text",
+        text: "Analise o documento do INPI na imagem e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras."
+      });
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:application/pdf;base64,${fileBase64}`,
+          detail: "high"
         }
       });
     }
+
+    console.log(`[process-inpi-resource] content approach: ${documentContent.length > 100 ? 'text-extract' : 'image'}, text length: ${documentContent.length}`);
 
     console.log(`[process-inpi-resource] provider=${aiConfig.provider}, model=${aiConfig.model}, agent: ${agentName || 'default'}`);
 
