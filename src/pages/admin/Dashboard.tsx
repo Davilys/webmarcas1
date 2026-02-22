@@ -8,6 +8,7 @@ import { ConversionFunnel } from '@/components/admin/dashboard/ConversionFunnel'
 import { LeadSourceChart } from '@/components/admin/dashboard/LeadSourceChart';
 import { RecentActivity } from '@/components/admin/dashboard/RecentActivity';
 import { CEOIntelligenceSection } from '@/components/admin/dashboard/CEOIntelligenceSection';
+import { PredictiveIntelligenceSection } from '@/components/admin/dashboard/PredictiveIntelligenceSection';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Users, FileText, TrendingUp, Target, CreditCard,
@@ -744,6 +745,9 @@ export default function AdminDashboard() {
 
           {/* ── INTELIGÊNCIA EXECUTIVA CEO ──────── */}
           <CEOIntelligenceSection />
+
+          {/* ── INTELIGÊNCIA PREDITIVA - FASE 1 ── */}
+          <PredictiveIntelligenceSection />
 
           {/* ── FOOTER STATUS BAR ──────────────── */}
           <motion.div
