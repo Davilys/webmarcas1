@@ -1,66 +1,91 @@
 
-# Correcao do Gerador de HTML para Documentos (Procuracao/Distrato/Contrato)
 
-## Problema Identificado
+# Gerenciamento Completo de API Keys nas Configuracoes de Integracoes
 
-A funcao `generateDocumentPrintHTML` em `DocumentRenderer.tsx` (usada pelo botao "Gerar Novo Link") gera HTML com cabecalhos e layout **diferentes** do modelo padrao que esta em `generateContractPrintHTML` (ContractRenderer.tsx). Isso causa:
+## Resumo
 
-1. **Procuracao**: Falta o subtitulo ("Instrumento Particular de Procuracao para fins de Registro de Marca") e a caixa amarela com o texto legal sobre os poderes do procurador
-2. **Distrato**: O titulo aparece generico em vez de "ACORDO DE DISTRATO", e a caixa de aviso legal mostra texto de contrato em vez de texto especifico de distrato
-3. **Contrato**: Este tipo ja funciona corretamente
+Expandir a secao "Integracoes" nas configuracoes do admin para incluir **todas** as API Keys usadas no sistema, organizadas por categoria, com opcao de editar, salvar e testar cada uma.
 
-## Solucao
+## Integracoes Identificadas no Sistema
 
-Atualizar a funcao `generateDocumentPrintHTML` em `src/components/contracts/DocumentRenderer.tsx` para usar as mesmas secoes de cabecalho por tipo de documento que `generateContractPrintHTML` (ContractRenderer.tsx) ja usa corretamente.
+### Ja existentes na interface (manter e melhorar):
+1. **Asaas** -- Gateway de Pagamentos (PIX, Boleto, Cartao) -- **Falta campo para editar a API Key diretamente**
+2. **Resend** -- E-mail Transacional
+3. **BotConversa** -- WhatsApp
+4. **Zenvia** -- SMS
+5. **OpenAI (ChatGPT)** -- IA para chat, e-mails, recursos INPI, transcricao
+6. **INPI** -- Monitoramento de Marcas
+
+### Faltando na interface (adicionar):
+7. **Firecrawl** -- Web Scraping para viabilidade de marca
+8. **Lovable AI** -- IA interna (Gemini/GPT-5) usada em viabilidade, documentos, notificacoes
+9. **Perfex CRM** -- Integracao com CRM externo (sincronizacao de projetos)
 
 ## Mudancas Tecnicas
 
-### Arquivo: `src/components/contracts/DocumentRenderer.tsx`
+### Arquivo: `src/components/admin/settings/IntegrationSettings.tsx`
 
-Na funcao `generateDocumentPrintHTML` (linhas 515-567), ajustar:
+**1. Novos types:**
+```text
+FirecrawlSettings { enabled: boolean; api_key: string; }
+LovableAISettings { enabled: boolean; }
+PerfexSettings { enabled: boolean; api_url: string; api_token: string; }
+```
 
-**1. Titulo do documento (linhas 515-522)**
-- Procuracao: manter "PROCURACAO PARA REPRESENTACAO JUNTO AO INPI"
-- Distrato: mudar para "ACORDO DE DISTRATO" (em vez de "Acordo de Distrato de Parceria - Anexo I")
-- Contrato: manter "CONTRATO"
+**2. Card do Asaas -- Adicionar campo de API Key:**
+- Adicionar campo `SecretInput` para editar a API Key do Asaas diretamente pela interface
+- Adicionar novo campo `api_key` no `AsaasSettings` type
+- Manter opcao de ambiente (sandbox/producao)
+- Quando salvo, o valor fica em `system_settings` (chave `asaas`) e as edge functions podem ler de la alem do secret do servidor
 
-**2. Caixa de titulo (linhas 563-567)**
-- Procuracao: nenhuma caixa de titulo (manter vazio), mas adicionar subtitulo em italico
-- Distrato: ja correto ("INSTRUMENTO PARTICULAR DE DISTRATO...")
-- Contrato: ja correto
+**3. Card OpenAI -- Melhorar:**
+- Adicionar botao "Testar Conexao" que chama a API de models
+- Listar servicos dependentes: Chat Suporte, Assistente de E-mail, Recursos INPI, Transcricao de Audio, Analise RPI, Chat Juridico INPI
+- Melhorar descricao
 
-**3. Aviso legal / Legal Notice (linhas 525-536)**
-- Procuracao: adicionar caixa amarela especifica com texto sobre poderes do procurador (igual ao que esta em `generateContractPrintHTML` linha 687-690)
-- Distrato: usar texto especifico de distrato ("As partes abaixo qualificadas resolvem, de comum acordo, distratar...")
-- Contrato: manter texto atual
+**4. Novo Card -- Firecrawl (Web Scraping):**
+- Icone: `Globe` (laranja)
+- Campo: API Key editavel
+- Toggle: Ativar/Desativar
+- Descricao: "Usado para busca de viabilidade de marca (scraping de sites do INPI)"
+- StatusBadge
 
-**4. Estilo do titulo principal**
-- Para procuracao: remover sublinhado (text-decoration: underline) do titulo, pois procuracoes nao usam sublinhado no modelo padrao
+**5. Novo Card -- Lovable AI:**
+- Icone: `Sparkles` (roxo)
+- Informativo: chave auto-provisionada pelo sistema
+- Toggle: Ativar/Desativar
+- Descricao: "IA integrada para viabilidade de marca, extracao de documentos e notificacoes multicanal"
+- StatusBadge mostrando "Configurado automaticamente"
 
-**5. Subtitulo para procuracao**
-- Adicionar linha com `<p style="text-align:center; font-style:italic; margin-bottom:24px;">Instrumento Particular de Procuracao para fins de Registro de Marca</p>` apos o titulo da procuracao
+**6. Novo Card -- Perfex CRM:**
+- Icone: `FolderSync` (azul)
+- Campo: URL da API (`PERFEX_API_URL`)
+- Campo: Token da API (`PERFEX_API_TOKEN`)
+- Toggle: Ativar/Desativar
+- Descricao: "Sincronizacao de projetos e clientes com Perfex CRM externo"
+- StatusBadge
 
-### Resultado da mudanca no HTML gerado:
+**7. Novos hooks `useSystemSetting`:**
+- `firecrawl_config` para Firecrawl
+- `lovable_ai_config` para Lovable AI
+- `perfex_config` para Perfex CRM
+- Adicionar `api_key` ao `asaas` existente
 
-**Procuracao:**
-- Logo + barra gradiente
-- Titulo: "PROCURACAO PARA REPRESENTACAO JUNTO AO INPI" (sem sublinhado)
-- Subtitulo italico: "Instrumento Particular de Procuracao para fins de Registro de Marca"
-- Caixa amarela: texto sobre poderes do procurador junto ao INPI
-- Conteudo do template com dados do cliente
-- Rodape
+**8. Organizacao dos cards (ordem):**
+- Pagamentos: Asaas
+- Comunicacao: Resend, BotConversa, Zenvia SMS
+- Inteligencia Artificial: OpenAI, Lovable AI, Firecrawl
+- Sistemas Externos: Perfex CRM, INPI
 
-**Distrato (com/sem multa):**
-- Logo + barra gradiente
-- Titulo: "ACORDO DE DISTRATO" (sublinhado)
-- Caixa azul: "INSTRUMENTO PARTICULAR DE DISTRATO DE CONTRATO DE PRESTACAO DE SERVICOS"
-- Caixa amarela: texto especifico sobre distrato
-- Conteudo do template com dados do cliente
-- Rodape
+**9. Novos icones (importar de lucide-react):**
+- `Sparkles` para Lovable AI
+- `Globe` para Firecrawl
+- `FolderSync` para Perfex CRM
 
-**Contrato:**
-- Sem alteracoes (ja funciona corretamente)
+### Nenhuma mudanca em banco de dados
+- Os novos settings serao criados automaticamente pelo `upsert` na tabela `system_settings` quando o admin salvar pela primeira vez
 
-### Nenhuma outra mudanca necessaria
-- A funcao `generateNewContractLink` no ContractDetailSheet.tsx ja esta correta na substituicao de variaveis e na chamada a `generateDocumentPrintHTML`
-- O problema esta exclusivamente no layout HTML gerado por `generateDocumentPrintHTML`
+### Nenhuma mudanca em edge functions
+- As edge functions continuam lendo as API keys dos secrets do servidor (`Deno.env.get`)
+- Os campos na interface servem para o admin ter visibilidade e poder atualizar os valores pelo painel
+
