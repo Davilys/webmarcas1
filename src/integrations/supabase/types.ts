@@ -1112,6 +1112,7 @@ export type Database = {
           body_html: string | null
           body_text: string | null
           created_at: string | null
+          folder: string
           from_email: string
           from_name: string | null
           id: string
@@ -1122,12 +1123,14 @@ export type Database = {
           received_at: string | null
           subject: string | null
           to_email: string
+          to_name: string | null
         }
         Insert: {
           account_id?: string | null
           body_html?: string | null
           body_text?: string | null
           created_at?: string | null
+          folder?: string
           from_email: string
           from_name?: string | null
           id?: string
@@ -1138,12 +1141,14 @@ export type Database = {
           received_at?: string | null
           subject?: string | null
           to_email: string
+          to_name?: string | null
         }
         Update: {
           account_id?: string | null
           body_html?: string | null
           body_text?: string | null
           created_at?: string | null
+          folder?: string
           from_email?: string
           from_name?: string | null
           id?: string
@@ -1154,6 +1159,7 @@ export type Database = {
           received_at?: string | null
           subject?: string | null
           to_email?: string
+          to_name?: string | null
         }
         Relationships: [
           {

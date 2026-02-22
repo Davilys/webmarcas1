@@ -9,7 +9,6 @@ const corsHeaders = {
 
 interface SyncRequest {
   account_id?: string;
-  limit?: number;
 }
 
 async function sendCommand(
@@ -24,7 +23,7 @@ async function sendCommand(
 
   const buffer = new Uint8Array(32768);
   let response = "";
-  const deadline = Date.now() + 8000; // 8s max per command
+  const deadline = Date.now() + 8000;
 
   while (Date.now() < deadline) {
     const n = await conn.read(buffer);
@@ -53,11 +52,14 @@ async function readGreeting(conn: Deno.TcpConn | Deno.TlsConn): Promise<string> 
 function parseEnvelopeHeaders(raw: string): {
   from: string;
   fromName: string;
+  to: string;
+  toName: string;
   subject: string;
   date: string;
   messageId: string;
 } {
   const fromMatch = raw.match(/From:\s*(?:"?([^"<]*)"?\s*)?<?([^>\r\n]+)>?/i);
+  const toMatch = raw.match(/To:\s*(?:"?([^"<]*)"?\s*)?<?([^>\r\n]+)>?/i);
   const subjectMatch = raw.match(/Subject:\s*(.+?)(?:\r\n(?![ \t])|\r?\n(?![ \t]))/is);
   const dateMatch = raw.match(/Date:\s*(.+?)(?:\r\n|\r?\n)/i);
   const messageIdMatch = raw.match(/Message-ID:\s*<?([^>\r\n]+)>?/i);
@@ -65,6 +67,8 @@ function parseEnvelopeHeaders(raw: string): {
   return {
     fromName: fromMatch?.[1]?.trim() || "",
     from: fromMatch?.[2]?.trim() || "unknown@email.com",
+    toName: toMatch?.[1]?.trim() || "",
+    to: toMatch?.[2]?.trim() || "",
     subject:
       subjectMatch?.[1]?.trim().replace(/\r?\n[ \t]+/g, " ") ||
       "(Sem assunto)",
@@ -75,17 +79,117 @@ function parseEnvelopeHeaders(raw: string): {
   };
 }
 
+async function syncFolder(
+  conn: Deno.TcpConn | Deno.TlsConn,
+  supabase: any,
+  emailAccount: any,
+  folderName: string,
+  folderLabel: string,
+  tagPrefix: number,
+  batchSize: number
+): Promise<{ synced: { subject: string; from: string }[]; total: number }> {
+  const selectResp = await sendCommand(conn, `F${tagPrefix}`, `SELECT "${folderName}"`);
+  
+  if (selectResp.includes(`F${tagPrefix} NO`) || selectResp.includes(`F${tagPrefix} BAD`)) {
+    console.log(`Folder "${folderName}" not found, skipping`);
+    return { synced: [], total: 0 };
+  }
+
+  const existsMatch = selectResp.match(/\* (\d+) EXISTS/);
+  const totalMessages = existsMatch ? parseInt(existsMatch[1]) : 0;
+  console.log(`${folderName} has ${totalMessages} messages`);
+
+  const syncedEmails: { subject: string; from: string }[] = [];
+
+  if (totalMessages > 0) {
+    let currentStart = 1;
+
+    while (currentStart <= totalMessages) {
+      const currentEnd = Math.min(currentStart + batchSize - 1, totalMessages);
+      console.log(`[${folderName}] Fetching batch ${currentStart}:${currentEnd} of ${totalMessages}`);
+
+      const fetchTag = `F${tagPrefix}B${currentStart}`;
+      const fetchResp = await sendCommand(
+        conn,
+        fetchTag,
+        `FETCH ${currentStart}:${currentEnd} (BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])`
+      );
+
+      const headerBlocks = fetchResp.split(/\* \d+ FETCH/);
+
+      for (const block of headerBlocks) {
+        if (!block.trim() || block.length < 30) continue;
+
+        try {
+          const headers = parseEnvelopeHeaders(block);
+
+          const { data: existing } = await supabase
+            .from("email_inbox")
+            .select("id")
+            .eq("message_id", headers.messageId)
+            .eq("folder", folderLabel)
+            .single();
+
+          if (!existing) {
+            const isSent = folderLabel === "sent";
+            const emailData = {
+              account_id: emailAccount.id,
+              message_id: headers.messageId,
+              from_email: isSent ? emailAccount.email_address : headers.from,
+              from_name: isSent ? (emailAccount.display_name || null) : (headers.fromName || null),
+              to_email: isSent ? (headers.to || "") : emailAccount.email_address,
+              to_name: isSent ? (headers.toName || null) : null,
+              subject: headers.subject,
+              body_text: null,
+              body_html: null,
+              received_at: new Date(headers.date).toISOString(),
+              is_read: isSent ? true : false,
+              is_starred: false,
+              is_archived: false,
+              folder: folderLabel,
+            };
+
+            const { error: insertError } = await supabase
+              .from("email_inbox")
+              .insert(emailData);
+
+            if (!insertError) {
+              syncedEmails.push({
+                subject: headers.subject,
+                from: headers.from,
+              });
+            }
+          }
+        } catch (parseError) {
+          console.error(`[${folderName}] Error parsing message:`, parseError);
+        }
+      }
+
+      currentStart = currentEnd + 1;
+    }
+  }
+
+  return { synced: syncedEmails, total: totalMessages };
+}
+
+const SENT_FOLDER_NAMES = [
+  "Sent",
+  "INBOX.Sent", 
+  "Sent Items",
+  "Sent Messages",
+  "[Gmail]/Sent Mail",
+  "INBOX.Sent Items",
+  "Enviados",
+];
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { account_id }: SyncRequest = await req
-      .json()
-      .catch(() => ({}));
-
-    const batchSize = 10; // process 10 at a time to stay within CPU budget
+    const { account_id }: SyncRequest = await req.json().catch(() => ({}));
+    const batchSize = 10;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -103,28 +207,18 @@ const handler = async (req: Request): Promise<Response> => {
     if (accountError || !emailAccount) {
       return new Response(
         JSON.stringify({ error: "No email account configured" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
     if (!emailAccount.imap_host || !emailAccount.imap_port) {
       return new Response(
         JSON.stringify({ error: "IMAP not configured for this account" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    console.log(
-      "Connecting to IMAP:",
-      emailAccount.imap_host,
-      emailAccount.imap_port
-    );
+    console.log("Connecting to IMAP:", emailAccount.imap_host, emailAccount.imap_port);
 
     const conn = await Deno.connectTls({
       hostname: emailAccount.imap_host,
@@ -145,94 +239,38 @@ const handler = async (req: Request): Promise<Response> => {
     }
     console.log("Logged in successfully");
 
-    const selectResp = await sendCommand(conn, "A002", "SELECT INBOX");
-    const existsMatch = selectResp.match(/\* (\d+) EXISTS/);
-    const totalMessages = existsMatch ? parseInt(existsMatch[1]) : 0;
-    console.log(`INBOX has ${totalMessages} messages`);
+    // 1. Sync INBOX
+    const inboxResult = await syncFolder(conn, supabase, emailAccount, "INBOX", "inbox", 1, batchSize);
 
-    const syncedEmails: { subject: string; from: string }[] = [];
+    // 2. List folders to find Sent folder
+    const listResp = await sendCommand(conn, "L001", 'LIST "" "*"');
+    console.log("Available folders:", listResp.substring(0, 500));
 
-    if (totalMessages > 0) {
-      // Process ALL messages in batches of batchSize (oldest to newest)
-      let currentStart = 1;
-      
-      while (currentStart <= totalMessages) {
-        const currentEnd = Math.min(currentStart + batchSize - 1, totalMessages);
-        console.log(`Fetching batch ${currentStart}:${currentEnd} of ${totalMessages}`);
-
-        const fetchResp = await sendCommand(
-          conn,
-          `A${100 + currentStart}`,
-          `FETCH ${currentStart}:${currentEnd} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID)])`
-        );
-
-        const headerBlocks = fetchResp.split(/\* \d+ FETCH/);
-
-        for (const block of headerBlocks) {
-          if (!block.trim() || block.length < 30) continue;
-
-          try {
-            const headers = parseEnvelopeHeaders(block);
-
-            const { data: existing } = await supabase
-              .from("email_inbox")
-              .select("id")
-              .eq("message_id", headers.messageId)
-              .single();
-
-            if (!existing) {
-              const emailData = {
-                account_id: emailAccount.id,
-                message_id: headers.messageId,
-                from_email: headers.from,
-                from_name: headers.fromName || null,
-                to_email: emailAccount.email_address,
-                subject: headers.subject,
-                body_text: null,
-                body_html: null,
-                received_at: new Date(headers.date).toISOString(),
-                is_read: false,
-                is_starred: false,
-                is_archived: false,
-              };
-
-              const { error: insertError } = await supabase
-                .from("email_inbox")
-                .insert(emailData);
-
-              if (!insertError) {
-                syncedEmails.push({
-                  subject: headers.subject,
-                  from: headers.from,
-                });
-              }
-            }
-          } catch (parseError) {
-            console.error("Error parsing message:", parseError);
-          }
-        }
-
-        currentStart = currentEnd + 1;
+    // 3. Try to find and sync Sent folder
+    let sentResult = { synced: [] as { subject: string; from: string }[], total: 0 };
+    for (const sentName of SENT_FOLDER_NAMES) {
+      if (listResp.includes(sentName)) {
+        console.log(`Found sent folder: ${sentName}`);
+        sentResult = await syncFolder(conn, supabase, emailAccount, sentName, "sent", 2, batchSize);
+        break;
       }
     }
 
     // Logout
-    await sendCommand(conn, "A004", "LOGOUT");
+    await sendCommand(conn, "Z001", "LOGOUT");
     conn.close();
 
-    console.log(`Synced ${syncedEmails.length} new emails`);
+    const totalSynced = inboxResult.synced.length + sentResult.synced.length;
+    console.log(`Synced ${totalSynced} new emails (inbox: ${inboxResult.synced.length}, sent: ${sentResult.synced.length})`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        synced_count: syncedEmails.length,
-        total_messages: totalMessages,
-        emails: syncedEmails,
+        synced_count: totalSynced,
+        inbox: { synced: inboxResult.synced.length, total: inboxResult.total },
+        sent: { synced: sentResult.synced.length, total: sentResult.total },
       }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
     console.error("Error syncing IMAP:", error);

@@ -35,7 +35,9 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
-      toast.success(`Sincronização concluída! ${data.synced_count} novos emails.`);
+      const inboxCount = data.inbox?.synced || 0;
+      const sentCount = data.sent?.synced || 0;
+      toast.success(`Sincronização concluída! ${inboxCount} recebidos e ${sentCount} enviados novos.`);
     },
     onError: (error: any) => {
       console.error('Sync error:', error);
@@ -48,50 +50,70 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
     queryFn: async () => {
       if (!accountId) return [];
 
-      if (folder === 'inbox') {
-        const { data, error } = await supabase
-          .from('email_inbox')
-          .select('*')
-          .eq('is_archived', false)
-          .eq('account_id', accountId)
-          .order('received_at', { ascending: false });
-        
-        if (error) throw error;
-        return data?.map(e => ({
-          id: e.id,
-          from_email: e.from_email,
-          from_name: e.from_name,
-          to_email: e.to_email,
-          subject: e.subject || '(Sem assunto)',
-          body_text: e.body_text,
-          body_html: e.body_html,
-          is_read: e.is_read || false,
-          is_starred: e.is_starred || false,
-          received_at: e.received_at,
-        })) as Email[];
-      } else if (folder === 'sent') {
-        if (!accountEmail) return [];
-        const { data, error } = await supabase
+      const folderFilter = folder === 'inbox' ? 'inbox' : folder === 'sent' ? 'sent' : 'drafts';
+
+      // Fetch from email_inbox (IMAP synced) for both inbox and sent
+      const { data: imapEmails, error: imapError } = await supabase
+        .from('email_inbox')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('folder', folderFilter)
+        .eq('is_archived', false)
+        .order('received_at', { ascending: false });
+
+      if (imapError) throw imapError;
+
+      const mappedImap = (imapEmails || []).map(e => ({
+        id: e.id,
+        from_email: e.from_email,
+        from_name: e.from_name,
+        to_email: e.to_email,
+        subject: e.subject || '(Sem assunto)',
+        body_text: e.body_text,
+        body_html: e.body_html,
+        is_read: e.is_read || false,
+        is_starred: e.is_starred || false,
+        received_at: e.received_at,
+      })) as Email[];
+
+      // For sent folder, also merge emails from email_logs (sent via the app)
+      if (folder === 'sent' && accountEmail) {
+        const { data: logEmails, error: logError } = await supabase
           .from('email_logs')
           .select('*')
           .eq('status', 'sent')
           .eq('from_email', accountEmail)
           .order('sent_at', { ascending: false });
-        
-        if (error) throw error;
-        return data?.map(e => ({
-          id: e.id,
-          from_email: e.from_email,
-          to_email: e.to_email,
-          subject: e.subject,
-          body_text: e.body,
-          body_html: e.html_body,
-          is_read: true,
-          is_starred: false,
-          sent_at: e.sent_at,
-        })) as Email[];
+
+        if (!logError && logEmails) {
+          const existingIds = new Set(mappedImap.map(e => e.id));
+          const mappedLogs = logEmails
+            .filter(e => !existingIds.has(e.id))
+            .map(e => ({
+              id: e.id,
+              from_email: e.from_email,
+              to_email: e.to_email,
+              subject: e.subject,
+              body_text: e.body,
+              body_html: e.html_body,
+              is_read: true,
+              is_starred: false,
+              sent_at: e.sent_at,
+              received_at: e.sent_at,
+            })) as Email[];
+
+          // Merge and sort by date
+          const allSent = [...mappedImap, ...mappedLogs];
+          allSent.sort((a, b) => {
+            const dateA = new Date(a.received_at || a.sent_at || 0).getTime();
+            const dateB = new Date(b.received_at || b.sent_at || 0).getTime();
+            return dateB - dateA;
+          });
+          return allSent;
+        }
       }
-      return [];
+
+      return mappedImap;
     },
     enabled: !!accountId,
   });
@@ -125,18 +147,16 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
             {title}
           </CardTitle>
           <div className="flex items-center gap-1.5 md:gap-2">
-            {folder === 'inbox' && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
-                className="h-8 text-xs"
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5 md:mr-1", syncMutation.isPending && "animate-spin")} />
-                <span className="hidden md:inline">Sincronizar</span>
-              </Button>
-            )}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              className="h-8 text-xs"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 md:mr-1", syncMutation.isPending && "animate-spin")} />
+              <span className="hidden md:inline">Sincronizar</span>
+            </Button>
             <Badge variant="secondary" className="text-[10px] md:text-xs">
               {emails?.length || 0}
             </Badge>
