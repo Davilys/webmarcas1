@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, FileText, Send, Copy, Link, UserPlus, Search, CalendarIcon } from 'lucide-react';
+import { Loader2, FileText, Send, Copy, Link, UserPlus, Search, CalendarIcon, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -152,6 +152,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   // Suggested NCL classes for admin to define
   const [suggestedClassesInput, setSuggestedClassesInput] = useState('');
   const [suggestedClassDescriptions, setSuggestedClassDescriptions] = useState<{number: number; description: string}[]>([]);
+  const [selectedSuggestedClasses, setSelectedSuggestedClasses] = useState<number[]>([]);
+  const [isGeneratingClasses, setIsGeneratingClasses] = useState(false);
 
   // Multiple brands support - NEW
   interface BrandItem {
@@ -347,6 +349,10 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     // For multiple brands, use first brand as primary and pass array
     const primaryBrand = brandQuantity > 1 ? brandsArray[0] : brandData;
     
+    // Get selected class numbers and descriptions for contract text
+    const selectedClasses = suggestedClassDescriptions
+      .filter(c => selectedSuggestedClasses.includes(c.number));
+    
     return replaceContractVariables(template, {
       personalData: {
         fullName: personalData.fullName,
@@ -365,6 +371,8 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         hasCNPJ: brandData.hasCNPJ,
         cnpj: brandData.cnpj,
         companyName: brandData.companyName,
+        selectedClasses: selectedClasses.length > 0 ? selectedClasses.map(c => c.number) : undefined,
+        classDescriptions: selectedClasses.length > 0 ? selectedClasses.map(c => c.description) : undefined,
       },
       paymentMethod: paymentMethod,
       multipleBrands: brandQuantity > 1 ? brandsArray : undefined,
@@ -374,7 +382,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   // Get contract value based on payment method - multiplied by brand quantity
   const getContractValue = (): number | null => {
     if (!paymentMethod) return null;
-    const quantity = brandQuantity;
+    // Multiply by brand quantity AND selected NCL classes (minimum 1)
+    const classCount = Math.max(selectedSuggestedClasses.length, 1);
+    const quantity = brandQuantity * classCount;
     switch (paymentMethod) {
       case 'avista': return 699 * quantity;
       case 'cartao6x': return 1194 * quantity;
@@ -755,7 +765,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
         lead_id: leadId || null,
         created_by: adminUser?.id || null,
         suggested_classes: suggestedClassDescriptions.length > 0
-          ? suggestedClassDescriptions.map(c => ({ number: c.number, description: c.description, selected: false }))
+          ? suggestedClassDescriptions.map(c => ({ 
+              number: c.number, 
+              description: c.description, 
+              selected: selectedSuggestedClasses.includes(c.number) 
+            }))
           : null,
       } as any).select().single();
 
@@ -900,6 +914,54 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     }
   };
 
+  const generateAIClassSuggestions = async () => {
+    const area = brandQuantity > 1 ? brandsArray[0]?.businessArea : brandData.businessArea;
+    const name = brandQuantity > 1 ? brandsArray[0]?.brandName : brandData.brandName;
+    
+    if (!area || area.trim().length < 2) {
+      toast.error('Preencha o ramo de atividade primeiro');
+      return;
+    }
+
+    setIsGeneratingClasses(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/suggest-ncl-classes`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({ businessArea: area, brandName: name }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Erro ao gerar sugestões');
+      }
+
+      const classes = result.classes || [];
+      if (classes.length === 0) {
+        toast.warning('Nenhuma classe sugerida para este ramo');
+        return;
+      }
+
+      setSuggestedClassDescriptions(classes);
+      setSuggestedClassesInput(classes.map((c: any) => c.number).join(', '));
+      // Auto-select all suggested classes
+      setSelectedSuggestedClasses(classes.map((c: any) => c.number));
+      toast.success(`${classes.length} classe(s) NCL sugerida(s) pela IA`);
+    } catch (err: any) {
+      console.error('Error generating NCL suggestions:', err);
+      toast.error(err.message || 'Erro ao consultar IA');
+    } finally {
+      setIsGeneratingClasses(false);
+    }
+  };
+
   const resetForm = () => {
     setPersonalData({
       fullName: '',
@@ -953,6 +1015,9 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     // Reset multiple brands state
     setBrandQuantity(1);
     setBrandsArray([{ brandName: '', businessArea: '', nclClass: '' }]);
+    setSuggestedClassesInput('');
+    setSuggestedClassDescriptions([]);
+    setSelectedSuggestedClasses([]);
   };
 
   const handleProfileChange = async (userId: string) => {
@@ -1490,77 +1555,91 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                           <Label htmlFor="businessArea" className={cn(validationErrors.brand_businessArea && "text-destructive")}>
                             Ramo de Atividade *
                           </Label>
-                          <Input
-                            id="businessArea"
-                            value={brandData.businessArea}
-                            onChange={(e) => {
-                              setBrandData({ ...brandData, businessArea: e.target.value });
-                              if (validationErrors.brand_businessArea) {
-                                setValidationErrors(prev => {
-                                  const updated = { ...prev };
-                                  delete updated.brand_businessArea;
-                                  return updated;
-                                });
-                              }
-                            }}
-                            placeholder="Ex: Serviços Jurídicos, Alimentação, etc."
-                            className={cn(validationErrors.brand_businessArea && "border-destructive focus-visible:ring-destructive")}
-                          />
+                          <div className="flex gap-2">
+                            <Input
+                              id="businessArea"
+                              value={brandData.businessArea}
+                              onChange={(e) => {
+                                setBrandData({ ...brandData, businessArea: e.target.value });
+                                if (validationErrors.brand_businessArea) {
+                                  setValidationErrors(prev => {
+                                    const updated = { ...prev };
+                                    delete updated.brand_businessArea;
+                                    return updated;
+                                  });
+                                }
+                              }}
+                              placeholder="Ex: Serviços Jurídicos, Alimentação, etc."
+                              className={cn("flex-1", validationErrors.brand_businessArea && "border-destructive focus-visible:ring-destructive")}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={generateAIClassSuggestions}
+                              disabled={isGeneratingClasses || !brandData.businessArea || brandData.businessArea.trim().length < 2}
+                              className="shrink-0 gap-1.5 h-10"
+                            >
+                              {isGeneratingClasses ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                              <span className="hidden sm:inline">Sugerir Classes</span>
+                            </Button>
+                          </div>
                           {validationErrors.brand_businessArea && (
                             <p className="text-destructive text-xs">{validationErrors.brand_businessArea}</p>
                           )}
                         </div>
 
                         {/* NCL Classes Sugeridas - Admin */}
-                        <div className="space-y-2 md:col-span-2">
-                          <Label className="text-xs font-medium">
-                            Classes NCL Sugeridas (opcional)
-                          </Label>
-                          <Input
-                            value={suggestedClassesInput}
-                            onChange={(e) => {
-                              setSuggestedClassesInput(e.target.value);
-                              // Parse comma-separated numbers
-                              const nums = e.target.value.split(',')
-                                .map(s => parseInt(s.trim()))
-                                .filter(n => !isNaN(n) && n > 0 && n <= 45);
-                              setSuggestedClassDescriptions(prev => {
-                                const existing = new Map(prev.map(p => [p.number, p.description]));
-                                return nums.map(n => ({
-                                  number: n,
-                                  description: existing.get(n) || '',
-                                }));
-                              });
-                            }}
-                            placeholder="Ex: 35, 42, 9 (separados por vírgula)"
-                            className="text-sm"
-                          />
-                          {suggestedClassDescriptions.length > 0 && (
-                            <div className="space-y-2 mt-2">
+                        {suggestedClassDescriptions.length > 0 && (
+                          <div className="space-y-3 md:col-span-2 bg-muted/50 rounded-lg p-4 border">
+                            <Label className="text-sm font-medium flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              Classes NCL Sugeridas — selecione as desejadas
+                            </Label>
+                            <div className="space-y-2">
                               {suggestedClassDescriptions.map((cls) => (
-                                <div key={cls.number} className="flex items-center gap-2">
-                                  <span className="text-xs font-semibold shrink-0 w-16">Classe {cls.number}:</span>
-                                  <Input
-                                    value={cls.description}
-                                    onChange={(e) => {
-                                      setSuggestedClassDescriptions(prev =>
-                                        prev.map(c => c.number === cls.number
-                                          ? { ...c, description: e.target.value }
-                                          : c
-                                        )
+                                <div
+                                  key={cls.number}
+                                  className={cn(
+                                    "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
+                                    selectedSuggestedClasses.includes(cls.number)
+                                      ? "bg-primary/10 border-primary/40"
+                                      : "bg-background border-border hover:border-primary/30"
+                                  )}
+                                  onClick={() => {
+                                    setSelectedSuggestedClasses(prev =>
+                                      prev.includes(cls.number)
+                                        ? prev.filter(n => n !== cls.number)
+                                        : [...prev, cls.number]
+                                    );
+                                  }}
+                                >
+                                  <Checkbox
+                                    checked={selectedSuggestedClasses.includes(cls.number)}
+                                    onCheckedChange={() => {
+                                      setSelectedSuggestedClasses(prev =>
+                                        prev.includes(cls.number)
+                                          ? prev.filter(n => n !== cls.number)
+                                          : [...prev, cls.number]
                                       );
                                     }}
-                                    placeholder={`Descrição da classe ${cls.number}`}
-                                    className="text-xs h-8"
                                   />
+                                  <div className="flex-1">
+                                    <p className="font-semibold text-sm">Classe NCL {cls.number}</p>
+                                    <p className="text-xs text-muted-foreground">{cls.description}</p>
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                          )}
-                          <p className="text-[10px] text-muted-foreground">
-                            Classes que serão sugeridas ao cliente na página de assinatura
-                          </p>
-                        </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              Classes selecionadas serão incluídas no contrato. As não selecionadas serão sugeridas ao cliente na página de assinatura.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
