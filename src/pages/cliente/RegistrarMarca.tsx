@@ -104,24 +104,31 @@ export default function RegistrarMarca() {
     setStep(5);
   };
 
-  const handleSubmit = async (contractHtml: string) => {
+  const handleSubmit = async (contractHtml: string, finalBrandData?: BrandData, finalPaymentValue?: number) => {
+    const activeBrandData = finalBrandData || brandData;
+    const activePaymentValue = finalPaymentValue || paymentValue;
+
     setIsSubmitting(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id || null;
 
       const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
-        body: { personalData, brandData, paymentMethod, paymentValue, contractHtml, userId },
+        body: { personalData, brandData: activeBrandData, paymentMethod, paymentValue: activePaymentValue, contractHtml, userId },
       });
 
       if (error) throw new Error(error.message);
       if (!data.success) throw new Error(data.error || 'Erro ao criar cobrança');
 
+      // Update state
+      if (finalBrandData) setBrandData(finalBrandData);
+      if (finalPaymentValue) setPaymentValue(finalPaymentValue);
+
       if (data.contractId && contractHtml) {
         generateAndUploadContractPdf({
           contractId: data.contractId,
           contractHtml,
-          brandName: brandData.brandName,
+          brandName: activeBrandData.brandName,
           documentType: 'contrato',
           userId: userId || undefined,
         }).then(result => {
@@ -131,7 +138,7 @@ export default function RegistrarMarca() {
       }
 
       const orderData = {
-        personalData, brandData, paymentMethod, paymentValue,
+        personalData, brandData: activeBrandData, paymentMethod, paymentValue: activePaymentValue,
         acceptedAt: new Date().toISOString(),
         leadId: data.leadId,
         contractId: data.contractId,
@@ -254,9 +261,7 @@ export default function RegistrarMarca() {
                     paymentMethod={paymentMethod}
                     paymentValue={paymentValue}
                     onSubmit={(html, updatedBrandData, updatedPaymentValue) => {
-                      if (updatedBrandData) setBrandData(updatedBrandData);
-                      if (updatedPaymentValue) setPaymentValue(updatedPaymentValue);
-                      handleSubmit(html);
+                      handleSubmit(html, updatedBrandData, updatedPaymentValue);
                     }}
                     onBack={() => setStep(4)}
                     isSubmitting={isSubmitting}
