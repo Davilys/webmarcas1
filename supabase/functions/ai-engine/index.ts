@@ -56,8 +56,9 @@ async function callProvider(
   }
 
   if (provider.provider_type === "openai") {
-    const apiKey = provider.api_key || Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) throw new Error("OpenAI API key not configured");
+    // Always prefer the env secret since DB key may be masked
+    const apiKey = Deno.env.get("OPENAI_API_KEY") || provider.api_key;
+    if (!apiKey || apiKey.includes("•")) throw new Error("OpenAI API key not configured");
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
