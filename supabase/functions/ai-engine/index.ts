@@ -56,15 +56,8 @@ async function callProvider(
   }
 
   if (provider.provider_type === "openai") {
-    // Always prefer the env secret since DB key may be masked
-    const apiKey = Deno.env.get("OPENAI_API_KEY") || provider.api_key;
-    if (!apiKey || apiKey.includes("•")) throw new Error("OpenAI API key not configured");
-
-    const openaiBody: any = {
-      model: provider.model,
-      messages,
-      max_completion_tokens: options?.max_tokens,
-    };
+    const apiKey = provider.api_key || Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) throw new Error("OpenAI API key not configured");
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -72,7 +65,12 @@ async function callProvider(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(openaiBody),
+      body: JSON.stringify({
+        model: provider.model,
+        messages,
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.max_tokens,
+      }),
     });
 
     if (!resp.ok) {
