@@ -1,75 +1,80 @@
 
-# Sugestao de Classes NCL na Pagina de Assinatura
+# Classes NCL Sugeridas no Formulario de Dados da Marca
 
-## O que sera feito
+## Resumo
 
-Na pagina de assinatura (`/assinar/:token`), entre o conteudo do contrato e o checkbox "Declaro que li...", adicionar um card de sugestao de classes NCL complementares. Se o cliente selecionar classes adicionais, o contrato e o valor sao atualizados automaticamente antes da assinatura.
+Adicionar a selecao de classes NCL sugeridas pelo laudo de viabilidade no passo "Dados da Marca" (BrandDataStep). As classes aparecem como checkboxes com descricao do que protegem. O valor no passo de pagamento multiplica automaticamente pela quantidade de classes selecionadas. Isso sera implementado em 3 locais: landing page (/registro), portal do cliente (/cliente/registrar-marca) e painel admin (criar contrato).
 
-## Fluxo do Usuario
+## O que o usuario ve
 
-1. Cliente abre o link de assinatura
-2. Le o contrato normalmente
-3. Antes do checkbox de aceite, ve um card: "Protecao Complementar Recomendada pelo Juridico"
-4. Card mostra classes sugeridas com descricao do que cada uma protege (ex: "Classe 35 - Protege atividades comerciais, franquias e publicidade da sua marca")
-5. Cliente pode selecionar 1 ou mais classes adicionais via checkbox
-6. Ao selecionar, o contrato e valor atualizam automaticamente (ex: de R$ 699 para R$ 1.398 no PIX)
-7. Entao aceita os termos e assina normalmente
+No formulario "Informacoes da Marca", abaixo do campo "Ramo de Atividade" e acima do CNPJ:
+
+- Secao "Classes NCL Sugeridas pelo Laudo"
+- Classe principal ja pre-selecionada (obrigatoria)
+- Classes complementares como checkboxes com descricao (ex: "Classe 35 - Protege atividades comerciais, franquias e publicidade")
+- Opcao de destaque "Registrar todas as classes" com badge de recomendacao
+- Ao selecionar mais classes, o passo de pagamento calcula automaticamente (699 x N classes no PIX, etc.)
 
 ## Detalhes Tecnicos
 
-### 1. Nova coluna no banco (aditiva, nullable)
+### 1. Atualizar interface BrandData
 
-Adicionar `suggested_classes` (jsonb, nullable) na tabela `contracts`. Formato:
+**Arquivo: `src/components/cliente/checkout/BrandDataStep.tsx`**
+- Adicionar `selectedClasses: number[]` e `classDescriptions: string[]` ao tipo `BrandData`
+- Valores default: arrays vazios
 
-```text
-[
-  { "number": 35, "description": "Comercio, franquias e publicidade", "selected": false },
-  { "number": 42, "description": "Servicos tecnologicos e cientificos", "selected": false }
-]
-```
+### 2. Atualizar BrandDataStep - UI de selecao de classes
 
-Isso armazena as classes sugeridas pelo laudo de viabilidade que NAO foram selecionadas pelo cliente no checkout. Coluna nullable, nao afeta contratos existentes.
+**Arquivo: `src/components/cliente/checkout/BrandDataStep.tsx`**
+- Receber nova prop `suggestedClasses: { number: number; description: string }[]`
+- Abaixo do campo "Ramo de Atividade", renderizar secao com:
+  - Titulo "Classes NCL Sugeridas"
+  - Subtitulo "Selecione as classes de protecao para sua marca"
+  - Checkboxes para cada classe (numero + descricao)
+  - Primeira classe pre-selecionada
+  - Botao/badge "Selecionar todas" com destaque
+- Ao submeter, incluir `selectedClasses` e `classDescriptions` no objeto BrandData
 
-### 2. Edge Function: `get-contract-by-token`
+### 3. Propagar classes sugeridas - Portal do Cliente
 
-Atualizar para incluir `suggested_classes` e `contract_value` no SELECT, para que a pagina de assinatura tenha acesso aos dados.
+**Arquivo: `src/pages/cliente/RegistrarMarca.tsx`**
+- No `handleViabilityNext`, extrair `result.classes` e `result.classDescriptions` do resultado da viabilidade
+- Armazenar em estado `suggestedClasses`
+- Passar como prop para `BrandDataStep`
+- Pre-selecionar a primeira classe no `brandData.selectedClasses`
 
-### 3. Nova Edge Function: `update-contract-classes`
+### 4. Propagar classes sugeridas - Landing Page
 
-Cria uma edge function isolada que:
-- Recebe `contractId` e `selectedClasses` (array de numeros)
-- Busca o contrato atual (via service role)
-- Verifica que ainda nao foi assinado (`signature_status != 'signed'`)
-- Recalcula o valor: valor base * (1 + classes adicionais selecionadas)
-- Regenera o `contract_html` com as novas classes na clausula 1.1
-- Atualiza `contracts.contract_value`, `contracts.contract_html` e `contracts.suggested_classes`
-- Retorna o contrato atualizado
+**Arquivo: `src/components/sections/RegistrationFormSection.tsx`**
+- Mesma logica: extrair classes do resultado de viabilidade
+- Passar para `BrandDataStep` como prop
+- Funciona identicamente ao portal do cliente
 
-### 4. Pagina `AssinarDocumento.tsx`
+### 5. PaymentStep - Valores dinamicos por quantidade de classes
 
-Entre o bloco do DocumentRenderer e a secao "Assinatura Eletronica":
+**Arquivo: `src/components/cliente/checkout/PaymentStep.tsx`**
+- Receber nova prop `classCount: number` (default 1)
+- Multiplicar valores do `usePricing()` pela quantidade:
+  - PIX: valor avista x classCount
+  - Cartao: valor cartao x classCount
+  - Boleto: valor boleto x classCount
+- Exibir indicador "X classes selecionadas" no topo
 
-- Verificar se `contract.suggested_classes` existe e tem itens
-- Se sim, renderizar card com:
-  - Titulo: "Protecao Complementar Recomendada"
-  - Subtitulo: "Nosso departamento juridico sugere proteger sua marca tambem nas classes abaixo"
-  - Lista de classes com checkbox, numero e descricao
-  - Resumo de valor atualizado ao selecionar
-  - Botao "Confirmar classes adicionais" que chama a edge function
-- Apos confirmacao, recarrega o contrato com os novos dados
+### 6. RegistrarMarca e RegistrationFormSection - Passar classCount
 
-### 5. Preenchimento das classes sugeridas
+- Ambos os arquivos passam `brandData.selectedClasses.length || 1` para `PaymentStep`
 
-No momento de criacao do contrato (checkout e admin), popular o campo `suggested_classes` com as classes do laudo que nao foram selecionadas. Isso sera feito:
-- No `ContractStep.tsx` (checkout do cliente): ao submeter, incluir as classes nao selecionadas
-- No `CreateContractDialog.tsx` (admin): campo opcional para adicionar classes sugeridas
+### 7. Admin CreateContractDialog - Campo de classes sugeridas
+
+**Arquivo: `src/components/admin/contracts/CreateContractDialog.tsx`**
+- Adicionar campo de input para classes sugeridas (numeros separados por virgula)
+- Campo de descricao para cada classe
+- Mesma logica de selecao para o admin poder definir as classes ao gerar contrato
 
 ## O que NAO muda
 
-- Tabelas existentes (apenas adiciona coluna nullable)
-- Fluxo de assinatura (blockchain, PDF, certificacao)
-- Edge functions existentes (sign-contract-blockchain, create-post-signature-payment)
-- Layout principal da pagina de assinatura
-- Contratos ja existentes (coluna nullable, sem impacto)
-- APIs externas (Asaas, INPI)
-- Permissoes e RLS
+- Banco de dados (nenhuma tabela nova)
+- Edge functions
+- Layout principal ou fluxo de assinatura
+- APIs externas
+- A coluna `suggested_classes` na tabela contracts (ja criada anteriormente) sera populada com as classes NAO selecionadas para o upsell na pagina de assinatura
