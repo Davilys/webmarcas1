@@ -34,13 +34,20 @@ function CommercialIntelligenceModule({ classes, businessArea, inpiTotal = 0, cn
     : 92; // sem conflito INPI = alto potencial
 
   // ── Score 2: Risco de Concorrente Registrar ──
-  // Baseado em empresas (CNPJ) + presença na internet
+  // 1 marca em colidência = 73%, mais de 3 = 91%
   const activeCnpjs = cnpjMatches.filter(m => m.situacao?.toLowerCase() === 'ativa').length;
   const socialPresence = socialMatches.filter(s => s.encontrado).length;
   const competitorSignals = activeCnpjs + socialPresence;
-  const competitorRiskScore = competitorSignals === 0
-    ? 15 // baixo risco
-    : Math.min(95, 30 + (activeCnpjs * 25) + (socialPresence * 12));
+  let competitorRiskScore: number;
+  if (competitorSignals === 0) {
+    competitorRiskScore = 15;
+  } else if (competitorSignals === 1) {
+    competitorRiskScore = 73;
+  } else if (competitorSignals <= 3) {
+    competitorRiskScore = 73 + Math.round((competitorSignals - 1) * 6); // 79, 85
+  } else {
+    competitorRiskScore = 91;
+  }
 
   // Labels Score 1
   const d = deferimentScore;
