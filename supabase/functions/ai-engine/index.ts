@@ -70,7 +70,7 @@ async function callProvider(
         model: provider.model,
         messages,
         temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.max_tokens,
+        max_completion_tokens: options?.max_tokens,
       }),
     });
 
