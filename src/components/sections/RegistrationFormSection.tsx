@@ -122,8 +122,11 @@ const RegistrationFormSection = () => {
     scrollToForm();
   }, []);
 
-  const handleContractSubmit = useCallback(async (contractHtml: string) => {
-    if (!personalData || !brandData) {
+  const handleContractSubmit = useCallback(async (contractHtml: string, finalBrandData?: BrandData, finalPaymentValue?: number) => {
+    const activeBrandData = finalBrandData || brandData;
+    const activePaymentValue = finalPaymentValue || paymentValue;
+
+    if (!personalData || !activeBrandData) {
       toast({
         title: "Erro",
         description: "Dados incompletos. Por favor, preencha todos os campos.",
@@ -151,14 +154,14 @@ const RegistrationFormSection = () => {
             state: personalData.state,
           },
           brandData: {
-            brandName: brandData.brandName,
-            businessArea: brandData.businessArea,
-            hasCNPJ: brandData.hasCNPJ,
-            cnpj: brandData.cnpj,
-            companyName: brandData.companyName,
+            brandName: activeBrandData.brandName,
+            businessArea: activeBrandData.businessArea,
+            hasCNPJ: activeBrandData.hasCNPJ,
+            cnpj: activeBrandData.cnpj,
+            companyName: activeBrandData.companyName,
           },
           paymentMethod,
-          paymentValue,
+          paymentValue: activePaymentValue,
           contractHtml,
         },
       });
@@ -173,6 +176,10 @@ const RegistrationFormSection = () => {
       }
 
       console.log('Asaas payment created:', data);
+
+      // Update state for orderData
+      if (finalBrandData) setBrandData(finalBrandData);
+      if (finalPaymentValue) setPaymentValue(finalPaymentValue);
 
       // Save order data for payment page
       const orderData = {
@@ -189,14 +196,14 @@ const RegistrationFormSection = () => {
           state: personalData.state,
         },
         brandData: {
-          brandName: brandData.brandName,
-          businessArea: brandData.businessArea,
-          hasCNPJ: brandData.hasCNPJ,
-          cnpj: brandData.cnpj,
-          companyName: brandData.companyName,
+          brandName: activeBrandData.brandName,
+          businessArea: activeBrandData.businessArea,
+          hasCNPJ: activeBrandData.hasCNPJ,
+          cnpj: activeBrandData.cnpj,
+          companyName: activeBrandData.companyName,
         },
         paymentMethod,
-        paymentValue,
+        paymentValue: activePaymentValue,
         contractHtml,
         acceptedAt: new Date().toISOString(),
         leadId: data.leadId,
@@ -338,9 +345,7 @@ const RegistrationFormSection = () => {
                 paymentMethod={paymentMethod}
                 paymentValue={paymentValue}
                 onSubmit={(html, updatedBrandData, updatedPaymentValue) => {
-                  if (updatedBrandData) setBrandData(updatedBrandData);
-                  if (updatedPaymentValue) setPaymentValue(updatedPaymentValue);
-                  handleContractSubmit(html);
+                  handleContractSubmit(html, updatedBrandData, updatedPaymentValue);
                 }}
                 onBack={() => handleBack(4)}
                 isSubmitting={isSubmitting}
