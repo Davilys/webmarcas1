@@ -277,6 +277,8 @@ export default function RegistrarMarca() {
                       const idx = suggestedClasses.indexOf(cls);
                       return idx >= 0 ? suggestedClassDescriptions[idx] : `Classe ${cls}`;
                     })}
+                    suggestedClasses={suggestedClasses}
+                    suggestedClassDescriptions={suggestedClassDescriptions}
                   />
                 </motion.div>
               )}

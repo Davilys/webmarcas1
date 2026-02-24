@@ -1,9 +1,8 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, Download, Printer, Check, Shield, FileText, Lock, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, Download, Printer, Check, Shield, FileText, Lock, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useContractTemplate, replaceContractVariables } from "@/hooks/useContractTemplate";
 import { ContractRenderer, generateContractPrintHTML } from "@/components/contracts/ContractRenderer";
 import { downloadUnifiedContractPDF, printUnifiedContract } from "@/hooks/useUnifiedContractDownload";
@@ -22,6 +21,8 @@ interface ContractStepProps {
   isSubmitting: boolean;
   selectedClasses?: number[];
   classDescriptions?: string[];
+  suggestedClasses?: number[];
+  suggestedClassDescriptions?: string[];
 }
 
 export function ContractStep({
@@ -34,6 +35,8 @@ export function ContractStep({
   isSubmitting,
   selectedClasses,
   classDescriptions,
+  suggestedClasses,
+  suggestedClassDescriptions,
 }: ContractStepProps) {
   const [accepted, setAccepted] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -173,7 +176,7 @@ export function ContractStep({
             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Protegido</span>
           </div>
         </div>
-        <ScrollArea className="h-[360px]">
+        <div className="h-[360px] overflow-y-auto">
           <div className="p-5">
             <ContractRenderer
               content={getProcessedContract()}
@@ -182,8 +185,48 @@ export function ContractStep({
               documentType={documentType}
             />
           </div>
-        </ScrollArea>
+        </div>
       </div>
+
+      {/* Upsell: unselected suggested classes */}
+      {(() => {
+        const unselected = (suggestedClasses || []).filter(
+          cls => !(selectedClasses || []).includes(cls)
+        );
+        if (unselected.length === 0) return null;
+        return (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+            <div className="p-4 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                Classes sugeridas não selecionadas
+              </p>
+            </div>
+            <div className="p-4 space-y-2">
+              <p className="text-xs text-muted-foreground mb-3">
+                A IA identificou estas classes como relevantes para proteger sua marca. Sem elas, terceiros podem registrar marcas similares nessas categorias.
+              </p>
+              {unselected.map((cls) => {
+                const idx = (suggestedClasses || []).indexOf(cls);
+                const desc = idx >= 0 && suggestedClassDescriptions?.[idx]
+                  ? suggestedClassDescriptions[idx]
+                  : `Classe ${cls}`;
+                return (
+                  <div key={cls} className="flex items-start gap-2 p-2 rounded-lg bg-background/60 border border-border">
+                    <span className="shrink-0 w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-xs font-bold text-amber-700 dark:text-amber-300">
+                      {cls}
+                    </span>
+                    <p className="text-xs text-muted-foreground leading-relaxed pt-1">{desc}</p>
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-muted-foreground mt-2 italic">
+                Para adicionar, volte à etapa "Dados da Marca" e selecione as classes desejadas.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Accept Checkbox */}
       <motion.div

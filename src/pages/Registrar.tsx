@@ -106,12 +106,19 @@ export default function Registrar() {
                    parsed.level === 'medium' ? 'Viabilidade Média' : 
                    parsed.level === 'low' ? 'Baixa Viabilidade' : 'Marca Bloqueada',
             description: 'Viabilidade já verificada anteriormente.',
+            classes: parsed.classes || [],
+            classDescriptions: parsed.classDescriptions || [],
           };
           setViabilityData({
             brandName: parsed.brandName,
             businessArea: parsed.businessArea,
             result: viabilityResult,
           });
+          // Extract suggested classes from sessionStorage
+          if (Array.isArray(parsed.classes)) {
+            setSuggestedClasses(parsed.classes);
+            setSuggestedClassDescriptions(parsed.classDescriptions || []);
+          }
           // Skip to step 2 (personal data)
           setStep(2);
           // Clear the stored data to prevent re-use
@@ -384,6 +391,8 @@ export default function Registrar() {
                   const idx = suggestedClasses.indexOf(cls);
                   return idx >= 0 ? suggestedClassDescriptions[idx] : `Classe ${cls}`;
                 })}
+                suggestedClasses={suggestedClasses}
+                suggestedClassDescriptions={suggestedClassDescriptions}
               />
             )}
           </CardContent>
