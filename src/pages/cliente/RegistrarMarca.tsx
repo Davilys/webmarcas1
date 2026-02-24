@@ -7,6 +7,7 @@ import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress
 import { ViabilityStep } from "@/components/cliente/checkout/ViabilityStep";
 import { PersonalDataStep, type PersonalData } from "@/components/cliente/checkout/PersonalDataStep";
 import { BrandDataStep, type BrandData } from "@/components/cliente/checkout/BrandDataStep";
+import { NclClassSelectionStep } from "@/components/cliente/checkout/NclClassSelectionStep";
 import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ const STEP_TITLES = [
   { title: "Consulta de Viabilidade", sub: "Verificando no banco do INPI" },
   { title: "Dados do Titular", sub: "Informações para o contrato" },
   { title: "Dados da Marca", sub: "Detalhes do registro" },
+  { title: "Classes NCL", sub: "Selecione as classes de proteção" },
   { title: "Forma de Pagamento", sub: "Escolha como pagar" },
   { title: "Contrato Digital", sub: "Revise e assine" },
 ];
@@ -37,6 +39,12 @@ export default function RegistrarMarca() {
   });
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentValue, setPaymentValue] = useState(0);
+
+  // NCL classes state
+  const [suggestedClasses, setSuggestedClasses] = useState<number[]>([]);
+  const [suggestedClassDescriptions, setSuggestedClassDescriptions] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
+  const [selectedClassDescriptions, setSelectedClassDescriptions] = useState<string[]>([]);
 
   // Pre-fill user data if logged in
   useEffect(() => {
@@ -67,6 +75,14 @@ export default function RegistrarMarca() {
   const handleViabilityNext = (brand: string, area: string, result: ViabilityResult) => {
     setBrandData(prev => ({ ...prev, brandName: brand, businessArea: area }));
     setViabilityResult(result);
+    // Extract classes from viability result
+    if (Array.isArray(result.classes) && result.classes.length > 0) {
+      setSuggestedClasses(result.classes);
+      setSuggestedClassDescriptions(result.classDescriptions || []);
+    } else {
+      setSuggestedClasses([]);
+      setSuggestedClassDescriptions([]);
+    }
     setStep(2);
   };
 
@@ -77,13 +93,19 @@ export default function RegistrarMarca() {
 
   const handleBrandDataNext = (data: BrandData) => {
     setBrandData(data);
-    setStep(4);
+    setStep(4); // NCL class selection
+  };
+
+  const handleNclNext = (classes: number[], descriptions: string[]) => {
+    setSelectedClasses(classes);
+    setSelectedClassDescriptions(descriptions);
+    setStep(5); // Payment
   };
 
   const handlePaymentNext = (method: string, value: number) => {
     setPaymentMethod(method);
     setPaymentValue(value);
-    setStep(5);
+    setStep(6); // Contract
   };
 
   const handleSubmit = async (contractHtml: string) => {
@@ -93,7 +115,17 @@ export default function RegistrarMarca() {
       const userId = sessionData.session?.user?.id || null;
 
       const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
-        body: { personalData, brandData, paymentMethod, paymentValue, contractHtml, userId },
+        body: {
+          personalData,
+          brandData,
+          paymentMethod,
+          paymentValue,
+          contractHtml,
+          userId,
+          selectedClasses,
+          classDescriptions: selectedClassDescriptions,
+          suggestedClasses,
+        },
       });
 
       if (error) throw new Error(error.message);
@@ -114,6 +146,7 @@ export default function RegistrarMarca() {
 
       const orderData = {
         personalData, brandData, paymentMethod, paymentValue,
+        selectedClasses,
         acceptedAt: new Date().toISOString(),
         leadId: data.leadId,
         contractId: data.contractId,
@@ -132,6 +165,7 @@ export default function RegistrarMarca() {
   };
 
   const currentStepInfo = STEP_TITLES[step - 1];
+  const classCount = selectedClasses.length > 0 ? selectedClasses.length : 1;
 
   return (
     <ClientLayout>
@@ -179,7 +213,7 @@ export default function RegistrarMarca() {
           className="flex items-center justify-between mb-4 px-1"
         >
           <div>
-            <p className="text-xs text-muted-foreground">Etapa {step} de 5</p>
+            <p className="text-xs text-muted-foreground">Etapa {step} de 6</p>
             <p className="text-sm font-semibold">{currentStepInfo.title}</p>
           </div>
           <span className="text-xs text-muted-foreground">{currentStepInfo.sub}</span>
@@ -189,7 +223,6 @@ export default function RegistrarMarca() {
         <motion.div
           className="relative rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] overflow-hidden"
         >
-          {/* Top accent line */}
           <div className="h-1 w-full bg-gradient-to-r from-primary to-primary/60" />
 
           <div className="p-6 sm:p-8">
@@ -219,30 +252,43 @@ export default function RegistrarMarca() {
               )}
               {step === 4 && (
                 <motion.div key="step4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <PaymentStep
-                    selectedMethod={paymentMethod}
-                    onNext={handlePaymentNext}
+                  <NclClassSelectionStep
+                    suggestedClasses={suggestedClasses}
+                    classDescriptions={suggestedClassDescriptions}
+                    brandName={viabilityResult?.title ? brandData.brandName : brandData.brandName}
+                    onNext={handleNclNext}
                     onBack={() => setStep(3)}
                   />
                 </motion.div>
               )}
               {step === 5 && (
                 <motion.div key="step5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <PaymentStep
+                    selectedMethod={paymentMethod}
+                    onNext={handlePaymentNext}
+                    onBack={() => setStep(4)}
+                    classCount={classCount}
+                  />
+                </motion.div>
+              )}
+              {step === 6 && (
+                <motion.div key="step6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                   <ContractStep
                     personalData={personalData}
                     brandData={brandData}
                     paymentMethod={paymentMethod}
                     paymentValue={paymentValue}
                     onSubmit={(html) => handleSubmit(html)}
-                    onBack={() => setStep(4)}
+                    onBack={() => setStep(5)}
                     isSubmitting={isSubmitting}
+                    selectedClasses={selectedClasses}
+                    classDescriptions={selectedClassDescriptions}
                   />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Bottom security footer */}
           <div className="px-6 pb-5 flex items-center justify-center gap-2">
             <Shield className="w-3.5 h-3.5 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">
@@ -251,7 +297,6 @@ export default function RegistrarMarca() {
           </div>
         </motion.div>
 
-        {/* FAQ / Help */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

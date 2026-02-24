@@ -21,6 +21,8 @@ interface ContractStepProps {
   onSubmit: (contractHtml: string) => void;
   onBack: () => void;
   isSubmitting: boolean;
+  selectedClasses?: number[];
+  classDescriptions?: string[];
 }
 
 export function ContractStep({
@@ -31,6 +33,8 @@ export function ContractStep({
   onSubmit,
   onBack,
   isSubmitting,
+  selectedClasses,
+  classDescriptions,
 }: ContractStepProps) {
   const [accepted, setAccepted] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -38,8 +42,14 @@ export function ContractStep({
 
   const getProcessedContract = useCallback(() => {
     if (!template) return '';
-    return replaceContractVariables(template.content, { personalData, brandData, paymentMethod });
-  }, [template, personalData, brandData, paymentMethod]);
+    return replaceContractVariables(template.content, {
+      personalData,
+      brandData,
+      paymentMethod,
+      selectedClasses,
+      classDescriptions,
+    });
+  }, [template, personalData, brandData, paymentMethod, selectedClasses, classDescriptions]);
 
   const printContract = async () => {
     try {
