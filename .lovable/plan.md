@@ -1,82 +1,79 @@
 
-## Diagnostico dos Erros
 
-### Erro 1: `/registrar` perde classes da viabilidade vindas do sessionStorage
-Em `Registrar.tsx` linhas 96-123, quando carrega dados do `sessionStorage`, o objeto `viabilityResult` e criado **sem** `classes` e `classDescriptions`. Alem disso, nao chama `setSuggestedClasses` / `setSuggestedClassDescriptions` (diferente do `RegistrationFormSection.tsx` que faz corretamente nas linhas 54-66).
+## Plano: Classes Selecionaveis no Contrato com Atualizacao de Valor e Clausula
 
-**Resultado**: ao chegar de `/` para `/registrar`, as classes sugeridas somem e o BrandDataStep mostra "Classes NCL serao definidas automaticamente".
+### Problema Atual
+As classes sugeridas nao selecionadas aparecem no contrato apenas como aviso informativo, pedindo para o cliente voltar a etapa anterior. O cliente precisa poder selecionar diretamente no contrato, e ao fazer isso:
+- O valor total deve ser recalculado
+- A clausula 1.1 deve incluir as novas classes
+- O resumo do pedido deve atualizar
 
-### Erro 2: `ContractStep.tsx` ainda usa Radix `ScrollArea`
-Na linha 176, o contrato usa `<ScrollArea className="h-[360px]">`. Este componente causa o bug de "Maximum update depth exceeded" (loop infinito de refs) quando o conteudo muda dinamicamente. Precisa ser substituido por div nativo com `overflow-y-auto`.
+### Solucao
 
-### Erro 3: Contrato nao mostra classes nao selecionadas para upsell
-O `ContractStep` recebe apenas `selectedClasses` e `classDescriptions` (das selecionadas), mas nao recebe `suggestedClasses` / `suggestedClassDescriptions` completos. Sem isso, nao e possivel mostrar as classes que o cliente nao selecionou como opcao de upsell.
+#### A) `ContractStep.tsx` - Tornar classes selecionaveis
 
----
+Mudancas na interface e logica:
 
-## Plano de Correcao
+1. Adicionar callback `onSelectedClassesChange` nas props para propagar mudancas ao pai
+2. Adicionar callback `onPaymentValueChange` para atualizar o valor exibido
+3. Substituir o bloco informativo por checkboxes nativos clicaveis em cada classe nao selecionada
+4. Ao marcar uma classe:
+   - Chamar `onSelectedClassesChange` com a lista atualizada
+   - Recalcular o valor com base no metodo de pagamento (PIX: R$699/classe, Cartao: R$1.194/classe, Boleto: R$1.197/classe)
+   - O contrato se regenera automaticamente pois `getProcessedContract()` usa `selectedClasses` via `useCallback`
 
-### A) `src/pages/Registrar.tsx` - Corrigir extracao de classes do sessionStorage
+Visualmente:
+- Cada classe tera um checkbox + badge com numero + descricao
+- Ao selecionar, mostra o acrescimo de valor (ex: "+R$ 699,00")
+- Destaque visual verde para classes recem-adicionadas
 
-Na secao do `useEffect` (linhas 96-123), adicionar:
-- Incluir `classes` e `classDescriptions` no objeto `viabilityResult`
-- Chamar `setSuggestedClasses(parsed.classes)` e `setSuggestedClassDescriptions(parsed.classDescriptions || [])` (igual ao `RegistrationFormSection.tsx`)
+#### B) `Registrar.tsx` - Receber mudancas do ContractStep
 
-Codigo atual (linha 102-113):
-```typescript
-const viabilityResult: ViabilityResult = {
-  success: true,
-  level: parsed.level,
-  title: ...,
-  description: '...',
-  // FALTA: classes e classDescriptions
-};
+1. Passar `onSelectedClassesChange={setSelectedClasses}` para o ContractStep
+2. Criar funcao `recalculatePaymentValue(classes, method)` que atualiza `paymentValue` quando classes mudam no step 5
+3. Passar `onPaymentValueChange={setPaymentValue}` para o ContractStep
+
+#### C) `RegistrationFormSection.tsx` e `RegistrarMarca.tsx` - Mesma logica
+
+Garantir que os outros pontos de entrada do formulario tambem passem os callbacks de mudanca para o ContractStep.
+
+### Detalhes Tecnicos
+
+```text
+ContractStep
+  |-- props: selectedClasses, suggestedClasses, paymentMethod
+  |-- props: onSelectedClassesChange(newList)
+  |-- props: onPaymentValueChange(newValue)
+  |
+  |-- Bloco "Classes sugeridas"
+  |     |-- checkbox nativo por classe nao selecionada
+  |     |-- ao toggle: chama onSelectedClassesChange
+  |     |-- recalcula valor: quantidade * preco_por_metodo
+  |     |-- chama onPaymentValueChange
+  |
+  |-- getProcessedContract() reage automaticamente
+  |     (ja depende de selectedClasses no useCallback)
+  |
+  |-- Resumo do Pedido: "Total" atualiza via paymentValue prop
 ```
 
-Correcao:
-```typescript
-const viabilityResult: ViabilityResult = {
-  success: true,
-  level: parsed.level,
-  title: ...,
-  description: '...',
-  classes: parsed.classes || [],
-  classDescriptions: parsed.classDescriptions || [],
-};
-// + setSuggestedClasses / setSuggestedClassDescriptions
-```
+Calculo de valor por metodo:
+- `avista` (PIX): R$ 699 por classe
+- `cartao6x`: R$ 1.194 por classe
+- `boleto3x`: R$ 1.197 por classe
 
-### B) `src/components/cliente/checkout/ContractStep.tsx` - Remover ScrollArea
-
-Substituir `<ScrollArea className="h-[360px]">` (linha 176) por `<div className="h-[360px] overflow-y-auto">` para evitar o bug de loop infinito do Radix.
-
-Remover o import de `ScrollArea` (linha 6).
-
-### C) `src/components/cliente/checkout/ContractStep.tsx` - Adicionar props de upsell
-
-Adicionar props opcionais `suggestedClasses` e `suggestedClassDescriptions` a interface `ContractStepProps`. Mostrar um bloco de upsell com as classes nao selecionadas, permitindo que o cliente veja o que esta deixando de proteger.
-
-### D) `src/pages/Registrar.tsx` e `src/components/sections/RegistrationFormSection.tsx` - Passar props de sugestao para ContractStep
-
-Nos dois arquivos, passar `suggestedClasses` e `suggestedClassDescriptions` para `ContractStep` alem de `selectedClasses` e `classDescriptions`.
-
-### E) `src/pages/cliente/RegistrarMarca.tsx` - Mesma correcao
-
-Garantir que o fluxo da area do cliente tambem passe todas as props corretamente para `ContractStep`.
-
----
-
-## Resumo das alteracoes por arquivo
+### Arquivos a editar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `Registrar.tsx` | Extrair classes do sessionStorage + passar suggestedClasses para ContractStep |
-| `RegistrationFormSection.tsx` | Passar suggestedClasses para ContractStep |
-| `RegistrarMarca.tsx` | Passar suggestedClasses para ContractStep |
-| `ContractStep.tsx` | Remover ScrollArea, adicionar props de upsell, mostrar classes nao selecionadas |
+| `ContractStep.tsx` | Adicionar checkboxes clicaveis, callbacks de mudanca, recalculo de valor |
+| `Registrar.tsx` | Passar callbacks onSelectedClassesChange e onPaymentValueChange |
+| `RegistrationFormSection.tsx` | Passar mesmos callbacks |
+| `RegistrarMarca.tsx` | Passar mesmos callbacks |
 
-## Resultado esperado
-- Viabilidade na landing -> `/registrar`: classes aparecem no passo "Dados da Marca"
-- Viabilidade direta no `/registrar`: classes aparecem normalmente
-- Contrato mostra classes selecionadas E lista classes nao selecionadas como sugestao
-- Sem crash de tela branca (ScrollArea removido)
+### Resultado esperado
+- No passo do contrato, as classes nao selecionadas aparecem com checkbox
+- Ao selecionar uma classe, o valor total atualiza instantaneamente
+- A clausula 1.1 do contrato inclui a nova classe automaticamente
+- O resumo "Total" no topo reflete o novo valor
+- Sem crash ou tela branca (usando checkboxes nativos, sem Radix)
