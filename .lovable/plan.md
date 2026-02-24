@@ -1,52 +1,43 @@
 
 
-## Correções no ContractStep - Classes Sugeridas
+## Correcao: Logo WebMarcas quebrada no contrato
 
-### Bug 1: Classe some ao ser selecionada
+### Diagnostico
 
-**Causa raiz**: O bloco de upsell (linha 224) filtra apenas classes NAO selecionadas:
-```typescript
-const unselected = (suggestedClasses || []).filter(
-  cls => !(selectedClasses || []).includes(cls)
-);
-if (unselected.length === 0) return null; // some tudo quando seleciona todas
-```
+O componente `ContractRenderer.tsx` importa o logo de `@/assets/webmarcas-logo-new.png` e exibe com uma tag `<img>`. O arquivo existe no projeto, porem pode estar corrompido ou com problemas de carregamento.
 
-E o checkbox esta hardcoded `checked={false}`.
+Alem disso, a funcao `generateContractPrintHTML` (usada ao imprimir/baixar) usa um logo SVG placeholder generico (retangulo azul com texto branco) em vez do logo real.
 
-**Correcao**: Mostrar TODAS as classes sugeridas que NAO estavam na selecao original do BrandDataStep. Ao selecionar, a classe continua visivel com checkbox marcado (checked=true) e destaque visual verde.
+### Solucao
 
-Logica:
-- Calcular `originalSelected` = classes que ja vinham selecionadas do BrandDataStep (nao mostrar essas)
-- Mostrar todas as classes sugeridas que NAO estavam no original
-- O `checked` do checkbox reflete se a classe esta em `selectedClasses` atual
-- Classes marcadas ganham borda verde e fundo verde claro
-- Classes desmarcadas mantem o visual amber atual
+1. **Adicionar fallback no `ContractRenderer`**: Colocar `onError` no `<img>` para trocar para o logo `webmarcas-logo-mark.png` (que sabemos que funciona, pois aparece no header do site) caso o `webmarcas-logo-new.png` falhe
 
-### Bug 2: Texto sem persuasao juridica
+2. **Trocar o import principal**: Usar `webmarcas-logo-mark.png` como logo principal no contrato, ja que este e o logo que funciona em toda a aplicacao (header, etc)
 
-**Correcao**: Substituir titulo e descricao por texto com orientacao juridica persuasiva:
-
-- Titulo: "⚖️ Orientacao Juridica" (com icone Scale do lucide)
-- Subtitulo em destaque: "O ideal e registrar nas X classes para maxima protecao."
-- Texto explicativo: "Sem o registro nestas categorias, terceiros podem usar sua marca legalmente nestes segmentos. A protecao parcial deixa sua marca vulneravel."
+3. **Atualizar `generateContractPrintHTML`**: Fazer a funcao aceitar o logo real convertido em base64 em vez de usar o fallback SVG generico
 
 ### Arquivo a editar
 
-`src/components/cliente/checkout/ContractStep.tsx`:
-
-1. Trocar o filtro de `unselected` para mostrar todas as sugeridas que nao estavam na selecao original
-2. Checkbox com `checked` dinamico baseado em `selectedClasses.includes(cls)`
-3. Estilo condicional: verde quando selecionado, amber quando nao
-4. Nao esconder o bloco quando todas estiverem selecionadas (manter visivel com todas marcadas)
-5. Novo texto persuasivo com tom juridico
-6. Importar icone `Scale` do lucide-react
+| Arquivo | Alteracao |
+|---------|-----------|
+| `ContractRenderer.tsx` | Trocar import de `webmarcas-logo-new.png` para `webmarcas-logo-mark.png`, adicionar `onError` fallback no `<img>`, e atualizar `generateContractPrintHTML` para usar logo real via base64 |
 
 ### Detalhes tecnicos
 
-Para saber quais classes sao "extras" (sugeridas mas nao selecionadas originalmente no BrandDataStep), precisamos comparar `suggestedClasses` com as classes que ja vieram selecionadas. Como o componente recebe `selectedClasses` atualizado reativamente, vamos filtrar as classes sugeridas que NAO faziam parte da selecao inicial. Para isso, mostraremos todas as `suggestedClasses` que nao estavam na lista original — usando a diferenca entre `suggestedClasses` e as classes que o usuario ja escolheu no passo anterior.
+```text
+Antes:
+  import webmarcasLogo from '@/assets/webmarcas-logo-new.png'
 
-Na pratica, a abordagem mais simples e robusta: mostrar TODAS as classes de `suggestedClasses` no bloco, com checkbox marcado/desmarcado conforme `selectedClasses`. As classes que ja estavam selecionadas desde o BrandDataStep aparecerao marcadas e o cliente pode desmarcar se quiser. Isso da controle total.
+Depois:
+  import webmarcasLogo from '@/assets/webmarcas-logo-mark.png'
 
-Porem, para nao confundir com as classes "obrigatorias", vamos filtrar apenas as que NAO estao na selecao inicial. Para isso, guardaremos a selecao inicial com `useRef` no mount.
+No <img>:
+  onError={(e) => { e.currentTarget.src = WEBMARCAS_LOGO_FALLBACK; }}
+
+Na funcao generateContractPrintHTML:
+  - Adicionar parametro opcional logoBase64
+  - Usar logoBase64 se disponivel, senao WEBMARCAS_LOGO_FALLBACK
+```
+
+Tambem aplicar a mesma correcao no `DocumentRenderer.tsx` que importa o mesmo logo.
 
