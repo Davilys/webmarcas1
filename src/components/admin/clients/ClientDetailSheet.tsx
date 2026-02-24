@@ -500,7 +500,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl p-0 overflow-hidden flex flex-col">
         {/* ──────────────────────────────── HEADER ────────────────────────── */}
-        <div className={cn('relative overflow-hidden flex-shrink-0', currentStage?.color || 'bg-gradient-to-r from-blue-600 to-blue-700')}>
+        <div className={cn('relative overflow-hidden flex-shrink-0 bg-gradient-to-r', currentStage?.color || 'from-blue-600 to-blue-700')}>
           {/* Background pattern */}
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 80%, white 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
 
