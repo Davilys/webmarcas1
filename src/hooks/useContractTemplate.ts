@@ -281,10 +281,12 @@ export function replaceContractVariables(
     switch (paymentMethod) {
       case 'avista': {
         const total = 699 * quantity;
+        const valorIntegral = 1228 * quantity; // valor sem desconto por classe
+        const economia = valorIntegral - total;
         const totalSuffix = quantity > 1 
           ? ` Valor total de ${quantity} ${classCount > 0 ? 'classes' : 'marcas'}: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
           : '';
-        return `• Pagamento à vista via PIX: R$ ${quantity === 1 ? '699,00' : total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${quantity === 1 ? 'seiscentos e noventa e nove reais' : 'valor total'}) - com 43% de desconto sobre o valor integral.${totalSuffix}`;
+        return `• Pagamento à vista via PIX: R$ ${quantity === 1 ? '699,00' : total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - com 43% de desconto (economia de R$ ${economia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).${totalSuffix}`;
       }
       case 'cartao6x': {
         const total = 1194 * quantity;

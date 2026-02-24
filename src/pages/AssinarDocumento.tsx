@@ -622,9 +622,13 @@ export default function AssinarDocumento() {
               <div className="space-y-6">
                 <div className="text-center">
                   <QrCode className="h-8 w-8 mx-auto text-primary mb-2" />
-                  <h2 className="text-xl font-bold">Pagamento via PIX</h2>
-                  <p className="text-3xl font-bold text-primary mt-2">R$ 699,00</p>
-                  <p className="text-sm text-green-600">43% de desconto</p>
+                  <h2 className="text-xl font-bold text-gray-900">Pagamento via PIX</h2>
+                  <p className="text-3xl font-bold text-primary mt-2">
+                    {paymentData.data.value 
+                      ? `R$ ${paymentData.data.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+                      : 'R$ 699,00'}
+                  </p>
+                  <p className="text-sm text-green-600 font-medium">43% de desconto</p>
                 </div>
 
                 {paymentData.data.pixQrCode && (
@@ -641,15 +645,15 @@ export default function AssinarDocumento() {
 
                 {paymentData.data.pixPayload && (
                   <div className="space-y-2">
-                    <Label className="text-sm text-gray-600">Código PIX (Copia e Cola):</Label>
+                    <label className="text-sm font-medium text-gray-700">Código PIX (Copia e Cola):</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={paymentData.data.pixPayload}
                         readOnly
-                        className="flex-1 px-3 py-2 text-xs font-mono bg-gray-50 border rounded-lg truncate"
+                        className="flex-1 px-3 py-2 text-xs font-mono bg-gray-50 border border-gray-300 rounded-lg truncate text-gray-900"
                       />
-                      <Button variant="outline" size="icon" onClick={copyPixCode}>
+                      <Button variant="outline" size="icon" onClick={copyPixCode} className="border-gray-300 text-gray-700">
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
@@ -666,11 +670,11 @@ export default function AssinarDocumento() {
                 </div>
 
                 <Button
-                  variant="outline"
-                  className="w-full"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
+                  size="lg"
                   onClick={() => setPaymentComplete(true)}
                 >
-                  Já efetuei o pagamento
+                  ✓ Já efetuei o pagamento
                 </Button>
               </div>
             )}
@@ -680,9 +684,15 @@ export default function AssinarDocumento() {
               <div className="space-y-6">
                 <div className="text-center">
                   <FileText className="h-8 w-8 mx-auto text-primary mb-2" />
-                  <h2 className="text-xl font-bold">Pagamento via Boleto</h2>
-                  <p className="text-lg font-bold text-primary mt-2">3x de R$ 399,00</p>
-                  <p className="text-sm text-gray-600">Total: R$ 1.197,00</p>
+                  <h2 className="text-xl font-bold text-gray-900">Pagamento via Boleto</h2>
+                  <p className="text-lg font-bold text-primary mt-2">
+                    {paymentData.data.installmentCount && paymentData.data.installmentValue
+                      ? `${paymentData.data.installmentCount}x de R$ ${paymentData.data.installmentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                      : '3x de R$ 399,00'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Total: R$ {(paymentData.data.value || 1197).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
                 </div>
 
                 {paymentData.data.invoiceUrl && (
@@ -696,11 +706,11 @@ export default function AssinarDocumento() {
                 )}
 
                 <Button
-                  variant="outline"
-                  className="w-full"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3"
+                  size="lg"
                   onClick={() => setPaymentComplete(true)}
                 >
-                  Já efetuei o pagamento
+                  ✓ Já efetuei o pagamento
                 </Button>
               </div>
             )}
@@ -749,11 +759,11 @@ export default function AssinarDocumento() {
             </div>
 
             <div className="flex justify-center gap-4 mb-8">
-              <Button onClick={handleDownloadPDF} size="lg">
+              <Button onClick={handleDownloadPDF} size="lg" className="bg-primary text-white hover:bg-primary/90">
                 <Download className="h-5 w-5 mr-2" />
                 Baixar PDF
               </Button>
-              <Button variant="outline" onClick={handlePrint} size="lg">
+              <Button onClick={handlePrint} size="lg" className="border-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-50">
                 <Printer className="h-5 w-5 mr-2" />
                 Imprimir
               </Button>
@@ -767,29 +777,29 @@ export default function AssinarDocumento() {
                 </h3>
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-gray-500 font-medium">Hash SHA-256:</p>
-                    <p className="font-mono text-xs break-all bg-white p-2 rounded mt-1">
+                    <p className="text-blue-700 font-medium">Hash SHA-256:</p>
+                    <p className="font-mono text-xs break-all bg-white text-gray-900 p-2 rounded mt-1 border border-blue-100">
                       {contract.blockchain_hash}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-500 font-medium">Data/Hora:</p>
-                    <p className="mt-1">{contract.blockchain_timestamp}</p>
+                    <p className="text-blue-700 font-medium">Data/Hora:</p>
+                    <p className="mt-1 text-gray-900 font-medium">{contract.blockchain_timestamp || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500 font-medium">ID Transação:</p>
-                    <p className="font-mono text-xs mt-1">{contract.blockchain_tx_id}</p>
+                    <p className="text-blue-700 font-medium">ID Transação:</p>
+                    <p className="font-mono text-xs mt-1 text-gray-900 break-all">{contract.blockchain_tx_id || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500 font-medium">Rede:</p>
-                    <p className="mt-1">{contract.blockchain_network}</p>
+                    <p className="text-blue-700 font-medium">Rede:</p>
+                    <p className="mt-1 text-gray-900 font-medium">{contract.blockchain_network || '—'}</p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-4">
+                <p className="text-xs text-blue-600 mt-4">
                   Verifique a autenticidade em:{' '}
                   <a 
                     href={`/verificar-contrato?hash=${contract.blockchain_hash}`}
-                    className="text-blue-600 hover:underline"
+                    className="text-blue-700 hover:underline font-medium"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
