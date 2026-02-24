@@ -1,57 +1,107 @@
 
 
-# Correcao: Link do Email Abre Pagina Errada + Verificacao Falha
+# Implementar Selecao de Classes NCL no Checkout (Site + Area do Cliente)
 
-## Problemas Identificados
+## Erros Identificados no Admin que Serao Evitados
 
-### Problema 1: Pagina de verificacao mostra "Contrato Nao Encontrado"
-O hash `749a0c9...` EXISTE no banco de dados, mas a pagina `/verificar-contrato` nao consegue encontra-lo. O motivo e que a tabela `contracts` tem RLS (Row Level Security) ativado e todas as politicas de SELECT exigem usuario autenticado (`authenticated`). Como a pagina de verificacao e publica (sem login), a consulta usa o papel `anon`, que nao tem permissao para ler a tabela.
+Apos analisar a implementacao do painel administrativo (`CreateContractDialog.tsx`), identifiquei os seguintes pontos criticos que causaram problemas e que serao evitados:
 
-### Problema 2: Link do email deveria abrir o contrato assinado para download
-O botao "Verificar Contrato" no email aponta para `/verificar-contrato?hash=...`, que e uma pagina de auditoria/blockchain. O cliente espera clicar e poder baixar o contrato assinado. O email precisa incluir um link direto para a area do cliente (documentos) e, opcionalmente, manter o link de verificacao como secundario.
+1. **Gradiente CSS nao renderizando** - No `ClientDetailSheet`, as classes `from-X to-Y` eram aplicadas sem o `bg-gradient-to-r`. Todos os componentes novos terao gradientes completos.
 
-## Correcoes
+2. **Sincronizacao de dados entre steps** - No admin, o `selectedClasses` e as descricoes precisam ser mapeados corretamente via indice. Se a IA retorna `classes: [25, 35, 42]` e `classDescriptions: ["Vestuario", "Publicidade", "Software"]`, o mapeamento precisa ser por posicao, nao por valor. O admin faz isso corretamente em `generateNewClientContractHtml` (linhas 353-361) e seguiremos o mesmo padrao.
 
-### 1. Adicionar politica RLS publica para verificacao (Migration SQL)
+3. **Valor nulo de classes quando viabilidade nao retorna classes** - A API `inpi-viability-check` pode retornar `classes: undefined`. O novo step precisa tratar o cenario de "nenhuma classe sugerida" mostrando uma mensagem informativa e permitindo prosseguir com 1 classe padrao.
 
-Criar uma politica que permite acesso anonimo/publico para SELECT na tabela `contracts`, mas SOMENTE quando filtrado por `blockchain_hash` e retornando apenas campos nao-sensiveis:
+4. **Edge function nao recebe selectedClasses** - Atualmente o `create-asaas-payment` no checkout nao recebe nem persiste `selectedClasses`. A funcao interna `replaceContractVariables` dentro da edge function (linhas 49-118) nao suporta classes. Precisamos enviar e persistir esses dados.
 
-```sql
-CREATE POLICY "Public can verify contracts by hash"
-  ON contracts
-  FOR SELECT
-  TO anon
-  USING (blockchain_hash IS NOT NULL);
+5. **Precos hardcoded vs dinamicos** - O admin usa valores hardcoded (699, 1194, 1197). O checkout publico ja usa `usePricing()` que busca do `system_settings`. Manteremos a consistencia usando `usePricing()` no novo step e multiplicando pelo numero de classes.
+
+## Fluxo Atual vs Novo
+
+```text
+ATUAL (5 passos):
+Viabilidade -> Dados Pessoais -> Dados da Marca -> Pagamento -> Contrato
+
+NOVO (6 passos):
+Viabilidade -> Dados Pessoais -> Dados da Marca -> Classes NCL -> Pagamento -> Contrato
 ```
 
-Nota: A pagina `VerificarContrato.tsx` ja filtra por `.eq('blockchain_hash', hash)` e seleciona apenas campos publicos (contract_number, blockchain_timestamp, etc.). A politica permite o SELECT anonimo, e a query da pagina ja limita os campos retornados.
+## Alteracoes Detalhadas
 
-### 2. Atualizar template de email no banco de dados
+### 1. NOVO: `src/components/cliente/checkout/NclClassSelectionStep.tsx`
 
-Alterar o template `contract_signed` para incluir:
-- Um botao principal "Acessar Meus Documentos" apontando para `{{link_area_cliente}}/documentos` (area do cliente com login)
-- Manter o botao "Verificar Autenticidade" como link secundario
+Componente do novo Step 4 (selecao de classes NCL).
 
-### 3. Atualizar edge function `sign-contract-blockchain`
+- Recebe `suggestedClasses: number[]`, `classDescriptions: string[]` e `brandName: string`
+- Exibe cards com checkbox para cada classe sugerida pela IA (NENHUMA pre-selecionada - regra de negocio critica)
+- Card informativo explicando o que sao classes NCL e por que proteger
+- Resumo dinamico do valor usando `usePricing()` multiplicado pelo numero de classes selecionadas
+- Validacao: minimo 1 classe selecionada para prosseguir
+- Tratamento do cenario sem classes: se a IA nao retornou sugestoes, exibe mensagem e permite prosseguir sem selecao (1 classe padrao)
+- Botoes Voltar/Continuar
+- Interface: `onNext: (selectedClasses: number[], classDescriptions: string[]) => void`
 
-Adicionar `link_area_cliente` nos dados enviados ao `trigger-email-automation`:
-- `link_area_cliente: https://webmarcas.net/cliente/login`
+### 2. MODIFICAR: `src/components/sections/RegistrationFormSection.tsx`
 
-### 4. Atualizar `VerificarContrato.tsx`
+Orquestrador do checkout no site (landing page).
 
-Adicionar um link para download do PDF assinado na pagina de verificacao (quando o contrato for encontrado). Buscar o `file_url` da tabela `documents` associado ao contrato verificado.
+- Adicionar estados: `selectedClasses: number[]` e `classDescriptions: string[]`
+- Extrair `classes` e `classDescriptions` do `viabilityData.result` no `handleViabilityNext`
+- Inserir Step 4 (NclClassSelectionStep) entre BrandData (step 3) e Payment (agora step 5)
+- Novo handler `handleNclNext` que salva `selectedClasses` e `classDescriptions` e avanca para step 5
+- Recalcular `paymentValue` no `handlePaymentNext` multiplicando pelo `selectedClasses.length` (minimo 1)
+- Passar `selectedClasses` e `classDescriptions` para `ContractStep`
+- Passar `classCount` para `PaymentStep`
+- Ajustar numeracao de steps (Payment = 5, Contract = 6)
+- Enviar `selectedClasses` e `classDescriptions` no body do `create-asaas-payment`
+
+### 3. MODIFICAR: `src/pages/cliente/RegistrarMarca.tsx`
+
+Orquestrador do checkout na area do cliente (logado).
+
+- Mesmas alteracoes do `RegistrationFormSection`: novos estados, novo step, novo handler
+- Adicionar `selectedClasses` e `classDescriptions` ao `handleSubmit`
+- Atualizar `STEP_TITLES` para 6 passos
+- Atualizar indicador "Etapa X de 6"
+
+### 4. MODIFICAR: `src/components/cliente/checkout/CheckoutProgress.tsx`
+
+- Adicionar novo passo "Classes NCL" com icone `Grid3X3` ou `Layers` entre "Dados da Marca" e "Pagamento"
+- Total de passos: 5 -> 6
+
+### 5. MODIFICAR: `src/components/cliente/checkout/PaymentStep.tsx`
+
+- Receber nova prop opcional `classCount?: number` (default 1)
+- Multiplicar todos os valores exibidos por `classCount`
+- Exibir badge informativo "X classes selecionadas" quando classCount > 1
+- Retornar o valor total (ja multiplicado) no `onNext`
+
+### 6. MODIFICAR: `src/components/cliente/checkout/ContractStep.tsx`
+
+- Receber novas props `selectedClasses?: number[]` e `classDescriptions?: string[]`
+- Passar para `replaceContractVariables` para que Clausula 1.1 (lista de classes) e Clausula 5.1 (valores) reflitam a selecao
+- O `paymentValue` ja vira multiplicado do PaymentStep
+
+### 7. MODIFICAR: `supabase/functions/create-asaas-payment/index.ts`
+
+- Adicionar `selectedClasses` e `classDescriptions` na interface `PaymentRequest`
+- Apos criar o contrato, fazer `UPDATE` no campo `suggested_classes` com formato JSONB: `{ classes: suggestedClasses, descriptions: classDescriptions, selected: selectedClasses }`
+- Atualizar a funcao interna `replaceContractVariables` da edge function para suportar classes (injetar na clausula 1.1 e calcular valores na 5.1)
+
+## Detalhes de Seguranca
+
+- Nenhuma alteracao de schema ou RLS necessaria (campo `suggested_classes` ja existe na tabela `contracts`)
+- Valores finais sao sempre recalculados no servidor (edge function) com base no `paymentMethod`, nunca confiando apenas no `paymentValue` do cliente
 
 ## Arquivos Modificados
 
-| Arquivo/Recurso | Alteracao |
-|---|---|
-| Migration SQL | Politica RLS para acesso anonimo a contracts por blockchain_hash |
-| Template no banco (email_templates) | Atualizar corpo do email contract_signed com link para area do cliente |
-| `supabase/functions/sign-contract-blockchain/index.ts` | Incluir link_area_cliente nos dados do email |
-| `src/pages/VerificarContrato.tsx` | Adicionar politica RLS para documents + link de download do PDF assinado |
+| Arquivo | Tipo | Risco |
+|---|---|---|
+| `src/components/cliente/checkout/NclClassSelectionStep.tsx` | Novo | Baixo |
+| `src/components/sections/RegistrationFormSection.tsx` | Modificado | Medio |
+| `src/pages/cliente/RegistrarMarca.tsx` | Modificado | Medio |
+| `src/components/cliente/checkout/CheckoutProgress.tsx` | Modificado | Baixo |
+| `src/components/cliente/checkout/PaymentStep.tsx` | Modificado | Baixo |
+| `src/components/cliente/checkout/ContractStep.tsx` | Modificado | Baixo |
+| `supabase/functions/create-asaas-payment/index.ts` | Modificado | Alto |
 
-## O que NAO sera alterado
-- Nenhum outro componente de UI
-- Nenhuma outra edge function
-- Logica de assinatura e blockchain
-- Layout geral da pagina de verificacao
