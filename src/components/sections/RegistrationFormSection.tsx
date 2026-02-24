@@ -6,6 +6,7 @@ import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress
 import { ViabilityStep } from "@/components/cliente/checkout/ViabilityStep";
 import { PersonalDataStep, type PersonalData } from "@/components/cliente/checkout/PersonalDataStep";
 import { BrandDataStep, type BrandData } from "@/components/cliente/checkout/BrandDataStep";
+import { NclClassSelectionStep } from "@/components/cliente/checkout/NclClassSelectionStep";
 import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import type { ViabilityResult } from "@/lib/api/viability";
@@ -29,6 +30,12 @@ const RegistrationFormSection = () => {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentValue, setPaymentValue] = useState(0);
 
+  // NCL classes state
+  const [suggestedClasses, setSuggestedClasses] = useState<number[]>([]);
+  const [suggestedClassDescriptions, setSuggestedClassDescriptions] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<number[]>([]);
+  const [selectedClassDescriptions, setSelectedClassDescriptions] = useState<string[]>([]);
+
   // Track if form_started email was already triggered
   const [formStartedTriggered, setFormStartedTriggered] = useState(false);
 
@@ -39,7 +46,6 @@ const RegistrationFormSection = () => {
       try {
         const parsed = JSON.parse(storedData);
         if (parsed.brandName && parsed.businessArea && parsed.level) {
-          // Create a viability result from stored data
           const viabilityResult: ViabilityResult = {
             success: true,
             level: parsed.level,
@@ -47,15 +53,20 @@ const RegistrationFormSection = () => {
                    parsed.level === 'medium' ? 'Viabilidade Média' : 
                    parsed.level === 'low' ? 'Baixa Viabilidade' : 'Marca Bloqueada',
             description: 'Viabilidade já verificada anteriormente.',
+            classes: parsed.classes,
+            classDescriptions: parsed.classDescriptions,
           };
           setViabilityData({
             brandName: parsed.brandName,
             businessArea: parsed.businessArea,
             result: viabilityResult,
           });
-          // Skip to step 2 (personal data)
+          // Extract suggested classes
+          if (Array.isArray(parsed.classes)) {
+            setSuggestedClasses(parsed.classes);
+            setSuggestedClassDescriptions(parsed.classDescriptions || []);
+          }
           setStep(2);
-          // Clear the stored data to prevent re-use
           sessionStorage.removeItem('viabilityData');
         }
       } catch (e) {
@@ -67,6 +78,14 @@ const RegistrationFormSection = () => {
   // Handlers
   const handleViabilityNext = useCallback((brandName: string, businessArea: string, result: ViabilityResult) => {
     setViabilityData({ brandName, businessArea, result });
+    // Extract classes from viability result
+    if (Array.isArray(result.classes) && result.classes.length > 0) {
+      setSuggestedClasses(result.classes);
+      setSuggestedClassDescriptions(result.classDescriptions || []);
+    } else {
+      setSuggestedClasses([]);
+      setSuggestedClassDescriptions([]);
+    }
     setStep(2);
     scrollToForm();
   }, []);
@@ -76,7 +95,6 @@ const RegistrationFormSection = () => {
     setStep(3);
     scrollToForm();
 
-    // Trigger form_started email automation (only once)
     if (!formStartedTriggered && data.email) {
       setFormStartedTriggered(true);
       try {
@@ -93,7 +111,6 @@ const RegistrationFormSection = () => {
             },
           },
         });
-        console.log('Form started email triggered successfully');
       } catch (error) {
         console.error('Error triggering form_started:', error);
       }
@@ -102,14 +119,21 @@ const RegistrationFormSection = () => {
 
   const handleBrandDataNext = useCallback((data: BrandData) => {
     setBrandData(data);
-    setStep(4);
+    setStep(4); // Now goes to NCL class selection
+    scrollToForm();
+  }, []);
+
+  const handleNclNext = useCallback((classes: number[], descriptions: string[]) => {
+    setSelectedClasses(classes);
+    setSelectedClassDescriptions(descriptions);
+    setStep(5); // Go to Payment
     scrollToForm();
   }, []);
 
   const handlePaymentNext = useCallback((method: string, value: number) => {
     setPaymentMethod(method);
     setPaymentValue(value);
-    setStep(5);
+    setStep(6); // Go to Contract
     scrollToForm();
   }, []);
 
@@ -126,7 +150,6 @@ const RegistrationFormSection = () => {
     setIsSubmitting(true);
 
     try {
-      // Call Asaas edge function to create payment and lead
       const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
         body: {
           personalData: {
@@ -151,6 +174,9 @@ const RegistrationFormSection = () => {
           paymentMethod,
           paymentValue,
           contractHtml,
+          selectedClasses,
+          classDescriptions: selectedClassDescriptions,
+          suggestedClasses,
         },
       });
 
@@ -165,7 +191,6 @@ const RegistrationFormSection = () => {
 
       console.log('Asaas payment created:', data);
 
-      // Save order data for payment page
       const orderData = {
         personalData: {
           fullName: personalData.fullName,
@@ -189,6 +214,7 @@ const RegistrationFormSection = () => {
         paymentMethod,
         paymentValue,
         contractHtml,
+        selectedClasses,
         acceptedAt: new Date().toISOString(),
         leadId: data.leadId,
         contractId: data.contractId,
@@ -225,7 +251,7 @@ const RegistrationFormSection = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [personalData, brandData, paymentMethod, paymentValue, navigate, toast]);
+  }, [personalData, brandData, paymentMethod, paymentValue, selectedClasses, selectedClassDescriptions, suggestedClasses, navigate, toast]);
 
   const scrollToForm = () => {
     document.getElementById('registro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -236,36 +262,24 @@ const RegistrationFormSection = () => {
     scrollToForm();
   };
 
-  // Build initial personal data with empty values
   const getInitialPersonalData = (): PersonalData => ({
-    fullName: "",
-    email: "",
-    phone: "",
-    cpf: "",
-    cep: "",
-    address: "",
-    addressNumber: "",
-    neighborhood: "",
-    city: "",
-    state: "",
+    fullName: "", email: "", phone: "", cpf: "",
+    cep: "", address: "", addressNumber: "", neighborhood: "", city: "", state: "",
   });
 
-  // Build initial brand data from viability step
   const getInitialBrandData = (): BrandData => ({
     brandName: viabilityData?.brandName || "",
     businessArea: viabilityData?.businessArea || "",
-    hasCNPJ: false,
-    cnpj: "",
-    companyName: "",
+    hasCNPJ: false, cnpj: "", companyName: "",
   });
+
+  const classCount = selectedClasses.length > 0 ? selectedClasses.length : 1;
 
   return (
     <section id="registro" className="section-padding bg-card relative overflow-hidden">
-      {/* Background */}
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
 
       <div className="container mx-auto px-4 relative z-10">
-        {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-12">
           <span className="badge-premium mb-4 inline-flex">Formulário de Registro</span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
@@ -277,20 +291,15 @@ const RegistrationFormSection = () => {
           </p>
         </div>
 
-        {/* Progress Steps */}
         <div className="max-w-2xl mx-auto mb-12">
           <CheckoutProgress currentStep={step} />
         </div>
 
-        {/* Form */}
         <div className="max-w-xl mx-auto">
           <div className="glass-card p-8">
-            {/* Step 1: Viability */}
             {step === 1 && (
               <ViabilityStep onNext={handleViabilityNext} />
             )}
-
-            {/* Step 2: Personal Data */}
             {step === 2 && (
               <PersonalDataStep
                 initialData={personalData || getInitialPersonalData()}
@@ -298,8 +307,6 @@ const RegistrationFormSection = () => {
                 onBack={() => handleBack(1)}
               />
             )}
-
-            {/* Step 3: Brand Data */}
             {step === 3 && (
               <BrandDataStep
                 initialData={brandData || getInitialBrandData()}
@@ -307,26 +314,34 @@ const RegistrationFormSection = () => {
                 onBack={() => handleBack(2)}
               />
             )}
-
-            {/* Step 4: Payment */}
             {step === 4 && (
-              <PaymentStep
-                selectedMethod={paymentMethod}
-                onNext={handlePaymentNext}
+              <NclClassSelectionStep
+                suggestedClasses={suggestedClasses}
+                classDescriptions={suggestedClassDescriptions}
+                brandName={viabilityData?.brandName || brandData?.brandName || ""}
+                onNext={handleNclNext}
                 onBack={() => handleBack(3)}
               />
             )}
-
-            {/* Step 5: Contract */}
-            {step === 5 && personalData && brandData && (
+            {step === 5 && (
+              <PaymentStep
+                selectedMethod={paymentMethod}
+                onNext={handlePaymentNext}
+                onBack={() => handleBack(4)}
+                classCount={classCount}
+              />
+            )}
+            {step === 6 && personalData && brandData && (
               <ContractStep
                 personalData={personalData}
                 brandData={brandData}
                 paymentMethod={paymentMethod}
                 paymentValue={paymentValue}
                 onSubmit={handleContractSubmit}
-                onBack={() => handleBack(4)}
+                onBack={() => handleBack(5)}
                 isSubmitting={isSubmitting}
+                selectedClasses={selectedClasses}
+                classDescriptions={selectedClassDescriptions}
               />
             )}
           </div>

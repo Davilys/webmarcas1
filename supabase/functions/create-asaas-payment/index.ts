@@ -36,6 +36,9 @@ interface PaymentRequest {
   contractHtml?: string;
   userId?: string;
   documentType?: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa';
+  selectedClasses?: number[];
+  classDescriptions?: string[];
+  suggestedClasses?: number[];
 }
 
 interface ContractTemplate {
@@ -52,6 +55,8 @@ function replaceContractVariables(
     personalData: PersonalData;
     brandData: BrandData;
     paymentMethod: string;
+    selectedClasses?: number[];
+    classDescriptions?: string[];
   }
 ): string {
   const { personalData, brandData, paymentMethod } = data;
@@ -76,13 +81,35 @@ function replaceContractVariables(
 
   // Payment method details
   const getPaymentDetails = () => {
+    const classCount = data.selectedClasses?.length || 1;
+    const qty = Math.max(classCount, 1);
+    
     switch (paymentMethod) {
-      case 'avista':
-        return `• Pagamento à vista via PIX: R$ 699,00 (seiscentos e noventa e nove reais) - com 43% de desconto sobre o valor integral de R$ 1.230,00.`;
-      case 'cartao6x':
-        return `• Pagamento parcelado no Cartão de Crédito: 6x de R$ 199,00 (cento e noventa e nove reais) = Total: R$ 1.194,00 - sem juros.`;
-      case 'boleto3x':
-        return `• Pagamento parcelado via Boleto Bancário: 3x de R$ 399,00 (trezentos e noventa e nove reais) = Total: R$ 1.197,00.`;
+      case 'avista': {
+        const total = 699 * qty;
+        const valorIntegral = 1228 * qty;
+        const economia = valorIntegral - total;
+        const totalSuffix = qty > 1
+          ? ` Valor total de ${qty} classes: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+          : '';
+        return `• Pagamento à vista via PIX: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${qty === 1 ? 'seiscentos e noventa e nove reais' : 'conforme seleção de classes'}) - com 43% de desconto (economia de R$ ${economia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).${totalSuffix}`;
+      }
+      case 'cartao6x': {
+        const total = 1194 * qty;
+        const installment = total / 6;
+        const totalSuffix = qty > 1
+          ? ` Valor total de ${qty} classes: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+          : '';
+        return `• Pagamento parcelado no Cartão de Crédito: 6x de R$ ${installment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = Total: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - sem juros.${totalSuffix}`;
+      }
+      case 'boleto3x': {
+        const total = 1197 * qty;
+        const installment = total / 3;
+        const totalSuffix = qty > 1
+          ? ` Valor total de ${qty} classes: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+          : '';
+        return `• Pagamento parcelado via Boleto Bancário: 3x de R$ ${installment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = Total: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.${totalSuffix}`;
+      }
       default:
         return `• Forma de pagamento a ser definida.`;
     }
@@ -113,6 +140,19 @@ function replaceContractVariables(
     .replace(/\{\{forma_pagamento_detalhada\}\}/g, getPaymentDetails())
     .replace(/\{\{data_extenso\}\}/g, currentDate)
     .replace(/\{\{data\}\}/g, now.toLocaleDateString('pt-BR'));
+
+  // Inject NCL classes into clause 1.1 if selectedClasses are provided
+  if (data.selectedClasses && data.selectedClasses.length > 0) {
+    const classListLines = data.selectedClasses.map((cls, i) => {
+      const desc = data.classDescriptions?.[i] || `Classe ${cls}`;
+      return `${i + 1}. Marca: ${brandData.brandName} - Classe NCL: ${cls} (${desc})`;
+    }).join('\n');
+
+    const clause11Pattern = /registro da marca "[^"]*" junto ao INPI até a conclusão do processo, no ramo de atividade: [^.]+\./i;
+    if (clause11Pattern.test(result)) {
+      result = result.replace(clause11Pattern, `registro das seguintes marcas junto ao INPI até a conclusão dos processos:\n\n${classListLines}`);
+    }
+  }
 
   return result;
 }
@@ -476,7 +516,7 @@ serve(async (req) => {
     // Create Supabase admin client
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { personalData, brandData, paymentMethod, paymentValue, contractHtml: providedContractHtml, userId }: PaymentRequest = await req.json();
+    const { personalData, brandData, paymentMethod, paymentValue, contractHtml: providedContractHtml, userId, selectedClasses, classDescriptions, suggestedClasses: suggestedClassesFromClient }: PaymentRequest = await req.json();
 
     console.log('Creating Asaas payment for:', personalData.fullName, '| Method:', paymentMethod);
 
@@ -506,6 +546,8 @@ serve(async (req) => {
         personalData,
         brandData,
         paymentMethod,
+        selectedClasses: selectedClasses || [],
+        classDescriptions: classDescriptions || [],
       });
 
       // Generate full HTML
@@ -868,6 +910,9 @@ serve(async (req) => {
         user_id: effectiveUserId || null, // Use effective user ID (found profile or session)
         contract_html: contractHtml || null,
         visible_to_client: true,
+        suggested_classes: selectedClasses && selectedClasses.length > 0
+          ? { classes: suggestedClassesFromClient || selectedClasses, descriptions: classDescriptions || [], selected: selectedClasses }
+          : null,
       })
       .select('id')
       .single();
