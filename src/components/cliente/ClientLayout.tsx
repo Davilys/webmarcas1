@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { toast } from 'sonner';
 import {
   LayoutDashboard,
@@ -132,7 +132,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         </Link>
       </div>
 
-      <ScrollArea className="flex-1 px-3 py-4">
+      <div className="flex-1 overflow-y-auto px-3 py-4">
         <nav className="space-y-1.5">
           {menuItems.map((item, index) => {
             const isActive = location.pathname === item.href;
@@ -176,7 +176,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
             );
           })}
         </nav>
-      </ScrollArea>
+      </div>
 
       <div className="p-3 border-t border-border/50 space-y-1.5">
         <Link
