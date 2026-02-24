@@ -1,52 +1,40 @@
 
-# Fase 7 -- Botao "Gerar Classes Sugeridas" no Admin (CreateContractDialog)
+# Correcao do Erro de Tela Branca -- CreateContractDialog
 
-## Resumo
-Adicionar um botao "Gerar Classes Sugeridas" na aba "Dados da Marca" do dialog de novo contrato no painel admin. Ao clicar, a IA analisa o nome da marca e ramo de atividade e retorna 3 classes NCL sugeridas com descricoes. O admin pode selecionar 1, 2 ou 3 classes manualmente. O valor do contrato e multiplicado pela quantidade de classes selecionadas. As classes selecionadas sao salvas no campo `suggested_classes` (jsonb) do contrato.
+## Causa Raiz Identificada
 
-## Alteracoes no arquivo
+Dois bugs combinados causam o crash:
 
-**Arquivo:** `src/components/admin/contracts/CreateContractDialog.tsx`
+### Bug 1: Dialog sem `forceMount`
+O arquivo `src/components/ui/dialog.tsx` perdeu a propriedade `forceMount` que havia sido aplicada anteriormente para evitar crashes do Radix UI. Sem `forceMount`, o componente `Presence` interno do Radix tenta remover nos DOM que ja foram removidos, gerando o erro:
+```text
+Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
+```
+Isso causa a tela preta/branca ao abrir o dialog.
 
-### 1. Novos estados
-- `suggestedClasses: { classes: number[], descriptions: string[] } | null` -- resultado da IA
-- `selectedClasses: number[]` -- classes marcadas pelo admin (inicialmente vazio, NUNCA pre-selecionadas)
-- `loadingClasses: boolean` -- loading do botao IA
+### Bug 2: Duplo disparo do toggle de classes
+No card de selecao de classes (linhas 1605-1633), o `<div>` pai tem `onClick={toggleClassSelection}` e o `<Checkbox>` filho tem `onCheckedChange={toggleClassSelection}`. Quando o usuario clica no checkbox, o evento dispara DUAS vezes (uma no checkbox, outra via bubbling no div), fazendo a classe ser selecionada e imediatamente desmarcada, causando atualizacoes de estado rapidas que intensificam o crash do Radix.
 
-### 2. Botao "Gerar Classes Sugeridas"
-- Localizado logo abaixo do campo "Ramo de Atividade" na secao de marca unica (single brand, linhas ~1505)
-- Icone de cerebro/IA + texto "Gerar Classes Sugeridas"
-- Habilitado apenas quando `brandData.brandName` e `brandData.businessArea` estiverem preenchidos
-- Ao clicar: chama `supabase.functions.invoke('inpi-viability-check', { body: { brandName, businessArea } })`
-- Usa apenas os campos `classes` e `classDescriptions` da resposta
-- Renderiza card com checkboxes (NENHUMA pre-marcada):
-  - Classe principal (indice 0) com badge "Classe Principal"
-  - Descricao resumida de cada classe
-  - Botao "Selecionar Todas"
+## Correcoes
 
-### 3. Calculo de valor multiplicado por classes
-- Modificar `getContractValue()` e `getUnitValue()`: quando `selectedClasses.length > 0`, usar `selectedClasses.length` como multiplicador em vez de `brandQuantity`
-- Atualizar `getPaymentDescription()` para refletir a quantidade de classes
-- Na aba pagamento, os valores exibidos (R$ 699, 6x R$ 199, 3x R$ 399) serao multiplicados pela quantidade de classes selecionadas
-- Se nenhuma classe selecionada e suggestedClasses existe, bloquear com minimo de 1 classe
+### Arquivo 1: `src/components/ui/dialog.tsx`
+- Adicionar `forceMount` ao `DialogPortal`, `DialogOverlay`, e `DialogPrimitive.Content`
+- Isso forca os componentes a ficarem sempre montados no DOM, evitando que o Radix Presence tente remover/adicionar nos durante animacoes
 
-### 4. Contrato salva com classes
-- No `handleSubmit`, ao inserir o contrato, adicionar `suggested_classes: suggestedClasses` no insert
-- Passar `selectedClasses` para `replaceContractVariables` (sera usado nas fases seguintes para formatacao da clausula 1.1)
+### Arquivo 2: `src/components/admin/contracts/CreateContractDialog.tsx`
+- Remover o `onClick` do `<div>` pai que envolve cada classe
+- Manter apenas o `onCheckedChange` no `<Checkbox>` como unico ponto de interacao
+- Alternativa: manter o `onClick` no div mas adicionar `e.stopPropagation()` no checkbox, ou remover `onCheckedChange` do checkbox e deixar apenas o div controlando
 
-### 5. Reset
-- Adicionar `setSuggestedClasses(null)`, `setSelectedClasses([])`, `setLoadingClasses(false)` no `resetForm()`
+## Arquivos Modificados
+| Arquivo | Alteracao |
+|---|---|
+| `src/components/ui/dialog.tsx` | Adicionar `forceMount` em Portal, Overlay e Content |
+| `src/components/admin/contracts/CreateContractDialog.tsx` | Corrigir duplo disparo do toggle de classes |
 
 ## O que NAO sera alterado
-- Nenhuma tabela (campo `suggested_classes` ja existe como jsonb)
-- Nenhuma edge function
-- Fluxo de marcas multiplas (`brandQuantity > 1`) permanece inalterado
-- Fluxo de cliente existente (legacy) permanece inalterado
-- Valores unitarios base (699/1194/1197) permanecem os mesmos
-- Nenhum outro componente ou pagina
-
-## Prevencao de tela branca
-- O botao IA e os checkboxes sao renderizados condicionalmente e isolados do formulario principal
-- Nenhuma alteracao no DialogContent ou na estrutura de tabs
-- Nenhum useEffect que dependa dos novos estados (evita loops)
-- fallback gracioso se a edge function falhar (toast de erro, sem crash)
+- Nenhuma logica de negocio
+- Nenhum calculo de valores
+- Nenhum layout visual
+- Nenhuma tabela ou edge function
+- Nenhum outro componente
