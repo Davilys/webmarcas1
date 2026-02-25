@@ -1,103 +1,65 @@
 
-# Plano: Corrigir Lentidao na Troca de Abas e Busca no Kanban
+# Correcao: Dois paineis abrindo simultaneamente na aba Publicacoes
 
-## Problemas Identificados
+## Problema
+Ao clicar num card do Kanban na aba Revista INPI > Publicacoes, duas coisas acontecem ao mesmo tempo:
+1. O painel lateral branco "Detalhes do Processo" aparece no lado direito (dentro da pagina)
+2. O ficheiro azul (ClientDetailSheet) abre por cima como Sheet
 
-1. **Troca lenta entre Comercial/Juridico**: Ao mudar o `funnelType`, 4 `useMemo` em cascata recalculam sequencialmente sobre 2300+ registros, e o Kanban re-renderiza todas as colunas com animacoes pesadas (`AnimatePresence` + `motion.div` com stagger delay em cada card).
-
-2. **Busca nao aparece no Kanban**: Cada tecla digitada dispara re-render imediato de todo o Kanban com 2300+ cards. As animacoes de entrada (`initial`, `animate`, `transition` com delay) em cada card causam travamento visual -- os resultados existem mas demoram a aparecer por causa das animacoes em cascata.
-
-3. **Animacoes excessivas**: Cada card do Kanban tem `motion.div` com `initial={{ opacity: 0, y: 8 }}` e `transition={{ delay: index * 0.03 }}`. Com 15+ cards por coluna e 9 colunas, sao 135+ animacoes simultaneas.
-
----
+Resultado: o painel branco mostra as informacoes corretas (timeline, botoes), mas o ficheiro azul mostra "Detalhes do Processo" vazio/em branco. Sao dois paineis sobrepostos.
 
 ## Solucao
-
-### 1. Debounce na busca (Clientes.tsx)
-- Adicionar estado `debouncedSearch` com `setTimeout` de 300ms.
-- O `useMemo` de `filteredClients` usa `debouncedSearch` em vez de `search` direto.
-- Isso evita re-render do Kanban a cada tecla.
-
-### 2. Remover animacoes pesadas dos cards (ClientKanbanBoard.tsx)
-- Substituir `motion.div` por `div` nos cards individuais (linhas ~390-500).
-- Remover `AnimatePresence` do wrapper de cards.
-- Manter apenas animacao no header das colunas (leve).
-- Remover `transition={{ delay: stageIndex * 0.05 }}` das colunas -- renderizar tudo imediatamente.
-
-### 3. Limitar cards visiveis por coluna
-- Mostrar no maximo 20 cards por coluna inicialmente.
-- Adicionar botao "Ver mais X clientes" para expandir.
-- Isso reduz o DOM de ~2300 cards para ~60-180 cards visiveis.
-
-### 4. Otimizar cascata de useMemo (Clientes.tsx)
-- Consolidar `dateFilteredClients` + `ownFilteredClients` + `funnelFilteredClients` em um unico `useMemo` para evitar 3 recalculos em cascata.
-
----
+Mudar o fluxo para que ao clicar num card do Kanban:
+- Abra APENAS o ficheiro azul (ClientDetailSheet) com `initialShowProcessDetails=true`
+- O painel lateral branco NAO apareca (fechar `selectedId` para o painel lateral ao abrir o sheet)
+- As informacoes do processo (timeline, botoes Editar/Agenda/Upload/Excluir) fiquem DENTRO do ficheiro azul
 
 ## Detalhes Tecnicos
 
-### Arquivo: `src/pages/admin/Clientes.tsx`
+### Arquivo: `src/components/admin/PublicacaoTab.tsx`
 
-**Debounce na busca:**
-```typescript
-const [debouncedSearch, setDebouncedSearch] = useState('');
+**1. No handler do Kanban `onSelect` (linha ~1358-1362):**
+- Ao abrir o ClientDetailSheet, limpar o `selectedId` do painel lateral para que ele nao apareca
+- Guardar o ID selecionado apenas para construir o `selectedClientForSheet`
+- Adicionar `setShowProcessDetailFromSheet(true)` para que o ficheiro azul abra ja com "Detalhes do Processo" visivel
 
-useEffect(() => {
-  const timer = setTimeout(() => setDebouncedSearch(search), 300);
-  return () => clearTimeout(timer);
-}, [search]);
+Antes:
+```
+onSelect={id => {
+  setSelectedId(id);
+  setShowClientSheet(true);
+}}
 ```
 
-**Consolidar filtros em um unico useMemo:**
-```typescript
-const filteredClients = useMemo(() => {
-  let result = clients;
-  
-  // Funnel filter
-  result = result.filter(c => (c.client_funnel_type || 'juridico') === funnelType);
-  
-  // Own filter
-  if (viewOwnOnly && currentUserId) {
-    result = result.filter(c => c.created_by === currentUserId || c.assigned_to === currentUserId);
-  }
-  
-  // Date filter
-  if (dateFilter !== 'all') { /* ... */ }
-  
-  // Search filter
-  if (debouncedSearch.trim()) { /* ... */ }
-  
-  return result;
-}, [clients, funnelType, viewOwnOnly, currentUserId, dateFilter, selectedMonth, debouncedSearch]);
+Depois:
+```
+onSelect={id => {
+  setSelectedId(id);
+  setSelectedId(null);  // Fecha painel lateral branco
+  setShowClientSheet(true);
+  setShowProcessDetailFromSheet(true);
+}}
 ```
 
-### Arquivo: `src/components/admin/clients/ClientKanbanBoard.tsx`
+Na pratica, vamos guardar o id num estado separado (ex: `sheetPubId`) para construir o `selectedClientForSheet`, sem ativar o painel lateral. Ou simplesmente limpar `selectedId` apos construir o client, usando um `useEffect`.
 
-**Remover animacoes dos cards:**
-- Trocar `<motion.div>` por `<div>` nos cards (linhas ~390-500).
-- Remover `<AnimatePresence>` (linha 367).
-- Manter `<motion.div>` apenas nas colunas mas sem delay.
+**Abordagem mais limpa:** Usar o `selectedId` apenas para o painel lateral (quando NAO abre o sheet). Quando abre o sheet, usar um estado separado `sheetSelectedPubId` para construir o client:
 
-**Limitar cards por coluna:**
-```typescript
-const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
-const MAX_VISIBLE = 20;
+- Criar estado `sheetSelectedPubId`
+- No Kanban onSelect: setar `sheetSelectedPubId`, abrir sheet, NAO setar `selectedId`
+- O `selectedClientForSheet` usa `sheetSelectedPubId` em vez de `selectedId`
+- O painel lateral branco continua usando `selectedId` (que ficara null quando o sheet estiver aberto)
 
-// No render:
-const visibleClients = isExpanded ? stageClients : stageClients.slice(0, MAX_VISIBLE);
-const hiddenCount = stageClients.length - MAX_VISIBLE;
-```
+**2. Na lista (view modo lista, linhas ~1395-1440):**
+- Manter o mesmo comportamento: ao clicar numa linha, abrir sheet e nao o painel lateral
 
----
+**3. No render do painel lateral (linhas ~1470-1660):**
+- Condicionar para NAO renderizar quando `showClientSheet` esta aberto
 
-## Arquivos Modificados
-
-| Arquivo | Alteracao |
-|---|---|
-| `src/pages/admin/Clientes.tsx` | Debounce na busca, consolidar filtros em unico useMemo |
-| `src/components/admin/clients/ClientKanbanBoard.tsx` | Remover animacoes pesadas, limitar cards por coluna |
+### Arquivo: `src/components/admin/clients/ClientDetailSheet.tsx`
+- Nenhuma alteracao necessaria. O `initialShowProcessDetails=true` ja funciona e o `handleQuickAction('processo')` ja busca os dados corretamente.
 
 ## Resultado Esperado
-- Troca entre Comercial/Juridico instantanea (sem animacoes em cascata)
-- Busca responsiva com resultado aparecendo apos 300ms de pausa na digitacao
-- Kanban renderiza imediatamente sem atrasos visuais
+- Clicar no card do Kanban abre APENAS o ficheiro azul (ClientDetailSheet) com Detalhes do Processo preenchido
+- Painel lateral branco nao aparece mais simultaneamente
+- Todas as informacoes e botoes (Editar, Agenda, Upload, Excluir) ficam dentro do ficheiro azul
