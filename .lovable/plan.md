@@ -1,77 +1,38 @@
 
 
-## Correção: Links de verificação blockchain no email
+## Correção: Link "Continuar Registro" no email abrindo no Lovable em vez de webmarcas.net
 
 ### Problema
 
-Dois pontos usam URLs incorretas, causando 404:
+Na linha 107 do arquivo `src/components/sections/RegistrationFormSection.tsx`, o campo `base_url` é enviado como `window.location.origin`. Quando o formulário é preenchido no ambiente de preview do Lovable, o link no email aponta para `https://...lovable.app/registro` em vez de `https://webmarcas.net/registro`.
 
-1. `sign-contract-blockchain/index.ts` linha 248: fallback é `webmarcas.lovable.app` (domínio antigo)
-2. `confirm-payment/index.ts` linhas 260-268: não inclui `verification_url` nem `link_area_cliente` no payload do email
+O mesmo padrão ruim pode afetar SMS e WhatsApp, pois o link repassado ao multicanal herda o mesmo domínio.
 
 ### Solução
 
-Usar o mesmo padrão já adotado em `generate-signature-link`, `send-signature-request` e `trigger-email-automation`: domínio fixo `https://webmarcas.net` como PRODUCTION_DOMAIN, com proteção contra URLs de preview.
+Trocar `window.location.origin` por uma lógica que prioriza o domínio de produção, seguindo o mesmo padrão já usado em todas as Edge Functions:
 
-### Alterações
+**Arquivo: `src/components/sections/RegistrationFormSection.tsx` (linha 107)**
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `sign-contract-blockchain/index.ts` | Linha 248: trocar fallback de `webmarcas.lovable.app` para `webmarcas.net`, com validação anti-preview |
-| `confirm-payment/index.ts` | Adicionar `verification_url` e `link_area_cliente` no payload do email contract_signed, buscando o `blockchain_hash` do contrato |
-
-### Detalhes técnicos
-
-**sign-contract-blockchain (linha 248)**
-
-```text
+```
 Antes:
-  const verificationBaseUrl = baseUrl || Deno.env.get('SITE_URL') || 'https://webmarcas.lovable.app';
+  base_url: window.location.origin,
 
 Depois:
-  const PRODUCTION_DOMAIN = 'https://webmarcas.net';
-  const isPreviewUrl = (url: string) =>
-    !url || url.includes('lovable.app') || url.includes('localhost');
-  const rawSiteUrl = Deno.env.get('SITE_URL') || '';
-  const verificationBaseUrl = (!isPreviewUrl(rawSiteUrl) ? rawSiteUrl : null)
-    || (!isPreviewUrl(baseUrl || '') ? baseUrl : null)
-    || PRODUCTION_DOMAIN;
+  base_url: 'https://webmarcas.net',
 ```
 
-Isso segue exatamente o padrão das outras funções (generate-signature-link, send-signature-request).
+Usar o domínio fixo de produção garante que o email, SMS e WhatsApp sempre apontem para o domínio correto, independente de onde o formulário foi preenchido (preview Lovable, localhost ou produção).
 
-**confirm-payment (linhas 249-269)**
+### Verificação adicional
 
-Antes de disparar o email, buscar o `blockchain_hash` do contrato e incluir os links:
+O template do email `form_started` no banco de dados já usa `{{app_url}}/registro` corretamente. A Edge Function `trigger-email-automation` já tem proteção anti-preview (linhas 58-64), mas como `data.base_url` é preenchido com `window.location.origin` ANTES da proteção ser aplicada, o domínio do preview acaba passando. Fixando no frontend resolve de forma definitiva.
 
-```text
-// Buscar blockchain_hash do contrato
-let blockchainHash = '';
-if (contractId) {
-  const { data: contractRecord } = await supabaseAdmin
-    .from('contracts')
-    .select('blockchain_hash')
-    .eq('id', contractId)
-    .maybeSingle();
-  blockchainHash = contractRecord?.blockchain_hash || '';
-}
-
-// No payload do email, adicionar:
-const PRODUCTION_DOMAIN = 'https://webmarcas.net';
-data: {
-  ...campos existentes...,
-  verification_url: blockchainHash
-    ? `${PRODUCTION_DOMAIN}/verificar-contrato?hash=${blockchainHash}`
-    : '',
-  link_area_cliente: `${PRODUCTION_DOMAIN}/cliente/documentos`,
-}
-```
-
-### Segurança
+### Impacto
 
 - Nenhuma tabela alterada
 - Nenhum schema modificado
-- Nenhum fluxo existente quebrado
-- Apenas URLs nos emails corrigidas para apontar ao domínio correto (webmarcas.net)
-- Deploy automático das edge functions após edição
+- Apenas 1 linha alterada no frontend
+- Nenhuma Edge Function precisa ser editada (a proteção anti-preview na trigger-email já existe, mas o frontend estava enviando o domínio errado antes dela ser verificada)
+- SMS e WhatsApp herdam a correção automaticamente
 
