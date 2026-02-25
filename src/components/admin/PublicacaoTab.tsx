@@ -798,6 +798,7 @@ export default function PublicacaoTab() {
       assigned_to: null,
       cpf_cnpj: undefined,
       brands: proc ? [{ id: proc.id, brand_name: proc.brand_name, process_number: proc.process_number, pipeline_stage: proc.pipeline_stage }] : [],
+      publicacao_id: sheetPub.id,
     } as ClientWithProcess;
   }, [sheetPub, clientMap, processMap, processes]);
 
