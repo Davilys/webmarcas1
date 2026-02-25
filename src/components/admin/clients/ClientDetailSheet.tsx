@@ -207,6 +207,11 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
   const rpiFileInputRef = useRef<HTMLInputElement>(null);
   const [rpiUploadPubId, setRpiUploadPubId] = useState<string | null>(null);
 
+  // Scheduling dialog state (for pub "Agenda" button)
+  const [schedulingPub, setSchedulingPub] = useState<any | null>(null);
+  const [schedulingForm, setSchedulingForm] = useState({ title: '', description: '', date: new Date(), time: '10:00', duration: '30', generateMeet: true });
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
   // Link client states (for orphan publications)
   const [linkClientSearch, setLinkClientSearch] = useState('');
   const [linkClientResults, setLinkClientResults] = useState<any[]>([]);
@@ -784,20 +789,105 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
     finally { setUploadingRpi(null); setRpiUploadPubId(null); }
   };
 
-  const handleSchedulePubReminder = async (pub: any) => {
-    if (!client) return;
+  const handleOpenSchedulingDialog = (pub: any) => {
+    const brandName = pub.brand_name_rpi || client?.brand_name || 'Marca';
+    setSchedulingForm({
+      title: `Reunião: ${brandName}`,
+      description: `Publicação: ${pub.process_number_rpi || ''} — Status: ${pub.status || 'depositada'}`,
+      date: new Date(),
+      time: '10:00',
+      duration: '30',
+      generateMeet: true,
+    });
+    setSchedulingPub(pub);
+  };
+
+  const handleCreatePubSchedule = async () => {
+    if (!client || !schedulingForm.title.trim()) return;
+    setSavingSchedule(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const scheduledDate = pub.proximo_prazo_critico ? new Date(new Date(pub.proximo_prazo_critico).getTime() - 7 * 86400000) : new Date(Date.now() + 7 * 86400000);
-      await supabase.from('client_appointments').insert({
-        user_id: client.id,
+      const scheduledAt = new Date(schedulingForm.date);
+      const [h, m] = schedulingForm.time.split(':');
+      scheduledAt.setHours(parseInt(h), parseInt(m), 0, 0);
+
+      // Use client.id if available, otherwise use admin's own id for orphans
+      const userId = client.id && client.id !== '' ? client.id : user?.id;
+
+      const { data: aptData, error } = await supabase.from('client_appointments').insert({
+        user_id: userId,
         admin_id: user?.id,
-        title: `Prazo Publicação: ${pub.brand_name_rpi || 'Marca'}`,
-        description: `Prazo crítico: ${pub.proximo_prazo_critico ? format(new Date(pub.proximo_prazo_critico), 'dd/MM/yyyy') : 'N/A'} — Status: ${pub.status}`,
-        scheduled_at: scheduledDate.toISOString(),
-      });
-      toast.success('Lembrete agendado!');
-    } catch { toast.error('Erro ao agendar'); }
+        title: schedulingForm.title,
+        description: schedulingForm.description,
+        scheduled_at: scheduledAt.toISOString(),
+      }).select().single();
+      if (error) throw error;
+
+      let meetLink: string | null = null;
+
+      // Generate Google Meet if toggle is on
+      if (schedulingForm.generateMeet && aptData) {
+        try {
+          const attendeeEmails = [client.email].filter(Boolean);
+          const { data: meetData } = await supabase.functions.invoke('create-google-meet', {
+            body: {
+              title: schedulingForm.title,
+              scheduled_at: scheduledAt.toISOString(),
+              duration_minutes: parseInt(schedulingForm.duration),
+              attendee_emails: attendeeEmails,
+            },
+          });
+          if (meetData?.meetLink) {
+            meetLink = meetData.meetLink;
+            await supabase.from('client_appointments').update({
+              google_meet_link: meetData.meetLink,
+              google_event_id: meetData.eventId,
+            }).eq('id', aptData.id);
+          }
+        } catch (meetErr) {
+          console.error('Meet generation error:', meetErr);
+        }
+      }
+
+      // Send notification via email + whatsapp if client has contact info
+      if (client.email || client.phone) {
+        try {
+          const dataHoraFormatada = format(scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+          const brandName = schedulingPub?.brand_name_rpi || client.brand_name || 'Marca';
+          const mensagemCustom = meetLink
+            ? `Olá ${client.full_name || 'Cliente'}! Uma reunião foi agendada:\n\n📋 ${schedulingForm.title}\n📅 ${dataHoraFormatada}\n🔗 Link Google Meet: ${meetLink}\n\nMarca: ${brandName}`
+            : `Olá ${client.full_name || 'Cliente'}! Uma reunião foi agendada:\n\n📋 ${schedulingForm.title}\n📅 ${dataHoraFormatada}\n\nMarca: ${brandName}`;
+
+          await supabase.functions.invoke('send-multichannel-notification', {
+            body: {
+              channels: ['email', 'whatsapp'],
+              event_type: 'agendamento_criado',
+              recipient: {
+                nome: client.full_name || 'Cliente',
+                email: client.email || null,
+                phone: client.phone || null,
+              },
+              data: {
+                titulo: schedulingForm.title,
+                data_hora: dataHoraFormatada,
+                meet_link: meetLink,
+                marca: brandName,
+                mensagem_custom: mensagemCustom,
+              },
+            },
+          });
+        } catch (notifErr) {
+          console.error('Notification error:', notifErr);
+        }
+      }
+
+      toast.success(meetLink ? 'Agendamento criado com Google Meet!' : 'Agendamento criado!');
+      setSchedulingPub(null);
+      await fetchClientData();
+      // Refresh process details if open
+      if (showProcessDetails) handleQuickAction('processo');
+    } catch (err: any) { toast.error(`Erro ao criar agendamento: ${err?.message}`); }
+    finally { setSavingSchedule(false); }
   };
 
   if (!client) return null;
@@ -1240,7 +1330,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
                             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleEditPub(pub)}>
                               <Edit2 className="h-3 w-3" /> Editar Datas e Status
                             </Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleSchedulePubReminder(pub)}>
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => handleOpenSchedulingDialog(pub)}>
                               <CalendarIcon className="h-3 w-3" /> Agenda
                             </Button>
                             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => { setRpiUploadPubId(pub.id); rpiFileInputRef.current?.click(); }} disabled={uploadingRpi === pub.id}>
@@ -2303,6 +2393,78 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
         clientName={client.full_name || client.email || 'Cliente'}
         onCreated={() => fetchClientData()}
       />
+
+      {/* ─── SCHEDULING DIALOG (from pub Agenda button) ─── */}
+      <Dialog open={!!schedulingPub} onOpenChange={(open) => { if (!open) setSchedulingPub(null); }}>
+        <DialogContent className="z-[200] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-primary" /> Novo Agendamento
+            </DialogTitle>
+            <DialogDescription>Crie um agendamento com Google Meet e notifique o cliente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Título</Label>
+              <Input value={schedulingForm.title} onChange={(e) => setSchedulingForm(prev => ({ ...prev, title: e.target.value }))} placeholder="Ex: Reunião sobre marca..." />
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Textarea value={schedulingForm.description} onChange={(e) => setSchedulingForm(prev => ({ ...prev, description: e.target.value }))} rows={2} className="resize-none" placeholder="Detalhes do agendamento..." />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Data</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal h-10">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {format(schedulingForm.date, 'dd/MM/yyyy')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-[210]" align="start">
+                    <Calendar mode="single" selected={schedulingForm.date} onSelect={(d) => d && setSchedulingForm(prev => ({ ...prev, date: d }))} locale={ptBR} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label>Hora</Label>
+                <Input type="time" value={schedulingForm.time} onChange={(e) => setSchedulingForm(prev => ({ ...prev, time: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Duração</Label>
+                <Select value={schedulingForm.duration} onValueChange={(v) => setSchedulingForm(prev => ({ ...prev, duration: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[210]">
+                    <SelectItem value="15">15 min</SelectItem>
+                    <SelectItem value="30">30 min</SelectItem>
+                    <SelectItem value="45">45 min</SelectItem>
+                    <SelectItem value="60">1 hora</SelectItem>
+                    <SelectItem value="90">1h30</SelectItem>
+                    <SelectItem value="120">2 horas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer h-10 px-3 rounded-md border border-input bg-background w-full">
+                  <input type="checkbox" checked={schedulingForm.generateMeet} onChange={(e) => setSchedulingForm(prev => ({ ...prev, generateMeet: e.target.checked }))} className="rounded" />
+                  <Video className="h-4 w-4 text-primary" />
+                  <span className="text-sm">Google Meet</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSchedulingPub(null)}>Cancelar</Button>
+            <Button onClick={handleCreatePubSchedule} disabled={savingSchedule || !schedulingForm.title.trim()}>
+              {savingSchedule ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+              Criar Agendamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </Sheet>
   );
