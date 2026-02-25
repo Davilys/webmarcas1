@@ -26,7 +26,7 @@ import {
   CheckCircle, TrendingUp, Receipt, Trash2, UserCheck,
   Bell, Send, MapPin, Hash, Globe, Briefcase, Shield,
   ChevronRight, Activity, RefreshCw, Eye, Copy, Edit2,
-  Package, BarChart3, Wallet, FileCheck, Lock
+  Package, BarChart3, Wallet, FileCheck, Lock, Video
 } from 'lucide-react';
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
@@ -43,7 +43,7 @@ interface ClientDetailSheetProps {
 }
 
 interface ClientNote { id: string; content: string; created_at: string; }
-interface ClientAppointment { id: string; title: string; description: string | null; scheduled_at: string; completed: boolean; }
+interface ClientAppointment { id: string; title: string; description: string | null; scheduled_at: string; completed: boolean; google_meet_link?: string | null; google_event_id?: string | null; }
 interface ClientDocument { id: string; name: string; file_url: string; created_at: string; file_size?: number | null; mime_type?: string | null; }
 interface ClientInvoice { id: string; description: string; amount: number; status: string; due_date: string; payment_method?: string | null; pix_code?: string | null; }
 
@@ -186,7 +186,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [newAppointment, setNewAppointment] = useState({ title: '', description: '', date: new Date(), time: '10:00' });
+  const [newAppointment, setNewAppointment] = useState({ title: '', description: '', date: new Date(), time: '10:00', duration: '30', generateMeet: true });
   const [selectedPricing, setSelectedPricing] = useState('');
   const [customValue, setCustomValue] = useState(0);
   const [customValueReason, setCustomValueReason] = useState('');
@@ -334,11 +334,38 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       const scheduledAt = new Date(newAppointment.date);
       const [h, m] = newAppointment.time.split(':');
       scheduledAt.setHours(parseInt(h), parseInt(m));
-      const { error } = await supabase.from('client_appointments').insert({ user_id: client.id, admin_id: user?.id, title: newAppointment.title, description: newAppointment.description, scheduled_at: scheduledAt.toISOString() });
+      const { data: aptData, error } = await supabase.from('client_appointments').insert({ user_id: client.id, admin_id: user?.id, title: newAppointment.title, description: newAppointment.description, scheduled_at: scheduledAt.toISOString() }).select().single();
       if (error) throw error;
-      toast.success('Agendamento criado!');
+
+      // Generate Google Meet link if toggle is on
+      if (newAppointment.generateMeet && aptData) {
+        try {
+          const { data: meetData } = await supabase.functions.invoke('create-google-meet', {
+            body: {
+              title: newAppointment.title,
+              scheduled_at: scheduledAt.toISOString(),
+              duration_minutes: parseInt(newAppointment.duration),
+              attendee_emails: [client.email].filter(Boolean),
+            },
+          });
+          if (meetData?.meetLink) {
+            await supabase.from('client_appointments').update({
+              google_meet_link: meetData.meetLink,
+              google_event_id: meetData.eventId,
+            }).eq('id', aptData.id);
+            toast.success('Agendamento criado com Google Meet!');
+          } else {
+            toast.success('Agendamento criado! (Meet não gerado)');
+          }
+        } catch {
+          toast.success('Agendamento criado! (Erro ao gerar Meet)');
+        }
+      } else {
+        toast.success('Agendamento criado!');
+      }
+
       setShowNewAppointment(false);
-      setNewAppointment({ title: '', description: '', date: new Date(), time: '10:00' });
+      setNewAppointment({ title: '', description: '', date: new Date(), time: '10:00', duration: '30', generateMeet: true });
       await fetchClientData();
     } catch { toast.error('Erro ao criar agendamento'); }
     finally { setSavingAppointment(false); }
@@ -1077,6 +1104,28 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                           </Popover>
                           <Input type="time" value={newAppointment.time} onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })} className="h-9 text-xs" />
                         </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs mb-1">Duração</Label>
+                            <Select value={newAppointment.duration} onValueChange={(v) => setNewAppointment({ ...newAppointment, duration: v })}>
+                              <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="15">15 min</SelectItem>
+                                <SelectItem value="30">30 min</SelectItem>
+                                <SelectItem value="45">45 min</SelectItem>
+                                <SelectItem value="60">1 hora</SelectItem>
+                                <SelectItem value="90">1h30</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-end">
+                            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-card h-9 w-full text-xs">
+                              <input type="checkbox" checked={newAppointment.generateMeet} onChange={(e) => setNewAppointment({ ...newAppointment, generateMeet: e.target.checked })} className="rounded" />
+                              <Video className="h-3.5 w-3.5 text-blue-500" />
+                              Google Meet
+                            </label>
+                          </div>
+                        </div>
                         <Button size="sm" className="w-full h-8" onClick={handleCreateAppointment} disabled={savingAppointment || !newAppointment.title.trim()}>
                           {savingAppointment ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : <Plus className="h-3 w-3 mr-2" />}
                           Criar Agendamento
@@ -1123,6 +1172,17 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                                 <p className={cn('text-sm font-medium truncate', apt.completed && 'line-through text-muted-foreground')}>{apt.title}</p>
                                 {apt.description && <p className="text-xs text-muted-foreground truncate">{apt.description}</p>}
                               </div>
+                              {(apt as any).google_meet_link && (
+                                <a
+                                  href={(apt as any).google_meet_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 hover:bg-blue-500/20 transition-colors text-xs font-medium flex-shrink-0"
+                                >
+                                  <Video className="h-3.5 w-3.5" />
+                                  Meet
+                                </a>
+                              )}
                               <div className="text-right flex-shrink-0">
                                 <p className={cn('text-xs font-semibold', isOverdue && 'text-red-400')}>
                                   {format(new Date(apt.scheduled_at), 'dd/MM/yyyy')}

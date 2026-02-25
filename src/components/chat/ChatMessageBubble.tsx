@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { FileText, Image, Video, Music, File as FileIcon, Download, Bot, CheckCheck } from 'lucide-react';
+import { FileText, Image, Video as VideoIcon, Music, File as FileIcon, Download, Bot, CheckCheck, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import type { ChatMessage } from '@/hooks/useChat';
 import ReactMarkdown from 'react-markdown';
@@ -15,7 +15,7 @@ interface ChatMessageBubbleProps {
 const getFileIcon = (mime: string | null) => {
   if (!mime) return <FileIcon className="h-5 w-5" />;
   if (mime.startsWith('image/')) return <Image className="h-5 w-5 text-blue-400" />;
-  if (mime.startsWith('video/')) return <Video className="h-5 w-5 text-purple-400" />;
+  if (mime.startsWith('video/')) return <VideoIcon className="h-5 w-5 text-purple-400" />;
   if (mime.startsWith('audio/')) return <Music className="h-5 w-5 text-green-400" />;
   if (mime.includes('pdf')) return <FileText className="h-5 w-5 text-red-400" />;
   return <FileIcon className="h-5 w-5 text-muted-foreground" />;
@@ -115,6 +115,21 @@ export function ChatMessageBubble({ message, isOwnMessage, showAvatar = true }: 
               <ReactMarkdown>
                 {message.content}
               </ReactMarkdown>
+              {/* Google Meet button */}
+              {message.content.includes('meet.google.com') && (() => {
+                const match = message.content.match(/(https:\/\/meet\.google\.com\/[a-z\-]+)/i);
+                return match ? (
+                  <a
+                    href={match[1]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors text-sm font-medium no-underline"
+                  >
+                    <Video className="h-4 w-4" />
+                    Entrar na Reunião
+                  </a>
+                ) : null;
+              })()}
             </div>
           )}
 

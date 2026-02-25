@@ -26,6 +26,7 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState('30');
   const [meetingType, setMeetingType] = useState<'video' | 'audio'>('video');
+  const [generateMeet, setGenerateMeet] = useState(true);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [adminUsers, setAdminUsers] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -74,6 +75,37 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
       if (error) throw error;
 
       const allParticipants = [currentUserId, ...selectedParticipants];
+
+      // Generate Google Meet link
+      let meetLink: string | null = null;
+      if (generateMeet) {
+        try {
+          const participantEmails = adminUsers
+            .filter(u => allParticipants.includes(u.id))
+            .map(u => u.email)
+            .filter(Boolean);
+
+          const { data: meetData } = await supabase.functions.invoke('create-google-meet', {
+            body: {
+              title,
+              scheduled_at: scheduledAt,
+              duration_minutes: parseInt(duration),
+              attendee_emails: participantEmails,
+            },
+          });
+
+          if (meetData?.meetLink) {
+            meetLink = meetData.meetLink;
+            await supabase.from('meetings').update({
+              google_meet_link: meetData.meetLink,
+              google_event_id: meetData.eventId,
+            }).eq('id', meeting.id);
+          }
+        } catch (meetErr) {
+          console.error('Meet generation failed:', meetErr);
+        }
+      }
+
       await supabase.from('meeting_participants').insert(
         allParticipants.map(uid => ({
           meeting_id: meeting.id,
@@ -83,10 +115,11 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
       );
 
       if (conversationId) {
+        const meetInfo = meetLink ? `\n🔗 ${meetLink}` : '';
         await supabase.from('conversation_messages').insert({
           conversation_id: conversationId,
           sender_id: currentUserId,
-          content: `📅 Reunião agendada: ${title}\n🕐 ${new Date(scheduledAt).toLocaleString('pt-BR')}\n⏱️ ${duration} minutos`,
+          content: `📅 Reunião agendada: ${title}\n🕐 ${new Date(scheduledAt).toLocaleString('pt-BR')}\n⏱️ ${duration} minutos${meetInfo}`,
           message_type: 'meeting_scheduled',
         });
       }
@@ -169,8 +202,17 @@ export const MeetingScheduleDialog = forwardRef<HTMLDivElement, MeetingScheduleD
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+              </div>
 
+            {/* Google Meet toggle */}
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 cursor-pointer">
+              <input type="checkbox" checked={generateMeet} onChange={(e) => setGenerateMeet(e.target.checked)} className="rounded" />
+              <Video className="h-4 w-4 text-blue-500" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Gerar Google Meet</p>
+                <p className="text-xs text-muted-foreground">Link de videoconferência automático</p>
+              </div>
+            </label>
             {/* Participants */}
             <div>
               <label className="text-sm font-medium mb-2 flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Participantes</label>
