@@ -1,49 +1,97 @@
 
 
-# Atribuir Cliente no Ficheiro Azul (Publicacoes Orfas)
+# Correcao: Detalhes do Processo vazios no ficheiro azul para publicacoes orfas
 
 ## Problema
-Quando uma publicacao nao tem cliente vinculado, o ficheiro azul abre mostrando "Sem cliente vinculado" na aba Contatos com dados vazios. Nao existe forma de atribuir um cliente real a essa publicacao/processo diretamente pelo ficheiro.
+Quando um card "Sem cliente vinculado" e clicado no Kanban de Publicacoes, o ficheiro azul abre com "Detalhes do Processo" completamente vazio (sem timeline, sem publicacoes, sem botoes). Isso acontece porque todas as queries no `ClientDetailSheet` usam `client.id` para buscar dados, e para publicacoes orfas `client.id === ''`, retornando zero resultados.
+
+O antigo painel branco funcionava porque usava os dados da publicacao diretamente. Precisamos replicar esse comportamento no ficheiro azul.
+
+## Causa Raiz
+Dois pontos no `ClientDetailSheet.tsx`:
+
+1. **`fetchClientData`** (linha ~295): Queries como `.eq('user_id', client.id)` e `.eq('id', client.id)` com `client.id = ''` retornam vazio. `clientBrands` fica vazio.
+2. **`handleQuickAction('processo')`** (linha ~619): `.eq('client_id', client.id)` e `.eq('user_id', client.id)` com `client.id = ''` retornam vazio. `processPublicacoes`, `processContracts`, `processEvents` ficam vazios.
 
 ## Solucao
-Adicionar na aba Contatos do ClientDetailSheet, quando `client.id === ''` (sem cliente vinculado), um campo de busca com autocomplete para pesquisar clientes por nome, email ou CPF/CNPJ e vincular ao processo/publicacao.
-
----
-
-## Detalhes Tecnicos
 
 ### Arquivo: `src/components/admin/clients/ClientDetailSheet.tsx`
 
-**1. Novos estados:**
-- `linkClientSearch`: texto digitado na busca
-- `linkClientResults`: array de resultados da busca (profiles)
-- `linkingClient`: loading state durante vinculacao
-- `debouncedLinkSearch`: debounce de 400ms no texto
+**1. Corrigir `fetchClientData` para orfaos:**
+- Quando `client.id === ''` e `client.process_id` existe, buscar `brand_processes` por `process_id` em vez de `user_id`
+- Setar `clientBrands` com o resultado (ou com `client.brands` como fallback)
+- Pular queries que dependem de user_id (notes, appointments, docs, invoices, profile) — elas legitimamente nao existem para orfaos
 
-**2. Busca com debounce:**
-- Quando `linkClientSearch` tem 2+ caracteres, buscar na tabela `profiles` com `or(full_name.ilike, email.ilike, cpf.ilike, cnpj.ilike)` limitado a 10 resultados
-- Usar `useEffect` com `setTimeout` de 400ms
+**2. Corrigir `handleQuickAction('processo')` para orfaos:**
+- Quando `client.id === ''`, buscar publicacoes por `process_id` (se existir) em vez de `client_id`
+- Buscar `process_events` pelo `process_id`
+- Contratos e faturas continuam vazios (correto, pois nao ha cliente vinculado)
+- Garantir que `processPublicacoes` tenha a publicacao da qual o card veio
 
-**3. Funcao `handleLinkClient(profileId)`:**
-- Atualizar `publicacoes_marcas.client_id = profileId` (usando `process_id` do client atual)
-- Atualizar `brand_processes.user_id = profileId` (se houver `process_id`)
-- Chamar `onUpdate()` para recarregar dados
-- Fechar o sheet e reabrir com o cliente correto (ou simplesmente chamar `onUpdate` + `toast.success`)
+**3. Logica especifica:**
 
-**4. UI na aba Contatos:**
-- Condicionar: se `client.id === ''`, mostrar um card com:
-  - Icone + titulo "Vincular Cliente"
-  - Input de busca com placeholder "Pesquisar por nome, email ou CPF/CNPJ..."
-  - Lista de resultados abaixo do input com nome, email e botao "Vincular"
-  - Manter o card "Dados Pessoais" existente abaixo (mostrando dados vazios) oculto quando nao ha cliente
-- Se `client.id !== ''`, manter o layout atual
+No `fetchClientData`:
+```typescript
+if (client.id === '') {
+  // Orphan: fetch brand_process by process_id
+  if (client.process_id) {
+    const { data } = await supabase.from('brand_processes')
+      .select('id, brand_name, business_area, process_number, pipeline_stage, status, created_at, updated_at, ncl_classes')
+      .eq('id', client.process_id);
+    setClientBrands(data || []);
+  } else {
+    setClientBrands(client.brands?.map(b => ({ ...b })) || []);
+  }
+  // Skip user-dependent queries
+  setNotes([]); setAppointments([]); setDocuments([]); setInvoices([]);
+  setProfileData(null);
+  setLoading(false);
+  return;
+}
+```
 
-**5. Apos vincular:**
-- Toast de sucesso "Cliente vinculado com sucesso!"
-- Chamar `onUpdate()` para recarregar a lista de publicacoes
-- Fechar o sheet (o usuario pode reabrir e vera os dados do cliente correto)
+No `handleQuickAction('processo')`:
+```typescript
+case 'processo':
+  if (client) {
+    let pubsQuery, eventsQuery;
+    
+    if (client.id === '' && client.process_id) {
+      // Orphan: fetch by process_id
+      pubsQuery = supabase.from('publicacoes_marcas').select('*')
+        .eq('process_id', client.process_id)
+        .order('proximo_prazo_critico', { ascending: true, nullsFirst: false });
+      eventsQuery = supabase.from('process_events').select('*')
+        .eq('process_id', client.process_id)
+        .order('event_date', { ascending: false });
+    } else {
+      // Normal client
+      pubsQuery = supabase.from('publicacoes_marcas').select('*')
+        .eq('client_id', client.id)
+        .order('proximo_prazo_critico', { ascending: true, nullsFirst: false });
+      eventsQuery = client.process_id
+        ? supabase.from('process_events').select('*')
+            .eq('process_id', client.process_id)
+            .order('event_date', { ascending: false })
+        : Promise.resolve({ data: [] });
+    }
+    
+    const contractsQuery = client.id !== ''
+      ? supabase.from('contracts').select('...').eq('user_id', client.id)
+      : Promise.resolve({ data: [] });
+    const invoicesQuery = client.id !== ''
+      ? supabase.from('invoices').select('...').eq('user_id', client.id)
+      : Promise.resolve({ data: [] });
+    
+    const [pubsRes, contractsRes, invoicesRes2, eventsRes] = await Promise.all([
+      pubsQuery, contractsQuery, invoicesQuery, eventsQuery
+    ]);
+    // ... rest same
+  }
+```
 
-### Resultado
-- Cards orfaos no Kanban de Publicacoes agora permitem atribuir cliente real pelo ficheiro azul
-- Busca por digitacao com autocomplete (nome, email, CPF/CNPJ)
-- Vinculacao atualiza tanto `publicacoes_marcas.client_id` quanto `brand_processes.user_id`
+## Resultado Esperado
+- Ficheiro azul para publicacoes orfas mostra a timeline completa (Deposito, Publicacao RPI, Prazo Oposicao, etc.) com datas preenchidas
+- Botoes de acao (Editar Datas, Agenda, Upload Doc RPI, Excluir) aparecem dentro da publicacao
+- Dados da marca/processo aparecem mesmo sem cliente vinculado
+- Aba Contatos continua mostrando campo de busca para vincular cliente
