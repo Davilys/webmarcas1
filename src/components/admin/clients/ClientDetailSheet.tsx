@@ -685,8 +685,27 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
           </div>
         </div>
 
-        {/* ──────────────────────────────── TABS ──────────────────────────── */}
+        {/* ──────────────────────────────── TABS / EMAIL COMPOSE ──────────────────────────── */}
         <div className="flex-1 overflow-hidden flex flex-col">
+          {showEmailCompose ? (
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0">
+                <Button variant="ghost" size="sm" onClick={() => setShowEmailCompose(false)} className="gap-1.5">
+                  <X className="h-4 w-4" /> Voltar ao ficheiro
+                </Button>
+                <span className="text-sm text-muted-foreground">Compor email para <strong>{client.full_name}</strong></span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <EmailCompose
+                  onClose={() => setShowEmailCompose(false)}
+                  initialTo={client.email}
+                  initialName={client.full_name || ''}
+                  accountId={adminEmailAccount?.id || null}
+                  accountEmail={adminEmailAccount?.email_address}
+                />
+              </div>
+            </div>
+          ) : (
           <Tabs defaultValue="overview" className="flex-1 overflow-hidden flex flex-col">
             {/* Tab bar */}
             <div className="border-b border-border flex-shrink-0 px-1">
@@ -1327,6 +1346,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
               </div>
             </ScrollArea>
           </Tabs>
+          )}
         </div>
 
         {/* ──────────────────────────── FOOTER ────────────────────────────── */}
@@ -1509,18 +1529,6 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         </Dialog>
       </SheetContent>
 
-      {/* ─── INLINE EMAIL COMPOSE DIALOG ──────────────────────────────── */}
-      <Dialog open={showEmailCompose} onOpenChange={setShowEmailCompose}>
-        <DialogContent className="max-w-4xl h-[85vh] p-0 overflow-hidden">
-          <EmailCompose
-            onClose={() => setShowEmailCompose(false)}
-            initialTo={client.email}
-            initialName={client.full_name || ''}
-            accountId={adminEmailAccount?.id || null}
-            accountEmail={adminEmailAccount?.email_address}
-          />
-        </DialogContent>
-      </Dialog>
     </Sheet>
   );
 }
