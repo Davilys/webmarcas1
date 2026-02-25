@@ -104,7 +104,7 @@ const RegistrationFormSection = () => {
               email: data.email,
               phone: data.phone || null,
               marca: viabilityData?.brandName || 'Sua Marca',
-              base_url: window.location.origin,
+              base_url: 'https://webmarcas.net',
             },
           },
         });
