@@ -49,6 +49,7 @@ export interface ClientWithProcess {
   created_by_name?: string | null;
   assigned_to_name?: string | null;
   brands?: ClientBrand[];
+  publicacao_id?: string | null;
 }
 
 export interface KanbanFilters {

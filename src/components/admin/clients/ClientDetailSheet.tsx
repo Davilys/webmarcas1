@@ -235,6 +235,9 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
       if (client.process_id) {
         await supabase.from('publicacoes_marcas').update({ client_id: profileId }).eq('process_id', client.process_id);
         await supabase.from('brand_processes').update({ user_id: profileId }).eq('id', client.process_id);
+      } else if (client.publicacao_id) {
+        // No process linked — just update the publication's client_id
+        await supabase.from('publicacoes_marcas').update({ client_id: profileId }).eq('id', client.publicacao_id);
       }
       toast.success('Cliente vinculado com sucesso!');
       onUpdate();
@@ -305,6 +308,24 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
             .select('id, brand_name, business_area, process_number, pipeline_stage, status, created_at, updated_at, ncl_classes')
             .eq('id', client.process_id);
           setClientBrands(data || []);
+        } else if (client.publicacao_id) {
+          // No process linked — use pub data directly to build a virtual brand entry
+          const { data: pubData } = await supabase.from('publicacoes_marcas').select('*').eq('id', client.publicacao_id).maybeSingle();
+          if (pubData) {
+            setClientBrands([{
+              id: pubData.id,
+              brand_name: pubData.brand_name_rpi || client.brand_name || 'Marca',
+              business_area: null,
+              process_number: pubData.process_number_rpi || client.process_number || null,
+              pipeline_stage: pubData.status || 'protocolado',
+              status: pubData.status || 'em_andamento',
+              created_at: pubData.created_at,
+              updated_at: pubData.updated_at,
+              ncl_classes: null,
+            }]);
+          } else {
+            setClientBrands(client.brands?.map(b => ({ ...b, business_area: null, status: null, created_at: null, updated_at: null, ncl_classes: null })) || []);
+          }
         } else {
           setClientBrands(client.brands?.map(b => ({ ...b, business_area: null, status: null, created_at: null, updated_at: null, ncl_classes: null })) || []);
         }
@@ -642,10 +663,15 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
       case 'processo':
         if (client) {
           const isOrphanProc = client.id === '';
-          // Fetch all lifecycle data in parallel - use process_id for orphans
-          const pubsQuery = isOrphanProc && client.process_id
-            ? supabase.from('publicacoes_marcas').select('*').eq('process_id', client.process_id).order('proximo_prazo_critico', { ascending: true, nullsFirst: false })
-            : supabase.from('publicacoes_marcas').select('*').eq('client_id', client.id).order('proximo_prazo_critico', { ascending: true, nullsFirst: false });
+          // Fetch all lifecycle data in parallel - use process_id, publicacao_id, or client_id
+          let pubsQuery;
+          if (isOrphanProc && client.process_id) {
+            pubsQuery = supabase.from('publicacoes_marcas').select('*').eq('process_id', client.process_id).order('proximo_prazo_critico', { ascending: true, nullsFirst: false });
+          } else if (isOrphanProc && client.publicacao_id) {
+            pubsQuery = supabase.from('publicacoes_marcas').select('*').eq('id', client.publicacao_id);
+          } else {
+            pubsQuery = supabase.from('publicacoes_marcas').select('*').eq('client_id', client.id).order('proximo_prazo_critico', { ascending: true, nullsFirst: false });
+          }
 
           const eventsQuery = client.process_id
             ? supabase.from('process_events').select('*').eq('process_id', client.process_id).order('event_date', { ascending: false })
