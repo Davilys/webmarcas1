@@ -1,121 +1,71 @@
 
+## Remover "Cliente / Processo" do Email no Ficheiro
 
-## Composicao de Email Inline no Ficheiro do Cliente
-
-### Problema Atual
-
-Ao clicar no botao "Email" (quick action) ou no link do email na aba Contatos, o sistema navega para `/admin/emails?compose=true`, saindo completamente do ficheiro do cliente. O usuario perde o contexto e precisa voltar manualmente.
+### Problema
+Quando o EmailCompose abre dentro do ficheiro do cliente, ele mostra o campo "Cliente / Processo" com busca de clientes. Isso nao faz sentido porque o cliente ja esta selecionado no ficheiro. O tipo de publicacao/fase deve permanecer pois se aplica ao processo do cliente.
 
 ### Solucao
-
-Abrir o componente `EmailCompose` **dentro do proprio ficheiro** (ClientDetailSheet), em um Dialog/overlay, sem sair da ficha. O email sera enviado pela conta atribuida ao administrador logado (via `email_accounts.assigned_to`).
+Adicionar uma prop `hideClientSearch` ao componente `EmailCompose`. Quando `true`, o modo processual mostra apenas o dropdown de "Tipo de Publicacao / Fase" (sem o campo de busca de cliente), e o cliente e automaticamente preenchido com os dados vindos do ficheiro.
 
 ### Alteracoes
 
-#### Arquivo: `src/components/admin/clients/ClientDetailSheet.tsx`
+#### 1. `src/components/admin/email/EmailCompose.tsx`
 
-**1. Adicionar estados para controlar o compose inline**
-
-```text
-const [showEmailCompose, setShowEmailCompose] = useState(false);
-const [adminEmailAccount, setAdminEmailAccount] = useState<{ id: string; email_address: string } | null>(null);
-```
-
-**2. Buscar a conta de email do admin logado no `fetchClientData`**
-
-Adicionar uma query para buscar a conta de email atribuida ao usuario logado:
+**Adicionar props novas a interface:**
 
 ```text
-const { data: { user } } = await supabase.auth.getUser();
-if (user) {
-  const { data: emailAcc } = await supabase
-    .from('email_accounts')
-    .select('id, email_address')
-    .eq('assigned_to', user.id)
-    .limit(1)
-    .maybeSingle();
-  
-  // Fallback: se nao tem conta atribuida, buscar a default
-  if (!emailAcc) {
-    const { data: defaultAcc } = await supabase
-      .from('email_accounts')
-      .select('id, email_address')
-      .eq('is_default', true)
-      .maybeSingle();
-    setAdminEmailAccount(defaultAcc);
-  } else {
-    setAdminEmailAccount(emailAcc);
-  }
+interface EmailComposeProps {
+  // ... props existentes
+  hideClientSearch?: boolean;       // Esconder busca de cliente (usado no ficheiro)
+  initialClientData?: {             // Dados do cliente pre-selecionado
+    id: string;
+    full_name: string;
+    email: string;
+    brand_name?: string;
+    process_number?: string;
+  };
 }
 ```
 
-**3. Alterar o `handleQuickAction` para "email"**
+**No modo processual (linhas 469-541):**
+- Quando `hideClientSearch` e `true`, renderizar apenas a coluna "Tipo de Publicacao / Fase" em largura completa
+- O campo "Cliente / Processo" nao aparece
+- O `selectedClient` e inicializado automaticamente com `initialClientData`
 
-Em vez de `window.location.href = ...`, abrir o compose inline:
+**No useEffect inicial:**
+- Se `initialClientData` existir, fazer `setSelectedClient(initialClientData)` automaticamente
 
-```text
-case 'email':
-  if (client?.email) setShowEmailCompose(true);
-  else toast.error('Cliente sem e-mail cadastrado');
-  break;
-```
+#### 2. `src/components/admin/clients/ClientDetailSheet.tsx`
 
-**4. Alterar o link de email na aba Contatos**
-
-Na `InfoRow` do email (linha 858), em vez de `link={mailto:...}`, adicionar um handler que abre o compose inline. Isso requer modificar o `InfoRow` para aceitar um `onClick` opcional, ou trocar o `link` por um botao customizado.
-
-Abordagem: Adicionar prop `onAction` ao `InfoRow`. Quando presente, o botao de acao externa chama `onAction` em vez de abrir o link.
-
-**5. Renderizar o EmailCompose em um Dialog**
-
-Adicionar um `Dialog` no final do componente que renderiza o `EmailCompose` completo:
+**Passar as novas props ao EmailCompose (linhas 699-705):**
 
 ```text
-<Dialog open={showEmailCompose} onOpenChange={setShowEmailCompose}>
-  <DialogContent className="max-w-4xl h-[85vh] p-0 overflow-hidden">
-    <EmailCompose
-      onClose={() => setShowEmailCompose(false)}
-      initialTo={client.email}
-      initialName={client.full_name || ''}
-      accountId={adminEmailAccount?.id || null}
-      accountEmail={adminEmailAccount?.email_address}
-    />
-  </DialogContent>
-</Dialog>
+<EmailCompose
+  onClose={() => setShowEmailCompose(false)}
+  initialTo={client.email}
+  initialName={client.full_name || ''}
+  accountId={adminEmailAccount?.id || null}
+  accountEmail={adminEmailAccount?.email_address}
+  hideClientSearch={true}
+  initialClientData={{
+    id: client.id,
+    full_name: client.full_name || '',
+    email: client.email || '',
+    brand_name: client.brand_name,
+    process_number: client.process_number,
+  }}
+/>
 ```
 
-Isso reutiliza 100% do componente EmailCompose existente (com templates processuais, variaveis dinamicas, preview, anexos, IA) sem duplicar logica.
+### Resultado
 
-**6. Importar o EmailCompose**
+- No ficheiro: modo processual mostra apenas "Tipo de Publicacao / Fase" (o cliente ja e o do ficheiro)
+- Na pagina de Emails normal: tudo continua igual (campo de busca de cliente + tipo de publicacao)
+- Templates processuais continuam funcionando com as variaveis do cliente preenchidas automaticamente
 
-Adicionar no topo:
-
-```text
-import { EmailCompose } from '@/components/admin/email/EmailCompose';
-```
-
-### Seguranca
-
-- Nenhuma tabela alterada
-- Nenhum schema modificado
-- Nenhuma Edge Function alterada
-- O EmailCompose ja valida autenticacao antes de enviar
-- A conta de email e determinada automaticamente pelo `assigned_to` do admin logado
-- O ficheiro do cliente continua aberto durante e apos o envio
-- Nenhum fluxo existente e quebrado (a pagina /admin/emails continua funcionando normalmente)
-
-### Arquivos a Editar
+### Arquivos a editar
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/admin/clients/ClientDetailSheet.tsx` | Adicionar Dialog com EmailCompose inline, buscar conta de email do admin, alterar quick action e link do email |
-
-### Resultado Esperado
-
-- Ao clicar em "Email" (quick action) ou no icone do email na aba Contatos, abre um Dialog com o compositor de email completo
-- O destinatario ja vem preenchido com o email do cliente
-- O remetente usa a conta de email atribuida ao admin logado pelo admin master
-- Todas as funcionalidades do EmailCompose ficam disponiveis (templates processuais, variaveis dinamicas, preview, anexos, IA)
-- O ficheiro do cliente permanece aberto por tras do Dialog
-- Apos enviar, o Dialog fecha e o usuario continua na ficha do cliente
-
+| `src/components/admin/email/EmailCompose.tsx` | Adicionar props `hideClientSearch` e `initialClientData`, condicionar renderizacao |
+| `src/components/admin/clients/ClientDetailSheet.tsx` | Passar as novas props ao EmailCompose |
