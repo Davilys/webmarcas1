@@ -129,7 +129,7 @@ serve(async (req) => {
           title: `${urgencyEmoji} Prazo ${timeLabel}: ${brandName}`,
           message: `Publicação "${brandName}" (${processNumber}) - ${statusLabel}. ${pub.descricao_prazo || ""}. Prazo: ${deadlineStr}.`,
           type: notifType,
-          link: "/admin/revista-inpi",
+          link: "/admin/publicacao",
         });
       }
 

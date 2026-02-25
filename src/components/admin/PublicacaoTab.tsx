@@ -867,7 +867,7 @@ export default function PublicacaoTab() {
         title: `🔔 Lembrete: ${brandName}`,
         message: `Lembrete gerado em lote para o processo "${brandName}".`,
         type: 'warning',
-        link: '/admin/revista-inpi',
+        link: '/admin/publicacao',
       });
     });
     if (notifications.length > 0) {
@@ -1033,7 +1033,7 @@ export default function PublicacaoTab() {
     const user = currentUserQuery.data;
     const notifications: any[] = [];
     if (user?.id) {
-      notifications.push({ user_id: user.id, title: `🔔 Prazo crítico: ${brandName}`, message: `O processo "${brandName}" tem prazo crítico em ${prazoStr}.`, type: 'warning', link: '/admin/revista-inpi' });
+      notifications.push({ user_id: user.id, title: `🔔 Prazo crítico: ${brandName}`, message: `O processo "${brandName}" tem prazo crítico em ${prazoStr}.`, type: 'warning', link: '/admin/publicacao' });
     }
     if (pub.client_id) {
       notifications.push({ user_id: pub.client_id, title: `📋 Atualização: ${brandName}`, message: `Seu processo "${brandName}" possui prazo importante em ${prazoStr}.`, type: 'info', link: '/cliente/processos' });
@@ -1041,7 +1041,7 @@ export default function PublicacaoTab() {
     const alerts = getScheduledAlerts(pub.proximo_prazo_critico);
     alerts.forEach(alert => {
       if (user?.id) {
-        notifications.push({ user_id: user.id, title: `⏰ Alerta ${alert.label}: ${brandName}`, message: `Prazo de "${brandName}" vence em ${prazoStr}. Alerta: ${format(alert.date, 'dd/MM/yyyy')}.`, type: 'warning', link: '/admin/revista-inpi' });
+        notifications.push({ user_id: user.id, title: `⏰ Alerta ${alert.label}: ${brandName}`, message: `Prazo de "${brandName}" vence em ${prazoStr}. Alerta: ${format(alert.date, 'dd/MM/yyyy')}.`, type: 'warning', link: '/admin/publicacao' });
       }
     });
     if (notifications.length > 0) {
