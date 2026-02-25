@@ -31,6 +31,7 @@ import {
 import type { ClientWithProcess } from './ClientKanbanBoard';
 import { PIPELINE_STAGES } from './ClientKanbanBoard';
 import { usePricing } from '@/hooks/usePricing';
+import { EmailCompose } from '@/components/admin/email/EmailCompose';
 
 const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
 
@@ -102,7 +103,7 @@ function EmptyState({ icon: Icon, title, description, action }: { icon: any; tit
 }
 
 // ─── Info Row ────────────────────────────────────────────────────────────────
-function InfoRow({ icon: Icon, label, value, mono, copyable, link }: { icon: any; label: string; value?: string | null; mono?: boolean; copyable?: boolean; link?: string }) {
+function InfoRow({ icon: Icon, label, value, mono, copyable, link, onAction }: { icon: any; label: string; value?: string | null; mono?: boolean; copyable?: boolean; link?: string; onAction?: () => void }) {
   if (!value) return null;
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-border last:border-0 group">
@@ -119,11 +120,15 @@ function InfoRow({ icon: Icon, label, value, mono, copyable, link }: { icon: any
             <Copy className="h-3 w-3 text-muted-foreground" />
           </button>
         )}
-        {link && (
+        {onAction ? (
+          <button className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center" onClick={onAction}>
+            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+          </button>
+        ) : link ? (
           <a href={link} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center">
             <ExternalLink className="h-3 w-3 text-muted-foreground" />
           </a>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -154,6 +159,8 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
   const [profileData, setProfileData] = useState<any>(null);
   const [clientBrands, setClientBrands] = useState<any[]>([]);
   const [adminUsersList, setAdminUsersList] = useState<{ id: string; full_name: string | null; email: string }[]>([]);
+  const [showEmailCompose, setShowEmailCompose] = useState(false);
+  const [adminEmailAccount, setAdminEmailAccount] = useState<{ id: string; email_address: string } | null>(null);
 
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -261,6 +268,27 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
       if (roles && roles.length > 0) {
         const { data: adminProfiles } = await supabase.from('profiles').select('id, full_name, email').in('id', roles.map(r => r.user_id));
         if (adminProfiles) setAdminUsersList(adminProfiles);
+      }
+
+      // Fetch admin's assigned email account
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: emailAcc } = await supabase
+          .from('email_accounts')
+          .select('id, email_address')
+          .eq('assigned_to', user.id)
+          .limit(1)
+          .maybeSingle();
+        if (!emailAcc) {
+          const { data: defaultAcc } = await supabase
+            .from('email_accounts')
+            .select('id, email_address')
+            .eq('is_default', true)
+            .maybeSingle();
+          setAdminEmailAccount(defaultAcc);
+        } else {
+          setAdminEmailAccount(emailAcc);
+        }
       }
     } catch (error) { console.error('Error fetching client data:', error); }
     finally { setLoading(false); }
@@ -468,7 +496,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
         break;
       case 'move': setShowMoveDialog(true); break;
       case 'email':
-        if (client?.email) window.location.href = `/admin/emails?compose=true&to=${encodeURIComponent(client.email)}&name=${encodeURIComponent(client.full_name || '')}`;
+        if (client?.email) setShowEmailCompose(true);
         else toast.error('Cliente sem e-mail cadastrado');
         break;
       case 'notification':
@@ -855,7 +883,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
                     <InfoRow icon={User} label="Nome Completo" value={client.full_name} copyable />
                     <InfoRow icon={Hash} label="CPF" value={profileData?.cpf || client.cpf_cnpj} mono copyable />
                     <InfoRow icon={Hash} label="CNPJ" value={profileData?.cnpj} mono copyable />
-                    <InfoRow icon={Mail} label="E-mail" value={client.email} copyable link={`mailto:${client.email}`} />
+                    <InfoRow icon={Mail} label="E-mail" value={client.email} copyable onAction={() => { if (client.email) setShowEmailCompose(true); }} />
                     <InfoRow icon={Phone} label="Telefone" value={client.phone} copyable link={`https://wa.me/55${client.phone?.replace(/\D/g,'')}`} />
                     <InfoRow icon={Building2} label="Empresa" value={client.company_name || profileData?.company_name} />
                   </div>
@@ -1480,6 +1508,19 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate }: Clie
           </DialogContent>
         </Dialog>
       </SheetContent>
+
+      {/* ─── INLINE EMAIL COMPOSE DIALOG ──────────────────────────────── */}
+      <Dialog open={showEmailCompose} onOpenChange={setShowEmailCompose}>
+        <DialogContent className="max-w-4xl h-[85vh] p-0 overflow-hidden">
+          <EmailCompose
+            onClose={() => setShowEmailCompose(false)}
+            initialTo={client.email}
+            initialName={client.full_name || ''}
+            accountId={adminEmailAccount?.id || null}
+            accountEmail={adminEmailAccount?.email_address}
+          />
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
