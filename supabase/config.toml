@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.check-publicacao-deadlines]
 verify_jwt = false
+
+[functions.create-google-meet]
+verify_jwt = false
