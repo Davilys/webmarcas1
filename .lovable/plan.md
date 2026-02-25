@@ -1,109 +1,81 @@
 
+## Correcao: Cards Duplicados no Kanban - Agrupar por CPF/Cliente
 
-## Diagnostico: Sincronizacao Asaas com Kanban Comercial
+### Problema
+Quando um cliente tem mais de uma marca (multiplos `brand_processes`), o sistema cria um card separado para cada processo, resultando em cards duplicados com o mesmo nome de cliente no Kanban.
 
-### Situacao Atual
-
-| Componente | Status | Detalhe |
-|-----------|--------|---------|
-| Webhook recebe evento do Asaas | OK | Recebe RECEIVED/CONFIRMED/RECEIVED_IN_CASH |
-| Atualiza status da fatura (invoices) | OK | Muda para 'confirmed'/'received' |
-| Envia notificacao email de pagamento | OK | Dispara trigger `payment_received` |
-| Envia notificacao multicanal (SMS/WhatsApp/CRM) | OK | Dispara `pagamento_confirmado` |
-| Atualiza pipeline_stage para `pagamento_ok` | FALTA | Nenhuma funcao atualiza o brand_processes |
-
-### Problema Principal
-
-Quando o Asaas confirma um pagamento (PIX, boleto ou cartao), o webhook atualiza a fatura e envia notificacoes, mas **nunca atualiza o `pipeline_stage` do `brand_processes`** de `assinou_contrato` para `pagamento_ok`. O cliente fica parado na coluna "ASSINOU CONTRATO" no Kanban comercial, mesmo apos pagar.
-
-### Onde adicionar a correcao
-
-Existem dois caminhos no webhook onde o pagamento e confirmado:
-
-1. **Caminho 1 (linha 86-166)**: Invoice encontrada diretamente, pagamento confirmado, usuario ja existe. Aqui o webhook atualiza a fatura e envia notificacoes, mas **nao toca no brand_processes**.
-
-2. **Caminho 2 (linha 192-300)**: Contract encontrado pelo `asaas_payment_id`, chama `confirm-payment`. Mas o `confirm-payment` cria o processo com `pipeline_stage: 'protocolado'` (nunca `pagamento_ok`). E quando o contrato ja tem user_id (linha 208-224), apenas atualiza a fatura e retorna.
+### Causa Raiz
+No arquivo `src/pages/admin/Clientes.tsx` (linhas 270-294), o loop `for (const process of userProcesses)` cria uma entrada `ClientWithProcess` por processo. O Kanban renderiza um card por entrada.
 
 ### Solucao
+Agrupar por `profile.id` (cliente unico). Cada cliente aparece como 1 card, com todas as suas marcas listadas. O card usa o processo mais recente para determinar a posicao no Kanban.
 
-Adicionar a atualizacao do `pipeline_stage` para `pagamento_ok` em **dois pontos** do `asaas-webhook`:
+### Alteracoes
 
-**Ponto 1**: Apos confirmar pagamento com invoice existente (caminho mais comum para faturas geradas pelo admin). Apos a linha 98, quando o pagamento e confirmado e o `user_id` existe, atualizar o `brand_processes`.
+#### 1. `src/components/admin/clients/ClientKanbanBoard.tsx` - Interface e renderizacao
 
-**Ponto 2**: Apos o `confirm-payment` retornar com sucesso (caminho do formulario /registrar). Apos a linha 290, atualizar o `brand_processes` do usuario criado.
-
-### Arquivo a editar
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/asaas-webhook/index.ts` | Adicionar update do `pipeline_stage` para `pagamento_ok` nos dois caminhos de confirmacao |
-
-### Detalhes tecnicos
-
-**Ponto 1 - Apos atualizar invoice (apos linha 98)**
-
-Quando o pagamento e confirmado e a invoice tem `user_id`, atualizar o pipeline:
+Adicionar campo `brands` a interface `ClientWithProcess`:
 
 ```text
-// Apos atualizar a fatura e antes das notificacoes:
-if ((paymentStatus === 'RECEIVED' || paymentStatus === 'CONFIRMED' || paymentStatus === 'RECEIVED_IN_CASH') && invoice.user_id) {
-  // Atualizar pipeline_stage para pagamento_ok (somente se estiver em assinou_contrato)
-  await supabaseAdmin
-    .from('brand_processes')
-    .update({ pipeline_stage: 'pagamento_ok', updated_at: new Date().toISOString() })
-    .eq('user_id', invoice.user_id)
-    .eq('pipeline_stage', 'assinou_contrato');
-
-  console.log('[webhook] Pipeline stage updated to pagamento_ok for user:', invoice.user_id);
-}
+brands?: { id: string; brand_name: string; pipeline_stage: string; process_number?: string }[];
 ```
 
-A clausula `.eq('pipeline_stage', 'assinou_contrato')` garante que so move clientes que estao na coluna correta, sem afetar processos em outras etapas (ex: protocolado, deferido).
+No card (linhas 481-497), quando `brands` tem mais de 1 item:
+- Mostrar nome da primeira marca + badge "N marcas"
+- Tooltip listando todas as marcas
 
-**Ponto 2 - Apos confirm-payment com sucesso (apos linha 290)**
+#### 2. `src/pages/admin/Clientes.tsx` - Agrupar processos por cliente
+
+Substituir o loop que cria 1 entrada por processo por logica de agrupamento:
+- Para cada profile, agrupar todos os processos no campo `brands`
+- Usar o processo com `updated_at` mais recente como referencia para `process_id` e `pipeline_stage`
+- Criar 1 unica entrada `ClientWithProcess` por profile
+
+**Logica de agrupamento:**
 
 ```text
-if (confirmResult.success && confirmResult.userId) {
-  // Move pipeline do processo recem-criado para pagamento_ok
-  await supabaseAdmin
-    .from('brand_processes')
-    .update({ pipeline_stage: 'pagamento_ok', updated_at: new Date().toISOString() })
-    .eq('user_id', confirmResult.userId)
-    .eq('pipeline_stage', 'protocolado');
+// Em vez de criar 1 entrada por processo:
+for (const process of userProcesses) { ... }
 
-  console.log('[webhook] Pipeline updated to pagamento_ok for new user:', confirmResult.userId);
-}
+// Criar 1 entrada por cliente com todas as marcas:
+const mainProcess = userProcesses[0]; // mais recente (ja ordenado)
+const brands = userProcesses.map(p => ({
+  id: p.id,
+  brand_name: p.brand_name,
+  pipeline_stage: p.pipeline_stage || 'protocolado',
+  process_number: p.process_number || undefined,
+}));
+
+clientsWithProcesses.push({
+  ...profileData,
+  process_id: mainProcess.id,
+  brand_name: mainProcess.brand_name,
+  pipeline_stage: mainProcess.pipeline_stage,
+  brands: brands,
+});
 ```
 
-**Ponto 3 - Caminho "already processed" (linha 208-224)**
+#### 3. Drag-and-drop
 
-Quando o contrato ja tem user_id mas recebe nova confirmacao do Asaas:
+Quando o card e arrastado, atualiza o `process_id` principal (processo mais recente). Isso ja funciona com a logica atual - nenhuma alteracao necessaria no handler de drop.
 
-```text
-if (contract.user_id) {
-  // Atualizar pipeline_stage para pagamento_ok
-  await supabaseAdmin
-    .from('brand_processes')
-    .update({ pipeline_stage: 'pagamento_ok', updated_at: new Date().toISOString() })
-    .eq('user_id', contract.user_id)
-    .eq('pipeline_stage', 'assinou_contrato');
+#### 4. Busca
 
-  console.log('[webhook] Pipeline updated to pagamento_ok for existing user:', contract.user_id);
-}
-```
+A busca existente ja filtra por `full_name`, `email`, `phone`, etc. Adicionar busca tambem no array `brands` para encontrar por nome de marca.
 
 ### Seguranca
 
-- Nenhuma tabela alterada ou criada
+- Nenhuma tabela alterada
 - Nenhum schema modificado
-- O filtro `.eq('pipeline_stage', 'assinou_contrato')` (ou `'protocolado'`) impede que processos em etapas avancadas (juridico) sejam afetados
-- Apenas o webhook do Asaas e editado
-- Deploy automatico apos edicao
+- Nenhuma Edge Function alterada
+- Apenas logica de agrupamento no frontend (2 arquivos)
+- Drag-and-drop continua funcionando
+- Cards existentes duplicados serao automaticamente agrupados
+- Ficha de detalhes (ClientDetailSheet) nao e afetada pois ja busca processos pelo `profile.id`
 
-### Resultado esperado
+### Arquivos a Editar
 
-Apos a correcao, quando o Asaas confirmar qualquer pagamento (PIX, Boleto, Cartao), o sistema:
-1. Atualiza a fatura para "confirmado" (ja funciona)
-2. Envia notificacoes multicanal (ja funciona)
-3. **NOVO**: Move automaticamente o cliente de "ASSINOU CONTRATO" para "PAGAMENTO OKAY" no Kanban comercial
-
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/components/admin/clients/ClientKanbanBoard.tsx` | Adicionar `brands` a interface, atualizar card para mostrar marcas agrupadas |
+| `src/pages/admin/Clientes.tsx` | Alterar `fetchClients` para agrupar processos por profile (1 entrada por cliente) |
