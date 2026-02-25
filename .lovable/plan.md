@@ -1,66 +1,113 @@
 
 
-## Plano: Sincronizar Publicacoes e Documentos com a Area do Cliente
+## Plano: Google Meet na Aba "Agenda" do ClientDetailSheet
 
 ### Contexto
-Atualmente, quando o admin atribui um `client_id` a uma publicacao na aba Publicacoes, ela ja aparece no componente `PublicacoesCliente` (que filtra por `client_id = userId`). Porem:
 
-1. Os **documentos anexados** (`documento_rpi_url`) na publicacao nao aparecem na aba Documentos do processo do cliente
-2. A aba **Publicacoes RPI** no detalhe do processo do cliente (`ProcessoDetalhe.tsx`) busca apenas da tabela `rpi_entries` e ignora os dados da `publicacoes_marcas`
-3. O **status/fase** da publicacao nao e refletido na area do cliente de forma completa
+O usuario quer que a geracao de link Google Meet aconteca na **aba "Agenda"** dentro do contato do cliente (`ClientDetailSheet.tsx`), e nao apenas no chat. Atualmente a aba Agenda usa a tabela `client_appointments` que **nao possui** campo para link do Meet.
 
-### Mudancas Planejadas
+Existem **dois pontos de agendamento** no sistema:
+1. **Aba Agenda no contato do cliente** (`ClientDetailSheet.tsx`) -- usa `client_appointments`
+2. **Chat de Suporte** (`MeetingScheduleDialog.tsx`) -- usa `meetings`
 
-#### 1. Sincronizar documentos da publicacao para a area do cliente
+A integracao com Google Meet sera aplicada em **ambos**.
 
-**Arquivo:** `src/pages/cliente/ProcessoDetalhe.tsx`
+---
 
-Na funcao `fetchProcessData`, alem de buscar documentos da tabela `documents`, tambem buscar documentos anexados nas `publicacoes_marcas` (campo `documento_rpi_url`) vinculadas ao processo. Esses documentos serao mesclados na lista de documentos exibida na aba "Documentos".
+### 1. Migracao de Banco de Dados
 
-- Buscar `publicacoes_marcas` onde `process_id = id` AND `client_id = user.id`
-- Para cada publicacao com `documento_rpi_url` preenchido, criar um item virtual de documento para exibicao
-- Mesclar com os documentos existentes, sem duplicatas
+Adicionar colunas nas duas tabelas de agendamento:
 
-#### 2. Sincronizar publicacoes da tabela `publicacoes_marcas` na aba "Publicacoes RPI"
+```text
+client_appointments:
+  + google_meet_link TEXT
+  + google_event_id TEXT
 
-**Arquivo:** `src/pages/cliente/ProcessoDetalhe.tsx`
+meetings:
+  + google_meet_link TEXT
+  + google_event_id TEXT
+```
 
-A aba "Publicacoes RPI" atualmente so mostra dados de `rpi_entries`. Vamos adicionar uma secao que mostra os dados de `publicacoes_marcas` vinculadas ao processo, incluindo:
+### 2. Configurar Credenciais Google
 
-- Status atual da publicacao (depositada, publicada, oposicao, deferida, certificada, etc.)
-- Timeline visual (mini timeline igual ao `PublicacoesCliente`)
-- Prazos criticos
-- Numero RPI e link oficial
-- Documento RPI anexado (com botao de download)
+Os seguintes secrets **precisam ser adicionados** (nenhum existe hoje):
 
-Isso sera exibido acima da tabela de `rpi_entries`, como um card de resumo da situacao atual.
+- **GOOGLE_CLIENT_ID** -- OAuth 2.0 do Google Cloud Console
+- **GOOGLE_CLIENT_SECRET** -- OAuth 2.0 do Google Cloud Console
+- **GOOGLE_REFRESH_TOKEN** -- obtido via fluxo OAuth offline da conta admin
 
-#### 3. Atualizar `PublicacoesCliente` com status "certificada"
+Sera solicitado durante a implementacao.
 
-**Arquivo:** `src/components/cliente/PublicacoesCliente.tsx`
+### 3. Criar Edge Function `create-google-meet`
 
-Adicionar o status `certificada` que foi adicionado no admin mas ainda nao existe no componente do cliente.
+Nova funcao backend que:
+- Recebe titulo, horario, duracao e emails dos participantes
+- Usa Refresh Token para obter Access Token via Google OAuth
+- Cria evento no Google Calendar com `conferenceDataVersion: 1` (Meet automatico)
+- Retorna o `meetLink` e `eventId`
+- Funciona como servico independente chamado por qualquer componente
 
-#### 4. Garantir que a fase do processo no Kanban do cliente reflita a publicacao
+Tratamento de erros:
+- Se credenciais nao configuradas, retorna erro claro sem quebrar o fluxo
+- Se API Google falhar, o agendamento permanece salvo sem link (fallback gracioso)
 
-**Arquivo:** `src/components/cliente/ClientProcessKanban.tsx`
+### 4. Atualizar `ClientDetailSheet.tsx` -- Aba Agenda
 
-O Kanban do cliente usa o campo `status` de `brand_processes`. Nenhuma mudanca estrutural necessaria aqui -- o status do processo ja e independente. A sincronizacao visual sera feita pela presenca dos dados de `publicacoes_marcas` nas telas de detalhe.
+Mudancas no formulario "Novo Agendamento":
+- Adicionar toggle/switch "Gerar Google Meet" (ativo por padrao)
+- Adicionar campo de duracao (30, 60, 90 min)
+- Apos salvar no banco, se toggle ativo, chamar a Edge Function `create-google-meet`
+- Atualizar o registro em `client_appointments` com `google_meet_link` e `google_event_id`
+- Exibir o link gerado com botao de copiar
 
-### Detalhes Tecnicos
+Na listagem de agendamentos:
+- Se `google_meet_link` existir, exibir botao "Entrar na Reuniao" com icone de video
+- Botao abre o link em nova aba
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/cliente/ProcessoDetalhe.tsx` | Buscar `publicacoes_marcas` por `process_id` + `client_id`, mesclar documentos anexados na aba Documentos, exibir resumo de publicacao na aba Publicacoes RPI |
-| `src/components/cliente/PublicacoesCliente.tsx` | Adicionar status `certificada` ao `STATUS_CONFIG` |
-| `src/pages/cliente/Processos.tsx` | Sem mudanca (ja usa `PublicacoesCliente` que filtra por `client_id`) |
+### 5. Atualizar `MeetingScheduleDialog.tsx` -- Chat
 
-### Fluxo Resultante
+Mudancas analogas:
+- Adicionar toggle "Gerar Google Meet"
+- Apos salvar na tabela `meetings`, chamar a Edge Function
+- Atualizar o registro com link e event ID
+- Incluir link na mensagem automatica do chat
 
-1. Admin cria/edita publicacao e atribui `client_id` -> aparece em "Publicacoes de Marcas" na pagina Processos do cliente
-2. Admin anexa documento RPI na publicacao -> documento aparece na aba Documentos do detalhe do processo do cliente
-3. Admin altera status da publicacao (ex: publicada -> deferida -> certificada) -> refletido na aba Publicacoes RPI do detalhe do processo e no card de PublicacoesCliente
-4. Prazos criticos sao exibidos para o cliente com indicadores visuais de urgencia
+### 6. Atualizar `ChatMessageBubble.tsx`
 
-Nenhuma migracao SQL necessaria -- todos os dados ja existem na tabela `publicacoes_marcas` e a RLS ja permite leitura pelo cliente (`client_id = auth.uid()`).
+- Detectar mensagens com link do Google Meet
+- Renderizar botao estilizado "Entrar na Reuniao" com icone
+
+### 7. Registrar funcao no config
+
+Adicionar em `supabase/config.toml`:
+```text
+[functions.create-google-meet]
+verify_jwt = true
+```
+
+---
+
+### Fluxo Final (Aba Agenda)
+
+1. Admin abre contato do cliente -> aba "Agenda"
+2. Clica "Novo Agendamento", preenche titulo/data/hora/duracao
+3. Toggle "Gerar Google Meet" esta ativo
+4. Clica "Criar Agendamento"
+5. Sistema salva no `client_appointments` -> chama Edge Function -> Google cria evento com Meet
+6. Link salvo no banco e exibido na listagem
+7. Admin pode copiar ou clicar para entrar
+
+### Fluxo Final (Chat)
+
+1. Admin ou cliente abre dialog de reuniao no chat
+2. Preenche dados e ativa "Gerar Google Meet"
+3. Sistema salva em `meetings` -> chama Edge Function
+4. Link incluido na mensagem automatica do chat
+5. Ambos veem botao "Entrar na Reuniao"
+
+---
+
+### Pre-requisito
+
+As 3 credenciais Google serao solicitadas ao usuario antes da implementacao funcionar.
 
