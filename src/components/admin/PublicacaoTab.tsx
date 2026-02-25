@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { AdminLayout } from '@/components/admin/AdminLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -104,7 +103,6 @@ function calcAutoFields(pub: Partial<Publicacao>): Partial<Publicacao> {
   if (out.data_certificado) {
     out.data_renovacao = format(addYears(parseISO(out.data_certificado), 10), 'yyyy-MM-dd');
   }
-  // proximo_prazo_critico = menor data futura pendente
   const futureDates = [out.prazo_oposicao, out.data_renovacao, out.proximo_prazo_critico]
     .filter(Boolean)
     .map(d => parseISO(d!))
@@ -166,8 +164,8 @@ function TimelineStep({ step, date, isCompleted, isOverdue }: {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
-export default function Publicacao() {
+// ─── Main Component (no AdminLayout wrapper) ─────────────────────────────────
+export default function PublicacaoTab() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -179,7 +177,6 @@ export default function Publicacao() {
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState<Partial<Publicacao>>({});
 
-  // ─── Fetch publicacoes ─────────────────────────────────────────
   const { data: publicacoes = [], isLoading } = useQuery({
     queryKey: ['publicacoes-marcas'],
     queryFn: async () => {
@@ -189,7 +186,6 @@ export default function Publicacao() {
     },
   });
 
-  // ─── Fetch processes (read-only) ──────────────────────────────
   const { data: processes = [] } = useQuery({
     queryKey: ['brand-processes-pub'],
     queryFn: async () => {
@@ -199,7 +195,6 @@ export default function Publicacao() {
     },
   });
 
-  // ─── Fetch clients (read-only) ────────────────────────────────
   const { data: clients = [] } = useQuery({
     queryKey: ['profiles-pub'],
     queryFn: async () => {
@@ -209,7 +204,6 @@ export default function Publicacao() {
     },
   });
 
-  // ─── Fetch admins for responsible display ─────────────────────
   const { data: admins = [] } = useQuery({
     queryKey: ['admin-profiles-pub'],
     queryFn: async () => {
@@ -222,7 +216,6 @@ export default function Publicacao() {
     },
   });
 
-  // ─── Fetch logs for selected publicacao ───────────────────────
   const { data: logs = [] } = useQuery({
     queryKey: ['publicacao-logs', selectedId],
     queryFn: async () => {
@@ -234,7 +227,6 @@ export default function Publicacao() {
     enabled: !!selectedId,
   });
 
-  // ─── Mutations ─────────────────────────────────────────────────
   const currentUserQuery = useQuery({
     queryKey: ['current-user-pub'],
     queryFn: async () => {
@@ -263,7 +255,6 @@ export default function Publicacao() {
       const computed = calcAutoFields(changes);
       const { error } = await supabase.from('publicacoes_marcas').update(computed as any).eq('id', id);
       if (error) throw error;
-      // Log changes
       const user = currentUserQuery.data;
       const logEntries = Object.entries(computed)
         .filter(([k, v]) => (original as any)[k] !== v && !['updated_at', 'created_at'].includes(k))
@@ -288,17 +279,14 @@ export default function Publicacao() {
     onError: (e: any) => toast.error(e.message || 'Erro ao atualizar'),
   });
 
-  // ─── Lookups ───────────────────────────────────────────────────
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const processMap = useMemo(() => new Map(processes.map(p => [p.id, p])), [processes]);
   const adminMap = useMemo(() => new Map(admins.map(a => [a.id, a])), [admins]);
 
-  // ─── Filtering ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return publicacoes.filter(pub => {
       const proc = processMap.get(pub.process_id);
       const client = clientMap.get(pub.client_id);
-      // Search
       if (search) {
         const q = search.toLowerCase();
         const matchName = proc?.brand_name?.toLowerCase().includes(q);
@@ -309,7 +297,6 @@ export default function Publicacao() {
       if (filterClient !== 'todos' && pub.client_id !== filterClient) return false;
       if (filterStatus !== 'todos' && pub.status !== filterStatus) return false;
       if (filterTipo !== 'todos' && pub.tipo_publicacao !== filterTipo) return false;
-      // Prazo filter
       if (filterPrazo !== 'todos') {
         const days = getDaysLeft(pub.proximo_prazo_critico);
         if (days === null) return filterPrazo === 'todos';
@@ -324,7 +311,6 @@ export default function Publicacao() {
 
   const selected = useMemo(() => publicacoes.find(p => p.id === selectedId) || null, [publicacoes, selectedId]);
 
-  // ─── Alerts on mount ──────────────────────────────────────────
   useEffect(() => {
     const urgentes = publicacoes.filter(p => {
       const d = getDaysLeft(p.proximo_prazo_critico);
@@ -335,7 +321,6 @@ export default function Publicacao() {
     }
   }, [publicacoes.length]);
 
-  // ─── CSV Export ────────────────────────────────────────────────
   const exportCSV = useCallback(() => {
     const rows = filtered.map(pub => {
       const proc = processMap.get(pub.process_id);
@@ -366,7 +351,6 @@ export default function Publicacao() {
     toast.success('CSV exportado');
   }, [filtered, processMap, clientMap]);
 
-  // ─── Create dialog state ──────────────────────────────────────
   const [createProcessId, setCreateProcessId] = useState('');
   const handleCreate = () => {
     const proc = processMap.get(createProcessId);
@@ -381,13 +365,11 @@ export default function Publicacao() {
     });
   };
 
-  // ─── Already linked process IDs ───────────────────────────────
   const linkedProcessIds = useMemo(() => new Set(publicacoes.map(p => p.process_id)), [publicacoes]);
 
-  // ─── Render ────────────────────────────────────────────────────
   return (
-    <AdminLayout>
-      <div className="flex flex-col lg:flex-row gap-4 p-3 md:p-6 min-h-[calc(100vh-56px)]">
+    <>
+      <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-280px)]">
         {/* ─── SIDEBAR FILTROS ─── */}
         <Card className="lg:w-64 xl:w-72 flex-shrink-0">
           <CardHeader className="pb-3">
@@ -396,13 +378,10 @@ export default function Publicacao() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar marca, processo..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
             </div>
-
-            {/* Cliente */}
             <div>
               <Label className="text-xs text-muted-foreground">Cliente</Label>
               <Select value={filterClient} onValueChange={setFilterClient}>
@@ -413,8 +392,6 @@ export default function Publicacao() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Status */}
             <div>
               <Label className="text-xs text-muted-foreground">Status</Label>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -425,8 +402,6 @@ export default function Publicacao() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Prazo */}
             <div>
               <Label className="text-xs text-muted-foreground">Prazo Crítico</Label>
               <Select value={filterPrazo} onValueChange={v => setFilterPrazo(v as PrazoFilter)}>
@@ -440,8 +415,6 @@ export default function Publicacao() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Tipo */}
             <div>
               <Label className="text-xs text-muted-foreground">Tipo</Label>
               <Select value={filterTipo} onValueChange={setFilterTipo}>
@@ -452,9 +425,7 @@ export default function Publicacao() {
                 </SelectContent>
               </Select>
             </div>
-
             <Separator />
-
             <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => { setSearch(''); setFilterClient('todos'); setFilterStatus('todos'); setFilterPrazo('todos'); setFilterTipo('todos'); }}>
               <RotateCcw className="w-3 h-3 mr-1" /> Limpar Filtros
             </Button>
@@ -477,7 +448,7 @@ export default function Publicacao() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100vh-220px)]">
+            <ScrollArea className="h-[calc(100vh-340px)]">
               {isLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -569,7 +540,7 @@ export default function Publicacao() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[calc(100vh-320px)]">
+                  <ScrollArea className="h-[calc(100vh-420px)]">
                     {/* Timeline */}
                     <div className="mb-4">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Timeline</p>
@@ -743,6 +714,6 @@ export default function Publicacao() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AdminLayout>
+    </>
   );
 }

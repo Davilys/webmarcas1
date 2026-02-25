@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PublicacaoTab from '@/components/admin/PublicacaoTab';
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface RpiUpload {
@@ -523,6 +524,10 @@ export default function RevistaINPI() {
             <TabsTrigger value="history" className="gap-2 rounded-lg data-[state=active]:shadow-sm">
               <Clock className="h-4 w-4" />
               Histórico
+            </TabsTrigger>
+            <TabsTrigger value="publicacoes" className="gap-2 rounded-lg data-[state=active]:shadow-sm">
+              <Newspaper className="h-4 w-4" />
+              Publicações
             </TabsTrigger>
           </TabsList>
 
@@ -1149,6 +1154,11 @@ export default function RevistaINPI() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* ─── TAB: Publicações ─── */}
+          <TabsContent value="publicacoes" className="space-y-4">
+            <PublicacaoTab />
           </TabsContent>
         </Tabs>
 
