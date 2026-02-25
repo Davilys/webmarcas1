@@ -1,182 +1,108 @@
 
 
-## Modulo "Publicacao" - Gestao Premium de Prazos e Publicacoes de Marcas INPI
+## O Que Falta Para o Modulo "Publicacao" Ficar 100% Funcional e Premium
 
-### Visao Geral
+### Estado Atual (O Que Ja Funciona)
 
-Criar uma aba "Publicacao" isolada e premium no CRM, dedicada exclusivamente a gestao de prazos legais e publicacoes oficiais do INPI para registro de marcas. O modulo opera em 3 paineis (sidebar de filtros, lista de processos, detalhes/timeline), com calculos automaticos de prazos, alertas por urgencia e logs de auditoria.
+- Layout 3 paineis (sidebar filtros, lista, timeline)
+- CRUD basico (criar/editar publicacao)
+- Timeline visual com 6 etapas
+- Calculo automatico de prazos (oposicao +60d, renovacao +10 anos)
+- Filtros por cliente, status, prazo critico, tipo
+- Exportacao CSV
+- Badges de urgencia com cores (verde/amarelo/vermelho/pulsante)
+- Logs de auditoria (quem alterou, quando, o que)
+- Toast de alerta ao abrir com prazos criticos
 
-### Principios de Seguranca
+### O Que Falta (14 Melhorias)
 
-- Nenhuma tabela existente sera alterada
-- Nenhuma rota, API ou fluxo existente sera modificado
-- Apenas 4 arquivos existentes recebem adicoes minimas (nova rota, novo menu item, nova permissao)
-- Duas novas tabelas isoladas com RLS restrito a admins
-- Zero impacto em contratos, pagamentos, leads, pipeline ou qualquer outra funcionalidade
+#### 1. Dashboard KPI no Topo
 
-### Arquitetura do Modulo
+Adicionar 4 cards de metricas animados acima dos 3 paineis:
+- Total de Processos
+- Prazos Urgentes (< 7 dias)
+- Atrasados
+- Deferidos este mes
 
-```text
-+---------------------+---------------------------+-------------------------------+
-|  SIDEBAR FILTROS    |   LISTA DE PROCESSOS      |  DETALHES / TIMELINE          |
-|                     |                           |                               |
-| Cliente [dropdown]  | Cliente | Marca | N.Proc  | Timeline Visual:              |
-| Status  [select]    | Deposito | Pub.RPI | Prazo |  Deposito                    |
-| Prazo   [select]    | Status(badge) | Resp.     |  Publicacao RPI              |
-| Tipo    [select]    | Acoes                     |  Prazo Oposicao (60d)        |
-|                     |                           |  Decisao                     |
-| [Limpar Filtros]    |                           |  Certificado                 |
-| [Exportar CSV]      |                           |  Renovacao (10 anos)         |
-|                     |                           |                               |
-|                     |                           | Historico de Alteracoes       |
-|                     |                           | Campos Editaveis              |
-|                     |                           | Upload Doc RPI                |
-|                     |                           | Botoes de Acao                |
-+---------------------+---------------------------+-------------------------------+
-```
+Usa o mesmo componente `StatCard` com gradientes que ja existe na `RevistaINPI.tsx`.
+
+#### 2. Gerar Lembrete Real (Inserir na Tabela `notifications`)
+
+Atualmente o botao "Gerar Lembrete" so mostra um toast. Precisa realmente inserir uma notificacao na tabela `notifications` para o cliente e o admin, com titulo, mensagem e link.
+
+#### 3. Upload de Documento RPI
+
+O campo `documento_rpi_url` existe na tabela mas nao ha interface para upload. Adicionar botao de upload no painel de detalhes que salva no bucket `documents` e atualiza o campo.
+
+#### 4. Exibir Link RPI Oficial
+
+O campo `rpi_link` existe mas nao e exibido no painel de detalhes. Adicionar botao com icone `ExternalLink` que abre o link da RPI oficial em nova aba.
+
+#### 5. Atribuicao de Responsavel (Admin)
+
+No dialog de criacao e edicao, adicionar dropdown para selecionar o admin responsavel. Na lista de processos, exibir o nome do responsavel.
+
+#### 6. Campos Extras no Dialog de Criacao
+
+O dialog de criacao atual so permite selecionar o processo. Falta:
+- Data de deposito (pre-preenchida do processo)
+- Data publicacao RPI (opcional)
+- Tipo de publicacao
+- Admin responsavel
+
+#### 7. Opcao de Excluir Publicacao
+
+Adicionar botao de exclusao no painel de detalhes com confirmacao (dialog de alerta).
+
+#### 8. Auto-Popular a Partir dos Dados da RPI
+
+Quando um `rpi_entry` e processado e vinculado a um processo (`matched_process_id`), oferecer um botao ou fluxo para criar automaticamente o registro de publicacao com os dados ja preenchidos (data publicacao, numero RPI, tipo de despacho).
+
+#### 9. Notificacoes Agendadas (30d / 15d / 7d)
+
+Exibir no painel de detalhes uma secao "Alertas Programados" mostrando as datas de alerta futuras calculadas (30, 15 e 7 dias antes do proximo prazo critico). O botao "Gerar Lembrete" agenda estas notificacoes.
+
+#### 10. Coluna "Responsavel" na Tabela da Lista
+
+Adicionar coluna com o nome do admin responsavel na tabela de processos (visivel em telas maiores).
+
+#### 11. Corrigir Warning do Console
+
+Warning atual: "Function components cannot be given refs" no componente `Badge` dentro da `RevistaINPI`. Ajustar o uso para eliminar o warning.
+
+#### 12. Indicador de RPI Number e Documento no Painel
+
+No painel de detalhes, exibir o numero da RPI e se ha documento anexado (com link para download).
+
+#### 13. Contador de Processos por Status na Sidebar
+
+Na sidebar de filtros, exibir ao lado de cada opcao de status a quantidade de processos naquele status (ex: "Depositada (5)").
+
+#### 14. Tipo de Publicacao no Dialog de Edicao
+
+O campo `tipo_publicacao` existe no banco mas nao aparece no dialog de edicao. Adicionar select para alterar entre publicacao_rpi, decisao, certificado e renovacao.
 
 ### Detalhes Tecnicos
 
-#### 1. Novas Tabelas (Migracao SQL)
+#### Arquivos a Editar
 
-**Tabela `publicacoes_marcas`** - Armazena dados de publicacoes e prazos por processo:
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/components/admin/PublicacaoTab.tsx` | Todas as 14 melhorias acima |
 
-- `id` uuid PK
-- `process_id` uuid FK -> brand_processes(id) UNIQUE
-- `client_id` uuid (referencia somente leitura)
-- `admin_id` uuid (responsavel)
-- `status` text (depositada, publicada, oposicao, deferida, indeferida, arquivada, renovacao_pendente)
-- `tipo_publicacao` text (publicacao_rpi, decisao, certificado, renovacao)
-- `data_deposito` date
-- `data_publicacao_rpi` date
-- `prazo_oposicao` date (calculado: publicacao + 60 dias)
-- `data_decisao` date
-- `data_certificado` date
-- `data_renovacao` date (calculado: certificado + 10 anos)
-- `proximo_prazo_critico` date
-- `descricao_prazo` text
-- `oposicao_protocolada` boolean
-- `oposicao_data` date
-- `comentarios_internos` text
-- `documento_rpi_url` text
-- `rpi_number` text
-- `rpi_link` text (link direto para RPI oficial)
-- `created_at` / `updated_at` timestamptz
+#### Nenhum Arquivo Novo Necessario
 
-RLS: Somente admins (usando `has_role(auth.uid(), 'admin')`)
+Tudo se resolve editando apenas o `PublicacaoTab.tsx` existente.
 
-**Tabela `publicacao_logs`** - Historico de auditoria:
+#### Nenhuma Alteracao de Banco de Dados
 
-- `id` uuid PK
-- `publicacao_id` uuid FK -> publicacoes_marcas(id)
-- `admin_id` uuid
-- `admin_email` text
-- `campo_alterado` text
-- `valor_anterior` text
-- `valor_novo` text
-- `created_at` timestamptz
+Todos os campos ja existem nas tabelas `publicacoes_marcas` e `publicacao_logs`. A unica interacao nova e a insercao na tabela `notifications` (ja existente) para o lembrete real.
 
-RLS: Somente admins
+### Resumo de Impacto
 
-#### 2. Nova Pagina: `src/pages/admin/Publicacao.tsx`
-
-Componente principal com 3 paineis responsivos:
-
-**Sidebar de Filtros:**
-- Dropdown de clientes (da tabela `profiles`, somente leitura)
-- Select de status (depositada, publicada, oposicao, deferida, indeferida, arquivada, renovacao_pendente)
-- Filtro de prazo critico (vence hoje, proximos 7 dias, proximos 30 dias, atrasados)
-- Tipo de publicacao (publicacao_rpi, decisao, certificado, renovacao)
-- Botao "Limpar Filtros"
-- Botao "Exportar CSV"
-
-**Lista de Processos (tabela dinamica):**
-- Colunas: Cliente, Marca, N. Processo INPI, Data Deposito, Data Publicacao RPI, Prazo Atual (com contagem regressiva de dias), Status (badge colorido), Responsavel, Acoes
-- Badges de urgencia: verde (>30 dias), amarelo (7-30 dias), vermelho (<7 dias), preto/pulsante (atrasado)
-- Botoes de acao: Ver detalhes, Editar prazo, Gerar lembrete
-- Busca por texto (marca, processo, cliente)
-
-**Detalhes/Timeline (ao selecionar processo):**
-- Timeline visual vertical com 6 etapas: Deposito -> Publicacao RPI -> Prazo Oposicao (60d) -> Decisao -> Certificado -> Renovacao (10 anos)
-- Cada etapa mostra data, status (concluida/pendente/atrasada), e indicador visual
-- Historico de alteracoes (quem, quando, o que mudou) via tabela `publicacao_logs`
-- Campos editaveis: Data publicacao RPI, Prazo oposicao (auto-calculado), Data decisao, Data certificado, Comentarios internos
-- Botoes: "Gerar Lembrete" (insere em `notifications`), "Marcar Oposicao Protocolada", "Upload Documento RPI"
-
-**Calculos automaticos:**
-- Ao preencher `data_publicacao_rpi`: calcula `prazo_oposicao = data + 60 dias`
-- Ao preencher `data_certificado`: calcula `data_renovacao = data + 10 anos`
-- `proximo_prazo_critico` = menor data futura pendente
-
-**Alertas:**
-- Toast notifications ao abrir a aba para prazos criticos (vence em <7 dias)
-- Botao "Gerar Lembrete" insere notificacao na tabela `notifications` para cliente e admin
-- Indicadores visuais de urgencia na lista
-
-**Criacao manual:**
-- Dialog para criar novo registro de publicacao vinculando a um processo (`brand_processes`) existente
-- Pre-carrega dados do processo selecionado (marca, numero, NCL, cliente)
-
-**Exportacao:**
-- CSV com filtros aplicados (cliente, status, periodo)
-
-#### 3. Edicoes em Arquivos Existentes (Adicoes minimas)
-
-**`src/App.tsx`** - Adicionar 1 import e 1 rota:
-```text
-import AdminPublicacao from "./pages/admin/Publicacao";
-<Route path="/admin/publicacao" element={<AdminPublicacao />} />
-```
-
-**`src/components/admin/AdminLayout.tsx`** - Adicionar 1 item ao array `menuItems`:
-```text
-{
-  icon: Newspaper,
-  label: 'Publicacao',
-  subtitle: 'Prazos e publicacoes',
-  href: '/admin/publicacao',
-  iconColor: 'text-rose-500',
-  iconBg: 'bg-rose-100 dark:bg-rose-900/30',
-  permissionKey: 'publications'
-}
-```
-
-**`src/components/admin/MobileBottomNav.tsx`** - Adicionar 1 item ao array `moreItems`:
-```text
-{ icon: Newspaper, label: 'Publicacao', href: '/admin/publicacao', color: 'text-rose-500', permissionKey: 'publications' }
-```
-
-**`src/hooks/useAdminPermissions.ts`** - Adicionar ao array `CRM_SECTIONS` e `PATH_TO_PERMISSION_KEY`:
-```text
-{ key: 'publications', label: 'Publicacao', description: 'Prazos e publicacoes de marcas' }
-'/admin/publicacao': 'publications'
-```
-
-#### 4. Design Visual
-
-- Segue o mesmo padrao visual do CRM existente (cards com gradientes, badges coloridos, motion animations)
-- Timeline vertical com icones Lucide e indicadores de progresso
-- Responsivo: em mobile os 3 paineis empilham verticalmente
-- Dark mode compativel via classes Tailwind existentes
-- Icone: `Newspaper` do Lucide (ja importado em RevistaINPI)
-
-### Resumo de Arquivos
-
-| Arquivo | Acao | Impacto |
-|---------|------|---------|
-| Migracao SQL | Criar | 2 tabelas novas isoladas com RLS |
-| `src/pages/admin/Publicacao.tsx` | Criar | Pagina completa ~800 linhas |
-| `src/App.tsx` | Editar | +2 linhas (import + rota) |
-| `src/components/admin/AdminLayout.tsx` | Editar | +8 linhas (menu item) |
-| `src/components/admin/MobileBottomNav.tsx` | Editar | +1 linha (more item) |
-| `src/hooks/useAdminPermissions.ts` | Editar | +2 linhas (permissao + path) |
-
-### Seguranca e Isolamento
-
-- Nenhuma tabela existente e alterada
-- Dados de `profiles` e `brand_processes` sao lidos em modo somente leitura via SELECT
-- Novas tabelas com RLS: `has_role(auth.uid(), 'admin')`
-- Logs de auditoria para todas as alteracoes
-- Permissoes granulares via `admin_permissions` existente
-- Sem dependencias obrigatorias - fallback seguro se tabelas estiverem vazias
+- Zero alteracoes em tabelas existentes
+- Zero novas rotas ou APIs
+- Zero impacto em outras abas
+- Apenas melhorias no componente `PublicacaoTab.tsx` existente
+- Resultado: modulo completo, premium e 100% funcional
 
