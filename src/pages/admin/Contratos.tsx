@@ -789,9 +789,11 @@ export default function AdminContratos() {
                           : '-'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {contract.signature_expires_at
-                          ? format(new Date(contract.signature_expires_at), 'dd/MM/yy', { locale: ptBR })
-                          : '-'}
+                        {contract.signature_status === 'signed'
+                          ? '-'
+                          : contract.signature_expires_at
+                            ? format(new Date(contract.signature_expires_at), 'dd/MM/yy', { locale: ptBR })
+                            : '-'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{contract.profile?.phone || '-'}</TableCell>
                       <TableCell>{getSignatureBadge(contract.signature_status, contract.signature_expires_at)}</TableCell>
