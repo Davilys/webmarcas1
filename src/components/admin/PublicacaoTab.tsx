@@ -292,6 +292,9 @@ export default function PublicacaoTab() {
   const [showInvoiceFromPub, setShowInvoiceFromPub] = useState(false);
   const [sheetPubId, setSheetPubId] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
+  const [clientAssignSearch, setClientAssignSearch] = useState('');
+  const [showClientAssignDropdown, setShowClientAssignDropdown] = useState(false);
+  const clientAssignRef = useRef<HTMLDivElement>(null);
 
   // ─── Create dialog state ────
   const [createProcessId, setCreateProcessId] = useState('');
@@ -370,6 +373,17 @@ export default function PublicacaoTab() {
     },
     staleTime: 60000,
   });
+
+  // ─── Close client assign dropdown on click outside ────
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientAssignRef.current && !clientAssignRef.current.contains(e.target as Node)) {
+        setShowClientAssignDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // ─── Realtime (#8) ────
   useEffect(() => {
@@ -647,6 +661,46 @@ export default function PublicacaoTab() {
       setShowDelete(false);
     },
     onError: (e: any) => toast.error(e.message || 'Erro ao excluir'),
+  });
+
+  // ─── Assign Client Mutation ────
+  const assignClientMutation = useMutation({
+    mutationFn: async ({ pubId, clientId, oldClientId, processId }: { pubId: string; clientId: string | null; oldClientId: string | null; processId: string | null }) => {
+      const { error: pubError } = await supabase.from('publicacoes_marcas').update({ client_id: clientId } as any).eq('id', pubId);
+      if (pubError) throw pubError;
+      if (processId) {
+        await supabase.from('brand_processes').update({ user_id: clientId, updated_at: new Date().toISOString() }).eq('id', processId);
+      }
+      const user = currentUserQuery.data;
+      await supabase.from('publicacao_logs').insert({
+        publicacao_id: pubId,
+        admin_id: user?.id,
+        admin_email: user?.email,
+        campo_alterado: 'client_id',
+        valor_anterior: oldClientId || '',
+        valor_novo: clientId || '',
+      });
+      if (clientId && processId) {
+        const proc = processMap.get(processId);
+        const brandName = proc?.brand_name || 'Marca';
+        await supabase.from('notifications').insert({
+          user_id: clientId,
+          title: '📋 Processo vinculado',
+          message: `O processo da marca "${brandName}" foi vinculado ao seu painel.`,
+          type: 'info',
+          link: '/cliente/processos',
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['publicacoes-marcas'] });
+      queryClient.invalidateQueries({ queryKey: ['publicacao-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['brand-processes-pub'] });
+      toast.success('Cliente atribuído com sucesso');
+      setClientAssignSearch('');
+      setShowClientAssignDropdown(false);
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao atribuir cliente'),
   });
 
   // ─── Maps ────
@@ -1564,6 +1618,67 @@ export default function PublicacaoTab() {
                         <Users className="w-3 h-3" /> Resp: {adminMap.get(selected.admin_id)?.full_name}
                       </p>
                     )}
+
+                    {/* ─── Atribuir ao Cliente ─── */}
+                    <div className="mt-3" ref={clientAssignRef}>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                        <Users className="w-3 h-3" /> Atribuir ao Cliente
+                      </Label>
+                      {selected.client_id && clientMap.get(selected.client_id) ? (
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold truncate">{clientMap.get(selected.client_id)?.full_name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{clientMap.get(selected.client_id)?.email}</p>
+                          </div>
+                          <button
+                            onClick={() => assignClientMutation.mutate({ pubId: selected.id, clientId: null, oldClientId: selected.client_id, processId: selected.process_id })}
+                            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            title="Desvincular cliente"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                            <Input
+                              placeholder="Buscar cliente por nome, email ou CPF..."
+                              value={clientAssignSearch}
+                              onChange={e => {
+                                setClientAssignSearch(e.target.value);
+                                setShowClientAssignDropdown(e.target.value.length >= 2);
+                              }}
+                              onFocus={() => { if (clientAssignSearch.length >= 2) setShowClientAssignDropdown(true); }}
+                              className="h-8 text-xs pl-7"
+                            />
+                          </div>
+                          {showClientAssignDropdown && clientAssignSearch.length >= 2 && (
+                            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                              {(() => {
+                                const q = clientAssignSearch.toLowerCase();
+                                const matches = clients.filter(c =>
+                                  (c.full_name?.toLowerCase().includes(q)) ||
+                                  (c.email?.toLowerCase().includes(q)) ||
+                                  (c.cpf_cnpj?.replace(/\D/g, '').includes(q.replace(/\D/g, '')))
+                                ).slice(0, 8);
+                                if (matches.length === 0) return <p className="text-xs text-muted-foreground p-3 text-center">Nenhum cliente encontrado</p>;
+                                return matches.map(c => (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => assignClientMutation.mutate({ pubId: selected.id, clientId: c.id, oldClientId: selected.client_id, processId: selected.process_id })}
+                                    className="w-full text-left px-3 py-2 hover:bg-accent transition-colors border-b border-border/50 last:border-0"
+                                  >
+                                    <p className="text-xs font-medium truncate">{c.full_name}</p>
+                                    <p className="text-[10px] text-muted-foreground truncate">{c.email}{c.cpf_cnpj ? ` · ${c.cpf_cnpj}` : ''}</p>
+                                  </button>
+                                ));
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
