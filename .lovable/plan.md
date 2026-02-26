@@ -1,132 +1,111 @@
 
-# Leads CRM Premium - Kanban + Funil de Vendas + Remarketing Automatico
+# Remarketing Multicanal: E-mail + WhatsApp com Limites e Horario Comercial
 
 ## Visao Geral
 
-Transformar a aba Leads em um CRM completo e premium com modo Kanban drag-and-drop, funil de vendas visual, ficha detalhada do lead e sistema de remarketing automatico (individual e em massa).
+Refatorar o sistema de remarketing para:
+1. Enviar por **E-mail** (Resend) e **WhatsApp** (BotConversa webhook) - sem SMS
+2. Limites diarios: **100 e-mails/dia** e **10 WhatsApp/dia** (intervalo de 10min entre WhatsApps)
+3. Envios apenas em **horario comercial** (Seg-Sex, 10h-17h BRT)
+4. Campanha nao envia tudo de uma vez - agenda os envios em fila
+5. **Teste imediato**: enviar 1 e-mail + 1 WhatsApp para o lead "Gleison Carvalho" como validacao
 
 ---
 
-## 1. Banco de Dados - Novas Colunas e Tabelas
+## 1. Nova Tabela: Fila de Envios (`lead_remarketing_queue`)
 
-### Tabela `leads` - Novas colunas:
-- `lead_score` (integer, default 0) - Pontuacao do lead (0-100)
-- `lead_temperature` (text, default 'frio') - frio/morno/quente
-- `last_activity_at` (timestamptz) - Ultima atividade
-- `remarketing_count` (integer, default 0) - Quantas vezes recebeu remarketing
-- `tags` (text[], default '{}') - Tags personalizadas
+Tabela para controlar envios escalonados:
 
-### Nova tabela `lead_activities`:
-- `id`, `lead_id` (FK leads), `admin_id`, `activity_type` (text: nota/email/ligacao/whatsapp/remarketing), `content` (text), `created_at`
-- RLS: apenas admins
+- `id` (uuid)
+- `campaign_id` (uuid, FK remarketing_campaigns)
+- `lead_id` (uuid)
+- `channel` (text: 'email' ou 'whatsapp')
+- `status` (text: 'pending' / 'sent' / 'failed')
+- `scheduled_for` (timestamptz) - data/hora agendada (dentro do horario comercial)
+- `sent_at` (timestamptz)
+- `error_message` (text)
+- `created_at` (timestamptz)
 
-### Nova tabela `lead_remarketing_campaigns`:
-- `id`, `name`, `type` (text: abandono_carrinho/promocao/reengajamento/personalizado), `subject`, `body` (html), `target_status` (text[]), `target_origin` (text[]), `scheduled_at`, `sent_at`, `total_sent` (int), `total_opened` (int), `created_by`, `status` (rascunho/agendada/enviando/enviada), `created_at`
-- RLS: apenas admins
-
----
-
-## 2. Componentes Novos
-
-### `LeadKanbanBoard.tsx`
-- Board Kanban com colunas por status: Novo > Em Contato > Qualificado > Proposta > Negociacao > Convertido > Perdido
-- Drag-and-drop via HTML5 drag API (sem lib extra)
-- Cards com: avatar, nome, empresa, valor estimado, temperatura (icone fogo), tags, origem
-- Ao arrastar entre colunas: atualiza status no banco automaticamente
-- Contagem e valor total por coluna
-
-### `LeadDetailSheet.tsx` (Sheet lateral)
-- Abre ao clicar no card/linha do lead
-- Abas: **Dados** | **Atividades** | **Remarketing**
-- **Dados**: Todos os campos editaveis inline, score, temperatura, tags
-- **Atividades**: Timeline de interacoes (notas, emails enviados, ligacoes registradas)
-- **Remarketing Individual**: Botao "Enviar Remarketing" com selector de template, preview do email e envio direto via `trigger-email-automation`
-- Botao "Converter em Cliente" em destaque
-
-### `LeadSalesFunnel.tsx`
-- Funil visual (trapezio/piramide invertida) mostrando a conversao entre cada estagio
-- Percentuais de conversao entre etapas
-- Animacao com framer-motion
-- Cores gradientes por estagio
-
-### `LeadRemarketingPanel.tsx`
-- Painel para disparo em massa de remarketing
-- Filtros: por status, origem, temperatura, data de criacao, tags
-- Opcoes de campanha: Abandono de Carrinho, Promocao, Reengajamento
-- Editor de mensagem com variaveis (nome, marca, link)
-- Preview antes do envio
-- Historico de campanhas enviadas com metricas
+RLS: apenas admins.
 
 ---
 
-## 3. Pagina Leads Atualizada (`Leads.tsx`)
+## 2. Edge Function: `send-lead-remarketing` (Reescrita)
 
-### Layout com Tabs:
-- **Lista** (tabela atual melhorada)
-- **Kanban** (novo board drag-and-drop)
-- **Funil** (funil de vendas visual)
-- **Remarketing** (painel de campanhas)
+A funcao sera refatorada para:
 
-### Header mantido com KPIs + Pipeline Bar existente
+### Modo "teste" (`test: true` no payload)
+- Recebe 1 lead_id, envia 1 e-mail + 1 WhatsApp imediatamente
+- Retorna resultado de cada canal
 
-### Melhorias na tabela:
-- Coluna de temperatura (emoji fogo)
-- Coluna de score
-- Ao clicar na linha, abre `LeadDetailSheet`
+### Modo "campanha" (padrao)
+- Recebe lead_ids[], channels (email/whatsapp), campaign_id
+- **Nao envia imediatamente** - insere na tabela `lead_remarketing_queue`
+- Calcula horarios agendados respeitando:
+  - E-mail: ate 100/dia, distribuidos no horario comercial (10h-17h BRT, Seg-Sex)
+  - WhatsApp: ate 10/dia, com intervalo minimo de 10 minutos entre cada
+  - Se ultrapassar o limite diario, agenda para o proximo dia util
+- Retorna quantos foram enfileirados
 
----
+### Envio de WhatsApp
+- Usa o webhook BotConversa (ja configurado) com payload: `{ telefone, nome, mensagem }`
+- Mesma logica do `send-multichannel-notification`
 
-## 4. Automacao de Captura de Leads
-
-### Formulario do site (Registrar.tsx / Index.tsx):
-- Ao preencher dados pessoais e NAO seguir ate assinatura, o lead ja e criado (isso ja funciona via `trigger-email-automation` com evento `form_started`)
-- Verificar que o status permanece "novo" e o lead aparece corretamente no Kanban
-
----
-
-## 5. Edge Function: `send-lead-remarketing`
-
-Nova funcao para enviar remarketing:
-- Recebe: `lead_ids[]`, `campaign_id` ou `subject + body` customizado
-- Para cada lead: substitui variaveis, envia via Resend, loga em `email_logs`
-- Atualiza `remarketing_count` no lead
-- Registra atividade em `lead_activities`
-- Rate limit: 5 emails/segundo para evitar spam
+### Envio de E-mail
+- Mantem Resend como esta
 
 ---
 
-## 6. Arquivos a Criar
+## 3. Nova Edge Function: `process-remarketing-queue`
 
-| Arquivo | Descricao |
+Funcao chamada via cron (a cada 10 minutos) para processar a fila:
+
+- Verifica se esta em horario comercial (10h-17h BRT, Seg-Sex)
+- Se nao, sai sem fazer nada
+- Busca itens `pending` com `scheduled_for <= now()`
+- Processa em lotes:
+  - E-mails: ate 15 por execucao (100/dia / ~7h = ~14/h)
+  - WhatsApp: ate 1 por execucao (10/dia / ~7h com intervalo 10min)
+- Para cada item: envia, atualiza status, loga atividade
+- Atualiza contadores da campanha
+
+---
+
+## 4. UI: `LeadRemarketingPanel.tsx` (Atualizado)
+
+### Novos elementos:
+- **Checkboxes de canal**: E-mail e WhatsApp (ambos marcados por padrao)
+- **Indicadores**: "X leads com e-mail" / "X leads com telefone"
+- **Botao "Enviar Teste"**: envia 1 e-mail + 1 WhatsApp para o primeiro lead da lista filtrada
+- **Info de limites**: "E-mail: 100/dia | WhatsApp: 10/dia (10min intervalo) | Horario: Seg-Sex 10h-17h"
+- Ao clicar "Enviar Campanha": mostra toast informando que os envios serao distribuidos no horario comercial
+
+### Historico de campanhas:
+- Mostrar status "agendada" / "em andamento" / "concluida"
+- Mostrar progresso (enviados / total)
+
+---
+
+## 5. Cron Job
+
+Agendar `process-remarketing-queue` a cada 10 minutos via pg_cron + pg_net.
+
+---
+
+## 6. Teste Imediato
+
+Apos implementar, enviar teste para o lead **Gleison Carvalho** (email: Gleysoncarvalhofm@gmail.com, phone: (74) 99976-4748):
+- 1 e-mail de remarketing
+- 1 WhatsApp via BotConversa webhook
+
+---
+
+## Arquivos
+
+| Arquivo | Acao |
 |---|---|
-| `src/components/admin/leads/LeadKanbanBoard.tsx` | Board Kanban drag-and-drop |
-| `src/components/admin/leads/LeadDetailSheet.tsx` | Ficha detalhada do lead (Sheet) |
-| `src/components/admin/leads/LeadSalesFunnel.tsx` | Funil de vendas visual |
-| `src/components/admin/leads/LeadRemarketingPanel.tsx` | Painel de remarketing em massa |
-| `supabase/functions/send-lead-remarketing/index.ts` | Edge function de disparo |
-
-## 7. Arquivos a Editar
-
-| Arquivo | Mudanca |
-|---|---|
-| `src/pages/admin/Leads.tsx` | Refatorar com Tabs (Lista/Kanban/Funil/Remarketing), integrar novos componentes, sheet de detalhes |
-| `src/components/admin/leads/LeadImportExportDialog.tsx` | Adicionar campo de tags na importacao |
-
-## 8. Migracao SQL
-
-- Adicionar colunas na tabela `leads`
-- Criar tabela `lead_activities` com RLS
-- Criar tabela `lead_remarketing_campaigns` com RLS
-- Sem alteracao em tabelas existentes (aditivo apenas)
-
----
-
-## Resultado Final
-
-- CRM de Leads completo com 4 visualizacoes (Lista, Kanban, Funil, Remarketing)
-- Drag-and-drop no Kanban atualiza status em tempo real
-- Ficha do lead com timeline de atividades e remarketing individual
-- Campanhas de remarketing em massa com filtros inteligentes
-- Automacao de abandono de carrinho (ja existe, sera integrada na UI)
-- Import/Export mantido e melhorado
-- Tudo funcional, premium e moderno com animacoes framer-motion
+| Migration SQL | Criar tabela `lead_remarketing_queue` |
+| `supabase/functions/send-lead-remarketing/index.ts` | Reescrever: modo teste + enfileiramento com horario comercial |
+| `supabase/functions/process-remarketing-queue/index.ts` | Novo: processa fila respeitando limites |
+| `src/components/admin/leads/LeadRemarketingPanel.tsx` | Adicionar canais, botao teste, info de limites |
+| Cron SQL | Agendar processamento a cada 10min |
