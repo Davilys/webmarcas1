@@ -13,8 +13,10 @@ import {
   Send, Rocket, Filter, Eye, Users, Mail,
   Loader2, CheckCircle2, Clock, AlertCircle,
   ShoppingCart, Megaphone, RefreshCw, Flame,
-  MessageCircle, TestTube2, Info, Pause, Trash2, Play
+  MessageCircle, TestTube2, Info, Pause, Trash2, Play,
+  CalendarClock, Zap
 } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -151,6 +153,10 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
   const [sending, setSending] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
+  const [scheduleHour, setScheduleHour] = useState('10');
+  const [scheduleMinute, setScheduleMinute] = useState('00');
 
   // Channel selection
   const [channelEmail, setChannelEmail] = useState(true);
@@ -244,7 +250,7 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
     }
   };
 
-  const handleSendCampaign = async () => {
+  const handleSendCampaign = async (sendNow: boolean = false) => {
     if (!campaignName || !subject || !body) {
       toast.error('Preencha todos os campos da campanha');
       return;
@@ -257,6 +263,17 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
       toast.error('Selecione pelo menos um canal de envio');
       return;
     }
+    if (!sendNow && !scheduleDate) {
+      toast.error('Selecione uma data para agendar');
+      return;
+    }
+
+    let scheduledFor: string | undefined;
+    if (!sendNow && scheduleDate) {
+      const d = new Date(scheduleDate);
+      d.setHours(parseInt(scheduleHour), parseInt(scheduleMinute), 0, 0);
+      scheduledFor = d.toISOString();
+    }
 
     setSending(true);
     try {
@@ -268,7 +285,7 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
           subject,
           body,
           target_status: filterStatus,
-          status: 'agendada',
+          status: sendNow ? 'agendada' : 'agendada',
           total_sent: 0,
           channels: getSelectedChannels(),
         } as any)
@@ -283,18 +300,23 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
           subject,
           body,
           channels: getSelectedChannels(),
+          ...(scheduledFor ? { scheduled_for: scheduledFor } : {}),
         },
       });
       if (error) throw error;
 
       const queued = data?.queued || 0;
       toast.success(
-        `${queued} envios agendados! Serão distribuídos em horário comercial (Seg-Sex, 10h-17h).`,
+        sendNow
+          ? `${queued} envios iniciados! Serão distribuídos em horário comercial (Seg-Sex, 10h-17h).`
+          : `${queued} envios agendados para ${format(scheduleDate!, 'dd/MM/yyyy', { locale: ptBR })} às ${scheduleHour}:${scheduleMinute}.`,
         { duration: 6000 }
       );
       setCampaignName('');
       setSubject('');
       setBody('');
+      setShowScheduler(false);
+      setScheduleDate(undefined);
       fetchCampaigns();
       onRefresh();
     } catch (err: any) {
@@ -603,17 +625,75 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
             )}
           </Button>
 
-          <Button
-            onClick={handleSendCampaign}
-            disabled={sending || filteredLeads.length === 0 || (!channelEmail && !channelWhatsApp)}
-            className="w-full rounded-xl gap-2 bg-gradient-to-r from-violet-600 to-purple-500 border-0"
-          >
-            {sending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Agendando...</>
-            ) : (
-              <><Send className="h-4 w-4" /> Agendar Campanha ({filteredLeads.length} Leads)</>
-            )}
-          </Button>
+          {/* Send Now / Schedule buttons */}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => handleSendCampaign(true)}
+              disabled={sending || filteredLeads.length === 0 || (!channelEmail && !channelWhatsApp)}
+              className="flex-1 rounded-xl gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 border-0 text-white"
+            >
+              {sending ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
+              ) : (
+                <><Zap className="h-4 w-4" /> Enviar Agora</>
+              )}
+            </Button>
+            <Button
+              onClick={() => setShowScheduler(!showScheduler)}
+              disabled={sending || filteredLeads.length === 0 || (!channelEmail && !channelWhatsApp)}
+              variant={showScheduler ? 'default' : 'outline'}
+              className="flex-1 rounded-xl gap-2"
+            >
+              <CalendarClock className="h-4 w-4" /> Agendar
+            </Button>
+          </div>
+
+          {/* Scheduler */}
+          {showScheduler && (
+            <div className="space-y-3 p-3 rounded-xl border border-primary/20 bg-primary/5">
+              <p className="text-xs font-semibold text-foreground">Escolha data e horário:</p>
+              <Calendar
+                mode="single"
+                selected={scheduleDate}
+                onSelect={setScheduleDate}
+                locale={ptBR}
+                disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                className="rounded-xl border mx-auto"
+              />
+              <div className="flex items-center gap-2 justify-center">
+                <Select value={scheduleHour} onValueChange={setScheduleHour}>
+                  <SelectTrigger className="w-20 h-8 text-xs rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 14 }, (_, i) => i + 7).map(h => (
+                      <SelectItem key={h} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}h</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-sm font-bold">:</span>
+                <Select value={scheduleMinute} onValueChange={setScheduleMinute}>
+                  <SelectTrigger className="w-20 h-8 text-xs rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {['00', '15', '30', '45'].map(m => (
+                      <SelectItem key={m} value={m}>{m}min</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={() => handleSendCampaign(false)}
+                disabled={sending || !scheduleDate}
+                className="w-full rounded-xl gap-2 bg-gradient-to-r from-violet-600 to-purple-500 border-0 text-white"
+              >
+                {sending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Agendando...</>
+                ) : (
+                  <><Send className="h-4 w-4" /> Agendar Campanha ({filteredLeads.length} Leads)
+                    {scheduleDate && ` — ${format(scheduleDate, 'dd/MM', { locale: ptBR })} ${scheduleHour}:${scheduleMinute}`}
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       </motion.div>
 
