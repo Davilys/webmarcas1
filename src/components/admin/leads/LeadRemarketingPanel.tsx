@@ -13,7 +13,7 @@ import {
   Send, Rocket, Filter, Eye, Users, Mail,
   Loader2, CheckCircle2, Clock, AlertCircle,
   ShoppingCart, Megaphone, RefreshCw, Flame,
-  MessageCircle, TestTube2, Info
+  MessageCircle, TestTube2, Info, Pause, Trash2, Play
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -315,7 +315,53 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
       case 'em_andamento': return { label: 'Em Andamento', color: 'text-amber-500', icon: Loader2 };
       case 'concluida': return { label: 'Concluída', color: 'text-emerald-500', icon: CheckCircle2 };
       case 'enviada': return { label: 'Enviada', color: 'text-emerald-500', icon: CheckCircle2 };
+      case 'pausada': return { label: 'Pausada', color: 'text-orange-500', icon: Pause };
       default: return { label: status, color: 'text-muted-foreground', icon: AlertCircle };
+    }
+  };
+
+  const handlePauseCampaign = async (campaignId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'pausada' ? 'agendada' : 'pausada';
+    const queueStatus = currentStatus === 'pausada' ? 'pending' : 'paused';
+    try {
+      await supabase
+        .from('lead_remarketing_campaigns')
+        .update({ status: newStatus } as any)
+        .eq('id', campaignId);
+
+      // Pause/resume pending queue items
+      await supabase
+        .from('lead_remarketing_queue')
+        .update({ status: queueStatus } as any)
+        .eq('campaign_id', campaignId)
+        .in('status', ['pending', 'paused']);
+
+      toast.success(newStatus === 'pausada' ? 'Campanha pausada' : 'Campanha retomada');
+      fetchCampaigns();
+    } catch {
+      toast.error('Erro ao atualizar campanha');
+    }
+  };
+
+  const handleDeleteCampaign = async (campaignId: string, campaignName: string) => {
+    if (!confirm(`Excluir a campanha "${campaignName}"? Os envios pendentes serão cancelados.`)) return;
+    try {
+      // Delete pending queue items
+      await supabase
+        .from('lead_remarketing_queue')
+        .delete()
+        .eq('campaign_id', campaignId)
+        .in('status', ['pending', 'paused']);
+
+      await supabase
+        .from('lead_remarketing_campaigns')
+        .delete()
+        .eq('id', campaignId);
+
+      toast.success('Campanha excluída');
+      fetchCampaigns();
+    } catch {
+      toast.error('Erro ao excluir campanha');
     }
   };
 
@@ -637,6 +683,31 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
                           style={{ width: `${Math.min(100, (c.total_sent / totalQueued) * 100)}%` }}
                         />
                       </div>
+                    </div>
+                  )}
+                  {/* Actions */}
+                  {(c.status === 'agendada' || c.status === 'em_andamento' || c.status === 'pausada') && (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/20">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-[10px] gap-1 rounded-lg"
+                        onClick={() => handlePauseCampaign(c.id, c.status)}
+                      >
+                        {c.status === 'pausada' ? (
+                          <><Play className="h-3 w-3 text-emerald-500" /> Retomar</>
+                        ) : (
+                          <><Pause className="h-3 w-3 text-orange-500" /> Pausar</>
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-[10px] gap-1 rounded-lg text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteCampaign(c.id, c.name)}
+                      >
+                        <Trash2 className="h-3 w-3" /> Excluir
+                      </Button>
                     </div>
                   )}
                 </div>
