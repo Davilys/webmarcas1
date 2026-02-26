@@ -202,12 +202,24 @@ Deno.serve(async (req) => {
 
       if (!client) throw new Error("Cliente não encontrado");
 
+      // Fetch brand name for {{marca}} variable
+      const { data: brandProcess } = await supabase
+        .from("brand_processes")
+        .select("brand_name")
+        .eq("user_id", client.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const brandName = brandProcess?.brand_name || "sua marca";
+
       const testSubject = (subject || "Teste de Remarketing - Webmarcas")
-        .replace(/\{\{nome\}\}/g, client.full_name || "");
+        .replace(/\{\{nome\}\}/g, client.full_name || "")
+        .replace(/\{\{marca\}\}/g, brandName);
       const testBody = (body || "Olá {{nome}}, este é um teste de remarketing.")
         .replace(/\{\{nome\}\}/g, client.full_name || "")
         .replace(/\{\{email\}\}/g, client.email || "")
-        .replace(/\{\{empresa\}\}/g, client.company_name || "");
+        .replace(/\{\{empresa\}\}/g, client.company_name || "")
+        .replace(/\{\{marca\}\}/g, brandName);
 
       const results: Record<string, any> = {};
 
@@ -271,6 +283,22 @@ Deno.serve(async (req) => {
       if (batchClients) allClients.push(...batchClients);
     }
 
+    // Fetch brand names for all clients for {{marca}} variable
+    const clientIds = allClients.map(c => c.id);
+    const brandMap: Record<string, string> = {};
+    if (clientIds.length > 0) {
+      const { data: brands } = await supabase
+        .from("brand_processes")
+        .select("user_id, brand_name")
+        .in("user_id", clientIds)
+        .order("created_at", { ascending: false });
+      for (const b of brands || []) {
+        if (b.user_id && !brandMap[b.user_id]) {
+          brandMap[b.user_id] = b.brand_name;
+        }
+      }
+    }
+
     const emailSubject = subject || "Temos uma oportunidade especial para você!";
     const emailBody = body || "Olá {{nome}}, gostaríamos de retomar contato com você.";
 
@@ -280,12 +308,15 @@ Deno.serve(async (req) => {
     const queueItems: any[] = [];
 
     for (const client of allClients) {
+      const marca = brandMap[client.id] || "sua marca";
       const personalizedBody = emailBody
         .replace(/\{\{nome\}\}/g, client.full_name || "")
         .replace(/\{\{email\}\}/g, client.email || "")
-        .replace(/\{\{empresa\}\}/g, client.company_name || "");
+        .replace(/\{\{empresa\}\}/g, client.company_name || "")
+        .replace(/\{\{marca\}\}/g, marca);
       const personalizedSubject = emailSubject
-        .replace(/\{\{nome\}\}/g, client.full_name || "");
+        .replace(/\{\{nome\}\}/g, client.full_name || "")
+        .replace(/\{\{marca\}\}/g, marca);
 
       if (selectedChannels.includes("email") && client.email) {
         queueItems.push({

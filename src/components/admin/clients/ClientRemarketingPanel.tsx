@@ -49,12 +49,7 @@ interface ClientRemarketingPanelProps {
   onRefresh: () => void;
 }
 
-const CAMPAIGN_TYPES = [
-  { value: 'promocao', label: 'Promoção', icon: Megaphone, color: 'text-violet-500' },
-  { value: 'reengajamento', label: 'Reengajamento', icon: RefreshCw, color: 'text-blue-500' },
-  { value: 'upsell', label: 'Upsell / Renovação', icon: ShoppingCart, color: 'text-orange-500' },
-  { value: 'personalizado', label: 'Personalizado', icon: Mail, color: 'text-emerald-500' },
-];
+// CAMPAIGN_TYPES moved below TEMPLATE_VARS
 
 const PIPELINE_FILTER_OPTIONS = [
   { value: 'assinou_contrato', label: 'Assinou Contrato' },
@@ -65,62 +60,144 @@ const PIPELINE_FILTER_OPTIONS = [
   { value: 'registrada', label: 'Registrada' },
 ];
 
-const TEMPLATE_VARS = ['{{nome}}', '{{email}}', '{{empresa}}'];
+const TEMPLATE_VARS = ['{{nome}}', '{{email}}', '{{empresa}}', '{{marca}}'];
+
+const CAMPAIGN_TYPES = [
+  { value: 'acesso_area_cliente', label: '🔑 Acesso Área do Cliente', icon: Users, color: 'text-blue-500' },
+  { value: 'institucional', label: '🏢 Institucional (Fortalecimento)', icon: Megaphone, color: 'text-violet-500' },
+  { value: 'alerta_educativo', label: '⚠️ Alerta Educativo', icon: AlertCircle, color: 'text-amber-500' },
+  { value: 'data_comemorativa', label: '🎉 Data Comemorativa', icon: CalendarClock, color: 'text-pink-500' },
+  { value: 'renovacao', label: '🔁 Renovação Futura', icon: RefreshCw, color: 'text-orange-500' },
+  { value: 'registro_classe', label: '🛡️ Registro de Nova Classe', icon: ShoppingCart, color: 'text-emerald-500' },
+  { value: 'personalizado', label: '✏️ Personalizado', icon: Mail, color: 'text-muted-foreground' },
+];
 
 const CAMPAIGN_TEMPLATES: Record<string, { subject: string; body: string }> = {
-  promocao: {
-    subject: '🔥 Oferta Exclusiva para {{nome}} — Condições especiais!',
+  acesso_area_cliente: {
+    subject: 'Acompanhe seu processo na Área do Cliente',
     body: `Olá {{nome}},
 
-Temos uma oferta EXCLUSIVA e por tempo limitado para você:
+Sua Área do Cliente está disponível para acompanhamento completo do seu processo de registro da marca {{marca}}.
 
-🏷️ PROMOÇÃO ESPECIAL
-✅ Condições diferenciadas para quem já é cliente
-✅ Parcelamento facilitado
-✅ Acompanhamento completo
+Acesse:
+https://www.webmarcas.net/cliente/login
 
-⏰ Essa condição é válida apenas esta semana!
+Login: seu e-mail cadastrado
+Senha provisória: 123Mudar@
 
-👉 Responda este e-mail ou fale com nosso time agora mesmo.
+Recomendamos alterar sua senha no primeiro acesso.
 
-Abraços,
-Equipe Webmarcas
+Lá você pode:
+✅ Acompanhar a situação do processo
+✅ Visualizar atualizações
+✅ Baixar o contrato
+✅ Acessar todas as documentações
+
+Atenciosamente,
+WebMarcas Intelligence PI™`,
+  },
+  institucional: {
+    subject: 'Sua marca está protegida? 🔒',
+    body: `Olá {{nome}},
+
+Agradecemos por confiar na WebMarcas Intelligence PI™ para a proteção da marca {{marca}}.
+
+Seguimos acompanhando seu processo junto ao INPI com monitoramento contínuo.
+
+Qualquer atualização relevante será informada imediatamente.
+
+Nosso compromisso é garantir que sua marca esteja sempre protegida e em conformidade com as exigências do INPI.
+
+Estamos à disposição para qualquer dúvida.
+
+Atenciosamente,
+WebMarcas Intelligence PI™
 www.webmarcas.net | (11) 91112-0225`,
   },
-  reengajamento: {
-    subject: '{{nome}}, sentimos sua falta! Novidades da Webmarcas 💼',
+  alerta_educativo: {
+    subject: 'Dono da marca é quem registra primeiro ⚠️',
     body: `Olá {{nome}},
 
-Faz um tempo que não conversamos, e muita coisa mudou por aqui!
+Lembramos que o direito sobre a marca pertence a quem registra primeiro junto ao INPI — independentemente de quem a criou ou usa há mais tempo.
 
-📢 Novidades:
-🔹 Processo 100% digital — acompanhe tudo pelo portal
-🔹 Alertas automáticos de prazos INPI
-🔹 Suporte dedicado via WhatsApp
+Se a {{empresa}} possui novas linhas de produtos, serviços ou está expandindo para novos segmentos, é fundamental ampliar a proteção da marca {{marca}}.
 
-Que tal agendar uma conversa rápida? Sem compromisso!
+📌 Marcas não registradas em todas as classes de atuação ficam vulneráveis a:
+• Concorrentes registrando o mesmo nome
+• Perda do direito de uso
+• Ações judiciais
 
-Um abraço,
-Equipe Webmarcas
+Fale conosco para avaliar a proteção completa da sua marca.
+
+Atenciosamente,
+WebMarcas Intelligence PI™
 www.webmarcas.net | (11) 91112-0225`,
   },
-  upsell: {
-    subject: '{{nome}}, proteja ainda mais sua marca com novos registros! 🛡️',
+  data_comemorativa: {
+    subject: '🎉 Uma mensagem especial da WebMarcas Intelligence PI™',
     body: `Olá {{nome}},
 
-Você já protegeu sua marca conosco — parabéns pela decisão!
+A WebMarcas Intelligence PI™ deseja sucesso e prosperidade para a {{empresa}} e para a marca {{marca}}.
 
-Mas sabia que é possível ampliar essa proteção?
+Seguimos protegendo o que é seu com dedicação e tecnologia.
 
-🔒 Registre sua marca em mais classes NCL
-🌎 Expanda a proteção para outros segmentos
-📋 Renove processos próximos do vencimento
+Que este momento especial traga ainda mais conquistas para o seu negócio! 🚀
 
-💡 Clientes que ampliam o registro reduzem em 90% o risco de disputas.
+Um grande abraço,
+WebMarcas Intelligence PI™
+www.webmarcas.net | (11) 91112-0225`,
+  },
+  renovacao: {
+    subject: 'Informação importante sobre a validade da sua marca',
+    body: `Olá {{nome}},
 
-Quer saber mais? Responda este e-mail ou fale conosco!
+Sua marca {{marca}} possui validade de 10 anos após a concessão pelo INPI.
 
-Equipe Webmarcas
+É fundamental manter seus dados atualizados conosco para garantir que a renovação seja realizada no momento correto, evitando:
+❌ Perda do registro
+❌ Abertura para terceiros registrarem o mesmo nome
+❌ Custos extras com processos emergenciais
+
+📋 Recomendamos:
+✅ Verificar se os dados cadastrais estão atualizados
+✅ Manter o contato ativo conosco
+✅ Acompanhar as publicações do INPI pela Área do Cliente
+
+Estamos monitorando seu processo e entraremos em contato quando o prazo de renovação se aproximar.
+
+Atenciosamente,
+WebMarcas Intelligence PI™
+www.webmarcas.net | (11) 91112-0225`,
+  },
+  registro_classe: {
+    subject: '🛡️ Amplie a proteção da marca {{marca}} — Registro em novas classes',
+    body: `Olá {{nome}},
+
+Você já deu um passo importante ao registrar a marca {{marca}} — parabéns pela decisão!
+
+Mas sabia que sua marca pode estar desprotegida em outros segmentos de atuação?
+
+O registro de marca no INPI é feito por classe (NCL), e cada classe cobre um grupo específico de produtos ou serviços. Se a {{empresa}} atua ou pretende atuar em mais de uma área, é essencial registrar a marca nas classes correspondentes.
+
+🔒 Benefícios do registro em múltiplas classes:
+✅ Proteção contra concorrentes em outros segmentos
+✅ Exclusividade de uso em todas as áreas de atuação
+✅ Blindagem jurídica completa
+✅ Valorização do ativo intangível da empresa
+
+💡 Clientes que ampliam o registro reduzem em 90% o risco de disputas de marca.
+
+📌 Exemplos comuns:
+• Restaurante → Classe 43 (serviços) + Classe 29/30 (produtos alimentícios)
+• Loja de roupas → Classe 35 (comércio) + Classe 25 (vestuário)
+• Escola → Classe 41 (educação) + Classe 16 (material didático)
+
+Quer saber quais classes são estratégicas para a {{empresa}}? Responda este e-mail ou fale conosco!
+
+Condições especiais para quem já é cliente WebMarcas. 🎯
+
+Atenciosamente,
+WebMarcas Intelligence PI™
 www.webmarcas.net | (11) 91112-0225`,
   },
   personalizado: { subject: '', body: '' },
@@ -275,7 +352,8 @@ export function ClientRemarketingPanel({ clients, onRefresh }: ClientRemarketing
   const previewBody = body
     .replace(/\{\{nome\}\}/g, 'João Silva')
     .replace(/\{\{email\}\}/g, 'joao@exemplo.com')
-    .replace(/\{\{empresa\}\}/g, 'Empresa XYZ');
+    .replace(/\{\{empresa\}\}/g, 'Empresa XYZ')
+    .replace(/\{\{marca\}\}/g, 'MinhaMarca');
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -432,7 +510,7 @@ export function ClientRemarketingPanel({ clients, onRefresh }: ClientRemarketing
           )}
 
           {showPreview && body && (() => {
-            const previewSubject = subject.replace(/\{\{nome\}\}/g, 'João Silva').replace(/\{\{email\}\}/g, 'joao@exemplo.com').replace(/\{\{empresa\}\}/g, 'Empresa XYZ');
+            const previewSubject = subject.replace(/\{\{nome\}\}/g, 'João Silva').replace(/\{\{email\}\}/g, 'joao@exemplo.com').replace(/\{\{empresa\}\}/g, 'Empresa XYZ').replace(/\{\{marca\}\}/g, 'MinhaMarca');
             const cleanSubject = previewSubject.replace(/[⚠️🔥💼🏷️🎯📢✅⏰👉💡🛡️🌎📋🔒]/g, '').replace(/\s+/g, ' ').trim();
             const bodyLines = previewBody.split('\n').map(l => l.trim()).filter(l => l.length > 10 && !l.startsWith('Olá') && !l.startsWith('Conte com') && !l.startsWith('Equipe') && !l.startsWith('www.') && !l.startsWith('Um abraço') && !l.startsWith('Abraços'));
             const keyPoints = bodyLines.slice(0, 2).join(' ').substring(0, 150);
