@@ -63,6 +63,77 @@ const STATUS_FILTER_OPTIONS = [
 
 const TEMPLATE_VARS = ['{{nome}}', '{{email}}', '{{empresa}}'];
 
+const CAMPAIGN_TEMPLATES: Record<string, { subject: string; body: string }> = {
+  abandono_carrinho: {
+    subject: '{{nome}}, você esqueceu algo importante! Sua marca ainda está desprotegida ⚠️',
+    body: `Olá {{nome}},
+
+Notamos que você iniciou o processo de registro da sua marca, mas não finalizou. Sabemos que a rotina é corrida, por isso viemos te lembrar!
+
+⚠️ A cada dia sem registro, sua marca fica vulnerável a:
+• Ser registrada por terceiros (e você perder o direito de uso)
+• Processos judiciais por uso indevido
+• Perda total do investimento na sua marca
+
+🎯 Retome agora de onde parou — leva menos de 5 minutos para concluir.
+
+Nosso time está à disposição para te ajudar em cada etapa.
+
+Conte com a Webmarcas!
+Equipe Webmarcas
+www.webmarcas.net | (11) 91112-0225`,
+  },
+  promocao: {
+    subject: '🔥 Oferta Exclusiva para {{nome}} — Registre sua marca com condições especiais!',
+    body: `Olá {{nome}},
+
+Temos uma oferta EXCLUSIVA e por tempo limitado para você:
+
+🏷️ PROMOÇÃO ESPECIAL DE REGISTRO DE MARCA
+
+✅ Entrada facilitada
+✅ Parcelamento em até 12x
+✅ Acompanhamento completo do processo no INPI
+✅ Consultoria de viabilidade GRATUITA
+
+⏰ Essa condição é válida apenas esta semana!
+
+Não perca a chance de proteger legalmente o nome da sua empresa, produto ou serviço com o melhor custo-benefício.
+
+👉 Responda este e-mail ou fale com nosso time agora mesmo.
+
+Abraços,
+Equipe Webmarcas
+www.webmarcas.net | (11) 91112-0225`,
+  },
+  reengajamento: {
+    subject: '{{nome}}, sentimos sua falta! Novidades da Webmarcas para você 💼',
+    body: `Olá {{nome}},
+
+Faz um tempo que não conversamos, e muita coisa mudou por aqui!
+
+📢 Novidades que podem te interessar:
+
+🔹 Processo 100% digital — acompanhe tudo pelo nosso portal exclusivo
+🔹 Alertas automáticos de prazos e publicações do INPI
+🔹 Suporte dedicado via WhatsApp
+
+💡 Sabia que mais de 70% das marcas no Brasil NÃO são registradas? Proteger a sua é um investimento que valoriza seu negócio e evita dores de cabeça futuras.
+
+Que tal agendar uma conversa rápida com nosso especialista? Sem compromisso!
+
+Estamos aqui para te ajudar.
+
+Um abraço,
+Equipe Webmarcas
+www.webmarcas.net | (11) 91112-0225`,
+  },
+  personalizado: {
+    subject: '',
+    body: '',
+  },
+};
+
 export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelProps) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -78,6 +149,15 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => { fetchCampaigns(); }, []);
+
+  const handleTypeChange = (type: string) => {
+    setCampaignType(type);
+    const tpl = CAMPAIGN_TEMPLATES[type];
+    if (tpl) {
+      setSubject(tpl.subject);
+      setBody(tpl.body);
+    }
+  };
 
   const fetchCampaigns = async () => {
     setLoadingCampaigns(true);
@@ -188,7 +268,7 @@ export function LeadRemarketingPanel({ leads, onRefresh }: LeadRemarketingPanelP
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-muted-foreground">Tipo</label>
-            <Select value={campaignType} onValueChange={setCampaignType}>
+            <Select value={campaignType} onValueChange={handleTypeChange}>
               <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CAMPAIGN_TYPES.map(t => (
