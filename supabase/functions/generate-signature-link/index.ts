@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { contractId, expiresInDays = 7, baseUrl: clientBaseUrl } = await req.json();
+    const { contractId, expiresInDays: requestedDays, baseUrl: clientBaseUrl } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -50,6 +50,26 @@ serve(async (req) => {
     const baseUrl = resolvedBase.replace(/\/+$/, '');
 
     console.log('Using base URL:', baseUrl, '| rawSiteUrl:', rawSiteUrl, '| clientBaseUrl was:', clientBaseUrl);
+
+    // Read configured validity from system_settings
+    let configuredDays = 7;
+    try {
+      const { data: settingsRow } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'contracts')
+        .single();
+      if (settingsRow?.value?.linkValidityDays) {
+        configuredDays = settingsRow.value.linkValidityDays;
+      }
+    } catch (e) {
+      console.warn('Could not read contract settings, using default 7 days');
+    }
+
+    // Use explicitly provided value if given, otherwise use configured value
+    const expiresInDays = requestedDays ?? configuredDays;
+
+    console.log('Signature link expiration:', { requestedDays, configuredDays, finalDays: expiresInDays });
 
     // Generate unique token
     const token = crypto.randomUUID();

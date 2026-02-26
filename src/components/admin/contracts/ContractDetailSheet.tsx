@@ -407,7 +407,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
-        body: JSON.stringify({ contractId: contract.id, expiresInDays: 7, baseUrl: getProductionBaseUrl() }),
+        body: JSON.stringify({ contractId: contract.id, baseUrl: getProductionBaseUrl() }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Erro ao gerar link');
@@ -541,7 +541,7 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
-        body: JSON.stringify({ contractId: contract.id, expiresInDays: 7, baseUrl: getProductionBaseUrl() }),
+        body: JSON.stringify({ contractId: contract.id, baseUrl: getProductionBaseUrl() }),
       });
       const result = await response.json();
       if (!response.ok || result.error) throw new Error(result.error || 'Erro ao gerar link');

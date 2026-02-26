@@ -62,10 +62,24 @@ export function ContractSettings() {
         .update({ value: JSON.parse(JSON.stringify(data)), updated_at: new Date().toISOString() })
         .eq('key', 'contracts');
       if (error) throw error;
+
+      // Update signature_expires_at on all pending/sent contracts
+      const { error: updateError } = await supabase
+        .from('contracts')
+        .update({
+          signature_expires_at: new Date(Date.now() + data.linkValidityDays * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .in('signature_status', ['pending', 'sent'])
+        .not('signature_expires_at', 'is', null);
+
+      if (updateError) {
+        console.error('Error updating pending contracts:', updateError);
+        toast.warning('Configurações salvas, mas houve erro ao atualizar contratos pendentes');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['system-settings', 'contracts'] });
-      toast.success('Configurações de contratos salvas!');
+      toast.success('Configurações salvas! Contratos pendentes atualizados.');
     },
     onError: () => toast.error('Erro ao salvar configurações'),
   });
