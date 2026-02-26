@@ -270,12 +270,19 @@ Deno.serve(async (req) => {
 
     const selectedChannels: string[] = channels || ["email"];
 
-    // Fetch leads
-    const { data: leads, error: leadsErr } = await supabase
-      .from("leads")
-      .select("id, full_name, email, phone, company_name")
-      .in("id", lead_ids);
-    if (leadsErr) throw leadsErr;
+    // Fetch leads in batches to avoid URL length limits
+    const allLeads: any[] = [];
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < lead_ids.length; i += BATCH_SIZE) {
+      const batch = lead_ids.slice(i, i + BATCH_SIZE);
+      const { data: batchLeads, error: batchErr } = await supabase
+        .from("leads")
+        .select("id, full_name, email, phone, company_name")
+        .in("id", batch);
+      if (batchErr) throw batchErr;
+      if (batchLeads) allLeads.push(...batchLeads);
+    }
+    const leads = allLeads;
 
     const emailSubject = subject || "Temos uma oportunidade especial para você!";
     const emailBody = body || "Olá {{nome}}, gostaríamos de retomar contato com você.";
