@@ -1,47 +1,76 @@
 
+# Correcao Urgente: Permissoes Nao Funcionando + Dashboard Acessivel
 
-# Filtro de Faturas por Admin - Cada um ve apenas seus clientes
+## Problemas Identificados
 
-## Problema
-Atualmente, todos os admins veem **todas** as faturas no Financeiro. O correto e que cada admin veja apenas as faturas dos clientes atribuidos a ele (`assigned_to`) ou criados por ele (`created_by`). Somente o admin master ve tudo.
+1. **Login sempre redireciona para `/admin/dashboard`** - mesmo que o usuario nao tenha permissao de dashboard
+2. **Logo e header sempre linkam para `/admin/dashboard`** - ao clicar na logo, todos vao para o dashboard
+3. **Nao existe guarda centralizada de permissoes** - cada pagina precisaria ter seu proprio check, mas apenas Dashboard.tsx tem um (e com bug de timing)
+4. **Race condition no carregamento** - enquanto as permissoes carregam, o conteudo aparece brevemente antes de ser bloqueado
 
-## Solucao
+## Dados do Banco (confirmados)
 
-### Arquivo: `src/pages/admin/Financeiro.tsx`
+- **Camila** e **Caroline**: NAO possuem `dashboard` na tabela `admin_permissions`, logo nao deveriam ver o Dashboard
+- Porem, ambas conseguem acessar `/admin/dashboard` porque o login redireciona para la e nao ha guarda efetiva
 
-Modificar a funcao `fetchInvoices` para filtrar por admin:
+## Solucao: Guarda Centralizada no AdminLayout
 
-1. Obter o usuario atual e verificar se e master admin
-2. Se **NAO** for master admin:
-   - Buscar os IDs dos clientes onde `assigned_to = uid` OU `created_by = uid` na tabela `profiles`
-   - Filtrar as faturas usando `.in('user_id', clientIds)` 
-3. Se for master admin: manter o comportamento atual (ve tudo)
+Em vez de adicionar checks em cada pagina individualmente, a solucao sera implementar uma **guarda centralizada** no `AdminLayoutInner` que:
 
-Mesma logica para `fetchClients` - admin secundario so ve seus proprios clientes no dropdown de criacao de fatura.
+1. Apos carregar as permissoes do usuario, verifica se ele tem acesso a rota atual
+2. Se NAO tiver, redireciona automaticamente para a **primeira secao permitida**
+3. Se nao tiver permissao para NENHUMA secao, mostra tela de acesso restrito
 
-E para `fetchProcesses` - filtrar processos apenas dos clientes atribuidos.
+### Mudancas nos Arquivos
 
-### Detalhes Tecnicos
+**1. `src/components/admin/AdminLayout.tsx`**
+
+- Importar `useAdminPermissions` no `AdminLayoutInner` (ja esta no sidebar)
+- Apos confirmar que e admin E permissoes carregaram:
+  - Verificar se a rota atual esta permitida via `canAccessPath(location.pathname)`
+  - Se nao estiver, calcular a primeira rota permitida e redirecionar via `navigate()`
+- Alterar os 2 links da logo (sidebar header linha 284 e header linha 449) para navegar para a primeira rota permitida em vez de `/admin/dashboard` hardcoded
+- O master admin continua com acesso total (FULL_ACCESS_MAP ja resolve isso)
+
+**2. `src/pages/admin/Login.tsx`**
+
+- Apos confirmar que o usuario e admin, buscar as permissoes antes de redirecionar
+- Navegar para a primeira secao que o usuario tem `can_view: true`
+- Fallback: se nao tiver nenhuma permissao, navegar para `/admin/configuracoes` (ou mostrar erro)
+
+**3. `src/pages/admin/Dashboard.tsx`**
+
+- Remover o check de permissao local (sera tratado pelo AdminLayout centralizado)
+- Manter apenas a restricao de valores financeiros para nao-master
+
+### Logica da Guarda Centralizada
 
 ```text
-fetchInvoices (admin secundario):
-1. SELECT id FROM profiles WHERE assigned_to = uid OR created_by = uid
-2. SELECT * FROM invoices WHERE user_id IN (clientIds)
-
-fetchClients (admin secundario):
-1. SELECT * FROM profiles WHERE assigned_to = uid OR created_by = uid
-
-fetchProcesses (admin secundario):  
-1. SELECT * FROM brand_processes WHERE user_id IN (clientIds)
+AdminLayoutInner:
+  1. checkAdmin() -> confirma role admin
+  2. useAdminPermissions() -> carrega permissoes
+  3. Se ambos carregados:
+     a. Obter permissionKey da rota atual
+     b. Se permissionKey existe E can_view === false:
+        - Encontrar primeira rota com can_view === true
+        - navigate(primeiraRotaPermitida)
+     c. Se nenhuma rota permitida -> mostrar "Acesso Restrito"
+  4. Enquanto carrega -> mostrar spinner (ja existe)
 ```
 
-O hook `useCanViewFinancialValues` ja retorna `isMasterAdmin`, que sera reutilizado para decidir se filtra ou nao. Tambem sera importado o estado do usuario atual para obter o `uid`.
+### Logica do Link da Logo
 
-### Resumo das mudancas
+```text
+Logo onClick:
+  1. Encontrar primeiro item do menu que o usuario tem can_view
+  2. Navegar para esse href
+  3. Fallback: /admin/configuracoes
+```
 
-| Arquivo | Mudanca |
-|---|---|
-| `src/pages/admin/Financeiro.tsx` | Adicionar logica de filtragem por admin nas 3 funcoes de fetch (invoices, clients, processes). Usar `isMasterAdmin` do hook existente para decidir se aplica filtro. |
+### Resultado Esperado
 
-Nenhuma mudanca no banco de dados e necessaria - as colunas `assigned_to` e `created_by` ja existem na tabela `profiles`.
-
+- Ao logar, Camila sera redirecionada para `/admin/leads` (primeira secao com permissao)
+- Ao clicar na logo, ira para `/admin/leads` tambem
+- Se digitar `/admin/dashboard` na URL, sera redirecionada automaticamente
+- Todas as restricoes de permissoes definidas na tela de Seguranca passam a funcionar em TODAS as paginas automaticamente
+- Master admin continua com acesso total e irrestrito
