@@ -1,111 +1,74 @@
 
-# Remarketing Multicanal: E-mail + WhatsApp com Limites e Horario Comercial
+# Email Automatico para Clientes - Sistema de Remarketing
 
-## Visao Geral
+## Resumo
 
-Refatorar o sistema de remarketing para:
-1. Enviar por **E-mail** (Resend) e **WhatsApp** (BotConversa webhook) - sem SMS
-2. Limites diarios: **100 e-mails/dia** e **10 WhatsApp/dia** (intervalo de 10min entre WhatsApps)
-3. Envios apenas em **horario comercial** (Seg-Sex, 10h-17h BRT)
-4. Campanha nao envia tudo de uma vez - agenda os envios em fila
-5. **Teste imediato**: enviar 1 e-mail + 1 WhatsApp para o lead "Gleison Carvalho" como validacao
+Replicar o sistema de remarketing de Leads para a aba Clientes. O sistema sera identico em funcionalidade (campanhas, canais email/WhatsApp, enviar agora/agendar, pausar/excluir, preview), mas enviando para clientes (tabela `profiles`) em vez de leads.
 
 ---
 
-## 1. Nova Tabela: Fila de Envios (`lead_remarketing_queue`)
+## 1. Banco de Dados
 
-Tabela para controlar envios escalonados:
+### Nova tabela: `client_remarketing_campaigns`
+Espelho de `lead_remarketing_campaigns`, para separar campanhas de clientes das de leads:
+- `id`, `name`, `type`, `subject`, `body`, `target_status` (array), `channels` (array), `status`, `total_sent`, `total_opened`, `total_queued`, `created_by`, `created_at`, `sent_at`, `scheduled_at`
+- RLS: apenas admins
 
-- `id` (uuid)
-- `campaign_id` (uuid, FK remarketing_campaigns)
-- `lead_id` (uuid)
-- `channel` (text: 'email' ou 'whatsapp')
-- `status` (text: 'pending' / 'sent' / 'failed')
-- `scheduled_for` (timestamptz) - data/hora agendada (dentro do horario comercial)
-- `sent_at` (timestamptz)
-- `error_message` (text)
-- `created_at` (timestamptz)
-
-RLS: apenas admins.
+### Nova tabela: `client_remarketing_queue`
+Espelho de `lead_remarketing_queue`, com `client_id` no lugar de `lead_id`:
+- `id`, `campaign_id` (FK client_remarketing_campaigns), `client_id` (uuid), `channel`, `status`, `scheduled_for`, `sent_at`, `error_message`, `subject`, `body`, `created_at`
+- RLS: admins + service role
 
 ---
 
-## 2. Edge Function: `send-lead-remarketing` (Reescrita)
+## 2. Nova Edge Function: `send-client-remarketing`
 
-A funcao sera refatorada para:
-
-### Modo "teste" (`test: true` no payload)
-- Recebe 1 lead_id, envia 1 e-mail + 1 WhatsApp imediatamente
-- Retorna resultado de cada canal
-
-### Modo "campanha" (padrao)
-- Recebe lead_ids[], channels (email/whatsapp), campaign_id
-- **Nao envia imediatamente** - insere na tabela `lead_remarketing_queue`
-- Calcula horarios agendados respeitando:
-  - E-mail: ate 100/dia, distribuidos no horario comercial (10h-17h BRT, Seg-Sex)
-  - WhatsApp: ate 10/dia, com intervalo minimo de 10 minutos entre cada
-  - Se ultrapassar o limite diario, agenda para o proximo dia util
-- Retorna quantos foram enfileirados
-
-### Envio de WhatsApp
-- Usa o webhook BotConversa (ja configurado) com payload: `{ telefone, nome, mensagem }`
-- Mesma logica do `send-multichannel-notification`
-
-### Envio de E-mail
-- Mantem Resend como esta
+Copia da `send-lead-remarketing`, adaptada:
+- Em vez de buscar na tabela `leads`, busca na tabela `profiles` (campos: `id, full_name, email, phone, company_name`)
+- Modo teste: envia 1 email + 1 WhatsApp para o primeiro cliente
+- Modo campanha: enfileira na `client_remarketing_queue`
+- Loga atividades em `client_activities` em vez de `lead_activities`
+- Mesma logica de slots, limites, e resumo IA para WhatsApp
 
 ---
 
-## 3. Nova Edge Function: `process-remarketing-queue`
+## 3. Atualizar Edge Function: `process-remarketing-queue`
 
-Funcao chamada via cron (a cada 10 minutos) para processar a fila:
-
-- Verifica se esta em horario comercial (10h-17h BRT, Seg-Sex)
-- Se nao, sai sem fazer nada
-- Busca itens `pending` com `scheduled_for <= now()`
-- Processa em lotes:
-  - E-mails: ate 15 por execucao (100/dia / ~7h = ~14/h)
-  - WhatsApp: ate 1 por execucao (10/dia / ~7h com intervalo 10min)
-- Para cada item: envia, atualiza status, loga atividade
-- Atualiza contadores da campanha
+Adicionar processamento da fila `client_remarketing_queue` alem da `lead_remarketing_queue`:
+- Apos processar emails/WhatsApp de leads, processar tambem a fila de clientes
+- Buscar dados do cliente em `profiles` (via join)
+- Logar em `client_activities` e `email_logs`
+- Atualizar contadores em `client_remarketing_campaigns`
 
 ---
 
-## 4. UI: `LeadRemarketingPanel.tsx` (Atualizado)
+## 4. Novo Componente: `ClientRemarketingPanel.tsx`
 
-### Novos elementos:
-- **Checkboxes de canal**: E-mail e WhatsApp (ambos marcados por padrao)
-- **Indicadores**: "X leads com e-mail" / "X leads com telefone"
-- **Botao "Enviar Teste"**: envia 1 e-mail + 1 WhatsApp para o primeiro lead da lista filtrada
-- **Info de limites**: "E-mail: 100/dia | WhatsApp: 10/dia (10min intervalo) | Horario: Seg-Sex 10h-17h"
-- Ao clicar "Enviar Campanha": mostra toast informando que os envios serao distribuidos no horario comercial
-
-### Historico de campanhas:
-- Mostrar status "agendada" / "em andamento" / "concluida"
-- Mostrar progresso (enviados / total)
+Componente em `src/components/admin/clients/ClientRemarketingPanel.tsx`, baseado no `LeadRemarketingPanel.tsx`:
+- Mesma UI: nome campanha, tipo, canais, assunto, corpo, filtros, preview email/WhatsApp, enviar agora/agendar, historico, pausar/excluir
+- Interface adaptada: recebe `clients` (array com `id, full_name, email, phone, company_name`) em vez de `leads`
+- Filtros de audiencia: por pipeline_stage (em vez de status do lead) e prioridade (em vez de temperatura)
+- Busca campanhas em `client_remarketing_campaigns`
+- Invoca `send-client-remarketing` em vez de `send-lead-remarketing`
+- Contadores: "X clientes com e-mail" / "X clientes com telefone"
 
 ---
 
-## 5. Cron Job
+## 5. Atualizar `Clientes.tsx`
 
-Agendar `process-remarketing-queue` a cada 10 minutos via pg_cron + pg_net.
-
----
-
-## 6. Teste Imediato
-
-Apos implementar, enviar teste para o lead **Gleison Carvalho** (email: Gleysoncarvalhofm@gmail.com, phone: (74) 99976-4748):
-- 1 e-mail de remarketing
-- 1 WhatsApp via BotConversa webhook
+- Adicionar botao "Email Automatico" ao lado da barra de busca (icone Mail, tamanho pequeno)
+- Ao clicar, abre/fecha o painel `ClientRemarketingPanel` acima do kanban/lista
+- Passar os `filteredClients` mapeados para o formato esperado pelo painel
+- Importar icone `Mail` do lucide-react
 
 ---
 
-## Arquivos
+## Arquivos Afetados
 
 | Arquivo | Acao |
 |---|---|
-| Migration SQL | Criar tabela `lead_remarketing_queue` |
-| `supabase/functions/send-lead-remarketing/index.ts` | Reescrever: modo teste + enfileiramento com horario comercial |
-| `supabase/functions/process-remarketing-queue/index.ts` | Novo: processa fila respeitando limites |
-| `src/components/admin/leads/LeadRemarketingPanel.tsx` | Adicionar canais, botao teste, info de limites |
-| Cron SQL | Agendar processamento a cada 10min |
+| Migration SQL | Criar tabelas `client_remarketing_campaigns` e `client_remarketing_queue` |
+| `supabase/functions/send-client-remarketing/index.ts` | Novo: versao para clientes |
+| `supabase/functions/process-remarketing-queue/index.ts` | Atualizar: processar tambem fila de clientes |
+| `src/components/admin/clients/ClientRemarketingPanel.tsx` | Novo: painel de remarketing para clientes |
+| `src/pages/admin/Clientes.tsx` | Adicionar botao e integrar painel |
