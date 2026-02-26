@@ -1,82 +1,82 @@
 
-# Botao "Agenda" em Detalhes do Processo: Abrir Dialog de Agendamento com Google Meet + Notificacao
 
-## Problema Atual
-O botao "Agenda" nas publicacoes dentro de "Detalhes do Processo" chama `handleSchedulePubReminder`, que cria silenciosamente um lembrete simples (sem dialog, sem Google Meet, sem notificacao). O usuario quer que este botao abra o formulario de agendamento completo (como na imagem) e envie o link do Google Meet por email e WhatsApp.
+# Sincronizacao de Status de Faturas Asaas -> Financeiro
 
-## Solucao
+## Problema Identificado
 
-### Arquivo: `src/components/admin/clients/ClientDetailSheet.tsx`
+As faturas estao todas como "pending" no banco de dados, mesmo estando pagas no Asaas. A causa raiz e que **o webhook do Asaas nunca esta sendo chamado** (zero logs na edge function `asaas-webhook`). Isso significa que o Asaas nao esta configurado para enviar notificacoes de pagamento para o sistema.
 
-**1. Novo estado para agendamento de publicacao:**
-- `schedulingPub`: guarda a publicacao selecionada (ou `null`)
-- Quando setado, abre um dialog inline (ou reutiliza a logica do "Novo Agendamento" existente) pre-preenchido com o titulo da publicacao
+Existem 2 solucoes complementares que precisam ser implementadas:
 
-**2. Substituir `handleSchedulePubReminder` pelo novo fluxo:**
-- Em vez de criar um lembrete silencioso, setar `schedulingPub = pub` e abrir o formulario de agendamento
-- O formulario ja existe na aba "Agenda" (com campos titulo, descricao, data, hora, duracao, Google Meet toggle) - reutilizar essa UI como Dialog
+1. **Configurar o webhook no Asaas** (acao manual do usuario no painel Asaas)
+2. **Criar um botao "Sincronizar com Asaas"** que consulta a API do Asaas e atualiza os status das faturas pendentes (solucao imediata + fallback permanente)
 
-**3. Criar `handleCreatePubAppointment`:**
-- Cria o agendamento em `client_appointments` (mesmo para orfaos, usar admin_id)
-- Gera Google Meet via edge function `create-google-meet`
-- Apos criar, envia notificacao multicanal (email + whatsapp) com o link do Meet via `send-multichannel-notification`
-- Payload da notificacao: titulo da reuniao, data/hora, link do Google Meet, nome da marca
+## Solucao Tecnica
 
-**4. Dialog de agendamento:**
-- Abrir como Dialog por cima do sheet (z-index alto)
-- Pre-preencher titulo com "Reuniao: [nome da marca/processo]"
-- Campos: Titulo, Descricao, Data, Hora, Duracao (select), Google Meet checkbox
-- Botao "Criar Agendamento"
+### 1. Nova Edge Function: `sync-asaas-invoices`
 
-**5. Envio de notificacao apos criar:**
-- Chamar `send-multichannel-notification` com:
-  - `channels: ['email', 'whatsapp']`
-  - `event_type: 'agendamento_criado'`
-  - `recipient: { nome, email, phone }` (do cliente, se vinculado)
-  - `data: { titulo, data_hora, meet_link, marca }`
+Criar uma edge function que:
+- Busca todas as faturas com status `pending` no banco de dados que possuem `asaas_invoice_id`
+- Para cada uma, consulta `GET /v3/payments/{id}` na API do Asaas
+- Compara o status retornado e atualiza o banco local
+- Mapeia os status: `RECEIVED`/`CONFIRMED` -> `paid`, `OVERDUE` -> `overdue`, etc.
+- Atualiza tambem o `payment_date` quando confirmado
+- Retorna um resumo: quantas atualizadas, quantas ja estavam corretas
+
+### 2. Botao "Sincronizar Asaas" na pagina Financeiro
+
+Adicionar no header da pagina `src/pages/admin/Financeiro.tsx`:
+- Um botao ao lado de "Atualizar" com icone de sync
+- Ao clicar, invoca `sync-asaas-invoices`
+- Mostra loading e toast com resultado ("5 faturas atualizadas")
+- Recarrega a lista apos sincronizacao
+
+### 3. Configuracao do Webhook (instrucao para o usuario)
+
+O usuario precisa acessar o painel do Asaas e configurar o webhook:
+- URL: `https://afuqrzecokubogopgfgt.supabase.co/functions/v1/asaas-webhook`
+- Eventos: `PAYMENT_RECEIVED`, `PAYMENT_CONFIRMED`, `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`
+
+Isso sera exibido como instrucao apos a sincronizacao.
 
 ## Detalhes Tecnicos
 
+### Edge Function `sync-asaas-invoices`
+
 ```text
 Fluxo:
-[Clicar "Agenda" na pub] 
-  -> Abre Dialog com formulario
-  -> Preencher dados + Google Meet ON
-  -> "Criar Agendamento"
-    -> INSERT client_appointments
-    -> invoke create-google-meet
-    -> UPDATE appointment com meet_link
-    -> invoke send-multichannel-notification (email + whatsapp)
-    -> Toast sucesso
+1. SELECT * FROM invoices WHERE status = 'pending' AND asaas_invoice_id IS NOT NULL
+2. Para cada fatura:
+   GET https://api.asaas.com/v3/payments/{asaas_invoice_id}
+3. Se status Asaas != PENDING:
+   UPDATE invoices SET status = mapeado, payment_date = data
+4. Retornar { synced: N, total: M }
 ```
 
-### Mudancas no codigo:
+Mapeamento de status:
+- `RECEIVED`, `CONFIRMED`, `RECEIVED_IN_CASH` -> `received` / `confirmed`
+- `OVERDUE` -> `overdue`
+- `REFUNDED` -> `refunded`
+- `PENDING` -> manter `pending`
 
-1. **Novos estados** (~linha 200):
-   - `schedulingPub: any | null` - publicacao sendo agendada
-   - `schedulingForm: { title, description, date, time, duration, generateMeet }`
-   - `savingSchedule: boolean`
+### Mudancas nos arquivos:
 
-2. **Nova funcao `handleCreatePubSchedule`** (~apos linha 800):
-   - Insere em `client_appointments` (user_id = client.id ou null para orfaos, admin_id = current user)
-   - Invoca `create-google-meet` se toggle ativo
-   - Invoca `send-multichannel-notification` com link do Meet
-   - Fecha dialog, recarrega dados
+1. **`supabase/functions/sync-asaas-invoices/index.ts`** (novo)
+   - Edge function que consulta Asaas e atualiza faturas
+   - Usa `ASAAS_API_KEY` (ja configurada)
+   - Processamento em lote com rate limiting
 
-3. **Botao "Agenda" na pub** (linha 1243):
-   - Mudar de `handleSchedulePubReminder(pub)` para `setSchedulingPub(pub)` + setar form pre-preenchido
+2. **`supabase/config.toml`** (adicionar)
+   - `[functions.sync-asaas-invoices]` com `verify_jwt = false`
 
-4. **Novo Dialog** (apos os dialogs existentes, ~final do JSX):
-   - Dialog com z-index 200+
-   - Layout identico ao da imagem: Titulo, Descricao, Data+Hora, Duracao+Google Meet, Botao criar
-   - Usar mesmos componentes (Input, Textarea, Select)
+3. **`src/pages/admin/Financeiro.tsx`**
+   - Novo botao "Sincronizar Asaas" no header
+   - Estado `syncing` para loading
+   - Funcao `handleSyncAsaas` que invoca a edge function
+   - Toast com resultado da sincronizacao
 
-### Edge function `send-multichannel-notification`:
-- Ja existe e suporta email + whatsapp
-- Usar `event_type: 'agendamento_criado'` (pode nao ter template - a funcao envia mensagem customizada via `data.mensagem_custom`)
+### Seguranca
+- A edge function usa `SUPABASE_SERVICE_ROLE_KEY` para updates
+- A API do Asaas e consultada com `ASAAS_API_KEY`
+- Ambos secrets ja estao configurados
 
-## Resultado Esperado
-- Botao "Agenda" abre dialog completo (como na imagem)
-- Agendamento criado com Google Meet automatico
-- Link do Meet enviado por email e WhatsApp ao cliente (se tiver dados de contato)
-- Agendamento aparece na aba "Agenda" do ficheiro
