@@ -108,8 +108,8 @@ serve(async (req) => {
           }
         }
 
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Delay to avoid Asaas rate limiting (1 second between requests)
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (err) {
         console.error(`Error processing invoice ${invoice.asaas_invoice_id}:`, err);
         errors.push(`${invoice.asaas_invoice_id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
