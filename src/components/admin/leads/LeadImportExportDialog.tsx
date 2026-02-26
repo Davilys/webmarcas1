@@ -47,13 +47,22 @@ export function LeadImportExportDialog({
     setFileName(file.name);
     const extension = file.name.split('.').pop()?.toLowerCase();
 
+    const filterValidRows = (data: any[]) => {
+      return data.filter((row) => {
+        const name = row.Nome || row.full_name || row.nome || row['Nome Completo'];
+        const email = row['E-mail'] || row.Email || row.email;
+        return name && String(name).trim().length >= 2 && name !== 'Leads' && name !== '#' && name !== 'Nome';
+      });
+    };
+
     if (extension === 'csv') {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-          setImportData(results.data);
-          toast.success(`${results.data.length} registros encontrados`);
+          const valid = filterValidRows(results.data);
+          setImportData(valid);
+          toast.success(`${valid.length} registros encontrados`);
         },
         error: () => toast.error('Erro ao ler arquivo CSV'),
       });
@@ -64,14 +73,29 @@ export function LeadImportExportDialog({
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-        setImportData(jsonData);
-        toast.success(`${jsonData.length} registros encontrados`);
+        const valid = filterValidRows(jsonData);
+        setImportData(valid);
+        toast.success(`${valid.length} registros encontrados`);
       };
       reader.readAsArrayBuffer(file);
     } else {
       toast.error('Formato não suportado. Use CSV ou Excel.');
     }
   }, []);
+
+  const detectColumns = (data: any[]) => {
+    if (data.length === 0) return [];
+    return Object.keys(data[0]);
+  };
+
+  const getFieldValue = (row: any, ...keys: string[]) => {
+    for (const key of keys) {
+      if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+        return String(row[key]).trim();
+      }
+    }
+    return null;
+  };
 
   const handleImport = async () => {
     if (importData.length === 0) {
@@ -84,24 +108,29 @@ export function LeadImportExportDialog({
     let errorCount = 0;
 
     try {
-      for (const row of importData) {
-        const leadData = {
-          full_name: row.full_name || row.nome || row.Nome || row['Nome Completo'] || 'Lead Importado',
-          email: row.email || row.Email || row['E-mail'] || null,
-          phone: row.phone || row.telefone || row.Telefone || row.celular || null,
-          company_name: row.company_name || row.empresa || row.Empresa || null,
-          cpf_cnpj: row.cpf_cnpj || row.cpf || row.cnpj || row.CPF || row.CNPJ || null,
-          status: 'novo',
-          origin: 'import',
-          estimated_value: row.estimated_value || row.valor || null,
-          notes: row.notes || row.observacoes || row.Observações || null,
-        };
+      // Process in batches of 50
+      const BATCH = 50;
+      for (let i = 0; i < importData.length; i += BATCH) {
+        const batch = importData.slice(i, i + BATCH);
+        const rows = batch.map((row) => ({
+          full_name: getFieldValue(row, 'Nome', 'full_name', 'nome', 'Nome Completo') || 'Lead Importado',
+          email: getFieldValue(row, 'E-mail', 'Email', 'email', 'e-mail'),
+          phone: getFieldValue(row, 'Telefone', 'phone', 'telefone', 'celular', 'Celular'),
+          company_name: getFieldValue(row, 'Marca', 'Empresa', 'company_name', 'empresa', 'marca'),
+          cpf_cnpj: getFieldValue(row, 'CPF/CNPJ', 'cpf_cnpj', 'cpf', 'cnpj', 'CPF', 'CNPJ'),
+          status: getFieldValue(row, 'Status', 'status')?.toLowerCase() || 'novo',
+          origin: getFieldValue(row, 'Fonte', 'Origem', 'origin', 'fonte') || 'import',
+          estimated_value: parseFloat(getFieldValue(row, 'Valor do lead', 'estimated_value', 'valor', 'Valor') || '') || null,
+          notes: getFieldValue(row, 'notes', 'observacoes', 'Observações'),
+          tags: getFieldValue(row, 'Tags', 'tags') ? [getFieldValue(row, 'Tags', 'tags')!] : [],
+        }));
 
-        const { error } = await supabase.from('leads').insert(leadData);
+        const { error, count } = await supabase.from('leads').insert(rows);
         if (error) {
-          errorCount++;
+          errorCount += batch.length;
+          console.error('Batch import error:', error);
         } else {
-          successCount++;
+          successCount += batch.length;
         }
       }
 
@@ -220,19 +249,59 @@ export function LeadImportExportDialog({
             </div>
 
             {fileName && (
-              <div className="bg-muted p-4 rounded-lg">
+              <div className="bg-muted p-4 rounded-lg space-y-2">
                 <p className="font-medium">{fileName}</p>
                 <p className="text-sm text-muted-foreground">
                   {importData.length} registros prontos para importar
                 </p>
+                {importData.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-medium mb-1">Colunas detectadas:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.keys(importData[0]).map((col) => (
+                        <span key={col} className="bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                          {col}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {importData.length > 0 && (
+                  <div className="mt-2 text-xs border rounded-lg overflow-auto max-h-40">
+                    <table className="w-full text-left">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          {['Nome', 'E-mail', 'Telefone', 'Marca'].map((h) => (
+                            <th key={h} className="px-2 py-1 font-medium">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importData.slice(0, 5).map((row, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-2 py-1">{row.Nome || row.full_name || row.nome || '-'}</td>
+                            <td className="px-2 py-1">{row['E-mail'] || row.Email || row.email || '-'}</td>
+                            <td className="px-2 py-1">{row.Telefone || row.phone || row.telefone || '-'}</td>
+                            <td className="px-2 py-1">{row.Marca || row.Empresa || row.empresa || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-sm">
-              <p className="font-medium mb-2">Colunas esperadas:</p>
-              <p className="text-muted-foreground">
-                nome, email, telefone, empresa, cpf_cnpj, valor, observacoes
-              </p>
+              <p className="font-medium mb-2">Mapeamento automático de colunas:</p>
+              <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                <span>Nome → Nome, full_name</span>
+                <span>E-mail → E-mail, Email</span>
+                <span>Telefone → Telefone, phone</span>
+                <span>Marca/Empresa → Marca, Empresa</span>
+                <span>Valor → Valor do lead, valor</span>
+                <span>Tags → Tags</span>
+              </div>
             </div>
 
             <Button 
