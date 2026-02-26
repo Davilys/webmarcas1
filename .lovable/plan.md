@@ -1,63 +1,57 @@
 
-# Atribuir Cliente na Ficha do Processo (Publicacao)
 
-## Objetivo
-Adicionar um campo "Atribuir ao Cliente" diretamente no painel de detalhes do processo (lado direito), ao lado do responsavel admin, com busca autocomplete de todos os clientes. Ao selecionar o cliente, a publicacao e sincronizada automaticamente com o painel do cliente.
+# Correcao do Dropdown + Lista de Processos do Cliente
 
-## O que sera feito
+## Problemas identificados
 
-### 1. Campo "Atribuir ao Cliente" no painel de detalhes
-- Adicionar um campo de busca com autocomplete logo abaixo do responsavel admin no painel lateral direito (linhas ~1562-1566 do PublicacaoTab.tsx)
-- Ao digitar o nome, aparece uma lista dropdown com todos os clientes filtrados
-- Exibe nome, email e CPF/CNPJ para facilitar a identificacao
-- Botao X para desvincular o cliente
-- Se ja houver cliente vinculado, mostra o nome com indicador visual
+### 1. Dropdown de busca fica atras/cortado
+O dropdown de resultados da busca de clientes (linha 1658) esta dentro de um `Card > CardHeader` que possui `overflow: hidden` implicito pelo `rounded` e pela `ScrollArea` logo abaixo. O `z-50` nao resolve porque o contexto de empilhamento (stacking context) e limitado pelo container pai. O dropdown e renderizado "inline" dentro do CardHeader, e o Card corta o conteudo que ultrapassa seus limites.
 
-### 2. Logica de atribuicao ao selecionar cliente
-Quando um cliente e selecionado:
-- Atualiza `client_id` na tabela `publicacoes_marcas`
-- Se a publicacao tem `process_id`, atualiza `user_id` do `brand_processes` para o cliente selecionado (sincroniza o processo)
-- Registra a alteracao na tabela `publicacao_logs` (auditoria)
-- Envia notificacao ao cliente informando que um processo foi vinculado
+**Solucao**: Usar um **Popover do Radix** para o dropdown de resultados, que renderiza via portal (fora do DOM do Card), garantindo que fique sempre visivel por cima de qualquer elemento. Alternativamente, usar `position: fixed` calculando a posicao do input para posicionar o dropdown no viewport.
 
-### 3. Sincronizacao automatica com o painel do cliente
-A sincronizacao ja funciona hoje atraves das queries existentes:
-- **Processos**: O painel do cliente (`/cliente/processos`) busca `brand_processes` por `user_id` -- ao atualizar o `user_id`, o processo aparece automaticamente
-- **Publicacoes**: O componente `PublicacoesCliente` busca `publicacoes_marcas` por `client_id` -- ao atualizar o `client_id`, a publicacao aparece automaticamente
-- **Documentos**: Documentos vinculados ao `process_id` ja sao exibidos no painel do cliente via query por `process_id`
-- **Status**: O status do pipeline e sincronizado bidirecionalmente entre `publicacoes_marcas.status` e `brand_processes.pipeline_stage` (ja implementado no `updateMutation`)
+### 2. Lista de processos do mesmo cliente
+Quando o processo e vinculado a um cliente que ja possui outros processos, exibir uma lista navegavel.
 
 ---
 
-## Detalhes tecnicos
+## Alteracoes no arquivo `src/components/admin/PublicacaoTab.tsx`
 
-### Arquivo modificado: `src/components/admin/PublicacaoTab.tsx`
+### Correcao 1: Dropdown visivel com Popover
 
-**Novo estado**:
-- `clientAssignSearch: string` -- texto de busca
-- `showClientAssignDropdown: boolean` -- controle do dropdown
+Substituir o dropdown `absolute z-50` (linhas 1657-1679) por um componente `Popover` do Radix (ja importado no projeto). O `Popover` renderiza o conteudo em um portal, fora da hierarquia DOM do Card, eliminando qualquer problema de overflow/z-index.
 
-**Novo componente inline** no painel de detalhes (apos linha 1565):
-- Input com icone de busca
-- Dropdown com lista de clientes filtrados (max 8)
-- Cada item mostra nome + email
-- Ao clicar, chama uma nova mutation que:
-  1. Atualiza `publicacoes_marcas.client_id`
-  2. Se `process_id` existe, atualiza `brand_processes.user_id` para o mesmo cliente
-  3. Registra log na `publicacao_logs`
-  4. Insere notificacao para o cliente
-
-**Nova mutation `assignClientMutation`**:
 ```text
-1. UPDATE publicacoes_marcas SET client_id = X WHERE id = Y
-2. UPDATE brand_processes SET user_id = X WHERE id = process_id (se existir)
-3. INSERT publicacao_logs (campo: client_id, valor anterior, valor novo)
-4. INSERT notifications (titulo: Processo vinculado)
+Estrutura:
+<Popover open={showClientAssignDropdown} onOpenChange={setShowClientAssignDropdown}>
+  <PopoverTrigger asChild>
+    <Input ... />  (campo de busca)
+  </PopoverTrigger>
+  <PopoverContent className="w-80 p-0 max-h-52 overflow-y-auto" align="start">
+    ... lista de clientes filtrados ...
+  </PopoverContent>
+</Popover>
 ```
 
-### Nenhuma alteracao de banco de dados necessaria
-Todas as colunas e tabelas necessarias ja existem:
-- `publicacoes_marcas.client_id`
-- `brand_processes.user_id`
-- `publicacao_logs`
-- `notifications`
+Isso garante que os resultados da busca aparecem SEMPRE por cima, independente de Cards, ScrollAreas ou qualquer container.
+
+### Correcao 2: Lista de processos do cliente vinculado
+
+Apos o card verde do cliente vinculado (linhas 1629-1641), adicionar uma secao "Processos deste Cliente":
+
+- Filtra `publicacoes` por `client_id === selected.client_id` (exclui o processo atual)
+- Exibe lista compacta com: nome da marca, numero do processo, badge de status
+- Ao clicar no numero/nome, chama `setSelectedId(pub.id)` para navegar ao processo
+- Max-height com scroll para listas longas
+- Contador de processos no titulo
+
+```text
+Estrutura visual:
+[icone] Processos deste Cliente (3)
+  - [badge DEFERIDA] Nome Marca · 123456789  [clicavel]
+  - [badge PROTOCOLADO] Outra Marca · 987654  [clicavel]
+  - [badge CERTIFICADA] Terceira · 555111222  [clicavel]
+```
+
+### Nenhuma alteracao de banco de dados
+Todos os dados necessarios ja estao disponiveis no estado do componente (arrays `publicacoes`, `processMap`, `clientMap`).
+
