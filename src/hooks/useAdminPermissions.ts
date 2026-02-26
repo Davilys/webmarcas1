@@ -107,30 +107,23 @@ export function useAdminPermissions(userId?: string) {
       // Convert to map for easy access
       const permissionsMap: UserPermissions = {};
       
-      // Initialize with defaults
+      // Initialize with defaults — deny all by default for non-master admins
       CRM_SECTIONS.forEach(section => {
         permissionsMap[section.key] = {
-          can_view: true,
-          can_edit: true,
-          can_delete: true,
+          can_view: false,
+          can_edit: false,
+          can_delete: false,
         };
       });
 
-      // If user has any explicit permissions, apply them (restricts non-master admins)
+      // Apply explicit permissions from the database
       if (data && data.length > 0) {
-        CRM_SECTIONS.forEach(section => {
-          permissionsMap[section.key] = {
-            can_view: false,
-            can_edit: false,
-            can_delete: false,
-          };
-        });
         data.forEach((perm) => {
           const key = perm.permission_key as PermissionKey;
           permissionsMap[key] = {
-            can_view: perm.can_view,
-            can_edit: perm.can_edit,
-            can_delete: perm.can_delete,
+            can_view: perm.can_view === true,
+            can_edit: perm.can_edit === true,
+            can_delete: perm.can_delete === true,
           };
         });
       }
