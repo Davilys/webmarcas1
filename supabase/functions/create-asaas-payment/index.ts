@@ -1098,7 +1098,6 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             contractId: contractData.id,
-            expiresInDays: 7,
             baseUrl: 'https://webmarcas.net',
           }),
         });
