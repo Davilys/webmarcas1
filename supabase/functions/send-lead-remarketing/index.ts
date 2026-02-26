@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { lead_ids, campaign_id, subject, body, channels, test } = await req.json();
+    const { lead_ids, campaign_id, subject, body, channels, test, scheduled_for } = await req.json();
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) throw new Error("RESEND_API_KEY not configured");
@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     const emailSubject = subject || "Temos uma oportunidade especial para você!";
     const emailBody = body || "Olá {{nome}}, gostaríamos de retomar contato com você.";
 
-    const now = new Date();
+    const now = scheduled_for ? new Date(scheduled_for) : new Date();
     let emailSlot = 0;
     let waSlot = 0;
     const queueItems: any[] = [];
