@@ -1,49 +1,74 @@
 
+# Corrigir Contrato "Plano de Monitoramento e Manutencao" - Link de Assinatura + Cobranca Automatica
 
-# Criar Modelo de Contrato - Plano de Monitoramento e Manutencao Pos-Certificado
+## Problemas Identificados
 
-## Objetivo
+1. **Link de assinatura nao gerado**: O template "Plano de Monitoramento e Manutencao - Pos Certificado" nao contem "registro de marca" nem "padrao" no nome, entao o sistema pula a geracao automatica do link de assinatura.
 
-Inserir um novo modelo de contrato na aba "Modelos de Contrato" para o servico continuo de monitoramento e manutencao de marca apos a entrega do certificado de registro. Este contrato cobre o acompanhamento ate a renovacao (10 anos), com cobranca mensal de R$ 59,00 e anuidade de R$ 398,00 em dezembro.
+2. **Fatura nao gerada no Asaas**: Nenhuma cobranca e criada porque o fluxo atual so gera cobranças apos a assinatura do contrato, e apenas para templates "padrao".
 
-## O que sera feito
+3. **Nao deve ter selecao de pagamento**: Este template deve gerar automaticamente um boleto recorrente (R$ 59,00/mes) direto no Asaas, sem exibir opcoes de pagamento ao admin.
 
-### 1. Criar novo tipo de contrato no banco de dados
+## Solucao
 
-Inserir um registro na tabela `contract_types` com o nome **"MONITORAMENTO E MANUTENCAO"** para categorizar este novo modelo.
+### 1. Ajustar `CreateContractDialog.tsx` - Deteccao do template de monitoramento
 
-### 2. Inserir o modelo de contrato completo
+Adicionar uma flag `isMonitoramentoTemplate` que detecta o template pelo nome (contendo "monitoramento" ou "manutencao"). Com isso:
 
-Criar o template na tabela `contract_templates` com:
+- **Gerar link de assinatura automaticamente** (igual aos templates padrao)
+- **Mostrar botao "Criar e Enviar Link"** para este template
+- **Esconder a selecao de forma de pagamento** (PIX/Cartao/Boleto) pois a cobranca sera automatica via boleto recorrente
+- **Definir valor do contrato como R$ 59,00** (primeira mensalidade) e payment_method como "boleto_recorrente"
+- **Preencher automaticamente as variaveis do template** com os dados do cliente selecionado
 
-- **Nome**: "Plano de Monitoramento e Manutencao - Pos Certificado"
-- **Tipo**: vinculado ao novo tipo criado
-- **Status**: ativo
-- **Variaveis dinamicas**: `{{nome_cliente}}`, `{{cpf_cnpj}}`, `{{endereco_cliente}}`, `{{marca}}`, `{{dia_vencimento}}`, `{{data_assinatura}}`, `{{email}}`, `{{telefone}}`
+### 2. Criar Edge Function `create-monitoring-subscription`
 
-O conteudo do contrato inclui todas as 9 clausulas fornecidas:
-- Objeto (monitoramento, vigilancia, alertas de renovacao)
-- Vigencia (ate renovacao, ~10 anos)
-- Remuneracao (R$ 59,00/mes + R$ 398,00/ano em dezembro)
-- Obrigacoes da contratada e do contratante
-- Limitacao de responsabilidade
-- Rescisao (aviso previo 30 dias)
-- Validade juridica (Lei 14.063/2020, MP 2.200-2/2001)
-- Foro (Comarca de Sao Paulo)
+Nova Edge Function que:
+- Recebe o `contractId` apos assinatura do contrato
+- Busca os dados do cliente (perfil + contrato)
+- Cria ou busca o cliente no Asaas
+- Cria uma **assinatura recorrente** (subscription) no Asaas com:
+  - Valor: R$ 59,00/mes
+  - Ciclo: MONTHLY
+  - Descricao: "Plano de Monitoramento e Manutencao - [nome da marca]"
+- Cria a primeira fatura interna na tabela `invoices`
+- A anuidade de R$ 398,00 em dezembro sera tratada como cobranca avulsa programada
 
-### 3. Adicionar variaveis ao preview
+### 3. Integrar chamada pos-assinatura
 
-Atualizar a funcao `renderPreviewContent` em `ModelosContrato.tsx` para incluir as novas variaveis (`{{dia_vencimento}}`, `{{endereco_cliente}}`, `{{data_assinatura}}`).
+No fluxo de assinatura de contrato (`sign-contract-blockchain`), apos detectar que o contrato assinado e do tipo "monitoramento", chamar automaticamente a nova Edge Function para criar a assinatura recorrente no Asaas.
 
-## Arquivos a alterar
+## Detalhes Tecnicos
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| Banco de dados | INSERT em `contract_types` e `contract_templates` |
-| src/pages/admin/ModelosContrato.tsx | Adicionar variaveis de preview |
+### Arquivo: `src/components/admin/contracts/CreateContractDialog.tsx`
 
-## Importante
+Alteracoes:
+- Adicionar constante `isMonitoramentoTemplate` baseada no nome do template selecionado
+- Incluir `isMonitoramentoTemplate` nas condicoes de `isStandardContractTemplate` para geracao de link
+- Incluir `isMonitoramentoTemplate` em `showSendLinkButton`
+- Quando `isMonitoramentoTemplate` = true, nao exibir o bloco de selecao de pagamento (linhas 2217-2339)
+- Definir `contract_value` = 59.00 e `payment_method` = "boleto_recorrente" automaticamente
+- Substituir variaveis do template (`{{nome_cliente}}`, `{{cpf_cnpj}}`, `{{endereco_cliente}}`, `{{marca}}`, `{{dia_vencimento}}`, `{{data_assinatura}}`, `{{email}}`, `{{telefone}}`) com dados do perfil
+
+### Arquivo: `supabase/functions/create-monitoring-subscription/index.ts` (novo)
+
+- Cria assinatura recorrente via API Asaas (`POST /v3/subscriptions`)
+- Parametros: customer, billingType: BOLETO, value: 59.00, cycle: MONTHLY, nextDueDate: proximo mes
+- Cria registro na tabela `invoices` com status 'pending'
+- Registra o `asaas_invoice_id` no contrato
+
+### Arquivo: `supabase/functions/sign-contract-blockchain/index.ts`
+
+- Apos assinatura bem-sucedida, verificar se o contrato tem `payment_method = 'boleto_recorrente'`
+- Se sim, invocar `create-monitoring-subscription` automaticamente
+
+### Arquivo: `supabase/config.toml`
+
+- Adicionar configuracao `verify_jwt = false` para a nova funcao
+
+## Impacto
 
 - Nenhum contrato existente sera alterado
 - Nenhuma tabela sera modificada estruturalmente
-- Apenas insercao de dados novos e ajuste cosmetic no preview
+- Apenas adicao de nova Edge Function e ajustes no dialogo de criacao
+- O fluxo de pagamento dos templates existentes permanece inalterado
