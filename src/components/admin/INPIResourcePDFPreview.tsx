@@ -164,37 +164,38 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
 
       // ── Letterhead ──
       if (logoBase64) {
-        pdf.addImage(logoBase64, 'PNG', margin, yPos - 2, 18, 18);
+        pdf.addImage(logoBase64, 'PNG', margin, yPos - 2, 16, 16);
       }
-      const textX = logoBase64 ? margin + 22 : margin;
-      pdf.setFontSize(22);
+      const textX = logoBase64 ? margin + 19 : margin;
+      pdf.setFontSize(16);
       pdf.setTextColor(30, 58, 95);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('WEBMARCAS INTELLIGENCE PI', textX, yPos + 6);
+      pdf.text('WEBMARCAS INTELLIGENCE PI', textX, yPos + 5);
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
+      pdf.setFontSize(9);
       pdf.setTextColor(100, 100, 100);
-      pdf.text('Propriedade Intelectual e Registro de Marcas', textX, yPos + 12);
+      pdf.text('Propriedade Intelectual e Registro de Marcas', textX, yPos + 10);
 
+      // Right-aligned contact info - positioned below header line to avoid overlap
+      yPos += 16;
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(30, 58, 95);
-      pdf.text('CNPJ: 39.528.012/0001-29', pageWidth - margin, yPos + 2, { align: 'right' });
+      pdf.text('CNPJ: 39.528.012/0001-29', pageWidth - margin, yPos, { align: 'right' });
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(150, 150, 150);
-      pdf.text('Av. Brigadeiro Luiz Antônio, 2696', pageWidth - margin, yPos + 7, { align: 'right' });
-      pdf.text('Centro — São Paulo/SP', pageWidth - margin, yPos + 11, { align: 'right' });
-      pdf.text('juridico@webmarcas.net', pageWidth - margin, yPos + 15, { align: 'right' });
+      pdf.text('Av. Brigadeiro Luiz Antônio, 2696 — Centro — São Paulo/SP', pageWidth - margin, yPos + 4, { align: 'right' });
+      pdf.text('Tel: (11) 9 1112-0225  |  juridico@webmarcas.net', pageWidth - margin, yPos + 8, { align: 'right' });
 
       // ── Double Separator ──
-      yPos = 42;
+      yPos += 12;
       pdf.setDrawColor(30, 58, 95);
       pdf.setLineWidth(0.8);
       pdf.line(margin, yPos, pageWidth - margin, yPos);
       pdf.setDrawColor(200, 175, 55);
       pdf.setLineWidth(0.3);
       pdf.line(margin, yPos + 1.5, pageWidth - margin, yPos + 1.5);
-      yPos = 50;
+      yPos += 8;
 
       // ── Document Title Badge ──
       pdf.setFontSize(11);
