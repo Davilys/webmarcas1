@@ -413,6 +413,21 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
       if (!response.ok || result.error) throw new Error(result.error || 'Erro ao gerar link');
       toast.success('Link de assinatura gerado!');
       onUpdate();
+
+      // Auto-send notification to client
+      try {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-signature-request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'], baseUrl: getProductionBaseUrl() }),
+        });
+        toast.success('Notificação enviada ao cliente automaticamente!');
+      } catch (e) {
+        console.error('Auto-send notification failed:', e);
+      }
     } catch (error: any) {
       toast.error(error.message || 'Erro ao gerar link');
     } finally {
@@ -548,6 +563,21 @@ export function ContractDetailSheet({ contract, open, onOpenChange, onUpdate }: 
 
       toast.success('Documento atualizado com template vigente e novo link gerado!');
       onUpdate();
+
+      // Auto-send notification to client
+      try {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-signature-request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          },
+          body: JSON.stringify({ contractId: contract.id, channels: ['email', 'whatsapp'], baseUrl: getProductionBaseUrl() }),
+        });
+        toast.success('Notificação enviada ao cliente automaticamente!');
+      } catch (e) {
+        console.error('Auto-send notification failed:', e);
+      }
     } catch (error: any) {
       console.error('Error generating new contract link:', error);
       toast.error(error.message || 'Erro ao gerar novo link');
