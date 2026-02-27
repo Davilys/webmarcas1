@@ -65,6 +65,9 @@ function renderPreviewContent(content: string): string {
     '{{data}}': new Date().toLocaleDateString('pt-BR'),
     '{{data_inicio}}': new Date().toLocaleDateString('pt-BR'),
     '{{data_fim}}': new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'),
+    '{{dia_vencimento}}': '10',
+    '{{endereco_cliente}}': 'Rua das Flores, 123, Centro, São Paulo - SP, CEP 01234-567',
+    '{{data_assinatura}}': new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
   };
   let result = content;
   Object.entries(sampleData).forEach(([key, val]) => {
