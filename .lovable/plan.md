@@ -1,84 +1,119 @@
 
-# Engrenagem de Configuracao no Kanban Admin (Clientes)
+
+# Painel de Acao por Etapa (Notificacao + Cobranca) na Aba Servicos
 
 ## Objetivo
 
-Adicionar um botao de engrenagem (configuracao) ao Kanban da pagina Admin > Clientes, permitindo:
-- Criar novas etapas do Kanban
-- Editar nome de etapas existentes
-- Arrastar etapas para reordenar (drag-and-drop)
-- Remover etapas
-- Escolher cor de cada etapa
+Quando o usuario clicar em uma etapa na aba "Servicos" do ficheiro do cliente (ex: "003"), um painel expandivel aparece **abaixo** dos cards de etapa (na mesma pagina), contendo:
 
-## Localizacao
+1. **Notificacao por Email e WhatsApp** com template pre-preenchido referenciando a fase da publicacao, prazo de 60 dias do INPI, e as clausulas 5.2 e 10.3 do contrato
+2. **Upload de documento** para anexar a notificacao
+3. **Selecao de cobranca** com valor (a vista ou parcelado, boleto/cartao), prazo de 10 dias
+4. **Botao de envio** que dispara tudo automaticamente para o cliente
 
-O botao de engrenagem ficara na area entre os filtros de data e os cards de resumo (Total / Valor / Ativos), exatamente onde o circulo preto foi marcado na imagem. Ficara ao lado esquerdo dos stats, visivel apenas no modo Kanban.
+## Funcionamento
 
-## Arquivos a criar/modificar
+```text
+[Etapa 1: PROTOCOLADO]
+[Etapa 2: 003]  <-- selecionada (destaque)
+[Etapa 3: Oposicao]
+...
 
-### 1. Novo componente: `src/components/admin/clients/AdminKanbanConfig.tsx`
+  +----------------------------------------------+
+  | PAINEL DE ACAO - 003                         |
+  |                                              |
+  | [Template Email/WhatsApp pre-preenchido]     |
+  | [Textarea editavel com mensagem]             |
+  | [Checkbox: Email] [Checkbox: WhatsApp]       |
+  |                                              |
+  | [Upload de Documento]  arquivo.pdf           |
+  |                                              |
+  | --- Cobranca ---                             |
+  | Valor: R$ [____]                             |
+  | Metodo: (o) A vista  (o) Parcelado           |
+  | Forma:  (o) Boleto   (o) Cartao              |
+  | Parcelas: [select 2-12x]                     |
+  | Vencimento: +10 dias (automatico)            |
+  |                                              |
+  | [====== ENVIAR NOTIFICACAO + COBRANCA ======] |
+  +----------------------------------------------+
+```
 
-Dialog de configuracao com:
-- Campo para adicionar nova etapa (nome + cor)
-- Lista de etapas com `framer-motion` `Reorder.Group` para drag-and-drop vertical
-- Cada etapa tera: grip handle, campo editavel (icone lapis), seletor de cor (swatches), botao remover
-- Salvamento automatico na tabela `system_settings` com chaves separadas:
-  - `admin_kanban_comercial_stages` para o funil comercial
-  - `admin_kanban_juridico_stages` para o funil juridico
+## O que sera criado/modificado
 
-### 2. Modificar: `src/components/admin/clients/ClientKanbanBoard.tsx`
+### 1. Novo componente: `src/components/admin/clients/ServiceActionPanel.tsx`
 
-- Adicionar prop `onConfigOpen` (callback para abrir dialog de configuracao)
-- Carregar etapas dinamicamente da `system_settings` em vez de usar arrays hardcoded
-- Fallback para as etapas hardcoded atuais (COMMERCIAL_PIPELINE_STAGES / PIPELINE_STAGES) quando nao houver configuracao salva
-- Manter compatibilidade com cores e estilos existentes
+Componente isolado que recebe os dados do cliente e da etapa selecionada. Contem:
 
-### 3. Modificar: `src/pages/admin/Clientes.tsx`
+- **Mensagem pre-preenchida** com template referenciando:
+  - Nome do cliente e marca
+  - Fase da publicacao selecionada
+  - Prazo de 60 dias do INPI
+  - Clausula 5.2 (cumprimento de exigencia) e 10.3 (cobranca de 1 salario minimo)
+- **Checkboxes** para selecionar canais (Email, WhatsApp)
+- **Upload de documento** usando o bucket "documents" existente
+- **Secao de cobranca** com:
+  - Input de valor (default: 1 salario minimo vigente = R$ 1.518,00 em 2025)
+  - RadioGroup: A vista / Parcelado
+  - Se parcelado: Select de forma (boleto/cartao) e numero de parcelas
+  - Data de vencimento auto-calculada (+10 dias)
+- **Botao "Enviar"** que executa em sequencia:
+  1. Upload do documento (se houver) para o storage
+  2. Criacao da cobranca via `create-admin-invoice`
+  3. Envio da notificacao via `send-multichannel-notification` (com link da fatura)
+  4. Registro da atividade em `client_activities`
 
-- Adicionar botao de engrenagem (Settings2) na area indicada pelo usuario
-- Importar e renderizar o `AdminKanbanConfig` dialog
-- Passar o tipo de funil ativo (comercial/juridico) ao dialog
-- Recarregar etapas ao salvar configuracao
+### 2. Modificar: `src/components/admin/clients/ClientDetailSheet.tsx`
+
+- Adicionar state `expandedStageAction` (string | null) para controlar qual etapa tem o painel aberto
+- Ao clicar em uma etapa, alem de atualizar o pipeline_stage, abrir/fechar o painel de acao abaixo
+- Renderizar `<ServiceActionPanel>` condicionalmente abaixo da lista de etapas
+- O painel aparece com animacao (framer-motion) e pode ser fechado com um X
 
 ## Detalhes Tecnicos
 
-### Persistencia
-- Tabela: `system_settings`
-- Chaves: `admin_kanban_comercial_stages` e `admin_kanban_juridico_stages`
-- Formato JSON:
+### Template de Email (pre-preenchido, editavel)
+
 ```text
-{
-  "stages": [
-    {
-      "id": "protocolado",
-      "label": "PROTOCOLADO",
-      "color": "from-blue-500 to-blue-600",
-      "borderColor": "border-blue-500",
-      "bgColor": "bg-blue-50 dark:bg-blue-950/30",
-      "textColor": "text-blue-700 dark:text-blue-300",
-      "description": "Pedido de registro enviado ao INPI."
-    }
-  ]
-}
+Prezado(a) {nome},
+
+Informamos que o INPI publicou uma exigencia referente ao processo
+da marca "{marca}" (Protocolo: {numero_processo}).
+
+Conforme o prazo legal, voce tem 60 (sessenta) dias corridos para
+o cumprimento desta exigencia, contados a partir da data de publicacao
+na Revista da Propriedade Industrial (RPI).
+
+De acordo com a Clausula 5.2 do seu contrato, o cumprimento de
+exigencias formais constitui servico adicional. Conforme a Clausula
+10.3, sera cobrado o valor correspondente a 1 (um) salario minimo
+vigente no ano da publicacao.
+
+Para dar continuidade ao processo, solicitamos o pagamento da taxa
+de servico no valor de R$ {valor}.
+
+{link_pagamento}
+
+Estamos a disposicao para esclarecer qualquer duvida.
+
+Atenciosamente,
+Equipe WebMarcas
+www.webmarcas.net | WhatsApp: (11) 91112-0225
 ```
 
-### RLS
-- A policy SELECT para usuarios autenticados ja foi criada na migracao anterior
-- Admins ja possuem policies de INSERT/UPDATE na `system_settings`
+### Fluxo de envio
 
-### Componente AdminKanbanConfig
-- Reutiliza o mesmo padrao do `ClientKanbanConfig` (framer-motion Reorder)
-- Adiciona campos extras: label, description, e seletor de gradiente de cor
-- Paleta de cores pre-definida com gradientes Tailwind (blue, emerald, teal, yellow, orange, red, purple, cyan, gray, pink)
-- Ao adicionar nova etapa, gera automaticamente as classes de cor baseadas na cor escolhida
+1. Valida campos obrigatorios (valor, pelo menos 1 canal selecionado)
+2. Se tem documento, faz upload para `documents` bucket e salva referencia
+3. Chama `create-admin-invoice` com os dados de cobranca (valor, metodo, +10 dias)
+4. Chama `send-multichannel-notification` com event_type `cobranca_gerada` e mensagem customizada
+5. Se email selecionado, tambem chama `send-email` com o template completo + anexo
+6. Registra atividade e exibe toast de sucesso
 
-### Fluxo do usuario
-1. Admin acessa `/admin/clientes` e ativa o modo Kanban
-2. Ve o botao de engrenagem na area entre filtros e stats
-3. Clica na engrenagem - abre dialog de configuracao
-4. Pode adicionar, editar nome, arrastar para reordenar, ou remover etapas
-5. Alteracoes sao salvas automaticamente
-6. Ao fechar o dialog, o Kanban recarrega com as novas etapas
+### Seguranca
 
-### Migracao SQL
-Nao e necessaria nova migracao - a policy SELECT ja existe e as chaves serao criadas automaticamente via upsert no primeiro uso.
+- Nenhuma tabela nova sera criada
+- Nenhuma tabela existente sera alterada
+- Utiliza apenas edge functions e tabelas ja existentes (invoices, documents, notifications, client_activities)
+- O componente e isolado e nao afeta nenhum outro fluxo do sistema
+
