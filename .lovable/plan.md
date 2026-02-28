@@ -1,55 +1,62 @@
 
 
-# Editor Inline de Contatos na Ficha do Cliente
+# Unificar Informacoes de Publicacoes no Ficheiro do Cliente
 
 ## Objetivo
-Adicionar um botao "Editar" na aba Contatos que transforma os campos de somente-leitura em inputs editaveis, permitindo completar/corrigir todas as informacoes do cliente (nome, CPF, CNPJ, email, telefone, empresa, endereco, informacoes comerciais).
+Integrar automaticamente os dados de publicacoes (status do processo, timeline, prazos criticos) diretamente nas abas principais do ficheiro do cliente, sem precisar clicar em "Ciclo Completo" ou sair para o modulo de publicacoes.
 
 ## Arquivo a modificar
 `src/components/admin/clients/ClientDetailSheet.tsx`
 
 ## Alteracoes
 
-### 1. Novos estados (junto aos existentes, ~linha 171)
-- `editingContacts: boolean` - alterna entre modo leitura e edicao
-- `contactForm: object` - dados temporarios (full_name, email, cpf, cnpj, phone, company_name, address, neighborhood, city, state, zip_code, origin, client_funnel_type, assigned_to)
-- `savingContacts: boolean` - loading do botao salvar
+### 1. Carregar publicacoes automaticamente ao abrir o ficheiro
+Atualmente os dados de publicacoes so sao carregados quando o usuario clica no botao "Ciclo Completo" (acao `processo`, linha ~700). A mudanca e carregar `publicacoes_marcas` junto com os outros dados na funcao `fetchClientData()` (linha ~300-400), para que estejam disponiveis nas abas desde o inicio.
 
-### 2. Atualizar query do perfil (linha 381)
-Adicionar `origin, client_funnel_type, full_name, email, phone` ao SELECT da tabela `profiles`.
+- Adicionar query `publicacoes_marcas` filtrada por `client_id` (ou `process_id` para orfaos) dentro de `fetchClientData()`
+- Salvar resultado em `processPublicacoes` (estado ja existente)
 
-### 3. Refatorar aba Contatos (linhas 1672-1701)
+### 2. Adicionar card de Publicacoes na aba "Geral" (overview)
+Inserir um novo card apos o card de "Notas Internas" (linha ~1625) na aba overview que mostra:
 
-**Card Dados Pessoais (linha 1675-1686):**
-- Adicionar botao "Editar" no header ao lado de "Dados Pessoais"
-- Ao clicar "Editar", o estado `editingContacts` muda para `true` e `contactForm` e populado com os dados atuais
-- Em modo edicao: cada InfoRow vira um Input com Label:
-  - Nome Completo (input texto)
-  - E-mail (input email, disabled pois e login)
-  - CPF (input texto)
-  - CNPJ (input texto)
-  - Telefone (input texto)
-  - Empresa (input texto)
-- Botoes "Cancelar" e "Salvar" no rodape do card
+- Numero de publicacoes vinculadas ao cliente
+- Para cada publicacao:
+  - Nome da marca + numero do processo
+  - Badge de status (Depositada, Publicada, Deferida, etc.) usando STATUS_CONFIG existente
+  - Prazo critico com indicador de urgencia (dias restantes ou atrasado)
+  - Mini-timeline com icones (6 etapas: Deposito, Publicacao RPI, Oposicao, Decisao, Certificado, Renovacao)
+- Botao "Ver Ciclo Completo" que aciona `handleQuickAction('processo')`
 
-**Card Endereco (linhas 1688-1698):**
-- Sempre visivel em modo edicao (remover condicional `profileData?.address || profileData?.city`)
-- Em modo edicao: inputs para Logradouro, Bairro, Cidade, Estado (UF), CEP
+### 3. Mostrar status da publicacao no header do ficheiro
+No header do ficheiro (linha ~1050-1100), abaixo do nome do cliente e da marca, adicionar:
+- Badge do status da publicacao mais recente (ex: "Deferida", "Publicada")
+- Prazo critico proximo com cor de urgencia
 
-**Novo card Informacoes Comerciais (apenas em modo edicao):**
-- Select Origem: site, indicacao, google, instagram, facebook, whatsapp, outro
-- Select Funil: comercial, juridico
-- Select Responsavel: lista dinamica de admins (ja carregada em `adminUsersList`)
+### 4. Exibir detalhes da publicacao na aba "Marcas"
+Na aba "Marcas" (valor `brands`), para cada marca listada, cruzar com `processPublicacoes` via `process_id` e mostrar:
+- Status atual da publicacao vinculada
+- Proximo prazo critico
+- Descricao do prazo
 
-### 4. Logica de salvamento
-- Update na tabela `profiles` com todos os campos do contactForm
-- Atualiza `cpf_cnpj` automaticamente (usa CPF se preenchido, senao CNPJ)
-- Apos salvar: `fetchClientData()` + `onUpdate()` para sincronizar
-- Toast de sucesso/erro
-- Volta ao modo leitura apos salvar
+## Detalhes tecnicos
 
-## Seguranca
-- Nenhuma tabela ou coluna nova
-- Usa apenas colunas ja existentes na tabela `profiles`
-- Sem afetar outras abas ou funcionalidades
+**Dados reutilizados (sem novas queries):**
+- `processPublicacoes` (estado ja existente, apenas carregado mais cedo)
+- `clientBrands` (ja carregado no fetchClientData)
+- `STATUS_CONFIG` inline (ja definido no componente)
+
+**Componentes reutilizados:**
+- Timeline inline (TIMELINE_STEPS_INLINE, ja implementado nas linhas 1237-1328)
+- Badge de urgencia (logica getDaysLeft, ja implementada)
+- STATUS_CONFIG_INLINE (ja definido nas linhas 1245-1254)
+
+**Sem dependencias novas:**
+- Nenhuma tabela nova
+- Nenhuma query adicional alem da que ja existe para publicacoes
+- Nenhum componente externo novo
+
+## Impacto
+- O ficheiro do cliente passa a mostrar o status do processo e publicacoes sem necessidade de navegar para outra tela
+- O "Ciclo Completo" continua existindo para quem quiser ver a timeline detalhada com contratos e faturas
+- Nenhuma funcionalidade existente e removida ou alterada
 
