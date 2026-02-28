@@ -173,6 +173,11 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
   const [showEmailCompose, setShowEmailCompose] = useState(false);
   const [adminEmailAccount, setAdminEmailAccount] = useState<{ id: string; email_address: string } | null>(null);
 
+  // Inline contact editor states
+  const [editingContacts, setEditingContacts] = useState(false);
+  const [contactForm, setContactForm] = useState<any>({});
+  const [savingContacts, setSavingContacts] = useState(false);
+
   // Loading states
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -378,7 +383,7 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
         supabase.from('client_appointments').select('*').eq('user_id', client.id).order('scheduled_at', { ascending: true }),
         supabase.from('documents').select('*').eq('user_id', client.id).order('created_at', { ascending: false }),
         supabase.from('invoices').select('*').eq('user_id', client.id).order('due_date', { ascending: false }),
-        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code, assigned_to, contract_value').eq('id', client.id).maybeSingle(),
+        supabase.from('profiles').select('cpf, cnpj, company_name, address, neighborhood, city, state, zip_code, assigned_to, contract_value, origin, client_funnel_type, full_name, email, phone').eq('id', client.id).maybeSingle(),
         supabase.from('contracts').select('contract_value, payment_method, signature_status').eq('user_id', client.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('brand_processes').select('id, brand_name, business_area, process_number, pipeline_stage, status, created_at, updated_at, ncl_classes, inpi_protocol, deposit_date, grant_date, expiry_date, next_step, next_step_date, notes').eq('user_id', client.id).order('created_at', { ascending: false }),
       ]);
@@ -1673,29 +1678,220 @@ export function ClientDetailSheet({ client, open, onOpenChange, onUpdate, extraA
                     <>
                       {/* Personal */}
                       <div className="rounded-2xl border border-border bg-card p-4">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
-                          <User className="h-4 w-4 text-primary" />
-                          <span className="text-sm font-semibold">Dados Pessoais</span>
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-semibold">Dados Pessoais</span>
+                          </div>
+                          {!editingContacts && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => {
+                                setContactForm({
+                                  full_name: client.full_name || profileData?.full_name || '',
+                                  email: client.email || profileData?.email || '',
+                                  cpf: profileData?.cpf || '',
+                                  cnpj: profileData?.cnpj || '',
+                                  phone: client.phone || profileData?.phone || '',
+                                  company_name: client.company_name || profileData?.company_name || '',
+                                  address: profileData?.address || '',
+                                  neighborhood: profileData?.neighborhood || '',
+                                  city: profileData?.city || '',
+                                  state: profileData?.state || '',
+                                  zip_code: profileData?.zip_code || '',
+                                  origin: profileData?.origin || client.origin || 'site',
+                                  client_funnel_type: profileData?.client_funnel_type || client.client_funnel_type || 'juridico',
+                                  assigned_to: profileData?.assigned_to || client.assigned_to || '',
+                                });
+                                setEditingContacts(true);
+                              }}
+                            >
+                              <Edit2 className="h-3 w-3" /> Editar
+                            </Button>
+                          )}
                         </div>
-                        <InfoRow icon={User} label="Nome Completo" value={client.full_name} copyable />
-                        <InfoRow icon={Hash} label="CPF" value={profileData?.cpf || client.cpf_cnpj} mono copyable />
-                        <InfoRow icon={Hash} label="CNPJ" value={profileData?.cnpj} mono copyable />
-                        <InfoRow icon={Mail} label="E-mail" value={client.email} copyable onAction={() => { if (client.email) setShowEmailCompose(true); }} />
-                        <InfoRow icon={Phone} label="Telefone" value={client.phone} copyable link={`https://wa.me/55${client.phone?.replace(/\D/g,'')}`} />
-                        <InfoRow icon={Building2} label="Empresa" value={client.company_name || profileData?.company_name} />
+
+                        <AnimatePresence mode="wait">
+                          {editingContacts ? (
+                            <motion.div
+                              key="editing"
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -6 }}
+                              className="space-y-3"
+                            >
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="col-span-2">
+                                  <Label className="text-xs text-muted-foreground">Nome Completo</Label>
+                                  <Input value={contactForm.full_name} onChange={e => setContactForm((f: any) => ({ ...f, full_name: e.target.value }))} className="h-9 mt-1" />
+                                </div>
+                                <div className="col-span-2">
+                                  <Label className="text-xs text-muted-foreground">E-mail</Label>
+                                  <Input value={contactForm.email} disabled className="h-9 mt-1 opacity-60" />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">CPF</Label>
+                                  <Input value={contactForm.cpf} onChange={e => setContactForm((f: any) => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" className="h-9 mt-1 font-mono" />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">CNPJ</Label>
+                                  <Input value={contactForm.cnpj} onChange={e => setContactForm((f: any) => ({ ...f, cnpj: e.target.value }))} placeholder="00.000.000/0000-00" className="h-9 mt-1 font-mono" />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Telefone</Label>
+                                  <Input value={contactForm.phone} onChange={e => setContactForm((f: any) => ({ ...f, phone: e.target.value }))} placeholder="(00) 00000-0000" className="h-9 mt-1" />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Empresa</Label>
+                                  <Input value={contactForm.company_name} onChange={e => setContactForm((f: any) => ({ ...f, company_name: e.target.value }))} className="h-9 mt-1" />
+                                </div>
+                              </div>
+                            </motion.div>
+                          ) : (
+                            <motion.div key="viewing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                              <InfoRow icon={User} label="Nome Completo" value={client.full_name} copyable />
+                              <InfoRow icon={Hash} label="CPF" value={profileData?.cpf || client.cpf_cnpj} mono copyable />
+                              <InfoRow icon={Hash} label="CNPJ" value={profileData?.cnpj} mono copyable />
+                              <InfoRow icon={Mail} label="E-mail" value={client.email} copyable onAction={() => { if (client.email) setShowEmailCompose(true); }} />
+                              <InfoRow icon={Phone} label="Telefone" value={client.phone} copyable link={`https://wa.me/55${client.phone?.replace(/\D/g,'')}`} />
+                              <InfoRow icon={Building2} label="Empresa" value={client.company_name || profileData?.company_name} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       {/* Address */}
-                      {(profileData?.address || profileData?.city) && (
+                      {(editingContacts || profileData?.address || profileData?.city) && (
                         <div className="rounded-2xl border border-border bg-card p-4">
                           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
                             <MapPin className="h-4 w-4 text-primary" />
                             <span className="text-sm font-semibold">Endereço</span>
                           </div>
-                          <InfoRow icon={MapPin} label="Logradouro" value={[profileData.address, profileData.neighborhood].filter(Boolean).join(' – ')} />
-                          <InfoRow icon={Globe} label="Cidade / Estado" value={[profileData.city, profileData.state].filter(Boolean).join(' – ')} />
-                          <InfoRow icon={Hash} label="CEP" value={profileData.zip_code} mono copyable />
+                          {editingContacts ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="col-span-2">
+                                <Label className="text-xs text-muted-foreground">Logradouro</Label>
+                                <Input value={contactForm.address} onChange={e => setContactForm((f: any) => ({ ...f, address: e.target.value }))} className="h-9 mt-1" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Bairro</Label>
+                                <Input value={contactForm.neighborhood} onChange={e => setContactForm((f: any) => ({ ...f, neighborhood: e.target.value }))} className="h-9 mt-1" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Cidade</Label>
+                                <Input value={contactForm.city} onChange={e => setContactForm((f: any) => ({ ...f, city: e.target.value }))} className="h-9 mt-1" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Estado (UF)</Label>
+                                <Input value={contactForm.state} onChange={e => setContactForm((f: any) => ({ ...f, state: e.target.value }))} maxLength={2} className="h-9 mt-1 uppercase" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">CEP</Label>
+                                <Input value={contactForm.zip_code} onChange={e => setContactForm((f: any) => ({ ...f, zip_code: e.target.value }))} placeholder="00000-000" className="h-9 mt-1 font-mono" />
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <InfoRow icon={MapPin} label="Logradouro" value={[profileData?.address, profileData?.neighborhood].filter(Boolean).join(' – ')} />
+                              <InfoRow icon={Globe} label="Cidade / Estado" value={[profileData?.city, profileData?.state].filter(Boolean).join(' – ')} />
+                              <InfoRow icon={Hash} label="CEP" value={profileData?.zip_code} mono copyable />
+                            </>
+                          )}
                         </div>
+                      )}
+
+                      {/* Commercial Info - only in edit mode */}
+                      {editingContacts && (
+                        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border bg-card p-4">
+                          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                            <Briefcase className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-semibold">Informações Comerciais</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Origem</Label>
+                              <Select value={contactForm.origin || 'site'} onValueChange={v => setContactForm((f: any) => ({ ...f, origin: v }))}>
+                                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="site">Site</SelectItem>
+                                  <SelectItem value="indicacao">Indicação</SelectItem>
+                                  <SelectItem value="google">Google</SelectItem>
+                                  <SelectItem value="instagram">Instagram</SelectItem>
+                                  <SelectItem value="facebook">Facebook</SelectItem>
+                                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                                  <SelectItem value="outro">Outro</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Funil</Label>
+                              <Select value={contactForm.client_funnel_type || 'juridico'} onValueChange={v => setContactForm((f: any) => ({ ...f, client_funnel_type: v }))}>
+                                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="comercial">Comercial</SelectItem>
+                                  <SelectItem value="juridico">Jurídico</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs text-muted-foreground">Responsável</Label>
+                              <Select value={contactForm.assigned_to || ''} onValueChange={v => setContactForm((f: any) => ({ ...f, assigned_to: v }))}>
+                                <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                                <SelectContent>
+                                  {adminUsersList.map(a => (
+                                    <SelectItem key={a.id} value={a.id}>{a.full_name || a.email}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Save/Cancel buttons */}
+                      {editingContacts && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2 justify-end">
+                          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setEditingContacts(false)}>
+                            <X className="h-3 w-3 mr-1" /> Cancelar
+                          </Button>
+                          <Button size="sm" className="h-8 text-xs" disabled={savingContacts} onClick={async () => {
+                            if (!client) return;
+                            setSavingContacts(true);
+                            try {
+                              const cpfCnpj = contactForm.cpf || contactForm.cnpj || '';
+                              const { error } = await supabase.from('profiles').update({
+                                full_name: contactForm.full_name,
+                                phone: contactForm.phone,
+                                cpf: contactForm.cpf,
+                                cnpj: contactForm.cnpj,
+                                cpf_cnpj: cpfCnpj,
+                                company_name: contactForm.company_name,
+                                address: contactForm.address,
+                                neighborhood: contactForm.neighborhood,
+                                city: contactForm.city,
+                                state: contactForm.state,
+                                zip_code: contactForm.zip_code,
+                                origin: contactForm.origin,
+                                client_funnel_type: contactForm.client_funnel_type,
+                                assigned_to: contactForm.assigned_to || null,
+                              }).eq('id', client.id);
+                              if (error) throw error;
+                              toast.success('Dados atualizados com sucesso!');
+                              setEditingContacts(false);
+                              await fetchClientData();
+                              onUpdate();
+                            } catch (err: any) {
+                              toast.error('Erro ao salvar: ' + (err.message || 'Tente novamente'));
+                            } finally {
+                              setSavingContacts(false);
+                            }
+                          }}>
+                            {savingContacts ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
+                            Salvar
+                          </Button>
+                        </motion.div>
                       )}
                     </>
                   )}
