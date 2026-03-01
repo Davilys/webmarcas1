@@ -107,6 +107,20 @@ export function ClientImportExportDialog({
     }
   };
 
+  // Recalculate selected rows based on updateExisting
+  const recalculateSelection = useCallback((mapped: ParsedClient[], shouldUpdateExisting: boolean) => {
+    const errors = validateClients(mapped);
+    const validRows = mapped
+      .map((client, index) => ({ client, index }))
+      .filter(({ client, index }) => {
+        const rowErrors = errors.filter(e => e.rowIndex === index);
+        const isDuplicate = existingEmails.includes((client.email || '').toLowerCase().trim());
+        return rowErrors.length === 0 && (shouldUpdateExisting || !isDuplicate);
+      })
+      .map(({ index }) => index);
+    setSelectedRows(validRows);
+  }, [existingEmails]);
+
   // Handle mapping confirmation
   const handleMappingConfirm = () => {
     if (!parseResult) return;
@@ -123,21 +137,8 @@ export function ClientImportExportDialog({
     
     // Apply mapping and validate
     const mapped = applyFieldMapping(parseResult.data, fieldMapping);
-    const errors = validateClients(mapped);
-    
     setMappedClients(mapped);
-    
-    // Pre-select valid rows
-    const validRows = mapped
-      .map((client, index) => ({ client, index }))
-      .filter(({ client, index }) => {
-        const rowErrors = errors.filter(e => e.rowIndex === index);
-        const isDuplicate = existingEmails.includes((client.email || '').toLowerCase().trim());
-        return rowErrors.length === 0 && !isDuplicate;
-      })
-      .map(({ index }) => index);
-    
-    setSelectedRows(validRows);
+    recalculateSelection(mapped, updateExisting);
     setImportStep('preview');
   };
 
@@ -263,6 +264,11 @@ export function ClientImportExportDialog({
       setIsExporting(false);
     }
   };
+  // Reprocess selection when updateExisting toggle changes
+  React.useEffect(() => {
+    if (importStep !== 'preview' || mappedClients.length === 0) return;
+    recalculateSelection(mappedClients, updateExisting);
+  }, [updateExisting, importStep, mappedClients, recalculateSelection]);
 
   const validationErrors = mappedClients.length > 0 ? validateClients(mappedClients) : [];
 
@@ -357,6 +363,7 @@ export function ClientImportExportDialog({
                     selectedRows={selectedRows}
                     onSelectionChange={setSelectedRows}
                     existingEmails={existingEmails}
+                    updateExisting={updateExisting}
                   />
                 </div>
               )}

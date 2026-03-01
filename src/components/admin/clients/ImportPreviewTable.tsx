@@ -14,6 +14,7 @@ interface ImportPreviewTableProps {
   selectedRows: number[];
   onSelectionChange: (selectedRows: number[]) => void;
   existingEmails?: string[];
+  updateExisting?: boolean;
 }
 
 export function ImportPreviewTable({
@@ -22,6 +23,7 @@ export function ImportPreviewTable({
   selectedRows,
   onSelectionChange,
   existingEmails = [],
+  updateExisting = false,
 }: ImportPreviewTableProps) {
   const [showOnlyErrors, setShowOnlyErrors] = useState(false);
 
@@ -60,7 +62,7 @@ export function ImportPreviewTable({
       .filter(({ client, index }) => {
         const rowErrors = getRowErrors(index);
         const isDuplicate = isEmailDuplicate(client.email);
-        return rowErrors.length === 0 && !isDuplicate;
+        return rowErrors.length === 0 && (updateExisting || !isDuplicate);
       })
       .map(({ index }) => index);
     onSelectionChange(validRows);
@@ -84,7 +86,7 @@ export function ImportPreviewTable({
   const totalWithErrors = clients.filter((client, index) => {
     const rowErrors = getRowErrors(index);
     const isDuplicate = isEmailDuplicate(client.email);
-    return rowErrors.length > 0 || isDuplicate;
+    return rowErrors.length > 0 || (isDuplicate && !updateExisting);
   }).length;
 
   return (
@@ -154,7 +156,7 @@ export function ImportPreviewTable({
               
               const rowErrors = getRowErrors(originalIndex);
               const isDuplicate = isEmailDuplicate(client.email);
-              const hasErrors = rowErrors.length > 0 || isDuplicate;
+              const hasErrors = rowErrors.length > 0 || (isDuplicate && !updateExisting);
               const isSelected = selectedRows.includes(originalIndex);
 
               return (
@@ -198,9 +200,15 @@ export function ImportPreviewTable({
                             <p className="text-xs text-destructive">{fieldError.message}</p>
                           )}
                           {isEmailField && isDuplicate && !fieldError && (
-                            <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
-                              Já existe
-                            </Badge>
+                            updateExisting ? (
+                              <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">
+                                Será atualizado
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+                                Já existe
+                              </Badge>
+                            )
                           )}
                         </div>
                       </TableCell>
