@@ -1,75 +1,71 @@
 
 
-## Correção: Sincronização Completa entre Revista INPI, Publicações e Clientes Jurídico
+## Prazos Automáticos nos Cards do Kanban + Auto-Arquivamento + Prazo de 9 anos para Certificado
 
-### Problema Identificado
+### O que será feito
 
-Existem 3 funções na aba Revista INPI que operam de forma isolada, sem sincronizar os dados entre os 3 módulos:
+**1. Fallback de prazo em TODOS os cards**
 
-1. **Alterar Tipo do Despacho** (`handleDispatchTypeChange`): Atualiza o status na aba Publicações (`publicacoes_marcas.status`) mas NAO atualiza a etapa no Kanban da aba Clientes Jurídico (`brand_processes.pipeline_stage`).
+Atualmente, se `proximo_prazo_critico` estiver vazio, o card não mostra dias restantes. Será adicionado um cálculo de fallback:
+- Status `certificado`: prazo = `data_publicacao_rpi + 9 anos` (3285 dias) para renovação
+- Outros status: prazo = `data_publicacao_rpi + 60 dias`
 
-2. **Atualizar Processo** (`handleUpdateProcess`): Atualiza a etapa no Kanban Clientes Jurídico (`brand_processes.pipeline_stage`) mas NAO atualiza o status na aba Publicações (`publicacoes_marcas.status`).
+**2. Auto-arquivamento client-side**
 
-3. **Vincular Cliente** (`handleAssignClient`): Propaga o `client_id` para publicações mas nao sincroniza o tipo do despacho com a etapa do processo.
+Ao carregar os dados, publicações com prazo expirado (dias < 0) e que NÃO estão em `arquivado` nem `certificado` serão automaticamente movidas para `arquivado`, com sincronização bidirecional para `brand_processes.pipeline_stage = 'distrato'`.
 
-### Solucao
+**3. Prazo de 9 anos para Certificado**
 
-Alterar as 3 funções no ficheiro `src/pages/admin/RevistaINPI.tsx` para garantir sincronização bidirecional:
+Quando o status é `certificado`, o prazo crítico passa a ser calculado como 9 anos (data da publicação + 9 anos), representando o prazo de renovação. Os cards mostrarão os dias restantes até essa data.
 
-### Alteracao 1: `handleDispatchTypeChange` (linha 205)
+### Alterações Técnicas
 
-Depois de atualizar `publicacoes_marcas.status`, adicionar a atualizacao de `brand_processes.pipeline_stage` com o mesmo valor, caso exista um processo vinculado (`entry.matched_process_id`).
+#### Ficheiro 1: `src/components/admin/publicacao/PublicacaoKanban.tsx`
 
-```text
-Antes:
-  1. Atualiza rpi_entries.dispatch_type
-  2. Atualiza publicacoes_marcas.status
+Alterar o cálculo de `days` (linha 160) para incluir fallback:
 
-Depois:
-  1. Atualiza rpi_entries.dispatch_type
-  2. Atualiza publicacoes_marcas.status
-  3. [NOVO] Se entry.matched_process_id existe -> atualiza brand_processes.pipeline_stage com o mesmo valor
+```typescript
+// Antes:
+const days = pub.proximo_prazo_critico ? differenceInDays(...) : null;
+
+// Depois:
+let deadlineDate = pub.proximo_prazo_critico;
+if (!deadlineDate && pub.data_publicacao_rpi) {
+  if (pub.status === 'certificado') {
+    deadlineDate = addYears(parseISO(pub.data_publicacao_rpi), 9).toISOString();
+  } else {
+    deadlineDate = addDays(parseISO(pub.data_publicacao_rpi), 60).toISOString();
+  }
+}
+const days = deadlineDate ? differenceInDays(parseISO(deadlineDate), new Date()) : null;
 ```
 
-### Alteracao 2: `handleUpdateProcess` (linha 417)
+Adicionar imports de `addDays` e `addYears` do date-fns.
 
-Depois de atualizar `brand_processes.pipeline_stage`, adicionar a atualizacao de `publicacoes_marcas.status` com o mesmo valor, caso exista uma publicacao vinculada ao `rpi_entry_id`.
+Atualizar a interface `Publicacao` local para incluir `data_publicacao_rpi`.
 
-```text
-Antes:
-  1. Atualiza brand_processes.pipeline_stage
-  2. Atualiza rpi_entries.update_status
+#### Ficheiro 2: `src/components/admin/PublicacaoTab.tsx`
 
-Depois:
-  1. Atualiza brand_processes.pipeline_stage
-  2. Atualiza rpi_entries.update_status
-  3. [NOVO] Busca publicacoes_marcas com rpi_entry_id = entry.id -> atualiza status com o valor do newStage
-```
+**A. Auto-archive via useEffect**
 
-### Alteracao 3: `handleAssignClient` (linha 470)
+Adicionar um `useEffect` que, após o fetch das publicações, verifica publicações com prazo vencido e status diferente de `arquivado`/`certificado`. Para cada uma:
+- Atualiza `publicacoes_marcas.status = 'arquivado'`
+- Atualiza `brand_processes.pipeline_stage = 'distrato'` (se `process_id` existe)
+- Invalida as queries para refrescar o Kanban
 
-Apos vincular o cliente, sincronizar o dispatch_type atual do entry com o `pipeline_stage` do processo vinculado e com o `status` da publicacao.
+**B. Garantir que o calcAutoFields trata certificado com 9 anos**
 
-```text
-Antes:
-  1. Atualiza rpi_entries.matched_client_id
-  2. Propaga client_id para publicacoes_marcas
+A lógica já existe parcialmente (linhas 178-180 usam `data_certificado`), mas será reforçada: se o status é `certificado` e não tem `data_certificado` preenchido, usar `data_publicacao_rpi` como base para calcular `proximo_prazo_critico = data_publicacao_rpi + 9 anos`.
 
-Depois:
-  1. Atualiza rpi_entries.matched_client_id
-  2. Propaga client_id para publicacoes_marcas
-  3. [NOVO] Se dispatch_type definido e matched_process_id existe -> atualiza brand_processes.pipeline_stage
-```
+**C. Fallback no cálculo de dias na lista (view lista)**
 
-### Mapeamento de Valores
-
-Os valores do despacho (dispatch_type) mapeiam diretamente para as etapas do pipeline (pipeline_stage) pois usam a mesma nomenclatura: `003`, `oposicao`, `indeferimento`, `deferimento`, `certificados`/`certificado`, `renovacao`, `arquivado`.
-
-### Ficheiro Alterado
-
-- `src/pages/admin/RevistaINPI.tsx` (unico ficheiro)
+Aplicar o mesmo fallback (60 dias ou 9 anos) quando `proximo_prazo_critico` é null nos cards da lista, para consistência.
 
 ### Resultado
 
-Ao alterar o tipo do despacho na Revista INPI, o card do cliente move automaticamente no Kanban da aba Publicacoes E no Kanban da aba Clientes Juridico, mantendo os 3 modulos 100% sincronizados.
+- Todos os cards do Kanban e da lista mostram "Xd restantes" ou "Xd atrasado"
+- Cards em `certificado` mostram o prazo de 9 anos para renovação
+- Publicações com prazo vencido (exceto certificado) são automaticamente arquivadas
+- O arquivamento sincroniza com o Kanban Jurídico (brand_processes)
+- Ambas as abas (Publicações e Clientes Jurídico) refletem a mesma informação
 
