@@ -70,6 +70,17 @@ interface Profile {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
+const DISPATCH_TYPE_OPTIONS = [
+  { value: '003', label: '003' },
+  { value: 'oposicao', label: 'Oposição' },
+  { value: 'exigencia_merito', label: 'Exigência de Mérito' },
+  { value: 'indeferimento', label: 'Indeferimento' },
+  { value: 'deferimento', label: 'Deferimento' },
+  { value: 'certificado', label: 'Certificado' },
+  { value: 'renovacao', label: 'Renovação' },
+  { value: 'arquivado', label: 'Arquivado' },
+];
+
 const TAG_OPTIONS = [
   { value: 'pending', label: 'Aguardando', color: 'bg-muted text-muted-foreground' },
   { value: 'em_contato', label: 'Em contato', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
@@ -189,6 +200,59 @@ export default function RevistaINPI() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ brand_name: '', process_number: '', ncl_classes: '', holder_name: '' });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [updatingDispatchType, setUpdatingDispatchType] = useState<string | null>(null);
+
+  const handleDispatchTypeChange = async (entry: RpiEntry, newType: string) => {
+    setUpdatingDispatchType(entry.id);
+    try {
+      // Update dispatch_type on rpi_entries
+      const { error: entryError } = await supabase.from('rpi_entries').update({
+        dispatch_type: DISPATCH_TYPE_OPTIONS.find(o => o.value === newType)?.label || newType,
+        updated_at: new Date().toISOString(),
+      }).eq('id', entry.id);
+      if (entryError) throw entryError;
+
+      // Update or create publicacao in publicacoes_marcas with the new status
+      const { data: existingPub } = await supabase.from('publicacoes_marcas')
+        .select('id')
+        .eq('rpi_entry_id', entry.id)
+        .maybeSingle();
+
+      if (existingPub) {
+        const { error: pubError } = await supabase.from('publicacoes_marcas').update({
+          status: newType,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existingPub.id);
+        if (pubError) throw pubError;
+      } else {
+        // Create new publicacao linked to this RPI entry
+        const { error: insertError } = await supabase.from('publicacoes_marcas').insert({
+          status: newType,
+          tipo_publicacao: 'publicacao_rpi',
+          rpi_entry_id: entry.id,
+          process_id: entry.matched_process_id || null,
+          client_id: entry.matched_client_id || null,
+          brand_name_rpi: entry.brand_name || null,
+          process_number_rpi: entry.process_number || null,
+          data_publicacao_rpi: entry.publication_date || null,
+        });
+        if (insertError) throw insertError;
+      }
+
+      // Update local state
+      setEntries(prev => prev.map(e => e.id === entry.id ? {
+        ...e,
+        dispatch_type: DISPATCH_TYPE_OPTIONS.find(o => o.value === newType)?.label || newType,
+      } : e));
+
+      toast.success(`Tipo alterado para "${DISPATCH_TYPE_OPTIONS.find(o => o.value === newType)?.label}" e publicação atualizada no Kanban!`);
+    } catch (err) {
+      console.error('Error updating dispatch type:', err);
+      toast.error('Erro ao atualizar tipo do despacho');
+    } finally {
+      setUpdatingDispatchType(null);
+    }
+  };
 
   useEffect(() => {
     fetchUploads();
@@ -945,7 +1009,35 @@ export default function RevistaINPI() {
                                             Despacho
                                           </h4>
                                           <div className="space-y-2.5 bg-card rounded-xl p-4 border border-border/50">
-                                            <DetailRow label="Tipo" value={entry.dispatch_type || '—'} />
+                                            <div>
+                                              <span className="text-[11px] text-muted-foreground">Tipo</span>
+                                              <div className="mt-1">
+                                                <Select
+                                                  value={(() => {
+                                                    const currentType = (entry.dispatch_type || '').toLowerCase();
+                                                    const match = DISPATCH_TYPE_OPTIONS.find(o => 
+                                                      o.label.toLowerCase() === currentType || o.value === currentType
+                                                    );
+                                                    return match?.value || '';
+                                                  })()}
+                                                  onValueChange={(val) => handleDispatchTypeChange(entry, val)}
+                                                  disabled={updatingDispatchType === entry.id}
+                                                >
+                                                  <SelectTrigger className="h-8 text-xs rounded-lg">
+                                                    {updatingDispatchType === entry.id ? (
+                                                      <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Salvando...</span>
+                                                    ) : (
+                                                      <SelectValue placeholder="Selecionar tipo" />
+                                                    )}
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    {DISPATCH_TYPE_OPTIONS.map(opt => (
+                                                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                            </div>
                                             <DetailRow label="Código" value={entry.dispatch_code || '—'} mono />
                                             <div>
                                               <span className="text-[11px] text-muted-foreground">Texto do Despacho</span>
