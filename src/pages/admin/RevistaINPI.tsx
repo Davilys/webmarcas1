@@ -102,6 +102,19 @@ const PIPELINE_STAGES = [
   { value: 'distrato', label: 'Distrato' },
 ];
 
+// Map pipeline stages to publicacao status (different naming conventions)
+const PIPELINE_TO_PUB_STATUS: Record<string, string> = {
+  protocolado: '003',
+  '003': '003',
+  oposicao: 'oposicao',
+  indeferimento: 'indeferimento',
+  notificacao_extrajudicial: '003',
+  deferimento: 'deferimento',
+  certificados: 'certificado',
+  renovacao: 'renovacao',
+  distrato: 'arquivado',
+};
+
 function getDispatchBadge(dispatchType: string | null) {
   const type = (dispatchType || '').toLowerCase();
   if (type.includes('deferido') || type.includes('deferimento'))
@@ -441,7 +454,7 @@ export default function RevistaINPI() {
         .maybeSingle();
       if (linkedPub) {
         const { error: pubSyncError } = await supabase.from('publicacoes_marcas').update({
-          status: newStage,
+          status: PIPELINE_TO_PUB_STATUS[newStage] || newStage,
           updated_at: new Date().toISOString(),
         }).eq('id', linkedPub.id);
         if (pubSyncError) console.error('Error syncing publicacao status:', pubSyncError);
