@@ -2513,39 +2513,6 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                             </div>
                           )}
 
-                          {/* Full NCL list for manual selection */}
-                          <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">Todas as Classes NCL (seleção manual):</Label>
-                            <ScrollArea className="h-[250px] rounded-md border p-3">
-                              <div className="space-y-1">
-                                {Object.entries(NCL_CLASS_DESCRIPTIONS).map(([num, desc]) => {
-                                  const cls = parseInt(num);
-                                  const isSelected = selectedClasses.includes(cls);
-                                  const isSuggested = suggestedClasses?.classes.includes(cls);
-                                  return (
-                                    <label
-                                      key={cls}
-                                      className={cn(
-                                        "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors",
-                                        isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted/50"
-                                      )}
-                                    >
-                                      <Checkbox
-                                        checked={isSelected}
-                                        onCheckedChange={() => toggleClassSelection(cls)}
-                                      />
-                                      <span className="inline-flex items-center justify-center w-7 h-7 rounded text-xs font-bold bg-muted text-muted-foreground shrink-0">
-                                        {String(cls).padStart(2, '0')}
-                                      </span>
-                                      <span className="text-sm">{desc}</span>
-                                      {isSuggested && <Badge variant="outline" className="text-[10px] ml-auto">IA</Badge>}
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </ScrollArea>
-                          </div>
-
                           {selectedClasses.length > 0 && (
                             <p className="text-sm font-medium text-primary">
                               {selectedClasses.length} classe{selectedClasses.length > 1 ? 's' : ''} selecionada{selectedClasses.length > 1 ? 's' : ''}
