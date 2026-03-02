@@ -395,6 +395,8 @@ export default function RevistaINPI() {
       deadlineDate.setDate(deadlineDate.getDate() + 60);
       const { error: entryError } = await supabase.from('rpi_entries').update({ matched_client_id: selectedClient.id, update_status: 'pending', updated_at: new Date().toISOString(), linked_at: new Date().toISOString() }).eq('id', assignEntry.id);
       if (entryError) throw entryError;
+      // Propagate client_id to publicacoes_marcas (sync with Publicações tab)
+      await supabase.from('publicacoes_marcas').update({ client_id: selectedClient.id }).eq('rpi_entry_id', assignEntry.id);
       await supabase.from('notifications').insert({ user_id: selectedClient.id, title: assignPriority === 'urgent' ? '🚨 URGENTE: Nova Publicação INPI' : 'Nova Publicação INPI', message: `Uma publicação referente ao processo ${assignEntry.process_number} (${assignEntry.brand_name || 'Marca'}) foi vinculada ao seu perfil. Prazo: 60 dias.`, type: assignPriority === 'urgent' ? 'warning' : 'info', link: '/cliente/processos' });
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('client_activities').insert({ user_id: selectedClient.id, admin_id: user?.id, activity_type: 'rpi_publication', description: `Publicação RPI vinculada: ${assignEntry.brand_name} - ${assignEntry.dispatch_type}. Prioridade: ${assignPriority === 'urgent' ? 'Urgente' : 'Média'}. Prazo: 60 dias.`, metadata: { process_number: assignEntry.process_number, dispatch_code: assignEntry.dispatch_code, dispatch_text: assignEntry.dispatch_text, deadline_date: deadlineDate.toISOString(), priority: assignPriority } });
