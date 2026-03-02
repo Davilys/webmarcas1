@@ -612,6 +612,33 @@ export default function PublicacaoTab() {
         queryClient.invalidateQueries({ queryKey: ['publicacoes-marcas'] });
         toast.success(`✅ ${updated} publicação(ões) atualizada(s) da revista`, { duration: 5000 });
       }
+
+      // ─── Reconcile orphan publicações: fill client_id from rpi_entries.matched_client_id ────
+      const orphans = publicacoes.filter(p => !p.client_id && (p as any).rpi_entry_id);
+      if (orphans.length > 0) {
+        const orphanRpiIds = orphans.map(p => (p as any).rpi_entry_id as string);
+        const { data: linkedEntries } = await supabase
+          .from('rpi_entries')
+          .select('id, matched_client_id')
+          .in('id', orphanRpiIds)
+          .not('matched_client_id', 'is', null);
+
+        if (linkedEntries && linkedEntries.length > 0) {
+          let orphansFixed = 0;
+          for (const entry of linkedEntries) {
+            const { error } = await supabase
+              .from('publicacoes_marcas')
+              .update({ client_id: entry.matched_client_id })
+              .eq('rpi_entry_id', entry.id)
+              .is('client_id', null);
+            if (!error) orphansFixed++;
+          }
+          if (orphansFixed > 0) {
+            queryClient.invalidateQueries({ queryKey: ['publicacoes-marcas'] });
+            console.log(`Reconciled ${orphansFixed} orphan publicações with client_id from rpi_entries`);
+          }
+        }
+      }
     };
 
     doSync();
