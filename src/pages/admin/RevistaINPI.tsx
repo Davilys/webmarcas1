@@ -379,18 +379,27 @@ export default function RevistaINPI() {
     setSelectedClient(null);
     setAssignPriority('medium');
     setAssignDialogOpen(true);
+    // Re-fetch clients when dialog opens to ensure latest data
+    if (availableClients.length === 0) {
+      fetchClients();
+    }
   };
 
   const filteredClients = useMemo(() => {
     if (!clientSearch || clientSearch.trim().length < 2) return [];
     const s = clientSearch.trim().toLowerCase();
+    const sDigits = s.replace(/\D/g, '');
     return availableClients.filter(client => {
       const name = (client.full_name || '').toLowerCase();
       const email = (client.email || '').toLowerCase();
       const company = (client.company_name || '').toLowerCase();
-      const cpf = (client.cpf_cnpj || '').replace(/\D/g, '');
-      const phone = (client.phone || '');
-      return name.includes(s) || email.includes(s) || company.includes(s) || cpf.includes(s.replace(/\D/g, '')) || phone.includes(s);
+      if (name.includes(s) || email.includes(s) || company.includes(s)) return true;
+      if (sDigits.length > 0) {
+        const cpf = (client.cpf_cnpj || '').replace(/\D/g, '');
+        const phone = (client.phone || '').replace(/\D/g, '');
+        if (cpf.includes(sDigits) || phone.includes(sDigits)) return true;
+      }
+      return false;
     });
   }, [clientSearch, availableClients]);
 
@@ -1299,10 +1308,10 @@ export default function RevistaINPI() {
               </div>
 
               <div className="space-y-2">
-                <Label>Selecionar Cliente</Label>
+                <Label>Selecionar Cliente {availableClients.length > 0 && <span className="text-muted-foreground font-normal">({availableClients.length} disponíveis{filteredClients.length > 0 ? `, ${filteredClients.length} encontrados` : ''})</span>}</Label>
                 <ScrollArea className="h-[200px] border rounded-xl p-2">
                   {filteredClients.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm">{clientSearch && clientSearch.trim().length >= 2 ? 'Nenhum cliente encontrado' : 'Digite ao menos 2 letras para buscar'}</div>
+                    <div className="text-center py-8 text-muted-foreground text-sm">{availableClients.length === 0 ? 'Carregando clientes...' : clientSearch && clientSearch.trim().length >= 2 ? `Nenhum cliente encontrado para "${clientSearch}"` : 'Digite ao menos 2 letras para buscar'}</div>
                   ) : (
                     <div className="space-y-1">
                       {filteredClients.slice(0, 50).map(client => (
