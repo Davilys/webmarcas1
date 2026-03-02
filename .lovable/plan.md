@@ -1,57 +1,96 @@
 
+# Adicionar aba "Dados da Marca" no Novo Contrato (Cliente Existente)
 
-# Corrigir Importacao com Atualizacao de Clientes Existentes
+## Objetivo
+Quando o admin seleciona "Contrato Padrao - Registro de Marca INPI" no fluxo de cliente existente, adicionar uma 3a aba "Dados da Marca" entre "Informacoes Basicas" e "Dados do Signatario". Essa aba cobre dois cenarios:
+- **Marca existente**: selecionar marca do cliente + escolher novas classes NCL (todas as 45 classes listadas)
+- **Nova marca**: digitar nome e ramo de atividade + botao "Gerar Classes por IA" que sugere classes automaticamente
 
-## Problema Atual
-Quando o usuario ativa "Atualizar clientes existentes", os clientes duplicados (que ja existem no sistema) continuam **desmarcados** na tabela de preview. Isso acontece porque a logica de pre-selecao em `handleMappingConfirm` exclui todos os emails duplicados antes mesmo do usuario ver o toggle. Resultado: o toggle nao tem efeito pratico.
+## Arquivo a modificar
+`src/components/admin/contracts/CreateContractDialog.tsx`
 
-## Arquivos a Modificar
+## Alteracoes
 
-### 1. `src/components/admin/clients/ClientImportExportDialog.tsx`
+### 1. Novos estados
+- `clientBrands`: array de marcas do cliente (vindas de `brand_processes`)
+- `useExistingBrand`: boolean para alternar entre marca existente e nova marca
+- `existingBrandId`: id da marca selecionada
 
-**Mover o toggle "Atualizar clientes existentes" para ANTES do preview (etapa mapping ou inicio do preview):**
-- Quando `updateExisting = true`: incluir clientes duplicados na selecao automatica (nao excluir da pre-selecao)
-- Quando `updateExisting = false`: manter comportamento atual (duplicados ficam desmarcados)
+### 2. Carregar marcas ao selecionar cliente
+Na funcao `handleSelectClient` (linha 261), apos selecionar o perfil, buscar todas as marcas dele em `brand_processes` (campos: `id`, `brand_name`, `business_area`, `ncl_classes`) e salvar em `clientBrands`.
 
-**Reprocessar selecao quando o toggle mudar:**
-- Adicionar um `useEffect` ou callback que reprocessa `selectedRows` quando `updateExisting` muda, incluindo/excluindo os duplicados conforme o valor
+### 3. Extrair NCL_CLASS_DESCRIPTIONS
+Copiar o mapa das 45 classes NCL (ja existe em `src/pages/AssinarDocumento.tsx` linhas 17-63) para dentro do componente, para uso na listagem completa de classes.
 
-### 2. `src/components/admin/clients/ImportPreviewTable.tsx`
+### 4. Tabs: de 2 para 3 (quando template e "Registro de Marca")
+Na linha 2034-2038, quando `isStandardContractTemplate` for true e nao for monitoramento:
 
-**Melhorar a indicacao visual de clientes que serao atualizados:**
-- Quando `updateExisting = true` e o email ja existe: mostrar badge "Sera atualizado" (azul) em vez de "Ja existe" (amarelo/warning)
-- Quando `updateExisting = false` e o email ja existe: manter badge "Ja existe" (amarelo) com tom de aviso
-- Passar nova prop `updateExisting: boolean` para o componente
-
-## Detalhes Tecnicos
-
-**ClientImportExportDialog.tsx - handleMappingConfirm (linhas 130-141):**
 ```text
-// Logica atual exclui duplicados sempre:
-.filter(({ client }) => !isDuplicate)
-
-// Nova logica:
-.filter(({ client }) => {
-  const isDuplicate = existingEmails.includes(email);
-  // Se updateExisting, incluir duplicados (serao atualizados)
-  return rowErrors.length === 0 && (updateExisting || !isDuplicate);
-})
+Antes:  [Informacoes Basicas] [Dados do Signatario]
+Depois: [Informacoes Basicas] [Dados da Marca] [Dados do Signatario]
 ```
 
-**ClientImportExportDialog.tsx - useEffect para reagir ao toggle:**
-```text
-useEffect(() => {
-  if (importStep !== 'preview') return;
-  // Recalcular selectedRows baseado no novo valor de updateExisting
-}, [updateExisting]);
-```
+### 5. Conteudo da aba "Dados da Marca"
 
-**ImportPreviewTable.tsx - badge condicional:**
-- Receber prop `updateExisting`
-- Se `updateExisting && isDuplicate`: Badge azul "Sera atualizado"
-- Se `!updateExisting && isDuplicate`: Badge amarelo "Ja existe"
+**Secao superior - Tipo de marca:**
+- Radio/toggle: "Marca ja registrada" vs "Nova marca"
+
+**Se "Marca ja registrada":**
+- Select com as marcas do cliente (`clientBrands`), mostrando nome + classes atuais
+- Ao selecionar, preencher `formData.brand_name` com o nome da marca
+- Exibir as classes ja registradas dessa marca como badges (informativas, nao editaveis)
+- Abaixo, lista das 45 classes NCL com checkbox, numero e descricao resumida ao lado (ScrollArea com altura fixa)
+- Classes ja registradas da marca aparecem desabilitadas com indicacao visual
+- O usuario seleciona as NOVAS classes que deseja registrar
+
+**Se "Nova marca":**
+- Campo "Nome da Marca" (text input) - preenche `formData.brand_name`
+- Campo "Ramo de Atividade" (text input) - preenche `brandData.businessArea`
+- Botao "Gerar Classes por IA" (reutiliza a funcao `handleGenerateClasses` que ja existe no componente, linhas 430-460)
+- Apos gerar, exibe as classes sugeridas com checkboxes (mesma UI do fluxo novo cliente)
+- Adicionalmente, lista completa das 45 classes NCL abaixo para selecao manual
+
+### 6. Atualizacao do valor do contrato
+- As classes selecionadas alimentam `selectedClasses` (estado ja existente)
+- O calculo de valor (`getContractValue`/`getQuantityMultiplier`) ja usa `selectedClasses.length`
+- O valor do contrato se atualiza automaticamente conforme classes selecionadas
+
+### 7. Integracao no submit
+- `formData.brand_name` ja e usado no `generateDocumentHtml` existente (linhas 2008-2010)
+- `selectedClasses` ja e salvo como `suggested_classes` no contrato (linha 853)
+- Nenhuma alteracao no submit necessaria
+
+### 8. Reset do formulario
+- Adicionar `clientBrands`, `useExistingBrand`, `existingBrandId` ao `resetForm()` (linha ~1040)
+
+## Resumo visual da aba "Dados da Marca"
+
+```text
++--------------------------------------------------+
+| ( ) Marca ja registrada    ( ) Nova marca         |
++--------------------------------------------------+
+|                                                    |
+| [Se marca existente]                               |
+| Select: [Escolha uma marca v]                      |
+| Classes atuais: [25] [35] [41]                     |
+|                                                    |
+| [Se nova marca]                                    |
+| Nome da Marca: [_______________]                   |
+| Ramo de Atividade: [_______________]               |
+| [Gerar Classes por IA]                             |
+|                                                    |
+| --- Selecionar Classes NCL ---                     |
+| [ ] 01 - Produtos quimicos                         |
+| [ ] 02 - Tintas e vernizes                         |
+| [ ] 03 - Cosmeticos e produtos de limpeza          |
+| ...                                                |
+| [ ] 45 - Servicos juridicos e seguranca            |
++--------------------------------------------------+
+```
 
 ## Impacto
-- Nenhuma tabela ou coluna nova
-- Nenhuma alteracao na Edge Function (ja suporta `updateExisting`)
-- Apenas correcao de logica no frontend para que o toggle funcione corretamente
+- Nenhuma tabela nova ou migracao
+- Reutiliza logica existente de sugestao por IA (`handleGenerateClasses`)
+- Reutiliza `selectedClasses`, `suggestedClasses` e calculo de valor
+- NCL_CLASS_DESCRIPTIONS copiado de `AssinarDocumento.tsx` (45 entradas)
+- Nenhuma funcionalidade existente removida
