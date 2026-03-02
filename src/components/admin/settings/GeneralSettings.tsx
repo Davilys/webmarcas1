@@ -12,7 +12,8 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { 
   Building2, Phone, Mail, MapPin, Clock, Save, Loader2, 
-  User, KeyRound, Shield, Eye, EyeOff, Crown 
+  User, KeyRound, Shield, Eye, EyeOff, Crown,
+  Globe, Instagram, Facebook, Linkedin, Youtube, Twitter
 } from 'lucide-react';
 
 interface CompanySettings {
@@ -21,6 +22,12 @@ interface CompanySettings {
   email: string;
   cnpj: string;
   address: string;
+  website?: string;
+  instagram?: string;
+  facebook?: string;
+  linkedin?: string;
+  youtube?: string;
+  twitter?: string;
 }
 
 interface BusinessHours {
@@ -103,6 +110,7 @@ export function GeneralSettings() {
 
   const [company, setCompany] = useState<CompanySettings>({
     name: '', phone: '', email: '', cnpj: '', address: '',
+    website: '', instagram: '', facebook: '', linkedin: '', youtube: '', twitter: '',
   });
 
   const [hours, setHours] = useState<BusinessHours>({
@@ -435,6 +443,89 @@ export function GeneralSettings() {
               placeholder="Rua, Número, Bairro, Cidade - Estado, CEP"
               rows={2}
             />
+          </div>
+
+          <Separator />
+
+          <div>
+            <h4 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Redes Sociais e Site
+            </h4>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="website" className="flex items-center gap-1.5">
+                  <Globe className="h-4 w-4" />
+                  Website
+                </Label>
+                <Input
+                  id="website"
+                  value={company.website || ''}
+                  onChange={(e) => setCompany(prev => ({ ...prev, website: e.target.value }))}
+                  placeholder="https://seusite.com.br"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="instagram" className="flex items-center gap-1.5">
+                  <Instagram className="h-4 w-4" />
+                  Instagram
+                </Label>
+                <Input
+                  id="instagram"
+                  value={company.instagram || ''}
+                  onChange={(e) => setCompany(prev => ({ ...prev, instagram: e.target.value }))}
+                  placeholder="@suaempresa"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="facebook" className="flex items-center gap-1.5">
+                  <Facebook className="h-4 w-4" />
+                  Facebook
+                </Label>
+                <Input
+                  id="facebook"
+                  value={company.facebook || ''}
+                  onChange={(e) => setCompany(prev => ({ ...prev, facebook: e.target.value }))}
+                  placeholder="https://facebook.com/suaempresa"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="linkedin" className="flex items-center gap-1.5">
+                  <Linkedin className="h-4 w-4" />
+                  LinkedIn
+                </Label>
+                <Input
+                  id="linkedin"
+                  value={company.linkedin || ''}
+                  onChange={(e) => setCompany(prev => ({ ...prev, linkedin: e.target.value }))}
+                  placeholder="https://linkedin.com/company/suaempresa"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="youtube" className="flex items-center gap-1.5">
+                  <Youtube className="h-4 w-4" />
+                  YouTube
+                </Label>
+                <Input
+                  id="youtube"
+                  value={company.youtube || ''}
+                  onChange={(e) => setCompany(prev => ({ ...prev, youtube: e.target.value }))}
+                  placeholder="https://youtube.com/@suaempresa"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="twitter" className="flex items-center gap-1.5">
+                  <Twitter className="h-4 w-4" />
+                  X (Twitter)
+                </Label>
+                <Input
+                  id="twitter"
+                  value={company.twitter || ''}
+                  onChange={(e) => setCompany(prev => ({ ...prev, twitter: e.target.value }))}
+                  placeholder="@suaempresa"
+                />
+              </div>
+            </div>
           </div>
 
           <Button
