@@ -38,9 +38,10 @@ interface Props {
   onSelect: (id: string) => void;
   selectedId: string | null;
   onStatusChange: (id: string, newStatus: PubStatus, pub: Publicacao) => void;
+  resolveRpiNumber?: (pub: Publicacao) => string | null;
 }
 
-export function PublicacaoKanban({ publicacoes, processMap, clientMap, adminMap, onSelect, selectedId, onStatusChange }: Props) {
+export function PublicacaoKanban({ publicacoes, processMap, clientMap, adminMap, onSelect, selectedId, onStatusChange, resolveRpiNumber }: Props) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<PubStatus | null>(null);
 
@@ -159,6 +160,7 @@ export function PublicacaoKanban({ publicacoes, processMap, clientMap, adminMap,
                   const days = pub.proximo_prazo_critico ? differenceInDays(parseISO(pub.proximo_prazo_critico), new Date()) : null;
                   const brandName = proc?.brand_name || pub.brand_name_rpi || '—';
                   const processNumber = proc?.process_number || pub.process_number_rpi || null;
+                  const rpiNumber = resolveRpiNumber ? resolveRpiNumber(pub) : null;
                   const isOverdue = days !== null && days < 0;
                   const isUrgent = days !== null && days >= 0 && days <= 7;
                   const isDragging = draggedId === pub.id;
@@ -193,12 +195,9 @@ export function PublicacaoKanban({ publicacoes, processMap, clientMap, adminMap,
                             {processNumber && (
                               <span className="text-[9px] text-muted-foreground/70 font-mono bg-muted/50 px-1 rounded">{processNumber}</span>
                             )}
-                            {(() => {
-                              const nclClass = (pub as any).ncl_class || proc?.ncl_classes?.join(', ') || null;
-                              return nclClass ? (
-                                <span className="text-[9px] text-primary/70 font-medium bg-primary/5 px-1 rounded">NCL {nclClass}</span>
-                              ) : null;
-                            })()}
+                            {rpiNumber && (
+                              <span className="text-[9px] text-cyan-700 dark:text-cyan-400 font-medium bg-cyan-100 dark:bg-cyan-900/40 px-1 rounded">RPI {rpiNumber}</span>
+                            )}
                           </div>
                         </div>
                       </div>
