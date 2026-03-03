@@ -11,7 +11,10 @@ interface ClientToImport {
   phone?: string;
   company_name?: string;
   cpf_cnpj?: string;
+  cpf?: string;
+  cnpj?: string;
   address?: string;
+  neighborhood?: string;
   city?: string;
   state?: string;
   zip_code?: string;
@@ -52,7 +55,10 @@ async function processClient(
           phone: client.phone || undefined,
           company_name: client.company_name || undefined,
           cpf_cnpj: client.cpf_cnpj || undefined,
+          cpf: client.cpf || undefined,
+          cnpj: client.cnpj || undefined,
           address: client.address || undefined,
+          neighborhood: client.neighborhood || undefined,
           city: client.city || undefined,
           state: client.state || undefined,
           zip_code: client.zip_code || undefined,
@@ -91,7 +97,10 @@ async function processClient(
       phone: client.phone || null,
       company_name: client.company_name || null,
       cpf_cnpj: client.cpf_cnpj || null,
+      cpf: client.cpf || null,
+      cnpj: client.cnpj || null,
       address: client.address || null,
+      neighborhood: client.neighborhood || null,
       city: client.city || null,
       state: client.state || null,
       zip_code: client.zip_code || null,
@@ -111,7 +120,10 @@ async function processClient(
         phone: client.phone || null,
         company_name: client.company_name || null,
         cpf_cnpj: client.cpf_cnpj || null,
+        cpf: client.cpf || null,
+        cnpj: client.cnpj || null,
         address: client.address || null,
+        neighborhood: client.neighborhood || null,
         city: client.city || null,
         state: client.state || null,
         zip_code: client.zip_code || null,

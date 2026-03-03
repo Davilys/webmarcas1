@@ -8,6 +8,9 @@ export interface ParsedClient {
   company_name?: string;
   cpf_cnpj?: string;
   address?: string;
+  neighborhood?: string;
+  address_number?: string;
+  address_complement?: string;
   city?: string;
   state?: string;
   zip_code?: string;
@@ -38,6 +41,9 @@ export const SYSTEM_FIELDS = [
   { key: 'company_name', label: 'Empresa', required: false },
   { key: 'cpf_cnpj', label: 'CPF/CNPJ', required: false },
   { key: 'address', label: 'Endereço', required: false },
+  { key: 'neighborhood', label: 'Bairro', required: false },
+  { key: 'address_number', label: 'Número', required: false },
+  { key: 'address_complement', label: 'Complemento', required: false },
   { key: 'city', label: 'Cidade', required: false },
   { key: 'state', label: 'Estado', required: false },
   { key: 'zip_code', label: 'CEP', required: false },
@@ -52,8 +58,11 @@ const FIELD_ALIASES: Record<string, string[]> = {
   email: ['email', 'e-mail', 'correio', 'mail', 'email_address'],
   phone: ['telefone', 'phone', 'tel', 'celular', 'mobile', 'whatsapp', 'fone', 'phone_number'],
   company_name: ['empresa', 'company', 'company_name', 'organization', 'organização', 'organizacao', 'razao_social'],
-  cpf_cnpj: ['cpf', 'cnpj', 'cpf_cnpj', 'documento', 'vat', 'tax_id', 'cpf/cnpj'],
+  cpf_cnpj: ['cpf', 'cnpj', 'cpf_cnpj', 'documento', 'vat', 'tax_id', 'cpf/cnpj', 'cpf ou cnpj', 'cpf_ou_cnpj'],
   address: ['endereco', 'endereço', 'address', 'logradouro', 'rua', 'street'],
+  neighborhood: ['bairro', 'neighborhood', 'district'],
+  address_number: ['numero', 'número', 'nro', 'num', 'number', 'address_number'],
+  address_complement: ['complemento', 'compl', 'complement', 'address_complement', 'apto', 'apartamento'],
   city: ['cidade', 'city', 'municipio', 'município'],
   state: ['estado', 'state', 'uf'],
   zip_code: ['cep', 'zip', 'zip_code', 'postal', 'postal_code', 'codigo_postal'],
