@@ -221,6 +221,16 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
           </button>
         </div>
 
+        {/* Already sent warning */}
+        {alreadySent && (
+          <Alert className="border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-700">
+            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+            <AlertDescription className="text-yellow-700 dark:text-yellow-300 text-xs">
+              Esta notificação já foi enviada em <strong>{new Date(alreadySent.sent_at).toLocaleDateString('pt-BR')}</strong>. Deseja enviar novamente?
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Message */}
         <div className="space-y-2">
           <Label className="text-xs font-semibold flex items-center gap-1.5">
