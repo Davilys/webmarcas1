@@ -1073,24 +1073,58 @@ export default function RevistaINPI() {
                                                     onClick={async () => {
                                                       setSavingEdit(true);
                                                       try {
-                                                        const nclArray = editForm.ncl_classes.split(',').map(s => s.trim()).filter(Boolean);
-                                                        const { error } = await supabase.from('rpi_entries').update({
-                                                          brand_name: editForm.brand_name || null,
-                                                          process_number: editForm.process_number,
-                                                          ncl_classes: nclArray.length > 0 ? nclArray : null,
-                                                          holder_name: editForm.holder_name || null,
-                                                          updated_at: new Date().toISOString(),
-                                                        }).eq('id', entry.id);
-                                                        if (error) throw error;
-                                                        toast.success('Dados atualizados!');
-                                                        setEditingEntryId(null);
-                                                        setEntries(prev => prev.map(e => e.id === entry.id ? {
-                                                          ...e,
-                                                          brand_name: editForm.brand_name || null,
-                                                          process_number: editForm.process_number,
-                                                          ncl_classes: nclArray.length > 0 ? nclArray : null,
-                                                          holder_name: editForm.holder_name || null,
-                                                        } : e));
+                                                         const nclArray = editForm.ncl_classes.split(',').map(s => s.trim()).filter(Boolean);
+                                                         const { error } = await supabase.from('rpi_entries').update({
+                                                           brand_name: editForm.brand_name || null,
+                                                           process_number: editForm.process_number,
+                                                           ncl_classes: nclArray.length > 0 ? nclArray : null,
+                                                           holder_name: editForm.holder_name || null,
+                                                           updated_at: new Date().toISOString(),
+                                                         }).eq('id', entry.id);
+                                                         if (error) throw error;
+
+                                                         // [SYNC] Propagate edits to publicacoes_marcas
+                                                         const { data: linkedPub } = await supabase.from('publicacoes_marcas')
+                                                           .select('id')
+                                                           .eq('rpi_entry_id', entry.id)
+                                                           .maybeSingle();
+                                                         if (linkedPub) {
+                                                           await supabase.from('publicacoes_marcas').update({
+                                                             brand_name_rpi: editForm.brand_name || null,
+                                                             process_number_rpi: editForm.process_number || null,
+                                                             updated_at: new Date().toISOString(),
+                                                           }).eq('id', linkedPub.id);
+                                                         }
+
+                                                         // [SYNC] Also update brand_processes if process_number changed
+                                                         if (editForm.process_number && entry.matched_client_id) {
+                                                           const resolvedProcessId = await resolveBrandProcessId(
+                                                             entry.matched_process_id, entry.matched_client_id, editForm.process_number
+                                                           );
+                                                           if (resolvedProcessId) {
+                                                             await supabase.from('brand_processes').update({
+                                                               brand_name: editForm.brand_name || undefined,
+                                                               process_number: editForm.process_number || undefined,
+                                                               updated_at: new Date().toISOString(),
+                                                             }).eq('id', resolvedProcessId);
+                                                             // Link process_id on publicacoes_marcas
+                                                             if (linkedPub) {
+                                                               await supabase.from('publicacoes_marcas').update({
+                                                                 process_id: resolvedProcessId,
+                                                               }).eq('id', linkedPub.id);
+                                                             }
+                                                           }
+                                                         }
+
+                                                         toast.success('Dados atualizados e sincronizados!');
+                                                         setEditingEntryId(null);
+                                                         setEntries(prev => prev.map(e => e.id === entry.id ? {
+                                                           ...e,
+                                                           brand_name: editForm.brand_name || null,
+                                                           process_number: editForm.process_number,
+                                                           ncl_classes: nclArray.length > 0 ? nclArray : null,
+                                                           holder_name: editForm.holder_name || null,
+                                                         } : e));
                                                       } catch (err) { toast.error('Erro ao salvar'); console.error(err); }
                                                       finally { setSavingEdit(false); }
                                                     }}
