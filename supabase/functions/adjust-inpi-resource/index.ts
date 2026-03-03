@@ -59,13 +59,7 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'OPENAI_API_KEY não configurada' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const ai = await getActiveAIConfig();
 
     const systemPrompt = `Você é um AGENTE JURÍDICO ESPECIALISTA EM PROPRIEDADE INTELECTUAL DA WEBMARCAS.
 
