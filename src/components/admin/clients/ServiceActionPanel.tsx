@@ -370,6 +370,8 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
         >
           {sending ? (
             <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando...</>
+          ) : alreadySent ? (
+            <><Send className="h-4 w-4 mr-2" /> Reenviar Notificação + Cobrança</>
           ) : (
             <><Send className="h-4 w-4 mr-2" /> Enviar Notificação + Cobrança</>
           )}
