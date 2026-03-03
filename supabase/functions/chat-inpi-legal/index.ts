@@ -356,10 +356,8 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY não configurada');
-    }
+    // Resolve AI provider from settings
+    const ai = await getActiveAIConfig();
 
     // Busca conhecimento dinâmico do INPI
     const { context: dynamicContext } = await fetchDynamicKnowledge();
