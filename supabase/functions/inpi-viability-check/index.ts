@@ -414,7 +414,7 @@ async function generateFinalAnalysis(
   description: string;
   laudo: string;
 }> {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
   const collectedData = `
@@ -438,18 +438,18 @@ ${inpiData.error ? `- Erro: ${inpiData.error}` : ''}
 ${classDescriptions.join('\n')}
 `;
 
-  if (!LOVABLE_API_KEY) {
+  if (!OPENAI_API_KEY) {
     // Fallback sem IA
     return buildFallbackAnalysis(brandName, businessArea, classes, classDescriptions, inpiData, cnpjData, internetData, now);
   }
 
   try {
     console.log('[ANALISE] Gerando laudo via IA...');
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-5.2',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -487,7 +487,7 @@ Use separadores ━━━ entre seções. Use emojis nos títulos das seções. 
           }
         ],
         temperature: 0.3,
-        max_completion_tokens: 3000,
+        max_tokens: 3000,
       }),
     });
 
