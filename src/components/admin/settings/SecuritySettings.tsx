@@ -109,19 +109,33 @@ export function SecuritySettings() {
         throw new Error('O administrador master não pode ser removido.');
       }
       
-      // Delete permissions first
+      // Check if user also has a 'user' (client) role
+      const { data: clientRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('role', 'user')
+        .maybeSingle();
+
+      // Delete permissions
       await supabase
         .from('admin_permissions')
         .delete()
         .eq('user_id', userId);
 
-      // Delete role
+      // Delete admin role
       const { error } = await supabase
         .from('user_roles')
         .delete()
         .eq('id', roleId);
       
       if (error) throw error;
+
+      // If user has NO client role, delete profile and auth user entirely
+      if (!clientRole) {
+        await supabase.from('profiles').delete().eq('id', userId);
+        await supabase.functions.invoke('delete-auth-user', { body: { userId } });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });

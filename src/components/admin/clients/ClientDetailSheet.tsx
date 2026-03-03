@@ -667,10 +667,12 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
         }).eq('id', client.id);
         toast.success('Dados de cliente removidos. Acesso admin preservado.');
       } else {
-        // Not an admin: full deletion (roles + profile)
+        // Not an admin: full deletion (roles + profile + auth user)
         await supabase.from('user_roles').delete().eq('user_id', client.id);
         const { error } = await supabase.from('profiles').delete().eq('id', client.id);
         if (error) throw error;
+        // Delete auth user to prevent further login
+        await supabase.functions.invoke('delete-auth-user', { body: { userId: client.id } });
         toast.success('Cliente excluído com sucesso');
       }
 
