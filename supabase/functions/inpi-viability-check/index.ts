@@ -234,19 +234,19 @@ async function searchINPI(brandName: string, mainClass: number): Promise<{
       return { totalResultados: 0, resultados: [], consultadoEm: now };
     }
 
-    // Enviar resultados reais ao GPT-5.2 para estruturar
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
+    // Enviar resultados reais à IA para estruturar
+    let ai: { endpoint: string; apiKey: string; model: string };
+    try { ai = await getActiveAIConfig(); } catch {
       return { totalResultados: allResults.length, resultados: [], consultadoEm: now, error: 'IA indisponível para estruturar resultados' };
     }
 
     const searchData = allResults.map(r => `- ${r.title}\n  URL: ${r.url}\n  ${r.description}`).join('\n\n');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(ai.endpoint, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${ai.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: ai.model,
         messages: [
           {
             role: 'system',
