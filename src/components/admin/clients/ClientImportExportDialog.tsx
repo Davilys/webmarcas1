@@ -225,21 +225,56 @@ export function ClientImportExportDialog({
 
     // ── 2. Deduplicate by email within the file ────────────────────────────
     const seenEmails = new Set<string>();
-    const clientsToImport = allSelected.filter(c => {
+    const deduped = allSelected.filter(c => {
       const email = (c.email || '').toLowerCase().trim();
       if (!email || seenEmails.has(email)) return false;
       seenEmails.add(email);
       return true;
     });
 
-    const deduped = allSelected.length - clientsToImport.length;
+    // ── 3. Pre-process: address concatenation + CPF/CNPJ split ─────────────
+    const clientsToImport = deduped.map(c => {
+      const processed: Record<string, unknown> = { ...c };
 
-    // ── 3. Close dialog and start background job ───────────────────────────
+      // Concatenate address parts
+      const parts = [c.address, c.address_number, c.address_complement].filter(Boolean);
+      if (parts.length > 0) {
+        processed.address = parts.join(', ');
+      }
+
+      // Auto-detect CPF vs CNPJ
+      if (c.cpf_cnpj) {
+        const digits = c.cpf_cnpj.replace(/\D/g, '');
+        if (digits.length === 11) {
+          processed.cpf = digits;
+        } else if (digits.length === 14) {
+          processed.cnpj = digits;
+        }
+        processed.cpf_cnpj = c.cpf_cnpj;
+      }
+
+      // Pass neighborhood directly
+      if (c.neighborhood) {
+        processed.neighborhood = c.neighborhood;
+      }
+
+      // Remove intermediate fields not needed by edge function
+      delete processed.address_number;
+      delete processed.address_complement;
+      delete processed._raw;
+      delete processed._rowIndex;
+
+      return processed as ParsedClient;
+    });
+
+    const dedupedCount = allSelected.length - clientsToImport.length;
+
+    // ── 4. Close dialog and start background job ───────────────────────────
     onOpenChange(false);
     resetImport();
 
     const descLines = [`${clientsToImport.length} cliente(s) sendo processado(s)`];
-    if (deduped > 0) descLines.push(`${deduped} duplicado(s) removido(s) do arquivo`);
+    if (dedupedCount > 0) descLines.push(`${dedupedCount} duplicado(s) removido(s) do arquivo`);
 
     toast.info('Importação iniciada em segundo plano', {
       description: descLines.join(' · '),
