@@ -82,14 +82,14 @@ Responda APENAS com o texto completo do recurso ajustado, sem explicações adic
 
     console.log('Calling AI to adjust INPI resource...');
 
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const aiResponse = await fetch(ai.endpoint, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${ai.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini',
+        model: ai.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Aplique os ajustes solicitados ao recurso.' }

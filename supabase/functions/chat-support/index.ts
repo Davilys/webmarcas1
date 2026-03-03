@@ -165,14 +165,14 @@ serve(async (req) => {
 
     console.log("Iniciando chat com mensagens:", messages?.length || 0);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(ai.endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${ai.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: ai.model,
         messages: [
           { role: "system", content: systemMessage },
           ...messages,

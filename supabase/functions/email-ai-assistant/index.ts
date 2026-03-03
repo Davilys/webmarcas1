@@ -70,14 +70,14 @@ REGRAS DE QUALIDADE OBRIGATÓRIAS:
 
     console.log(`email-ai-assistant: action=${action}, messages=${messages.length}`);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(ai.endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${ai.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: ai.model,
         messages: allMessages,
         stream: false,
         max_tokens: 800,
