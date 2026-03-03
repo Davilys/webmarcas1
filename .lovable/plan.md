@@ -1,57 +1,56 @@
 
-## Problema
 
-Quando um cliente tem mais de uma marca/processo, ao clicar em qualquer card no Kanban de Publicações, o ficheiro do cliente sempre abre mostrando o **primeiro processo** encontrado (`userProcesses[0]`). Isso significa que todas as publicações do mesmo cliente abrem exatamente a mesma informação, independente de qual marca foi clicada.
+## Melhorias na Importação de Clientes
 
-## Solução
+### O que será feito
 
-Passar o `process_id` da publicação clicada para o `ClientDetailSheet`, para que o ficheiro foque na marca/processo correto.
+**1. Novos campos de mapeamento no sistema**
 
-### Alterações
+Adicionar 3 novos campos ao mapeamento de importação:
+- **Bairro** (neighborhood) — salva na coluna `neighborhood` da tabela profiles
+- **Número** (address_number) — concatenado ao campo `address` (ex: "Rua X, 123")
+- **Complemento** (address_complement) — concatenado ao campo `address` (ex: "Rua X, 123, Apto 4")
 
-#### 1. `ClientDetailSheet.tsx` — Aceitar `focusProcessId`
+**2. Auto-detecção CPF vs CNPJ**
 
-Adicionar uma nova prop opcional `focusProcessId?: string` ao componente. Quando fornecida:
-- O `mainProcess` usado no cabeçalho (nome da marca, pipeline_stage) será o processo correspondente ao `focusProcessId`, e não o primeiro da lista
-- As queries de publicações, eventos e documentos usarão esse `process_id` específico
-- A aba "Serviços" selecionará o serviço correspondente a esse processo
+Quando o campo mapeado for "CPF/CNPJ", o sistema analisará a quantidade de dígitos:
+- 11 dígitos = CPF, salva no campo `cpf` da tabela profiles
+- 14 dígitos = CNPJ, salva no campo `cnpj` da tabela profiles
+- O campo legado `cpf_cnpj` continua preenchido para retrocompatibilidade
 
-```typescript
-interface ClientDetailSheetProps {
-  client: ClientWithProcess | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onUpdate: () => void;
-  extraActions?: React.ReactNode;
-  initialShowProcessDetails?: boolean;
-  focusProcessId?: string; // NOVO
-}
-```
+**3. Novos aliases de auto-detecção de colunas**
 
-Na lógica interna, onde hoje se usa `client.process_id`, será feito:
-```typescript
-const activeProcessId = focusProcessId || client.process_id;
-```
+- "Bairro" e "neighborhood" mapeiam automaticamente para o campo Bairro
+- "Número", "numero", "nro" mapeiam para Número
+- "Complemento", "compl" mapeiam para Complemento
+- "CPF ou CNPJ" e variações já existentes continuam funcionando
 
-#### 2. `PublicacaoTab.tsx` — Passar `process_id` da publicação clicada
+### Alterações Técnicas
 
-Na função `fetchClientForSheet`, em vez de usar `mainProcess = userProcesses[0]`, definir o `process_id` como o da publicação clicada (via `sheetPub.process_id`).
+#### Ficheiro 1: `src/lib/clientParser.ts`
 
-Além disso, passar `focusProcessId={sheetPub?.process_id}` ao `ClientDetailSheet`:
+- Adicionar `neighborhood`, `address_number` e `address_complement` ao `ParsedClient` interface
+- Adicionar 3 novos campos ao array `SYSTEM_FIELDS`
+- Adicionar aliases no `FIELD_ALIASES` para auto-detecção (bairro, numero, complemento)
+- No `applyFieldMapping`, manter a lógica existente (os novos campos são strings simples)
 
-```typescript
-<ClientDetailSheet
-  client={fetchedClientForSheet}
-  open={showClientSheet}
-  focusProcessId={sheetPub?.process_id || undefined}
-  ...
-/>
-```
+#### Ficheiro 2: `src/components/admin/clients/ClientImportExportDialog.tsx`
+
+No `handleMappingConfirm` (ou num passo antes de enviar ao edge function), ao preparar os clientes para importação:
+- Concatenar `address` + `address_number` + `address_complement` num único campo `address` (ex: "Rua X, 123, Apto 4")
+- Detectar se `cpf_cnpj` tem 11 ou 14 dígitos e preencher `cpf` ou `cnpj` separadamente
+- Passar `neighborhood` diretamente
+
+#### Ficheiro 3: `supabase/functions/import-clients/index.ts`
+
+- Adicionar `neighborhood`, `cpf` e `cnpj` ao `ClientToImport` interface
+- No `processClient`, salvar `neighborhood`, `cpf` e `cnpj` no upsert/update do profile
+- Manter `cpf_cnpj` para retrocompatibilidade
 
 ### Resultado
 
-- Clicar no card "MINI CHICLE TATTOO" abre o ficheiro com foco nessa marca
-- Clicar no card "Outra Marca" do mesmo cliente abre o ficheiro com foco na outra marca
-- Aba Serviços mostra a fase do pipeline do processo correto
-- Publicações e eventos mostram os dados do processo correto
-- Funciona para clientes com 1 ou N marcas
+- O mapeamento agora oferece Bairro, Número e Complemento como opções
+- Colunas "Bairro", "Número", "Complemento" do arquivo são auto-detectadas
+- CPF e CNPJ são separados automaticamente com base na quantidade de dígitos
+- O ficheiro do cliente mostra CPF e CNPJ em campos distintos
+- Endereço completo é montado corretamente (rua + número + complemento)
