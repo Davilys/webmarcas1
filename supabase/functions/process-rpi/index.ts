@@ -137,22 +137,22 @@ type AttorneyProcess = {
 };
 
 async function aiExtractFromBlocks(args: {
-  apiKey: string;
+  ai: { endpoint: string; apiKey: string; model: string };
   blocks: string[];
 }): Promise<AttorneyProcess[]> {
-  const { apiKey, blocks } = args;
+  const { ai, blocks } = args;
   if (blocks.length === 0) return [];
 
   const combinedText = blocks.join("\n\n---BLOCO---\n\n");
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  const resp = await fetch(ai.endpoint, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${ai.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4.1-mini",
+      model: ai.model,
       messages: [
         {
           role: "system",
