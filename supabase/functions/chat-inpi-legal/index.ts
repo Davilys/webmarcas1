@@ -257,7 +257,10 @@ async function extractPdfTextFromBase64(base64: string, maxPages = 50): Promise<
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+    // Disable worker para funcionar em edge runtime
+    // deno-lint-ignore no-explicit-any
+    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = undefined;
+    const doc = await (pdfjsLib as any).getDocument({ data: bytes, disableWorker: true }).promise;
     const pagesToRead = Math.min(doc.numPages, maxPages);
 
     let fullText = '';
