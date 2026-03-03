@@ -1,23 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// ─── Dynamic AI Provider Resolution ────────────────
-const _aiAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-async function getActiveAIConfig(): Promise<{ endpoint: string; apiKey: string; model: string }> {
-  const { data: p } = await _aiAdmin.from('ai_providers').select('*').eq('is_active', true).single();
-  if (!p) throw new Error('Nenhum provedor de IA ativo configurado');
-  switch (p.provider_type) {
-    case 'lovable': { const k = Deno.env.get('LOVABLE_API_KEY'); if (!k) throw new Error('LOVABLE_API_KEY não configurada'); return { endpoint: 'https://ai.gateway.lovable.dev/v1/chat/completions', apiKey: k, model: p.model }; }
-    case 'openai': { const k = p.api_key || Deno.env.get('OPENAI_API_KEY'); if (!k) throw new Error('OpenAI API key não configurada'); return { endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: k, model: p.model }; }
-    case 'deepseek': { if (!p.api_key) throw new Error('DeepSeek API key não configurada'); return { endpoint: 'https://api.deepseek.com/v1/chat/completions', apiKey: p.api_key, model: p.model }; }
-    case 'gemini': { const k = Deno.env.get('LOVABLE_API_KEY'); if (!k) throw new Error('Gemini requer LOVABLE_API_KEY'); const m = p.model.startsWith('google/') ? p.model : `google/${p.model}`; return { endpoint: 'https://ai.gateway.lovable.dev/v1/chat/completions', apiKey: k, model: m }; }
-    default: throw new Error(`Provider não suportado: ${p.provider_type}`);
-  }
-}
 
 // Mapeamento de ramos para classes NCL
 const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: string[] }> = {
@@ -180,12 +164,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    let ai: { endpoint: string; apiKey: string; model: string };
-    try { ai = await getActiveAIConfig(); } catch (e) {
+    const apiKey = Deno.env.get('LOVABLE_API_KEY');
+    
+    if (!apiKey) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Nenhum provedor de IA ativo configurado' 
+          error: 'API key não configurada' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -257,14 +242,14 @@ Se for PDF, analise o texto. Se for imagem, faça OCR e analise.`
         }
       ];
 
-      const response = await fetch(ai.endpoint, {
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${ai.apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: ai.model,
+          model: 'google/gemini-2.5-flash',
           messages,
           max_tokens: 1000
         }),
