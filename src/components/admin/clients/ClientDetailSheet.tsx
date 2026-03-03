@@ -292,6 +292,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
   const [selectedServiceType, setSelectedServiceType] = useState('pedido_registro');
   const [dynamicServiceStages, setDynamicServiceStages] = useState<any[] | null>(null);
   const [expandedStageAction, setExpandedStageAction] = useState<string | null>(null);
+  const [sentStagesMap, setSentStagesMap] = useState<Record<string, { sent_at: string; description: string }>>({});
 
   const [editData, setEditData] = useState({ priority: '', origin: '', contract_value: 0, pipeline_stage: '' });
   const [editFormData, setEditFormData] = useState({

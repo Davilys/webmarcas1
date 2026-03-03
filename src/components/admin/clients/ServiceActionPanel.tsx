@@ -8,9 +8,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { X, Mail, MessageCircle, Upload, Loader2, Send, FileText, DollarSign, CreditCard, Paperclip } from 'lucide-react';
+import { X, Mail, MessageCircle, Upload, Loader2, Send, FileText, DollarSign, CreditCard, Paperclip, AlertCircle } from 'lucide-react';
 
 interface ServiceActionPanelProps {
   client: {
