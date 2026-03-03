@@ -109,12 +109,50 @@ export function ClientLayout({ children }: ClientLayoutProps) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserId(session?.user?.id || null);
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user) {
+        navigate('/cliente/login');
+        setAuthChecked(true);
+        return;
+      }
+      
+      setUserId(session.user.id);
+
+      // Verify user has 'user' role (client access)
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('role', 'user')
+        .maybeSingle();
+
+      if (!userRole) {
+        // No client role — check if admin
+        const { data: adminRole } = await supabase
+          .from('user_roles')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+        if (adminRole) {
+          navigate('/admin/dashboard');
+        } else {
+          // No roles at all — account was deleted, sign out
+          await supabase.auth.signOut();
+          toast.error('Sua conta não está mais ativa.');
+          navigate('/cliente/login');
+        }
+        setAuthChecked(true);
+        return;
+      }
+      
+      setAuthChecked(true);
     });
-  }, []);
+  }, [navigate]);
 
   usePresence(userId);
 
@@ -209,6 +247,14 @@ export function ClientLayout({ children }: ClientLayoutProps) {
       </div>
     </div>
   );
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background safe-area-top safe-area-bottom">
