@@ -164,13 +164,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('LOVABLE_API_KEY');
+    const apiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!apiKey) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'API key não configurada' 
+          error: 'OPENAI_API_KEY não configurada' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
