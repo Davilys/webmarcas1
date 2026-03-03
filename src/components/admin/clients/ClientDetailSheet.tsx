@@ -2215,7 +2215,28 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                                 }}
                                 stage={actionStage}
                                 onClose={() => setExpandedStageAction(null)}
-                                onUpdate={onUpdate}
+                                onUpdate={() => {
+                                  // Refresh sent history
+                                  supabase
+                                    .from('client_activities')
+                                    .select('created_at, metadata, description')
+                                    .eq('user_id', client.id)
+                                    .eq('activity_type', 'notificacao_cobranca')
+                                    .order('created_at', { ascending: false })
+                                    .then(({ data }) => {
+                                      if (!data) return;
+                                      const map: Record<string, { sent_at: string; description: string }> = {};
+                                      data.forEach((a: any) => {
+                                        const stageId = a.metadata?.stage_id;
+                                        if (stageId && !map[stageId]) {
+                                          map[stageId] = { sent_at: a.created_at, description: a.description || '' };
+                                        }
+                                      });
+                                      setSentStagesMap(map);
+                                    });
+                                  onUpdate();
+                                }}
+                                alreadySent={sentStagesMap[expandedStageAction] || null}
                               />
                             );
                           })()}
