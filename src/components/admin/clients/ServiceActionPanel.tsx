@@ -162,9 +162,9 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
         },
       });
 
-      // 4. If email, also send rich email with attachment
+      // 4. If email, also send rich email with attachments
       if (sendEmail && client.email) {
-        const attachments = docUrl ? [{ url: docUrl, filename: file?.name || 'documento.pdf' }] : [];
+        const attachments = docUrls.length > 0 ? docUrls : [];
         await supabase.functions.invoke('send-email', {
           body: {
             to: [client.email],
