@@ -212,8 +212,22 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, 
     setDraggedClient(null);
   };
 
+  const activeStageIds = useMemo(() => new Set(activePipelineStages.map(s => s.id)), [activePipelineStages]);
+
   const getClientsForStage = (stageId: string) => {
-    return filteredClients.filter(c => (c.pipeline_stage || defaultStage) === stageId);
+    const directMatch = filteredClients.filter(c => (c.pipeline_stage || defaultStage) === stageId);
+    
+    // If this is the first column, also include orphan clients whose pipeline_stage
+    // doesn't match any column in the active funnel
+    if (stageId === activePipelineStages[0]?.id) {
+      const orphans = filteredClients.filter(c => {
+        const stage = c.pipeline_stage || defaultStage;
+        return stage !== stageId && !activeStageIds.has(stage);
+      });
+      return [...directMatch, ...orphans];
+    }
+    
+    return directMatch;
   };
 
   const getStageValue = (stageId: string) => {
