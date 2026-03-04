@@ -590,14 +590,17 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
         const ext = file.name.split('.').pop() || 'bin';
         const sanitized = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
         const fileName = `clients/${client.id}/${Date.now()}_${sanitized}.${ext}`;
+        console.log('[FileUpload] Uploading:', fileName, 'size:', file.size, 'type:', file.type);
         const { error: uploadError } = await supabase.storage.from('documents').upload(fileName, file, { upsert: false });
-        if (uploadError) { toast.error(`Erro: ${uploadError.message}`); continue; }
+        if (uploadError) { console.error('[FileUpload] Storage error:', uploadError); toast.error(`Erro upload: ${uploadError.message}`); continue; }
         const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
+        console.log('[FileUpload] Public URL:', publicUrl);
         const { error: dbError } = await supabase.from('documents').insert({ user_id: client.id, name: file.name, file_url: publicUrl, document_type: 'anexo', uploaded_by: user?.id || 'admin', file_size: file.size, mime_type: file.type });
-        if (!dbError) uploaded++;
+        if (dbError) { console.error('[FileUpload] DB insert error:', dbError); toast.error(`Erro ao salvar: ${dbError.message}`); } else { uploaded++; }
       }
       if (uploaded > 0) { toast.success(`${uploaded} arquivo(s) enviado(s)`); await fetchClientData(); }
-    } finally { setUploading(false); }
+    } catch (err: any) { console.error('[FileUpload] Unexpected error:', err); toast.error(`Erro inesperado: ${err.message}`); }
+    finally { setUploading(false); }
   };
 
   const handleDeleteDocument = async (doc: ClientDocument) => {
