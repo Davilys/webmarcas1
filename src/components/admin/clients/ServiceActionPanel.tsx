@@ -57,7 +57,7 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
   const [message, setMessage] = useState(() => generateTemplate(client, stage, SALARIO_MINIMO_2025));
   const [sendEmail, setSendEmail] = useState(true);
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Billing
@@ -73,8 +73,15 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
   const dueDateStr = dueDate.toISOString().split('T')[0];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) setFile(f);
+    const newFiles = Array.from(e.target.files || []);
+    if (newFiles.length > 0) {
+      setFiles(prev => [...prev, ...newFiles]);
+    }
+    e.target.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSend = async () => {
@@ -91,23 +98,23 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. Upload document if exists
-      let docUrl: string | null = null;
-      if (file) {
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      // 1. Upload documents if any
+      const docUrls: { url: string; filename: string }[] = [];
+      for (const f of files) {
+        const sanitizedName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const filePath = `${client.id}/${Date.now()}_${sanitizedName}`;
-        const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
-        if (uploadErr) throw new Error('Erro ao fazer upload do documento');
+        const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, f);
+        if (uploadErr) throw new Error(`Erro ao fazer upload: ${f.name}`);
         const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath);
-        docUrl = urlData.publicUrl;
+        const docUrl = urlData.publicUrl;
+        docUrls.push({ url: docUrl, filename: f.name });
 
-        // Save doc reference
         await supabase.from('documents').insert({
           user_id: client.id,
-          name: file.name,
+          name: f.name,
           file_url: docUrl,
-          file_size: file.size,
-          mime_type: file.type,
+          file_size: f.size,
+          mime_type: f.type,
           document_type: 'notificacao',
           uploaded_by: user?.id,
           process_id: client.process_id || null,
@@ -155,9 +162,9 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
         },
       });
 
-      // 4. If email, also send rich email with attachment
+      // 4. If email, also send rich email with attachments
       if (sendEmail && client.email) {
-        const attachments = docUrl ? [{ url: docUrl, filename: file?.name || 'documento.pdf' }] : [];
+        const attachments = docUrls.length > 0 ? docUrls : [];
         await supabase.functions.invoke('send-email', {
           body: {
             to: [client.email],
@@ -182,7 +189,7 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
           payment_method: paymentType === 'avista' ? 'pix' : paymentMethod,
           channels: { email: sendEmail, whatsapp: sendWhatsApp },
           invoice_id: invoiceData?.invoice_id,
-          document_url: docUrl,
+          document_urls: docUrls.map(d => d.url),
         } as any,
       });
 
@@ -261,20 +268,24 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
         {/* Document Upload */}
         <div className="space-y-2">
           <Label className="text-xs font-semibold flex items-center gap-1.5">
-            <Paperclip className="h-3.5 w-3.5" /> Documento (opcional)
+            <Paperclip className="h-3.5 w-3.5" /> Documentos (opcional)
           </Label>
-          <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5 mr-1.5" /> Anexar arquivo
+          <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
+          <div className="flex flex-col gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs w-fit" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-3.5 w-3.5 mr-1.5" /> Anexar arquivos
             </Button>
-            {file && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
-                <FileText className="h-3 w-3" />
-                <span className="truncate max-w-[150px]">{file.name}</span>
-                <button onClick={() => setFile(null)} className="hover:text-destructive">
-                  <X className="h-3 w-3" />
-                </button>
+            {files.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-[150px]">{f.name}</span>
+                    <button onClick={() => removeFile(i)} className="hover:text-destructive shrink-0">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
