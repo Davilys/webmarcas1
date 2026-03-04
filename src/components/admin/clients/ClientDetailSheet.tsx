@@ -584,12 +584,15 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
     console.log('[FileUpload] Called with files:', files?.length, 'client:', client?.id);
     if (!files || files.length === 0) { toast.error('Nenhum arquivo selecionado'); return; }
     if (!client) { toast.error('Cliente não carregado'); return; }
+    // Clone files array immediately to avoid FileList being cleared by input reset
+    const fileArray = Array.from(files);
+    console.log('[FileUpload] Cloned file array length:', fileArray.length, 'names:', fileArray.map(f => f.name));
     setUploading(true);
     let uploaded = 0;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Usuário não autenticado'); setUploading(false); return; }
-      for (const file of Array.from(files)) {
+      for (const file of fileArray) {
         const ext = file.name.split('.').pop() || 'bin';
         const sanitized = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
         const fileName = `clients/${client.id}/${Date.now()}_${sanitized}.${ext}`;
@@ -2455,7 +2458,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
 
                 {/* ─── ATTACHMENTS TAB ───────────────────────────────────── */}
                 <TabsContent value="attachments" className="mt-0 space-y-4">
-                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => { handleFileUpload(e.target.files); if (e.target) e.target.value = ''; }} />
+                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => { const filesCopy = e.target.files ? new DataTransfer() : null; if (e.target.files) { Array.from(e.target.files).forEach(f => filesCopy!.items.add(f)); } handleFileUpload(filesCopy?.files ?? null).finally(() => { if (e.target) e.target.value = ''; }); }} />
 
                   {/* Drop zone */}
                   <div
