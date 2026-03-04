@@ -381,6 +381,15 @@ serve(async (req) => {
       if (userId) {
         await supabase.from('contracts').update({ user_id: userId }).eq('id', contractId);
         console.log('Updated contract with user_id:', userId);
+
+        // Also link lead to converted client
+        if (leadId) {
+          await supabase
+            .from('leads')
+            .update({ converted_to_client_id: userId })
+            .eq('id', leadId);
+          console.log('Linked lead to client user:', leadId, '->', userId);
+        }
       }
     }
 
