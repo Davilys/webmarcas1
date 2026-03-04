@@ -57,7 +57,7 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
   const [message, setMessage] = useState(() => generateTemplate(client, stage, SALARIO_MINIMO_2025));
   const [sendEmail, setSendEmail] = useState(true);
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Billing
