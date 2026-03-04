@@ -222,6 +222,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
   const [processContracts, setProcessContracts] = useState<any[]>([]);
   const [processInvoices, setProcessInvoices] = useState<any[]>([]);
   const [processEvents, setProcessEvents] = useState<any[]>([]);
+  const [processActivities, setProcessActivities] = useState<any[]>([]);
 
   // Publication action states
   const [editingPubData, setEditingPubData] = useState<any>(null);
