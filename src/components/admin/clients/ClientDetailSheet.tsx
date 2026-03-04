@@ -1288,6 +1288,37 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                         }
                       });
 
+                      // Notification + billing activities (from ServiceActionPanel)
+                      processActivities.forEach((act: any) => {
+                        const meta = act.metadata || {};
+                        const channels: string[] = [];
+                        if (meta.channels?.email) channels.push('Email');
+                        if (meta.channels?.whatsapp) channels.push('WhatsApp');
+                        const channelStr = channels.length > 0 ? ` via ${channels.join(' + ')}` : '';
+                        
+                        // Notification sent event
+                        lifecycleEvents.push({
+                          date: act.created_at,
+                          label: 'Notificação Enviada',
+                          description: `${meta.stage_label || act.description || 'Serviço'}${channelStr}`,
+                          icon: Send, status: 'completed', category: 'notificacao',
+                        });
+
+                        // Attached documents
+                        const docUrls = meta.document_urls || [];
+                        if (docUrls.length > 0) {
+                          docUrls.forEach((url: string, idx: number) => {
+                            const filename = decodeURIComponent(url.split('/').pop() || 'Documento').replace(/^\d+_/, '');
+                            lifecycleEvents.push({
+                              date: act.created_at,
+                              label: 'Anexo Enviado',
+                              description: filename,
+                              icon: Paperclip, status: 'completed', category: 'notificacao',
+                            });
+                          });
+                        }
+                      });
+
                       // Sort by date ascending
                       lifecycleEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
