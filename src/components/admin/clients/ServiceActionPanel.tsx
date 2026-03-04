@@ -268,20 +268,24 @@ export function ServiceActionPanel({ client, stage, onClose, onUpdate, alreadySe
         {/* Document Upload */}
         <div className="space-y-2">
           <Label className="text-xs font-semibold flex items-center gap-1.5">
-            <Paperclip className="h-3.5 w-3.5" /> Documento (opcional)
+            <Paperclip className="h-3.5 w-3.5" /> Documentos (opcional)
           </Label>
-          <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5 mr-1.5" /> Anexar arquivo
+          <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
+          <div className="flex flex-col gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs w-fit" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-3.5 w-3.5 mr-1.5" /> Anexar arquivos
             </Button>
-            {file && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
-                <FileText className="h-3 w-3" />
-                <span className="truncate max-w-[150px]">{file.name}</span>
-                <button onClick={() => setFile(null)} className="hover:text-destructive">
-                  <X className="h-3 w-3" />
-                </button>
+            {files.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5">
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-[150px]">{f.name}</span>
+                    <button onClick={() => removeFile(i)} className="hover:text-destructive shrink-0">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
