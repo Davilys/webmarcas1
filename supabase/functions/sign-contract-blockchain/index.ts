@@ -233,15 +233,18 @@ serve(async (req) => {
       console.log('No existing document found for contract, will be created during PDF upload');
     }
 
-    // Update lead status if leadId provided
+    // Update lead status to 'convertido' when contract is signed
+    // The person signed → they become a client, no longer just a lead
     if (leadId) {
       await supabase
         .from('leads')
         .update({ 
-          status: 'contrato_assinado',
+          status: 'convertido',
+          converted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', leadId);
+      console.log('Lead converted at signature:', leadId);
     }
 
     // Build verification URL — use production domain, same pattern as generate-signature-link
