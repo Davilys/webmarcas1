@@ -9,7 +9,6 @@ export interface UTMParams {
   utm_content?: string;
   utm_term?: string;
   fbclid?: string;
-  gclid?: string;
   captured_at?: string;
   landing_page?: string;
   referrer?: string;
@@ -22,7 +21,7 @@ export function captureUTMParams(): UTMParams | null {
   const utm: UTMParams = {};
   let hasAny = false;
 
-  const keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid'] as const;
+  const keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'] as const;
   for (const key of keys) {
     const val = params.get(key);
     if (val) {
@@ -34,10 +33,6 @@ export function captureUTMParams(): UTMParams | null {
   // Auto-detect platform from click IDs
   if (utm.fbclid && !utm.utm_source) {
     utm.utm_source = 'facebook';
-    hasAny = true;
-  }
-  if (utm.gclid && !utm.utm_source) {
-    utm.utm_source = 'google';
     hasAny = true;
   }
 
@@ -67,7 +62,6 @@ export function clearStoredUTMParams(): void {
 export function detectPlatform(params: UTMParams | null): string {
   if (!params) return 'Direto';
   if (params.fbclid || params.utm_source?.toLowerCase().includes('facebook') || params.utm_source?.toLowerCase().includes('instagram') || params.utm_source?.toLowerCase().includes('meta')) return 'Meta Ads';
-  if (params.gclid || params.utm_source?.toLowerCase().includes('google')) return 'Google Ads';
   if (params.utm_source) return params.utm_source;
   if (params.referrer) {
     if (params.referrer.includes('google')) return 'Google Orgânico';
