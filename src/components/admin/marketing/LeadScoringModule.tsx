@@ -57,7 +57,7 @@ export default function LeadScoringModule() {
       if (attr?.fbclid || attr?.utm_source?.includes('facebook')) {
         score += 20;
         factors.push('Meta Ads');
-      } else if (attr?.gclid || attr?.utm_source?.includes('google')) {
+      } else if (attr?.utm_source?.includes('google')) {
         score += 25;
         factors.push('Google Ads');
       } else if (lead.origin === 'site') {
