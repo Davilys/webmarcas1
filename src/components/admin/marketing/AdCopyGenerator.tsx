@@ -104,7 +104,7 @@ export default function AdCopyGenerator() {
             Gerador de Anúncios com IA
           </CardTitle>
           <CardDescription>
-            Gere anúncios otimizados para Meta Ads e Google Ads usando inteligência artificial
+            Gere anúncios otimizados para Meta Ads usando inteligência artificial
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
