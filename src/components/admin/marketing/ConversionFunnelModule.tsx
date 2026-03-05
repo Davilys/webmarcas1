@@ -79,7 +79,7 @@ export default function ConversionFunnelModule() {
     const contractsSent = contracts.length;
     const contractsSigned = contracts.filter(c => c.signature_status === 'signed').length;
     const paidClients = invoices.length;
-    // Estimate visitors as leads * 10 (typical 10% conversion rate)
+    // Estimate visitors as leads * 10 (typical ~10% conversion rate estimate)
     const estimatedVisitors = Math.max(totalLeads * 10, totalLeads);
 
     return [
@@ -140,7 +140,12 @@ export default function ConversionFunnelModule() {
             return (
               <div key={stage.key} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-foreground">{stage.label}</span>
+                  <span className="font-medium text-foreground">
+                    {stage.label}
+                    {stage.key === 'visitors' && (
+                      <span className="ml-1 text-xs text-muted-foreground" title="Estimativa baseada em taxa de conversão média de ~10%">(estimado*)</span>
+                    )}
+                  </span>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-foreground">{stage.value.toLocaleString('pt-BR')}</span>
                     {i > 0 && (

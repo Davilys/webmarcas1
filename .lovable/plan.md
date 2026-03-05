@@ -1,91 +1,70 @@
 
 
-## Diagnóstico Completo — Marketing Intelligence
+## Correcao: Separacao de contas Admin e Cliente
 
-Após análise detalhada de todos os 20 componentes, edge functions, tabelas e integrações, aqui está o que está faltando, precisa de upgrade ou refinamento para o módulo ficar **100% funcional**.
+### Problemas identificados
 
----
+1. **Excluir cliente remove acesso Admin**: Em `ClientDetailSheet.tsx` (linha 642), ao excluir um cliente, o codigo deleta TODAS as `user_roles` do usuario, incluindo a role `admin`. Isso faz o admin perder acesso ao CRM.
 
-### PROBLEMAS ENCONTRADOS
+2. **Criar Admin cria conta de cliente**: O edge function `create-admin-user` cria um usuario no `auth.users`, e o trigger `handle_new_user` automaticamente cria um perfil na tabela `profiles`. Isso faz o admin aparecer na area de clientes.
 
-#### 1. Arquivos órfãos (criados mas nunca usados)
-- **`AIOptimization.tsx`** — componente duplicado do `OptimizationAgent.tsx`, nunca importado
-- **`MetaAIAgent.tsx`** — componente duplicado, análise local (sem IA real), nunca importado na página atual
+3. **Excluir Admin exclui tudo**: Se o perfil do admin for excluido como cliente, ele perde acesso ao CRM tambem (porque perfil e conta auth sao compartilhados).
 
-**Ação:** Deletar ambos. Funcionalidade já coberta pelo `OptimizationAgent.tsx`.
+### Solucao
 
-#### 2. UTM Capture não salva no banco
-O hook `useUTMCapture` captura UTMs e salva no `localStorage`, mas **nunca grava na tabela `marketing_attribution`**. Isso significa que a aba "Atribuição de Leads" e toda a lógica de origem de campanha está sempre vazia.
+#### 1. Corrigir exclusao de cliente para preservar role admin
 
-**Ação:** Quando um lead é criado (formulário do site), gravar automaticamente os UTMs capturados na tabela `marketing_attribution` vinculando ao `lead_id`.
+No `ClientDetailSheet.tsx`, ao excluir um cliente, verificar se o usuario tem role `admin` antes de deletar. Se tiver, manter a role admin e apenas remover dados de cliente (processos, contratos, etc.) sem deletar o perfil.
 
-#### 3. Conversões nunca são registradas automaticamente
-A tabela `marketing_conversions` existe mas **nenhum fluxo do CRM grava nela**. Os eventos (LeadCreated, ContractSigned, PaymentCompleted) são apenas conceituais — não há trigger nem código que popule essa tabela.
+```text
+Antes:
+  supabase.from('user_roles').delete().eq('user_id', client.id)
+  supabase.from('profiles').delete().eq('id', client.id)
 
-**Ação:** Criar triggers de banco de dados que inserem automaticamente em `marketing_conversions` quando:
-- Um lead é criado → evento `LeadCreated`
-- Um contrato é assinado (`signature_status` muda para `signed`) → evento `ContractSigned`
-- Uma fatura é paga (`status` muda para `paid`) → evento `PaymentCompleted`
+Depois:
+  // Verificar se e admin
+  const { data: adminRole } = await supabase
+    .from('user_roles').select('id').eq('user_id', client.id).eq('role', 'admin').maybeSingle();
+  
+  // Se e admin: deletar apenas role 'client' (se existir), manter perfil e admin role
+  // Se NAO e admin: deletar tudo (roles, perfil)
+  if (adminRole) {
+    // Apenas remover role client, manter perfil e admin role
+    supabase.from('user_roles').delete().eq('user_id', client.id).eq('role', 'client');
+    // Limpar dados de cliente no perfil (client_funnel_type = null, etc.)
+  } else {
+    // Remover tudo incluindo perfil
+    supabase.from('user_roles').delete().eq('user_id', client.id);
+    supabase.from('profiles').delete().eq('id', client.id);
+  }
+```
 
-#### 4. Funil usa "Visitantes Estimados" como leads × 10
-O `ConversionFunnelModule` estima visitantes multiplicando leads por 10. Sem dados reais de visitantes.
+#### 2. Corrigir criacao de Admin para nao criar perfil de cliente
 
-**Ação:** Manter a estimativa mas deixar claro no UI que é uma projeção, e adicionar tooltip explicativo.
+No `create-admin-user` edge function, apos criar o usuario (que gera perfil via trigger), marcar o perfil como admin-only para que nao apareca na listagem de clientes.
 
-#### 5. Pixel Event Tracking está desconectado
-O `PixelEventTracking` tem botão "Testar" que chama `send-meta-conversion`, mas os eventos **nunca são disparados automaticamente** nos momentos reais do CRM.
+O perfil ja e criado pelo trigger `handle_new_user` e nao podemos evitar isso. A solucao e garantir que a query de clientes no Kanban filtre admins-only (usuarios que tem role admin mas nao tem `brand_processes`).
 
-**Ação:** Os triggers de conversão (item 3) também devem chamar a Meta Conversions API automaticamente via webhook/trigger.
+Na pratica, como o Kanban de clientes ja filtra por `brand_processes` (processo de marca), admins sem processos ja nao aparecem. Preciso verificar se a listagem de clientes tambem filtra corretamente.
 
-#### 6. Referência a "Google Ads" residual
-O `MetaAIAgent.tsx` (linha 285) e `OptimizationAgent.tsx` (linha 284) ainda mencionam "Google Ads" no disclaimer. O `LeadScoringModule` dá +25 pontos para "Google Ads" (linha 61).
+#### 3. Corrigir exclusao de Admin para nao afetar perfil
 
-**Ação:** Remover todas as referências residuais a Google Ads.
+A exclusao de admin (`removeAdminMutation` no SecuritySettings.tsx) ja esta correta -- so remove role e permissions, nao toca no perfil. Nenhuma alteracao necessaria aqui.
 
-#### 7. MetaAdsConfig não salva o Access Token
-A config salva Pixel ID e Business ID, mas o `META_ACCESS_TOKEN` precisa ser configurado como secret separadamente. O usuário não tem orientação clara no UI.
+### Alteracoes tecnicas
 
-**Ação:** Adicionar campo para o Access Token na config que salva como secret via o mecanismo adequado, ou pelo menos melhorar o texto explicativo.
+**Ficheiro: `src/components/admin/clients/ClientDetailSheet.tsx`**
+- Modificar `handleDeleteClient` para verificar se o usuario tem role `admin`
+- Se tiver role admin: deletar dados de cliente (processos, contratos, faturas, etc.) mas MANTER o perfil e a role admin
+- Se nao tiver role admin: comportamento atual (deletar tudo)
 
----
+**Ficheiro: `supabase/functions/create-admin-user/index.ts`**
+- Nenhuma alteracao necessaria no edge function. O trigger `handle_new_user` cria o perfil automaticamente, mas admins sem `brand_processes` nao aparecem no Kanban de clientes.
 
-### UPGRADES PROPOSTOS
+### Resultado esperado
 
-#### A. Auto-population do Data Warehouse (CRÍTICO)
-Criar 3 triggers SQL que populam `marketing_conversions` automaticamente:
-- `ON INSERT` em `leads` → registra `LeadCreated`
-- `ON UPDATE` em `contracts` quando `signature_status = 'signed'` → registra `ContractSigned`
-- `ON UPDATE` em `invoices` quando `status = 'paid'` → registra `PaymentCompleted` com valor
-
-Isso faz **todo o módulo de Análise funcionar com dados reais**.
-
-#### B. Gravar UTMs na atribuição ao criar lead
-No fluxo de criação de lead (formulário do site), ler `localStorage` UTM params e gravar em `marketing_attribution` com o `lead_id`.
-
-Isso faz o **Dashboard de origem, Funil por campanha e Attribution Panel** funcionarem.
-
-#### C. Limpeza de código morto
-Deletar `AIOptimization.tsx` e `MetaAIAgent.tsx` (órfãos). Remover referências Google Ads residuais do `LeadScoringModule` e disclaimers.
-
-#### D. Refinar o Agente IA — Resumo Executivo Automático
-O `OptimizationAgent` já chama a edge function, mas só quando o usuário clica. Adicionar um mini-resumo automático no Dashboard que mostra o status geral (ROI, alertas pendentes) sem precisar ir à aba do agente.
-
----
-
-### PLANO DE IMPLEMENTAÇÃO
-
-| Prioridade | Tarefa | Impacto |
-|-----------|--------|---------|
-| 1 | Criar 3 triggers SQL para auto-popular `marketing_conversions` | Análise e Conversões funcionam com dados reais |
-| 2 | Gravar UTMs em `marketing_attribution` no fluxo de criação de lead | Atribuição e Dashboard de origem funcionam |
-| 3 | Deletar `AIOptimization.tsx` e `MetaAIAgent.tsx` | Limpeza de código morto |
-| 4 | Remover referências Google Ads residuais | Consistência |
-| 5 | Adicionar mini-resumo de status no Dashboard | UX melhorada |
-| 6 | Melhorar texto do MetaAdsConfig sobre Access Token | Clareza para o usuário |
-
-### O QUE NÃO SERÁ ALTERADO
-- Nenhuma tabela existente do CRM
-- Nenhum fluxo de leads, contratos ou financeiro
-- Nenhuma edge function existente (exceto marketing-ai-agent se necessário)
-- Estrutura de 7 abas mantida
+- Excluir um cliente que tambem e admin: remove dados de cliente, mas admin continua com acesso ao CRM
+- Excluir um admin: remove acesso admin, mas se tiver conta de cliente, continua com acesso a area do cliente
+- Criar um admin: cria apenas acesso admin, sem processos de marca (nao aparece no Kanban de clientes)
+- Unico com conta dupla (admin + cliente): Administrador Master (davillys@gmail.com)
 
