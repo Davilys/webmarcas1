@@ -79,7 +79,7 @@ export default function ConversionFunnelModule() {
     const contractsSent = contracts.length;
     const contractsSigned = contracts.filter(c => c.signature_status === 'signed').length;
     const paidClients = invoices.length;
-    // Estimate visitors as leads * 10 (typical 10% conversion rate)
+    // Estimate visitors as leads * 10 (typical ~10% conversion rate estimate)
     const estimatedVisitors = Math.max(totalLeads * 10, totalLeads);
 
     return [
