@@ -39,9 +39,9 @@ export default function LeadScoringModule() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('marketing_attribution')
-        .select('lead_id, utm_source, fbclid, gclid, utm_campaign');
+        .select('lead_id, utm_source, fbclid, utm_campaign, utm_term');
       if (error) throw error;
-      return data || [];
+      return data || [] as any[];
     },
   });
 
