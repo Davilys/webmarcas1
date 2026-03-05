@@ -53,6 +53,7 @@ import AdminPublicacoes from "./pages/admin/Publicacoes";
 import AdminEmails from "./pages/admin/Emails";
 import AdminChatAoVivo from "./pages/admin/ChatAoVivo";
 import AdminPremiacao from "./pages/admin/Premiacao";
+import AdminMarketingIntelligence from "./pages/admin/MarketingIntelligence";
 
 
 // Initialize query client
