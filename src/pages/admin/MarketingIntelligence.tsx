@@ -1,30 +1,27 @@
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  BarChart3, Settings, Link2, Users, Brain, AlertTriangle,
-  Megaphone, TrendingDown, Clock, Sparkles, Key, Activity, Zap,
-  DollarSign, ArrowRight, TrendingUp, Search, Wand2, FlaskConical, Target,
+  BarChart3, Settings, Users, Brain, Megaphone, Activity, Target,
 } from 'lucide-react';
 import MarketingOverview from '@/components/admin/marketing/MarketingOverview';
 import MetaAdsConfig from '@/components/admin/marketing/MetaAdsConfig';
-import GoogleAdsConfig from '@/components/admin/marketing/GoogleAdsConfig';
 import CampaignTable from '@/components/admin/marketing/CampaignTable';
 import AttributionPanel from '@/components/admin/marketing/AttributionPanel';
 import AudienceExport from '@/components/admin/marketing/AudienceExport';
 import MarketingAlerts from '@/components/admin/marketing/MarketingAlerts';
 import ConversionFunnelModule from '@/components/admin/marketing/ConversionFunnelModule';
-import HeatmapModule from '@/components/admin/marketing/HeatmapModule';
 import CampaignPrediction from '@/components/admin/marketing/CampaignPrediction';
-import KeywordAnalysis from '@/components/admin/marketing/KeywordAnalysis';
 import LeadScoringModule from '@/components/admin/marketing/LeadScoringModule';
 import PixelEventTracking from '@/components/admin/marketing/PixelEventTracking';
 import BudgetControl from '@/components/admin/marketing/BudgetControl';
 import ConversionsTracker from '@/components/admin/marketing/ConversionsTracker';
 import AdPerformanceHistory from '@/components/admin/marketing/AdPerformanceHistory';
+import HeatmapModule from '@/components/admin/marketing/HeatmapModule';
 import AdCopyGenerator from '@/components/admin/marketing/AdCopyGenerator';
 import ABTestManager from '@/components/admin/marketing/ABTestManager';
 import AudienceSuggester from '@/components/admin/marketing/AudienceSuggester';
 import OptimizationAgent from '@/components/admin/marketing/OptimizationAgent';
+import { Separator } from '@/components/ui/separator';
 
 export default function MarketingIntelligence() {
   return (
@@ -33,114 +30,110 @@ export default function MarketingIntelligence() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Marketing Intelligence</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            CRM + Growth Marketing + BI de Anúncios — Análise, geração de anúncios com IA e otimização completa
+            CRM + Growth Marketing + BI de Anúncios — Análise e otimização completa com IA
           </p>
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="overview" className="gap-1.5 text-xs">
-              <BarChart3 className="h-3 w-3" />
+              <BarChart3 className="h-3.5 w-3.5" />
               Dashboard
             </TabsTrigger>
             <TabsTrigger value="campaigns" className="gap-1.5 text-xs">
-              <Megaphone className="h-3 w-3" />
+              <Megaphone className="h-3.5 w-3.5" />
               Campanhas
             </TabsTrigger>
-            <TabsTrigger value="conversions" className="gap-1.5 text-xs">
-              <ArrowRight className="h-3 w-3" />
-              Conversões
+            <TabsTrigger value="analysis" className="gap-1.5 text-xs">
+              <Activity className="h-3.5 w-3.5" />
+              Análise
             </TabsTrigger>
-            <TabsTrigger value="funnel" className="gap-1.5 text-xs">
-              <TrendingDown className="h-3 w-3" />
-              Funil
-            </TabsTrigger>
-            <TabsTrigger value="attribution" className="gap-1.5 text-xs">
-              <Link2 className="h-3 w-3" />
-              Atribuição
-            </TabsTrigger>
-            <TabsTrigger value="pixels" className="gap-1.5 text-xs">
-              <Zap className="h-3 w-3" />
-              Eventos
-            </TabsTrigger>
-            <TabsTrigger value="performance" className="gap-1.5 text-xs">
-              <TrendingUp className="h-3 w-3" />
-              Histórico
-            </TabsTrigger>
-            <TabsTrigger value="scoring" className="gap-1.5 text-xs">
-              <Activity className="h-3 w-3" />
-              Lead Score
-            </TabsTrigger>
-            <TabsTrigger value="keywords" className="gap-1.5 text-xs">
-              <Key className="h-3 w-3" />
-              Keywords
-            </TabsTrigger>
-            <TabsTrigger value="budget" className="gap-1.5 text-xs">
-              <DollarSign className="h-3 w-3" />
-              Orçamento
-            </TabsTrigger>
-            <TabsTrigger value="heatmap" className="gap-1.5 text-xs">
-              <Clock className="h-3 w-3" />
-              Heatmap
+            <TabsTrigger value="leads" className="gap-1.5 text-xs">
+              <Target className="h-3.5 w-3.5" />
+              Leads
             </TabsTrigger>
             <TabsTrigger value="audiences" className="gap-1.5 text-xs">
-              <Users className="h-3 w-3" />
+              <Users className="h-3.5 w-3.5" />
               Públicos
             </TabsTrigger>
-            <TabsTrigger value="audience-ai" className="gap-1.5 text-xs">
-              <Target className="h-3 w-3" />
-              Público IA
-            </TabsTrigger>
-            <TabsTrigger value="prediction" className="gap-1.5 text-xs">
-              <Sparkles className="h-3 w-3" />
-              Previsão
-            </TabsTrigger>
-            <TabsTrigger value="ad-generator" className="gap-1.5 text-xs">
-              <Wand2 className="h-3 w-3" />
-              Gerador IA
-            </TabsTrigger>
-            <TabsTrigger value="ab-test" className="gap-1.5 text-xs">
-              <FlaskConical className="h-3 w-3" />
-              Teste A/B
-            </TabsTrigger>
             <TabsTrigger value="agent" className="gap-1.5 text-xs">
-              <Brain className="h-3 w-3" />
+              <Brain className="h-3.5 w-3.5" />
               Agente IA
             </TabsTrigger>
-            <TabsTrigger value="alerts" className="gap-1.5 text-xs">
-              <AlertTriangle className="h-3 w-3" />
-              Alertas
-            </TabsTrigger>
-            <TabsTrigger value="config-meta" className="gap-1.5 text-xs">
-              <Settings className="h-3 w-3" />
-              Meta
-            </TabsTrigger>
-            <TabsTrigger value="config-google" className="gap-1.5 text-xs">
-              <Search className="h-3 w-3" />
-              Google
+            <TabsTrigger value="config" className="gap-1.5 text-xs">
+              <Settings className="h-3.5 w-3.5" />
+              Config
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview"><MarketingOverview /></TabsContent>
-          <TabsContent value="campaigns"><CampaignTable /></TabsContent>
-          <TabsContent value="conversions"><ConversionsTracker /></TabsContent>
-          <TabsContent value="funnel"><ConversionFunnelModule /></TabsContent>
-          <TabsContent value="attribution"><AttributionPanel /></TabsContent>
-          <TabsContent value="pixels"><PixelEventTracking /></TabsContent>
-          <TabsContent value="performance"><AdPerformanceHistory /></TabsContent>
-          <TabsContent value="scoring"><LeadScoringModule /></TabsContent>
-          <TabsContent value="keywords"><KeywordAnalysis /></TabsContent>
-          <TabsContent value="budget"><BudgetControl /></TabsContent>
-          <TabsContent value="heatmap"><HeatmapModule /></TabsContent>
-          <TabsContent value="audiences"><AudienceExport /></TabsContent>
-          <TabsContent value="audience-ai"><AudienceSuggester /></TabsContent>
-          <TabsContent value="prediction"><CampaignPrediction /></TabsContent>
-          <TabsContent value="ad-generator"><AdCopyGenerator /></TabsContent>
-          <TabsContent value="ab-test"><ABTestManager /></TabsContent>
-          <TabsContent value="agent"><OptimizationAgent /></TabsContent>
-          <TabsContent value="alerts"><MarketingAlerts /></TabsContent>
-          <TabsContent value="config-meta"><MetaAdsConfig /></TabsContent>
-          <TabsContent value="config-google"><GoogleAdsConfig /></TabsContent>
+          {/* Dashboard = Overview + Budget + Alerts */}
+          <TabsContent value="overview">
+            <div className="space-y-6">
+              <MarketingOverview />
+              <Separator />
+              <BudgetControl />
+              <Separator />
+              <MarketingAlerts />
+            </div>
+          </TabsContent>
+
+          {/* Campanhas = Table + Histórico */}
+          <TabsContent value="campaigns">
+            <div className="space-y-6">
+              <CampaignTable />
+              <Separator />
+              <AdPerformanceHistory />
+            </div>
+          </TabsContent>
+
+          {/* Análise = Conversões + Funil + Atribuição + Eventos */}
+          <TabsContent value="analysis">
+            <div className="space-y-6">
+              <ConversionsTracker />
+              <Separator />
+              <ConversionFunnelModule />
+              <Separator />
+              <AttributionPanel />
+              <Separator />
+              <PixelEventTracking />
+            </div>
+          </TabsContent>
+
+          {/* Leads = Scoring + Heatmap */}
+          <TabsContent value="leads">
+            <div className="space-y-6">
+              <LeadScoringModule />
+              <Separator />
+              <HeatmapModule />
+            </div>
+          </TabsContent>
+
+          {/* Públicos = Export + IA Suggester */}
+          <TabsContent value="audiences">
+            <div className="space-y-6">
+              <AudienceExport />
+              <Separator />
+              <AudienceSuggester />
+            </div>
+          </TabsContent>
+
+          {/* Agente IA = Otimização + Gerador + A/B + Previsão */}
+          <TabsContent value="agent">
+            <div className="space-y-6">
+              <OptimizationAgent />
+              <Separator />
+              <AdCopyGenerator />
+              <Separator />
+              <ABTestManager />
+              <Separator />
+              <CampaignPrediction />
+            </div>
+          </TabsContent>
+
+          {/* Config = Meta only */}
+          <TabsContent value="config">
+            <MetaAdsConfig />
+          </TabsContent>
         </Tabs>
       </div>
     </AdminLayout>

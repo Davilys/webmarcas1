@@ -72,7 +72,7 @@ export default function PixelEventTracking() {
             Pixel Event Tracking
           </CardTitle>
           <CardDescription>
-            Eventos de conversão enviados para Meta Conversions API e Google Ads.
+            Eventos de conversão enviados para Meta Conversions API.
             Os eventos são disparados automaticamente nos momentos-chave do CRM.
           </CardDescription>
         </CardHeader>

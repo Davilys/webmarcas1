@@ -133,7 +133,6 @@ export default function AdCopyGenerator() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="meta">Meta Ads (Facebook/Instagram)</SelectItem>
-                  <SelectItem value="google">Google Ads</SelectItem>
                 </SelectContent>
               </Select>
             </div>

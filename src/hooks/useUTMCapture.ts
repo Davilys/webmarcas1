@@ -62,7 +62,6 @@ export function clearStoredUTMParams(): void {
 export function detectPlatform(params: UTMParams | null): string {
   if (!params) return 'Direto';
   if (params.fbclid || params.utm_source?.toLowerCase().includes('facebook') || params.utm_source?.toLowerCase().includes('instagram') || params.utm_source?.toLowerCase().includes('meta')) return 'Meta Ads';
-  if (params.gclid || params.utm_source?.toLowerCase().includes('google')) return 'Google Ads';
   if (params.utm_source) return params.utm_source;
   if (params.referrer) {
     if (params.referrer.includes('google')) return 'Google Orgânico';

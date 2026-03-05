@@ -75,7 +75,7 @@ Retorne um JSON com:
   ]
 }`;
     } else if (action === "optimize_report") {
-      systemPrompt = `Você é um consultor de Growth Marketing especializado em otimização de campanhas pagas (Meta Ads e Google Ads) para empresas de registro de marcas no Brasil.
+      systemPrompt = `Você é um consultor de Growth Marketing especializado em otimização de campanhas pagas (Meta Ads) para empresas de registro de marcas no Brasil.
 Analise os dados e gere um relatório executivo com ações concretas.
 Responda APENAS com o JSON no formato solicitado.`;
 
