@@ -1,70 +1,54 @@
 
 
-## Correcao: Separacao de contas Admin e Cliente
+## Plano: Simplificar Marketing Intelligence — Remover Google Ads e Consolidar Abas
 
-### Problemas identificados
+### Situação Atual
+20 abas no painel, incluindo componentes Google Ads que serão removidos. Muitas abas com funcionalidades que podem ser agrupadas.
 
-1. **Excluir cliente remove acesso Admin**: Em `ClientDetailSheet.tsx` (linha 642), ao excluir um cliente, o codigo deleta TODAS as `user_roles` do usuario, incluindo a role `admin`. Isso faz o admin perder acesso ao CRM.
-
-2. **Criar Admin cria conta de cliente**: O edge function `create-admin-user` cria um usuario no `auth.users`, e o trigger `handle_new_user` automaticamente cria um perfil na tabela `profiles`. Isso faz o admin aparecer na area de clientes.
-
-3. **Excluir Admin exclui tudo**: Se o perfil do admin for excluido como cliente, ele perde acesso ao CRM tambem (porque perfil e conta auth sao compartilhados).
-
-### Solucao
-
-#### 1. Corrigir exclusao de cliente para preservar role admin
-
-No `ClientDetailSheet.tsx`, ao excluir um cliente, verificar se o usuario tem role `admin` antes de deletar. Se tiver, manter a role admin e apenas remover dados de cliente (processos, contratos, etc.) sem deletar o perfil.
+### Estrutura Proposta: 20 abas → 7 abas
 
 ```text
-Antes:
-  supabase.from('user_roles').delete().eq('user_id', client.id)
-  supabase.from('profiles').delete().eq('id', client.id)
+ANTES (20 abas):
+Dashboard | Campanhas | Conversões | Funil | Atribuição | Eventos | Histórico
+Lead Score | Keywords | Orçamento | Heatmap | Públicos | Público IA | Previsão
+Gerador IA | Teste A/B | Agente IA | Alertas | Meta | Google
 
-Depois:
-  // Verificar se e admin
-  const { data: adminRole } = await supabase
-    .from('user_roles').select('id').eq('user_id', client.id).eq('role', 'admin').maybeSingle();
-  
-  // Se e admin: deletar apenas role 'client' (se existir), manter perfil e admin role
-  // Se NAO e admin: deletar tudo (roles, perfil)
-  if (adminRole) {
-    // Apenas remover role client, manter perfil e admin role
-    supabase.from('user_roles').delete().eq('user_id', client.id).eq('role', 'client');
-    // Limpar dados de cliente no perfil (client_funnel_type = null, etc.)
-  } else {
-    // Remover tudo incluindo perfil
-    supabase.from('user_roles').delete().eq('user_id', client.id);
-    supabase.from('profiles').delete().eq('id', client.id);
-  }
+DEPOIS (7 abas):
+Dashboard | Campanhas | Análise | Leads | Públicos | Agente IA | Config
 ```
 
-#### 2. Corrigir criacao de Admin para nao criar perfil de cliente
+### Mapeamento de consolidação
 
-No `create-admin-user` edge function, apos criar o usuario (que gera perfil via trigger), marcar o perfil como admin-only para que nao apareca na listagem de clientes.
+| Nova Aba | Conteúdo embutido |
+|----------|-------------------|
+| **Dashboard** | MarketingOverview + BudgetControl (resumo orçamento) + MarketingAlerts (alertas inline) |
+| **Campanhas** | CampaignTable + AdPerformanceHistory (histórico como sub-seção) |
+| **Análise** | ConversionsTracker + ConversionFunnelModule + AttributionPanel + PixelEventTracking (4 módulos em sub-tabs internas) |
+| **Leads** | LeadScoringModule + HeatmapModule (score + melhores horários juntos) |
+| **Públicos** | AudienceExport + AudienceSuggester (exportação + sugestão IA juntos) |
+| **Agente IA** | OptimizationAgent + AdCopyGenerator + ABTestManager + CampaignPrediction (hub completo do agente) |
+| **Config** | MetaAdsConfig apenas (sem Google) |
 
-O perfil ja e criado pelo trigger `handle_new_user` e nao podemos evitar isso. A solucao e garantir que a query de clientes no Kanban filtre admins-only (usuarios que tem role admin mas nao tem `brand_processes`).
+### O que será REMOVIDO
 
-Na pratica, como o Kanban de clientes ja filtra por `brand_processes` (processo de marca), admins sem processos ja nao aparecem. Preciso verificar se a listagem de clientes tambem filtra corretamente.
+1. **Arquivo deletado**: `src/components/admin/marketing/GoogleAdsConfig.tsx`
+2. **Arquivo deletado**: `src/components/admin/marketing/KeywordAnalysis.tsx` (focado em Google Ads)
+3. **Referências a Google Ads** removidas dos textos de: `AdCopyGenerator.tsx` (remover opção "Google Ads" do select de plataforma), `PixelEventTracking.tsx` (remover menções a Google Ads Conversion API), `marketing-ai-agent` edge function (remover referências a Google Ads nos prompts)
+4. **Referência `gclid`** removida do `useUTMCapture.ts` (manter apenas `fbclid`)
 
-#### 3. Corrigir exclusao de Admin para nao afetar perfil
+### O que será MODIFICADO
 
-A exclusao de admin (`removeAdminMutation` no SecuritySettings.tsx) ja esta correta -- so remove role e permissions, nao toca no perfil. Nenhuma alteracao necessaria aqui.
+1. **`MarketingIntelligence.tsx`** — Reescrever com 7 abas consolidadas, cada uma renderizando múltiplos componentes agrupados com sub-tabs internas ou seções empilhadas
+2. **`AdCopyGenerator.tsx`** — Remover opção Google do select de plataforma
+3. **`PixelEventTracking.tsx`** — Remover texto sobre Google Ads Conversion API
+4. **`useUTMCapture.ts`** — Remover captura de `gclid`
+5. **`marketing-ai-agent/index.ts`** — Remover referências Google Ads dos prompts, focar apenas Meta Ads
 
-### Alteracoes tecnicas
+### O que NÃO será alterado
+- Nenhuma tabela do banco de dados (colunas google_ads ficam no schema mas não são usadas)
+- Nenhum módulo do CRM (leads, clientes, contratos, financeiro)
+- Nenhuma edge function existente além do `marketing-ai-agent`
 
-**Ficheiro: `src/components/admin/clients/ClientDetailSheet.tsx`**
-- Modificar `handleDeleteClient` para verificar se o usuario tem role `admin`
-- Se tiver role admin: deletar dados de cliente (processos, contratos, faturas, etc.) mas MANTER o perfil e a role admin
-- Se nao tiver role admin: comportamento atual (deletar tudo)
-
-**Ficheiro: `supabase/functions/create-admin-user/index.ts`**
-- Nenhuma alteracao necessaria no edge function. O trigger `handle_new_user` cria o perfil automaticamente, mas admins sem `brand_processes` nao aparecem no Kanban de clientes.
-
-### Resultado esperado
-
-- Excluir um cliente que tambem e admin: remove dados de cliente, mas admin continua com acesso ao CRM
-- Excluir um admin: remove acesso admin, mas se tiver conta de cliente, continua com acesso a area do cliente
-- Criar um admin: cria apenas acesso admin, sem processos de marca (nao aparece no Kanban de clientes)
-- Unico com conta dupla (admin + cliente): Administrador Master (davillys@gmail.com)
+### Resultado Visual
+Interface limpa com 7 abas em uma única linha, visual profissional, todas funcionalidades essenciais preservadas e agrupadas logicamente. O Agente IA centraliza toda a inteligência (geração, testes, previsão, otimização).
 
