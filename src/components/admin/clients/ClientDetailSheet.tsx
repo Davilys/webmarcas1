@@ -2795,10 +2795,8 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                                               <SelectItem value="003">003</SelectItem>
                                               <SelectItem value="oposicao">Oposição</SelectItem>
                                               <SelectItem value="exigencia_merito">Exigência de Mérito</SelectItem>
-                                              <SelectItem value="deferido">Deferido</SelectItem>
-                                              <SelectItem value="deferimento">Deferimento</SelectItem>
-                                              <SelectItem value="indeferido">Indeferido</SelectItem>
                                               <SelectItem value="indeferimento">Indeferimento</SelectItem>
+                                              <SelectItem value="deferimento">Deferimento</SelectItem>
                                               <SelectItem value="certificado">Certificado</SelectItem>
                                               <SelectItem value="renovacao">Renovação</SelectItem>
                                               <SelectItem value="arquivado">Arquivado</SelectItem>
