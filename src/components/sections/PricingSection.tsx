@@ -208,7 +208,7 @@ const PricingSection = () => {
                 variant="hero"
                 size="lg"
                 className="w-full rounded-2xl shadow-xl shadow-primary/25 hover:shadow-primary/40"
-                onClick={() => navigate('/cliente/registrar-marca?plano=premium')}
+                onClick={scrollToForm}
               >
                 Começar Plano Premium
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -270,7 +270,7 @@ const PricingSection = () => {
                 variant="default"
                 size="lg"
                 className="w-full rounded-2xl"
-                onClick={() => navigate('/cliente/registrar-marca?plano=corporativo')}
+                onClick={scrollToForm}
               >
                 Começar Plano Corporativo
                 <ArrowRight className="w-4 h-4 ml-2" />
