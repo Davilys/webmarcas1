@@ -80,6 +80,8 @@ const App = () => (
               <Route path="/assinar/:token" element={<AssinarDocumento />} />
               <Route path="/registro-blockchain" element={<RegistroBlockchain />} />
               <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/termos-de-uso" element={<TermosUso />} />
               
               {/* Área do Cliente */}

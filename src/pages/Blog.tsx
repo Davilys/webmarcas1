@@ -4,7 +4,7 @@ import { ArrowRight, Clock, Calendar, Tag } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { blogPosts } from "@/data/blogPosts";
-import { Helmet } from "react-helmet-async";
+
 
 const Blog = () => {
   const featured = blogPosts[0];
