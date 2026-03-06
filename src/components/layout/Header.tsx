@@ -231,7 +231,7 @@ const Header = () => {
                 <Link to="/cliente/login">{t("nav.clientArea")}</Link>
               </Button>
               <Button variant="primary" className="btn-glow touch-target" asChild>
-                <a href="#consultar">{t("nav.checkBrand")}</a>
+                <a href={isHomePage ? "#consultar" : "/#consultar"} onClick={(e) => { handleAnchorClick(e, "#consultar"); setIsMobileMenuOpen(false); }}>{t("nav.checkBrand")}</a>
               </Button>
             </div>
           </nav>
