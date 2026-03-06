@@ -378,16 +378,14 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setProfiles(allProfiles);
     setTemplates(templatesRes.data || []);
 
-    // Auto-select the standard contract template only if none is selected yet
-    if (!selectedTemplate) {
-      const standardTemplate = templatesRes.data?.find(t => 
-        t.name.toLowerCase().includes('registro de marca') || 
-        t.name.toLowerCase().includes('padrão')
-      );
-      if (standardTemplate) {
-        setSelectedTemplate(standardTemplate);
-        setFormData(prev => ({ ...prev, template_id: standardTemplate.id }));
-      }
+    // Auto-select the standard contract template for new clients
+    const standardTemplate = templatesRes.data?.find(t => 
+      t.name.toLowerCase().includes('registro de marca') || 
+      t.name.toLowerCase().includes('padrão')
+    );
+    if (standardTemplate) {
+      setSelectedTemplate(standardTemplate);
+      setFormData(prev => ({ ...prev, template_id: standardTemplate.id }));
     }
   };
 
