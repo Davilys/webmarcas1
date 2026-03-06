@@ -95,7 +95,8 @@ const Header = () => {
               ) : (
                 <a
                   key={item.label}
-                  href={item.href}
+                  href={isHomePage ? item.href : `/${item.href}`}
+                  onClick={(e) => handleAnchorClick(e, item.href)}
                   className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-secondary"
                 >
                   {item.label}
