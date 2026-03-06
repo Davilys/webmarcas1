@@ -7,6 +7,7 @@ import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress
 import { ViabilityStep } from "@/components/cliente/checkout/ViabilityStep";
 import { PersonalDataStep, type PersonalData } from "@/components/cliente/checkout/PersonalDataStep";
 import { BrandDataStep, type BrandData } from "@/components/cliente/checkout/BrandDataStep";
+import { PlanSelectionStep } from "@/components/cliente/checkout/PlanSelectionStep";
 import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ const STEP_TITLES = [
   { title: "Consulta de Viabilidade", sub: "Verificando no banco do INPI" },
   { title: "Dados do Titular", sub: "Informações para o contrato" },
   { title: "Dados da Marca", sub: "Detalhes do registro e classes NCL" },
+  { title: "Escolha do Plano", sub: "Selecione o plano ideal" },
   { title: "Forma de Pagamento", sub: "Escolha como pagar" },
   { title: "Contrato Digital", sub: "Revise e assine" },
 ];
@@ -35,9 +37,11 @@ export default function RegistrarMarca() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Read plan from URL
+  // Read plan from URL as initial suggestion
   const planParam = (searchParams.get('plano') || 'essencial') as PlanType;
-  const plan: PlanType = ['premium', 'corporativo'].includes(planParam) ? planParam : 'essencial';
+  const initialPlan: PlanType = ['premium', 'corporativo'].includes(planParam) ? planParam : 'essencial';
+
+  const [plan, setPlan] = useState<PlanType>(initialPlan);
 
   const [viabilityResult, setViabilityResult] = useState<ViabilityResult | null>(null);
   const [personalData, setPersonalData] = useState<PersonalData>({
@@ -101,19 +105,23 @@ export default function RegistrarMarca() {
 
   const handleBrandDataNext = (data: BrandData) => {
     setBrandData(data);
-    setStep(4); // Payment
+    setStep(4); // Plan selection
+  };
+
+  const handlePlanNext = (selectedPlan: PlanType) => {
+    setPlan(selectedPlan);
+    setStep(5); // Payment
   };
 
   const handlePaymentNext = (method: string, value: number) => {
     setPaymentMethod(method);
     setPaymentValue(value);
-    setStep(5); // Contract
+    setStep(6); // Contract
   };
 
   const handleSubmit = async (contractHtml: string) => {
     setIsSubmitting(true);
 
-    // Derive selectedClassDescriptions by index from suggestedClasses
     const selectedClassDescriptions = selectedClasses.map(cls => {
       const idx = suggestedClasses.indexOf(cls);
       return idx >= 0 ? suggestedClassDescriptions[idx] : `Classe ${cls}`;
@@ -229,7 +237,7 @@ export default function RegistrarMarca() {
           className="flex items-center justify-between mb-4 px-1"
         >
           <div>
-            <p className="text-xs text-muted-foreground">Etapa {step} de 5</p>
+            <p className="text-xs text-muted-foreground">Etapa {step} de 6</p>
             <p className="text-sm font-semibold">{currentStepInfo.title}</p>
           </div>
           <span className="text-xs text-muted-foreground">{currentStepInfo.sub}</span>
@@ -272,24 +280,33 @@ export default function RegistrarMarca() {
               )}
               {step === 4 && (
                 <motion.div key="step4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <PaymentStep
-                    selectedMethod={paymentMethod}
-                    onNext={handlePaymentNext}
+                  <PlanSelectionStep
+                    selectedPlan={plan}
+                    onNext={handlePlanNext}
                     onBack={() => setStep(3)}
-                    classCount={classCount}
-                    plan={plan}
                   />
                 </motion.div>
               )}
               {step === 5 && (
                 <motion.div key="step5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <PaymentStep
+                    selectedMethod={paymentMethod}
+                    onNext={handlePaymentNext}
+                    onBack={() => setStep(4)}
+                    classCount={classCount}
+                    plan={plan}
+                  />
+                </motion.div>
+              )}
+              {step === 6 && (
+                <motion.div key="step6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                   <ContractStep
                     personalData={personalData}
                     brandData={brandData}
                     paymentMethod={paymentMethod}
                     paymentValue={paymentValue}
                     onSubmit={(html) => handleSubmit(html)}
-                    onBack={() => setStep(4)}
+                    onBack={() => setStep(5)}
                     isSubmitting={isSubmitting}
                     selectedClasses={selectedClasses}
                     classDescriptions={selectedClasses.map(cls => {

@@ -8,6 +8,7 @@ import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress
 import { ViabilityStep } from "@/components/cliente/checkout/ViabilityStep";
 import { PersonalDataStep, type PersonalData } from "@/components/cliente/checkout/PersonalDataStep";
 import { BrandDataStep, type BrandData } from "@/components/cliente/checkout/BrandDataStep";
+import { PlanSelectionStep } from "@/components/cliente/checkout/PlanSelectionStep";
 import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import SocialProofNotification from "@/components/SocialProofNotification";
 import type { ViabilityResult } from "@/lib/api/viability";
+import type { PlanType } from "@/hooks/useContractTemplate";
 import logo from "@/assets/webmarcas-logo.png";
 import WhatsAppButton from "@/components/layout/WhatsAppButton";
 
@@ -46,6 +48,7 @@ export default function Registrar() {
   
   const [personalData, setPersonalData] = useState<PersonalData | null>(null);
   const [brandData, setBrandData] = useState<BrandData | null>(null);
+  const [plan, setPlan] = useState<PlanType>("essencial");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [paymentValue, setPaymentValue] = useState<number>(0);
 
@@ -59,7 +62,6 @@ export default function Registrar() {
     const interval = setInterval(() => {
       setPhraseIndex((prev) => (prev + 1) % dynamicTexts.length);
     }, 3000);
-    
     return () => clearInterval(interval);
   }, []);
 
@@ -73,7 +75,6 @@ export default function Registrar() {
           .select('*')
           .eq('id', user.id)
           .single();
-        
         if (profile) {
           setPersonalData({
             fullName: profile.full_name || '',
@@ -98,7 +99,6 @@ export default function Registrar() {
       try {
         const parsed = JSON.parse(storedData);
         if (parsed.brandName && parsed.businessArea && parsed.level) {
-          // Create a viability result from stored data
           const viabilityResult: ViabilityResult = {
             success: true,
             level: parsed.level,
@@ -114,14 +114,11 @@ export default function Registrar() {
             businessArea: parsed.businessArea,
             result: viabilityResult,
           });
-          // Extract suggested classes from sessionStorage
           if (Array.isArray(parsed.classes)) {
             setSuggestedClasses(parsed.classes);
             setSuggestedClassDescriptions(parsed.classDescriptions || []);
           }
-          // Skip to step 2 (personal data)
           setStep(2);
-          // Clear the stored data to prevent re-use
           sessionStorage.removeItem('viabilityData');
         }
       } catch (e) {
@@ -146,13 +143,18 @@ export default function Registrar() {
 
   const handleBrandDataNext = (data: BrandData) => {
     setBrandData(data);
-    setStep(4);
+    setStep(4); // Plan selection
+  };
+
+  const handlePlanNext = (selectedPlan: PlanType) => {
+    setPlan(selectedPlan);
+    setStep(5); // Payment
   };
 
   const handlePaymentNext = (method: string, value: number) => {
     setPaymentMethod(method);
     setPaymentValue(value);
-    setStep(5);
+    setStep(6); // Contract
   };
 
   const handleSubmit = async (contractHtml: string) => {
@@ -186,14 +188,13 @@ export default function Registrar() {
           classDescriptions: selectedClassDescriptions,
           suggestedClasses,
           suggestedClassDescriptions,
+          plan,
         },
       });
 
       if (error) throw error;
 
       if (data?.success) {
-        // Store complete order data in sessionStorage for the status page
-        // Structure must match what StatusPedido.tsx expects (OrderData interface)
         const orderData = {
           personalData: {
             ...personalData,
@@ -210,6 +211,7 @@ export default function Registrar() {
           contractId: data.contractId,
           invoiceId: data.invoiceId,
           contractNumber: data.contractNumber,
+          plan,
           asaas: {
             customerId: data.customerId,
             asaasCustomerId: data.asaasCustomerId || data.customerId,
@@ -224,7 +226,6 @@ export default function Registrar() {
         };
         
         sessionStorage.setItem('orderData', JSON.stringify(orderData));
-
         toast.success("Pedido realizado com sucesso!");
         navigate('/status-pedido');
       } else {
@@ -278,7 +279,7 @@ export default function Registrar() {
 
       {/* Main content */}
       <main className="relative z-10 w-full max-w-2xl mx-auto px-4 pt-24 pb-8">
-        {/* Badge - Líder em Registro de Marcas */}
+        {/* Badge */}
         <div className="flex justify-center mb-6 animate-fade-in">
           <div className="inline-flex items-center gap-2 badge-premium">
             <Award className="w-4 h-4" />
@@ -331,16 +332,8 @@ export default function Registrar() {
             {step === 2 && personalData === null && (
               <PersonalDataStep
                 initialData={{
-                  fullName: '',
-                  email: '',
-                  phone: '',
-                  cpf: '',
-                  cep: '',
-                  address: '',
-                  addressNumber: '',
-                  city: '',
-                  state: '',
-                  neighborhood: '',
+                  fullName: '', email: '', phone: '', cpf: '',
+                  cep: '', address: '', addressNumber: '', city: '', state: '', neighborhood: '',
                 }}
                 onNext={handlePersonalDataNext}
                 onBack={() => setStep(1)}
@@ -352,9 +345,7 @@ export default function Registrar() {
                 initialData={{
                   brandName: viabilityData?.brandName || '',
                   businessArea: viabilityData?.businessArea || '',
-                  hasCNPJ: false,
-                  cnpj: '',
-                  companyName: '',
+                  hasCNPJ: false, cnpj: '', companyName: '',
                 }}
                 onNext={handleBrandDataNext}
                 onBack={() => setStep(2)}
@@ -366,15 +357,24 @@ export default function Registrar() {
             )}
 
             {step === 4 && (
-              <PaymentStep
-                selectedMethod={paymentMethod}
-                onNext={handlePaymentNext}
+              <PlanSelectionStep
+                selectedPlan={plan}
+                onNext={handlePlanNext}
                 onBack={() => setStep(3)}
-                classCount={selectedClasses.length > 0 ? selectedClasses.length : 1}
               />
             )}
 
-            {step === 5 && personalData && brandData && (
+            {step === 5 && (
+              <PaymentStep
+                selectedMethod={paymentMethod}
+                onNext={handlePaymentNext}
+                onBack={() => setStep(4)}
+                classCount={selectedClasses.length > 0 ? selectedClasses.length : 1}
+                plan={plan}
+              />
+            )}
+
+            {step === 6 && personalData && brandData && (
               <ContractStep
                 personalData={personalData}
                 brandData={{
@@ -383,7 +383,7 @@ export default function Registrar() {
                 }}
                 paymentMethod={paymentMethod}
                 paymentValue={paymentValue}
-                onBack={() => setStep(4)}
+                onBack={() => setStep(5)}
                 onSubmit={(html) => handleSubmit(html)}
                 isSubmitting={isSubmitting}
                 selectedClasses={selectedClasses}
@@ -395,6 +395,7 @@ export default function Registrar() {
                 suggestedClassDescriptions={suggestedClassDescriptions}
                 onSelectedClassesChange={setSelectedClasses}
                 onPaymentValueChange={setPaymentValue}
+                plan={plan}
               />
             )}
           </CardContent>
