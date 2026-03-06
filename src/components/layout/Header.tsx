@@ -147,7 +147,7 @@ const Header = () => {
               <Link to="/cliente/login">{t("nav.clientArea")}</Link>
             </Button>
             <Button variant="primary" size="sm" className="btn-glow" asChild>
-              <a href="#consultar">{t("nav.checkBrand")}</a>
+              <a href={isHomePage ? "#consultar" : "/#consultar"} onClick={(e) => handleAnchorClick(e, "#consultar")}>{t("nav.checkBrand")}</a>
             </Button>
           </div>
 
