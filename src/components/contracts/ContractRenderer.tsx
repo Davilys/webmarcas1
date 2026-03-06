@@ -386,7 +386,8 @@ export function generateContractPrintHTML(
   blockchainSignature?: BlockchainSignature,
   showCertificationSection: boolean = true,
   documentType: 'contract' | 'procuracao' | 'distrato_multa' | 'distrato_sem_multa' = 'contract',
-  logoBase64?: string
+  logoBase64?: string,
+  contractTitle?: string
 ): string {
   // Convert plain text to HTML with proper formatting
   const htmlContent = content
