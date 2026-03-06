@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Check, Search, User, Building2, CreditCard, FileSignature } from "lucide-react";
+import { Check, Search, User, Building2, Sparkles, CreditCard, FileSignature } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Step {
@@ -12,8 +12,9 @@ const steps: Step[] = [
   { number: 1, label: "Viabilidade", icon: Search },
   { number: 2, label: "Dados Pessoais", icon: User },
   { number: 3, label: "Dados da Marca", icon: Building2 },
-  { number: 4, label: "Pagamento", icon: CreditCard },
-  { number: 5, label: "Contrato", icon: FileSignature },
+  { number: 4, label: "Planos", icon: Sparkles },
+  { number: 5, label: "Pagamento", icon: CreditCard },
+  { number: 6, label: "Contrato", icon: FileSignature },
 ];
 
 interface CheckoutProgressProps {

@@ -6,9 +6,11 @@ import { CheckoutProgress } from "@/components/cliente/checkout/CheckoutProgress
 import { ViabilityStep } from "@/components/cliente/checkout/ViabilityStep";
 import { PersonalDataStep, type PersonalData } from "@/components/cliente/checkout/PersonalDataStep";
 import { BrandDataStep, type BrandData } from "@/components/cliente/checkout/BrandDataStep";
+import { PlanSelectionStep } from "@/components/cliente/checkout/PlanSelectionStep";
 import { PaymentStep } from "@/components/cliente/checkout/PaymentStep";
 import { ContractStep } from "@/components/cliente/checkout/ContractStep";
 import type { ViabilityResult } from "@/lib/api/viability";
+import type { PlanType } from "@/hooks/useContractTemplate";
 
 interface ViabilityData {
   brandName: string;
@@ -26,6 +28,7 @@ const RegistrationFormSection = () => {
   const [viabilityData, setViabilityData] = useState<ViabilityData | null>(null);
   const [personalData, setPersonalData] = useState<PersonalData | null>(null);
   const [brandData, setBrandData] = useState<BrandData | null>(null);
+  const [plan, setPlan] = useState<PlanType>("essencial");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentValue, setPaymentValue] = useState(0);
 
@@ -59,7 +62,6 @@ const RegistrationFormSection = () => {
             businessArea: parsed.businessArea,
             result: viabilityResult,
           });
-          // Extract suggested classes
           if (Array.isArray(parsed.classes)) {
             setSuggestedClasses(parsed.classes);
             setSuggestedClassDescriptions(parsed.classDescriptions || []);
@@ -116,14 +118,20 @@ const RegistrationFormSection = () => {
 
   const handleBrandDataNext = useCallback((data: BrandData) => {
     setBrandData(data);
-    setStep(4); // Payment (step 4 now)
+    setStep(4); // Plan selection
+    scrollToForm();
+  }, []);
+
+  const handlePlanNext = useCallback((selectedPlan: PlanType) => {
+    setPlan(selectedPlan);
+    setStep(5); // Payment
     scrollToForm();
   }, []);
 
   const handlePaymentNext = useCallback((method: string, value: number) => {
     setPaymentMethod(method);
     setPaymentValue(value);
-    setStep(5); // Contract (step 5 now)
+    setStep(6); // Contract
     scrollToForm();
   }, []);
 
@@ -139,7 +147,6 @@ const RegistrationFormSection = () => {
 
     setIsSubmitting(true);
 
-    // Derive selectedClassDescriptions from suggestedClasses by index
     const selectedClassDescriptions = selectedClasses.map(cls => {
       const idx = suggestedClasses.indexOf(cls);
       return idx >= 0 ? suggestedClassDescriptions[idx] : `Classe ${cls}`;
@@ -174,6 +181,7 @@ const RegistrationFormSection = () => {
           classDescriptions: selectedClassDescriptions,
           suggestedClasses,
           suggestedClassDescriptions,
+          plan,
         },
       });
 
@@ -212,6 +220,7 @@ const RegistrationFormSection = () => {
         paymentValue,
         contractHtml,
         selectedClasses,
+        plan,
         acceptedAt: new Date().toISOString(),
         leadId: data.leadId,
         contractId: data.contractId,
@@ -248,7 +257,7 @@ const RegistrationFormSection = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [personalData, brandData, paymentMethod, paymentValue, selectedClasses, suggestedClasses, suggestedClassDescriptions, navigate, toast]);
+  }, [personalData, brandData, paymentMethod, paymentValue, selectedClasses, suggestedClasses, suggestedClassDescriptions, plan, navigate, toast]);
 
   const scrollToForm = () => {
     document.getElementById('registro')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -316,21 +325,29 @@ const RegistrationFormSection = () => {
               />
             )}
             {step === 4 && (
+              <PlanSelectionStep
+                selectedPlan={plan}
+                onNext={handlePlanNext}
+                onBack={() => handleBack(3)}
+              />
+            )}
+            {step === 5 && (
               <PaymentStep
                 selectedMethod={paymentMethod}
                 onNext={handlePaymentNext}
-                onBack={() => handleBack(3)}
+                onBack={() => handleBack(4)}
                 classCount={classCount}
+                plan={plan}
               />
             )}
-            {step === 5 && personalData && brandData && (
+            {step === 6 && personalData && brandData && (
               <ContractStep
                 personalData={personalData}
                 brandData={brandData}
                 paymentMethod={paymentMethod}
                 paymentValue={paymentValue}
                 onSubmit={handleContractSubmit}
-                onBack={() => handleBack(4)}
+                onBack={() => handleBack(5)}
                 isSubmitting={isSubmitting}
                 selectedClasses={selectedClasses}
                 classDescriptions={selectedClasses.map(cls => {
@@ -341,6 +358,7 @@ const RegistrationFormSection = () => {
                 suggestedClassDescriptions={suggestedClassDescriptions}
                 onSelectedClassesChange={setSelectedClasses}
                 onPaymentValueChange={setPaymentValue}
+                plan={plan}
               />
             )}
           </div>
