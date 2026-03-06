@@ -34,7 +34,7 @@ const PricingSection = () => {
 
   const premiumFeatures = [
     "Tudo do Plano Essencial",
-    "Taxas do INPI inclusas",
+    
     "Resposta a oposições inclusa",
     "Cumprimento de exigências incluso",
     "Recursos contra indeferimento inclusos",
