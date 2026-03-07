@@ -27,6 +27,7 @@ import { LeadSalesFunnel } from '@/components/admin/leads/LeadSalesFunnel';
 import { LeadDetailSheet } from '@/components/admin/leads/LeadDetailSheet';
 import { LeadRemarketingPanel } from '@/components/admin/leads/LeadRemarketingPanel';
 import { cn } from '@/lib/utils';
+import { LeadDirectMessageDialog } from '@/components/admin/leads/LeadDirectMessageDialog';
 
 // ─── Types ────────────────────────────────────────
 interface Lead {
