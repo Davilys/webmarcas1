@@ -260,9 +260,10 @@ function LeadRow({ lead, selected, onSelect, onEdit, onDelete, onConvert, onSend
 }
 
 // ─── Bulk Action Bar ──────────────────────────────
-function BulkBar({ selectedIds, leads, onClear, onComplete }: {
+function BulkBar({ selectedIds, leads, onClear, onComplete, onSendMessage }: {
   selectedIds: string[]; leads: Lead[];
   onClear: () => void; onComplete: () => void;
+  onSendMessage: (leads: Lead[]) => void;
 }) {
   const [loading, setLoading] = useState(false);
 
