@@ -39,7 +39,7 @@ const BUSINESS_AREA_CLASSES: Record<string, { classes: number[], descriptions: s
   'financeiro': { classes: [36, 35, 42], descriptions: ['Classe 36 – Serviços financeiros, seguros, investimentos, crédito e consultoria fiscal. (Classe principal)', 'Classe 35 – Contabilidade, gestão empresarial, consultoria administrativa e auditoria. (protege o serviço)', 'Classe 42 – Plataformas fintech, sistemas bancários digitais e soluções tecnológicas financeiras. (protege a tecnologia)'] },
   'advocacia': { classes: [45, 35, 41], descriptions: ['Classe 45 – Serviços jurídicos, advocacia, consultoria legal e assessoria contratual. (Classe principal)', 'Classe 35 – Gestão de escritórios de advocacia, administração e consultoria empresarial. (protege o serviço)', 'Classe 41 – Cursos jurídicos, palestras, treinamentos e eventos na área do Direito. (protege a educação)'] },
   'automotivo': { classes: [37, 12, 35], descriptions: ['Classe 37 – Oficinas mecânicas, funilaria, pintura automotiva e manutenção de veículos. (Classe principal)', 'Classe 12 – Veículos, peças automotivas, acessórios para carros e motos. (protege o produto)', 'Classe 35 – Concessionárias, lojas de autopeças, comércio de veículos e franquias. (protege a loja ou franquia)'] },
-  'default': { classes: [35, 41, 42], descriptions: ['Classe 35 – Comércio, vendas, marketing, gestão do seu negócio e atendimento ao cliente. (Classe principal)', 'Classe 41 – Cursos, treinamentos, eventos e atividades educacionais do seu ramo. (protege o serviço)', 'Classe 42 – Desenvolvimento de sites, sistemas e soluções tecnológicas para o seu negócio. (protege a tecnologia)'] }
+  // 'default' is handled dynamically in getClassesForBusinessAreaFallback
 };
 
 function normalizeString(str: string): string {
