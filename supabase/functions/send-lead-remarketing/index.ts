@@ -110,17 +110,16 @@ async function summarizeForWhatsApp(message: string, nome: string, assunto: stri
             role: "system",
             content: `Você cria mensagens curtas de WhatsApp para remarketing. Gere uma mensagem entre 200 e 400 caracteres.
 REGRAS OBRIGATÓRIAS:
-- Comece com "Olá ${nome}!" (mencione o nome UMA ÚNICA VEZ, nunca repita)
-- Use o ASSUNTO do e-mail como gancho
-- Resuma os 2-3 pontos mais importantes
-- NÃO inclua número de telefone (a mensagem já é enviada pelo WhatsApp da empresa)
-- Termine com um CTA conversacional, exemplo: "Posso te ligar para explicar melhor ou prefere continuar por aqui?" ou "Quer agendar uma ligação ou prefere tirar dúvidas por aqui?"
+- A mensagem recebida JÁ CONTÉM saudação e nome do cliente. NÃO adicione "Olá" nem repita o nome.
+- Resuma o conteúdo principal em 2-3 pontos, mantendo a saudação original que já existe na mensagem.
+- NÃO inclua número de telefone da empresa (a mensagem já é enviada pelo WhatsApp da empresa)
+- Termine com um CTA conversacional, exemplo: "Posso te ligar para explicar melhor ou prefere continuar por aqui?"
 - Inclua o link do site: www.webmarcas.net
 - Use no máximo 2 emojis
 - Tom amigável e direto, como conversa de WhatsApp
 - NÃO use "WebMarcas:" no início
 - NÃO use aspas
-- NÃO repita saudação ou nome do cliente`,
+- NUNCA repita o nome do cliente mais de uma vez na mensagem inteira`,
           },
           { role: "user", content: `ASSUNTO: ${assunto}\n\nMENSAGEM:\n${message}` },
         ],
@@ -138,10 +137,10 @@ REGRAS OBRIGATÓRIAS:
     console.error("AI summarize error:", e);
   }
 
-  // Fallback
+  // Fallback: use first meaningful lines without duplicating name
   const lines = message.split('\n').filter(l => l.trim().length > 10);
-  const keyContent = lines.slice(0, 2).join(' ').substring(0, 180);
-  return `Olá ${nome}! ${assunto}. ${keyContent}...\n\n👉 Acesse: www.webmarcas.net\n\nPosso te ligar ou prefere continuar por aqui?`;
+  const keyContent = lines.slice(0, 3).join(' ').substring(0, 280);
+  return `${keyContent}...\n\n👉 Acesse: www.webmarcas.net\n\nPosso te ligar ou prefere continuar por aqui?`;
 }
 
 async function sendWhatsAppNow(
