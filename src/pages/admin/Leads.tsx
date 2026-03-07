@@ -27,6 +27,7 @@ import { LeadSalesFunnel } from '@/components/admin/leads/LeadSalesFunnel';
 import { LeadDetailSheet } from '@/components/admin/leads/LeadDetailSheet';
 import { LeadRemarketingPanel } from '@/components/admin/leads/LeadRemarketingPanel';
 import { cn } from '@/lib/utils';
+import { LeadDirectMessageDialog } from '@/components/admin/leads/LeadDirectMessageDialog';
 
 // ─── Types ────────────────────────────────────────
 interface Lead {
@@ -156,12 +157,13 @@ function PipelineBar({ leads }: { leads: Lead[] }) {
 }
 
 // ─── Lead Row (static) ──────────────────────────
-function LeadRow({ lead, selected, onSelect, onEdit, onDelete, onConvert }: {
+function LeadRow({ lead, selected, onSelect, onEdit, onDelete, onConvert, onSendMessage }: {
   lead: Lead; selected: boolean;
   onSelect: (id: string, checked: boolean) => void;
   onEdit: (lead: Lead) => void;
   onDelete: (id: string) => void;
   onConvert: (lead: Lead) => void;
+  onSendMessage: (lead: Lead) => void;
 }) {
   const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG['novo'];
 
@@ -240,6 +242,9 @@ function LeadRow({ lead, selected, onSelect, onEdit, onDelete, onConvert }: {
             <DropdownMenuItem onClick={() => onEdit(lead)} className="gap-2 text-sm cursor-pointer">
               <Edit className="h-3.5 w-3.5 text-primary" /> Editar
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSendMessage(lead)} className="gap-2 text-sm cursor-pointer">
+              <Mail className="h-3.5 w-3.5 text-blue-500" /> Enviar Mensagem
+            </DropdownMenuItem>
             {lead.status !== 'convertido' && (
               <DropdownMenuItem onClick={() => onConvert(lead)} className="gap-2 text-sm cursor-pointer">
                 <UserCheck className="h-3.5 w-3.5 text-emerald-500" /> Converter em Cliente
@@ -256,9 +261,10 @@ function LeadRow({ lead, selected, onSelect, onEdit, onDelete, onConvert }: {
 }
 
 // ─── Bulk Action Bar ──────────────────────────────
-function BulkBar({ selectedIds, leads, onClear, onComplete }: {
+function BulkBar({ selectedIds, leads, onClear, onComplete, onSendMessage }: {
   selectedIds: string[]; leads: Lead[];
   onClear: () => void; onComplete: () => void;
+  onSendMessage: (leads: Lead[]) => void;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -309,6 +315,17 @@ function BulkBar({ selectedIds, leads, onClear, onComplete }: {
           ))}
         </SelectContent>
       </Select>
+
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => onSendMessage(leads.filter(l => selectedIds.includes(l.id)))}
+        disabled={loading}
+        className="h-8 rounded-xl text-xs gap-1.5 border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
+      >
+        <Mail className="h-3.5 w-3.5" />
+        Enviar Mensagem
+      </Button>
 
       <Button size="sm" variant="destructive" onClick={bulkDelete} disabled={loading} className="h-8 rounded-xl text-xs gap-1.5">
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -494,6 +511,8 @@ export default function AdminLeads() {
   const [activeTab, setActiveTab] = useState('lista');
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [messageLeads, setMessageLeads] = useState<Lead[]>([]);
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
 
   useEffect(() => { fetchLeads(); }, []);
 
@@ -754,6 +773,7 @@ export default function AdminLeads() {
                             onEdit={lead => { setDetailLead(lead); setDetailOpen(true); }}
                             onDelete={handleDelete}
                             onConvert={handleConvert}
+                            onSendMessage={(lead) => { setMessageLeads([lead]); setMessageDialogOpen(true); }}
                           />
                         ))
                       )}
@@ -849,6 +869,14 @@ export default function AdminLeads() {
         leads={leads}
         onClear={() => setSelectedIds([])}
         onComplete={fetchLeads}
+        onSendMessage={(selectedLeads) => { setMessageLeads(selectedLeads); setMessageDialogOpen(true); }}
+      />
+
+      <LeadDirectMessageDialog
+        open={messageDialogOpen}
+        onOpenChange={setMessageDialogOpen}
+        leads={messageLeads}
+        onSent={fetchLeads}
       />
     </AdminLayout>
   );
