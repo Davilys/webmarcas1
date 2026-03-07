@@ -101,22 +101,41 @@ async function suggestClassesWithAI(businessArea: string): Promise<{ classes: nu
       body: JSON.stringify({
         model: 'openai/gpt-5.2',
         messages: [
-          { role: 'system', content: `Você é um especialista em propriedade intelectual e classificação NCL do INPI Brasil.
-Ao sugerir classes, as descrições devem ser ESPECÍFICAS e CONTEXTUALIZADAS para o ramo de atividade do cliente, usando linguagem clara que o cliente leigo entenda.
-NÃO use descrições genéricas como "Publicidade, gestão de negócios". 
-Use descrições que mencionem os produtos/serviços reais do ramo do cliente.
-Indique entre parênteses a função estratégica de cada classe: (Classe principal), (protege o produto), (protege a loja ou franquia), (protege o serviço), etc.
-Responda sempre em JSON válido, sem markdown.` },
-          { role: 'user', content: `O cliente atua no ramo "${businessArea}". Sugira EXATAMENTE 3 classes NCL (1-45) mais estratégicas para proteger a marca dele.
+          { role: 'system', content: `Você é um especialista em propriedade intelectual e classificação NCL (Nice) do INPI Brasil com 20 anos de experiência.
 
-Exemplo para "Sorveteria":
+TAREFA: Dado o ramo de atividade do cliente, sugira EXATAMENTE 3 classes NCL (números de 1 a 45) mais estratégicas para proteger a marca dele.
+
+REGRAS OBRIGATÓRIAS:
+1. As descrições DEVEM ser ESPECÍFICAS e CONTEXTUALIZADAS para o ramo real do cliente.
+2. Cada descrição DEVE mencionar os produtos ou serviços REAIS do ramo informado pelo cliente (ex: se o ramo é "sorveteria", escreva "sorvetes, picolés, sobremesas geladas").
+3. Use linguagem CLARA e SIMPLES que qualquer pessoa leiga entenda — NÃO use jargão jurídico.
+4. Indique entre parênteses a função estratégica: (Classe principal), (protege o produto), (protege a loja ou franquia), (protege o serviço), (protege a tecnologia).
+
+PROIBIDO — NUNCA use estas descrições genéricas:
+- "Publicidade, gestão de negócios"
+- "Educação, treinamento e cultura"  
+- "Serviços científicos e tecnológicos"
+- "Propaganda e publicidade"
+- "Pesquisa e desenvolvimento"
+Se você retornar qualquer descrição genérica como essas, sua resposta será REJEITADA.
+
+EXEMPLOS DE RESPOSTAS CORRETAS:
+
+Ramo "Sorveteria":
 {"classes":[43,30,35],"descriptions":["Classe 43 – Serviços de sorveteria, venda de sorvetes, picolés, sobremesas geladas e atendimento ao público. (Classe principal)","Classe 30 – Sorvetes, picolés, sobremesas geladas e produtos alimentícios à base de leite ou frutas. (protege o produto)","Classe 35 – Comércio varejista e venda de sorvetes, picolés e produtos alimentícios. (protege a loja ou franquia)"]}
 
-Agora gere para o ramo "${businessArea}" seguindo o mesmo padrão detalhado e contextualizado.
-JSON: {"classes":[n1,n2,n3],"descriptions":["Classe XX – descrição específica do ramo. (função estratégica)","Classe XX – descrição específica. (função)","Classe XX – descrição específica. (função)"]}` }
+Ramo "Escritório de Advocacia":
+{"classes":[45,35,41],"descriptions":["Classe 45 – Serviços de advocacia, consultoria jurídica, defesa em processos e assessoria legal para empresas e pessoas físicas. (Classe principal)","Classe 35 – Gestão e administração de escritórios de advocacia, consultoria empresarial e administrativa. (protege o serviço)","Classe 41 – Cursos, palestras e treinamentos na área jurídica, eventos e seminários de Direito. (protege a educação)"]}
+
+Ramo "Pet Shop":
+{"classes":[31,44,35],"descriptions":["Classe 31 – Rações, petiscos, brinquedos e acessórios para animais de estimação. (Classe principal)","Classe 44 – Banho e tosa, consultas veterinárias, vacinação e cuidados com saúde animal. (protege o serviço)","Classe 35 – Loja de produtos para pets, e-commerce de artigos para animais e franquias de pet shop. (protege a loja ou franquia)"]}
+
+Responda SOMENTE em JSON válido, sem markdown.` },
+          { role: 'user', content: `O cliente atua no ramo "${businessArea}". Sugira EXATAMENTE 3 classes NCL estratégicas com descrições específicas para este ramo.
+JSON: {"classes":[n1,n2,n3],"descriptions":["Classe XX – descrição específica para ${businessArea}. (função estratégica)","Classe XX – descrição específica para ${businessArea}. (função)","Classe XX – descrição específica para ${businessArea}. (função)"]}` }
         ],
         temperature: 0.3,
-        max_completion_tokens: 600,
+        max_completion_tokens: 800,
       }),
     });
 
@@ -128,13 +147,29 @@ JSON: {"classes":[n1,n2,n3],"descriptions":["Classe XX – descrição específi
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     if (content) {
-      // Extract JSON from potential markdown wrapping
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         if (Array.isArray(parsed.classes) && parsed.classes.length === 3 &&
             Array.isArray(parsed.descriptions) && parsed.descriptions.length === 3 &&
             parsed.classes.every((c: number) => c >= 1 && c <= 45)) {
+          
+          // POST-AI VALIDATION: Check if descriptions are contextual (not generic)
+          const genericPhrases = [
+            'publicidade, gestão de negócios',
+            'educação, treinamento e cultura',
+            'serviços científicos e tecnológicos',
+            'propaganda e publicidade',
+            'pesquisa e desenvolvimento',
+          ];
+          const descriptionsText = parsed.descriptions.join(' ').toLowerCase();
+          const isGeneric = genericPhrases.some(phrase => descriptionsText.includes(phrase));
+          
+          if (isGeneric) {
+            console.warn(`[CLASSES] IA retornou descrições genéricas, usando fallback contextualizado`);
+            return getClassesForBusinessAreaFallback(businessArea);
+          }
+          
           console.log(`[CLASSES] IA sugeriu:`, parsed.classes);
           return parsed;
         }
