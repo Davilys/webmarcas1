@@ -621,7 +621,10 @@ O laudo deve conter TODAS estas seções:
 2. RESULTADO DA PESQUISA NO INPI (detalhamento dos resultados encontrados)
 3. ANÁLISE DE COLIDÊNCIA EMPRESARIAL (CNPJs encontrados)
 4. ANÁLISE DE COLIDÊNCIA NA INTERNET (redes sociais e web)
-5. CLASSES NCL RECOMENDADAS
+5. CLASSES NCL RECOMENDADAS — IMPORTANTE: NÃO use descrições genéricas como "Publicidade, gestão de negócios". 
+   Escreva descrições ESPECÍFICAS e CONTEXTUALIZADAS para o ramo "${businessArea}" do cliente, em linguagem CLARA e SIMPLES que qualquer pessoa entenda.
+   Formato: "🏷️ Classes sugeridas (estratégia com 3 classes):" seguido de cada classe com descrição detalhada dos produtos/serviços reais do ramo e a função estratégica entre parênteses (Classe principal), (protege o produto), (protege a loja ou franquia), etc.
+   Exemplo para Sorveteria: "Classe 43 – Serviços de sorveteria, venda de sorvetes, picolés, sobremesas geladas e atendimento ao público. (Classe principal)"
 6. CONCLUSÃO TÉCNICA (viabilidade e justificativa)
 7. ORIENTAÇÃO JURÍDICA
 8. AVISO: "O DONO DA MARCA É QUEM REGISTRA PRIMEIRO!"
