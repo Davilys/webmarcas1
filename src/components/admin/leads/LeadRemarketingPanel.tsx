@@ -71,10 +71,10 @@ const TEMPLATE_VARS = ['{{nome}}', '{{email}}', '{{empresa}}'];
 
 const CAMPAIGN_TEMPLATES: Record<string, { subject: string; body: string }> = {
   abandono_carrinho: {
-    subject: '{{nome}}, você esqueceu algo importante! Sua marca ainda está desprotegida ⚠️',
+    subject: '{{nome}}, sua marca {{empresa}} ainda está desprotegida ⚠️',
     body: `Olá {{nome}},
 
-Notamos que você iniciou o processo de registro da sua marca, mas não finalizou. Sabemos que a rotina é corrida, por isso viemos te lembrar!
+Notamos que você iniciou o processo de registro da marca {{empresa}}, mas não finalizou. Sabemos que a rotina é corrida, por isso viemos te lembrar!
 
 ⚠️ A cada dia sem registro, sua marca fica vulnerável a:
 • Ser registrada por terceiros (e você perder o direito de uso)
@@ -90,10 +90,10 @@ Equipe Webmarcas
 www.webmarcas.net | (11) 91112-0225`,
   },
   promocao: {
-    subject: '🔥 Oferta Exclusiva para {{nome}} — Registre sua marca com condições especiais!',
+    subject: '🔥 Oferta Exclusiva — Registre a marca {{empresa}} com condições especiais!',
     body: `Olá {{nome}},
 
-Temos uma oferta EXCLUSIVA e por tempo limitado para você:
+Temos uma oferta EXCLUSIVA e por tempo limitado para você registrar a marca {{empresa}}:
 
 🏷️ PROMOÇÃO ESPECIAL DE REGISTRO DE MARCA
 
