@@ -85,6 +85,7 @@ export const PIPELINE_STAGES = [
   { id: 'protocolado', label: 'PROTOCOLADO', color: 'from-blue-500 to-blue-600', borderColor: 'border-blue-500', bgColor: 'bg-blue-50 dark:bg-blue-950/30', textColor: 'text-blue-700 dark:text-blue-300', description: 'Pedido de registro enviado ao INPI. Aguardando análise inicial.' },
   { id: '003', label: '003', color: 'from-yellow-500 to-amber-500', borderColor: 'border-yellow-500', bgColor: 'bg-yellow-50 dark:bg-yellow-950/30', textColor: 'text-yellow-700 dark:text-yellow-300', description: 'Cumprimento de exigência formal. Documentos adicionais solicitados.' },
   { id: 'oposicao', label: 'Oposição', color: 'from-orange-500 to-orange-600', borderColor: 'border-orange-500', bgColor: 'bg-orange-50 dark:bg-orange-950/30', textColor: 'text-orange-700 dark:text-orange-300', description: 'Terceiro contestou o registro. Manifestação necessária.' },
+  { id: 'exigencia_merito', label: 'EXIGENCIA DE MÉRITO', color: 'from-violet-500 to-violet-600', borderColor: 'border-violet-500', bgColor: 'bg-violet-50 dark:bg-violet-950/30', textColor: 'text-violet-700 dark:text-violet-300', description: 'Exigência de mérito emitida pelo INPI. Resposta técnica necessária.' },
   { id: 'indeferimento', label: 'Indeferimento', color: 'from-red-500 to-red-600', borderColor: 'border-red-500', bgColor: 'bg-red-50 dark:bg-red-950/30', textColor: 'text-red-700 dark:text-red-300', description: 'Pedido indeferido. Recurso pode ser interposto.' },
   { id: 'notificacao', label: 'Notificação Extrajudicial', color: 'from-purple-500 to-purple-600', borderColor: 'border-purple-500', bgColor: 'bg-purple-50 dark:bg-purple-950/30', textColor: 'text-purple-700 dark:text-purple-300', description: 'Notificação enviada a terceiros por uso indevido.' },
   { id: 'deferimento', label: 'Deferimento', color: 'from-emerald-500 to-emerald-600', borderColor: 'border-emerald-500', bgColor: 'bg-emerald-50 dark:bg-emerald-950/30', textColor: 'text-emerald-700 dark:text-emerald-300', description: 'Pedido aprovado! Aguardando pagamento da taxa de concessão.' },
@@ -515,32 +516,34 @@ export function ClientKanbanBoard({ clients, onClientClick, onRefresh, filters, 
                                     <p className="font-bold text-sm mb-0.5 line-clamp-1">
                                       {client.full_name || 'Sem nome'}
                                     </p>
-                                    {client.brands && client.brands.length > 1 ? (
+                                    {client.brand_name ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <p className="font-bold text-sm text-primary line-clamp-1">
-                                          {client.brands[0].brand_name}
+                                          {client.brand_name}
                                         </p>
-                                        <Tooltip>
-                                          <TooltipTrigger>
-                                            <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
-                                              +{client.brands.length - 1} marca{client.brands.length > 2 ? 's' : ''}
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="bottom" className="max-w-[250px]">
-                                            <p className="font-semibold text-xs mb-1">Marcas registradas:</p>
-                                            <ul className="text-xs space-y-0.5">
-                                              {client.brands.map(b => (
-                                                <li key={b.id} className="flex items-center gap-1">
-                                                  <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                                                  {b.brand_name}
-                                                  {b.process_number && <span className="text-muted-foreground font-mono">#{b.process_number}</span>}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </TooltipContent>
-                                        </Tooltip>
+                                        {client.brands && client.brands.length > 1 && (
+                                          <Tooltip>
+                                            <TooltipTrigger>
+                                              <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
+                                                +{client.brands.length - 1} marca{client.brands.length > 2 ? 's' : ''}
+                                              </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[250px]">
+                                              <p className="font-semibold text-xs mb-1">Marcas registradas:</p>
+                                              <ul className="text-xs space-y-0.5">
+                                                {client.brands.map(b => (
+                                                  <li key={b.id} className="flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                                                    {b.brand_name}
+                                                    {b.process_number && <span className="text-muted-foreground font-mono">#{b.process_number}</span>}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        )}
                                       </div>
-                                    ) : client.brand_name ? (
+                                    ) : client.brands && client.brands.length > 0 ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
                                         <p className="font-bold text-sm text-primary line-clamp-1">
                                           {client.brand_name}
