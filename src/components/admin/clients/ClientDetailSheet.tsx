@@ -2347,32 +2347,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                     <EmptyState
                       icon={Package}
                       title="Nenhum processo registrado"
-                      description="Adicione um processo de marca para este cliente"
-                      action={
-                        <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
-                          <DialogTrigger asChild>
-                            <Button size="sm" className="mt-2"><Plus className="h-4 w-4 mr-2" />Adicionar Processo</Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader><DialogTitle>Adicionar Processo de Marca</DialogTitle></DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div><Label>Nome da Marca *</Label><Input placeholder="Ex: WebMarcas" value={newProcess.brand_name} onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})} /></div>
-                              <div><Label>Número do Processo (INPI)</Label><Input placeholder="Ex: 928374651" value={newProcess.process_number} onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})} /></div>
-                              <div><Label>Fase do Pipeline</Label>
-                                <Select value={newProcess.pipeline_stage} onValueChange={(v) => setNewProcess({...newProcess, pipeline_stage: v})}>
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
-                                  <SelectContent>{PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </div>
-                              <div><Label>Área de Atuação</Label><Input placeholder="Ex: Tecnologia" value={newProcess.business_area} onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})} /></div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
-                              <Button onClick={handleCreateProcess}>Criar Processo</Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      }
+                      description="Adicione um processo na aba Marcas para habilitar os serviços"
                     />
                   )}
                 </TabsContent>
