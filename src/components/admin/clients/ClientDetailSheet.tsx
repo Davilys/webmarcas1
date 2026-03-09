@@ -213,6 +213,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showTagsDialog, setShowTagsDialog] = useState(false);
   const [showAddProcessDialog, setShowAddProcessDialog] = useState(false);
+  const [selectedServiceBrandId, setSelectedServiceBrandId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
   const [showProcessDetails, setShowProcessDetails] = useState(false);
@@ -307,6 +308,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
     if (client && open) {
       fetchClientData();
       setShowProcessDetails(false);
+      setSelectedServiceBrandId(client.process_id || null);
       setEditData({ priority: client.priority || 'medium', origin: client.origin || 'site', contract_value: client.contract_value || 0, pipeline_stage: client.pipeline_stage || 'protocolado' });
       setSelectedServiceType(client.pipeline_stage || 'protocolado');
       setEditFormData({
@@ -2171,6 +2173,35 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                 <TabsContent value="services" className="mt-0 space-y-4">
                   {client.process_id ? (
                     <div className="space-y-4">
+                      {/* Brand selector when client has multiple brands */}
+                      {clientBrands.length > 1 && (
+                        <div className="rounded-2xl border border-border bg-card p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Tag className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-semibold">Selecionar Marca</span>
+                          </div>
+                          <Select value={selectedServiceBrandId || ''} onValueChange={(v) => {
+                            setSelectedServiceBrandId(v);
+                            const brand = clientBrands.find(b => b.id === v);
+                            if (brand) {
+                              setEditData(prev => ({ ...prev, pipeline_stage: brand.pipeline_stage || 'protocolado' }));
+                              setSelectedServiceType(brand.pipeline_stage || 'protocolado');
+                            }
+                          }}>
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue placeholder="Selecione uma marca" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientBrands.map(b => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  {b.brand_name} {b.process_number ? `(${b.process_number})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
                       {/* Pipeline stage selector */}
                       <div className="rounded-2xl border border-border bg-card p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -2181,8 +2212,9 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                           <Select value={editData.pipeline_stage} onValueChange={async (v) => {
                             setEditData(prev => ({ ...prev, pipeline_stage: v }));
                             setSelectedServiceType(v);
-                            if (client.process_id) {
-                              await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
+                            const targetProcessId = selectedServiceBrandId || client.process_id;
+                            if (targetProcessId) {
+                              await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', targetProcessId);
                               toast.success('Pipeline atualizado!');
                               onUpdate();
                             }
@@ -2226,8 +2258,9 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                                   setSelectedServiceType(stage.id);
                                   setEditData(prev => ({ ...prev, pipeline_stage: stage.id }));
                                   setExpandedStageAction(prev => prev === stage.id ? null : stage.id);
-                                  if (client.process_id) {
-                                    await supabase.from('brand_processes').update({ pipeline_stage: stage.id }).eq('id', client.process_id);
+                                    const targetProcessId = selectedServiceBrandId || client.process_id;
+                                    if (targetProcessId) {
+                                    await supabase.from('brand_processes').update({ pipeline_stage: stage.id }).eq('id', targetProcessId);
                                     toast.success(`Serviço: ${stage.label}`);
                                     onUpdate();
                                   }
@@ -2270,9 +2303,15 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                                   full_name: client.full_name,
                                   email: client.email,
                                   phone: client.phone,
-                                  brand_name: clientBrands.length > 0 ? clientBrands[0].brand_name : client.brand_name,
-                                  process_number: clientBrands.length > 0 ? clientBrands[0].process_number : client.process_number,
-                                  process_id: clientBrands.length > 0 ? clientBrands[0].id : client.process_id,
+                                  brand_name: (() => {
+                                    const targetBrand = clientBrands.find(b => b.id === selectedServiceBrandId);
+                                    return targetBrand ? targetBrand.brand_name : (clientBrands.length > 0 ? clientBrands[0].brand_name : client.brand_name);
+                                  })(),
+                                  process_number: (() => {
+                                    const targetBrand = clientBrands.find(b => b.id === selectedServiceBrandId);
+                                    return targetBrand ? targetBrand.process_number : (clientBrands.length > 0 ? clientBrands[0].process_number : client.process_number);
+                                  })(),
+                                  process_id: selectedServiceBrandId || (clientBrands.length > 0 ? clientBrands[0].id : client.process_id),
                                 }}
                                 stage={actionStage}
                                 onClose={() => setExpandedStageAction(null)}
@@ -2308,32 +2347,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                     <EmptyState
                       icon={Package}
                       title="Nenhum processo registrado"
-                      description="Adicione um processo de marca para este cliente"
-                      action={
-                        <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
-                          <DialogTrigger asChild>
-                            <Button size="sm" className="mt-2"><Plus className="h-4 w-4 mr-2" />Adicionar Processo</Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader><DialogTitle>Adicionar Processo de Marca</DialogTitle></DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div><Label>Nome da Marca *</Label><Input placeholder="Ex: WebMarcas" value={newProcess.brand_name} onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})} /></div>
-                              <div><Label>Número do Processo (INPI)</Label><Input placeholder="Ex: 928374651" value={newProcess.process_number} onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})} /></div>
-                              <div><Label>Fase do Pipeline</Label>
-                                <Select value={newProcess.pipeline_stage} onValueChange={(v) => setNewProcess({...newProcess, pipeline_stage: v})}>
-                                  <SelectTrigger><SelectValue /></SelectTrigger>
-                                  <SelectContent>{PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </div>
-                              <div><Label>Área de Atuação</Label><Input placeholder="Ex: Tecnologia" value={newProcess.business_area} onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})} /></div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
-                              <Button onClick={handleCreateProcess}>Criar Processo</Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      }
+                      description="Adicione um processo na aba Marcas para habilitar os serviços"
                     />
                   )}
                 </TabsContent>
@@ -2622,14 +2636,43 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                 <TabsContent value="brands" className="mt-0 space-y-4">
                   {loading ? (
                     <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-                  ) : clientBrands.length === 0 ? (
-                    <EmptyState icon={Tag} title="Nenhuma marca" description="As marcas registradas por este cliente aparecerão aqui" />
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Tag className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-semibold">{clientBrands.length} marca{clientBrands.length !== 1 ? 's' : ''} registrada{clientBrands.length !== 1 ? 's' : ''}</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-semibold">{clientBrands.length} marca{clientBrands.length !== 1 ? 's' : ''} registrada{clientBrands.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <Dialog open={showAddProcessDialog} onOpenChange={setShowAddProcessDialog}>
+                          <DialogTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-8 text-xs">
+                              <Plus className="h-3.5 w-3.5 mr-1" />Adicionar Marca
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader><DialogTitle>Adicionar Processo de Marca</DialogTitle></DialogHeader>
+                            <DialogDescription>Adicione uma nova marca ao portfólio deste cliente.</DialogDescription>
+                            <div className="space-y-4 py-4">
+                              <div><Label>Nome da Marca *</Label><Input placeholder="Ex: WebMarcas" value={newProcess.brand_name} onChange={(e) => setNewProcess({...newProcess, brand_name: e.target.value})} /></div>
+                              <div><Label>Número do Processo (INPI)</Label><Input placeholder="Ex: 928374651" value={newProcess.process_number} onChange={(e) => setNewProcess({...newProcess, process_number: e.target.value})} /></div>
+                              <div><Label>Fase do Pipeline</Label>
+                                <Select value={newProcess.pipeline_stage} onValueChange={(v) => setNewProcess({...newProcess, pipeline_stage: v})}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>{PIPELINE_STAGES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                              </div>
+                              <div><Label>Área de Atuação</Label><Input placeholder="Ex: Tecnologia" value={newProcess.business_area} onChange={(e) => setNewProcess({...newProcess, business_area: e.target.value})} /></div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setShowAddProcessDialog(false)}>Cancelar</Button>
+                              <Button onClick={handleCreateProcess}>Criar Processo</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                       </div>
+                      {clientBrands.length === 0 ? (
+                        <EmptyState icon={Tag} title="Nenhuma marca" description="Clique em 'Adicionar Marca' para registrar a primeira marca deste cliente" />
+                      ) : (
                       <AnimatePresence>
                         {clientBrands.map((brand, i) => {
                           const stageInfo = PIPELINE_STAGES.find(s => s.id === brand.pipeline_stage) || PIPELINE_STAGES[0];
@@ -2900,6 +2943,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                           );
                         })}
                       </AnimatePresence>
+                      )}
                     </div>
                   )}
                 </TabsContent>
