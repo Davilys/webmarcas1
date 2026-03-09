@@ -213,6 +213,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showTagsDialog, setShowTagsDialog] = useState(false);
   const [showAddProcessDialog, setShowAddProcessDialog] = useState(false);
+  const [selectedServiceBrandId, setSelectedServiceBrandId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
   const [showProcessDetails, setShowProcessDetails] = useState(false);
