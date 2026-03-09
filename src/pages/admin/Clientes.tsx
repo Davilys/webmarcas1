@@ -286,39 +286,40 @@ export default function AdminClientes() {
             assigned_to_name: assignedToName,
           });
         } else {
-          // Group all processes under a single client entry
-          const mainProcess = userProcesses[0]; // first = most relevant
-          const brands = userProcesses.map(p => ({
-            id: p.id,
-            brand_name: p.brand_name,
-            pipeline_stage: p.pipeline_stage || ((profile as any).client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado'),
-            process_number: p.process_number || undefined,
-          }));
+          // Create one card per brand/process
+          for (const proc of userProcesses) {
+            const brands = userProcesses.map(p => ({
+              id: p.id,
+              brand_name: p.brand_name,
+              pipeline_stage: p.pipeline_stage || ((profile as any).client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado'),
+              process_number: p.process_number || undefined,
+            }));
 
-          clientsWithProcesses.push({
-            id: profile.id,
-            full_name: profile.full_name,
-            email: profile.email,
-            phone: profile.phone,
-            company_name: profile.company_name,
-            priority: profile.priority,
-            origin: profile.origin,
-            contract_value: contractVal,
-            process_id: mainProcess.id,
-            brand_name: mainProcess.brand_name,
-            business_area: mainProcess.business_area || null,
-            pipeline_stage: mainProcess.pipeline_stage || ((profile as any).client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado'),
-            process_status: mainProcess.status,
-            created_at: profile.created_at || undefined,
-            cpf_cnpj: profile.cpf_cnpj || undefined,
-            process_number: mainProcess.process_number || undefined,
-            client_funnel_type: (profile as any).client_funnel_type || 'juridico',
-            created_by: (profile as any).created_by || null,
-            assigned_to: (profile as any).assigned_to || null,
-            created_by_name: createdByName,
-            assigned_to_name: assignedToName,
-            brands: brands,
-          });
+            clientsWithProcesses.push({
+              id: profile.id,
+              full_name: profile.full_name,
+              email: profile.email,
+              phone: profile.phone,
+              company_name: profile.company_name,
+              priority: profile.priority,
+              origin: profile.origin,
+              contract_value: contractVal,
+              process_id: proc.id,
+              brand_name: proc.brand_name,
+              business_area: proc.business_area || null,
+              pipeline_stage: proc.pipeline_stage || ((profile as any).client_funnel_type === 'comercial' ? 'assinou_contrato' : 'protocolado'),
+              process_status: proc.status,
+              created_at: profile.created_at || undefined,
+              cpf_cnpj: profile.cpf_cnpj || undefined,
+              process_number: proc.process_number || undefined,
+              client_funnel_type: (profile as any).client_funnel_type || 'juridico',
+              created_by: (profile as any).created_by || null,
+              assigned_to: (profile as any).assigned_to || null,
+              created_by_name: createdByName,
+              assigned_to_name: assignedToName,
+              brands: brands,
+            });
+          }
         }
       }
 
