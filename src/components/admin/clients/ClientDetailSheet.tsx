@@ -2171,6 +2171,35 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                 <TabsContent value="services" className="mt-0 space-y-4">
                   {client.process_id ? (
                     <div className="space-y-4">
+                      {/* Brand selector when client has multiple brands */}
+                      {clientBrands.length > 1 && (
+                        <div className="rounded-2xl border border-border bg-card p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Tag className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-semibold">Selecionar Marca</span>
+                          </div>
+                          <Select value={selectedServiceBrandId || ''} onValueChange={(v) => {
+                            setSelectedServiceBrandId(v);
+                            const brand = clientBrands.find(b => b.id === v);
+                            if (brand) {
+                              setEditData(prev => ({ ...prev, pipeline_stage: brand.pipeline_stage || 'protocolado' }));
+                              setSelectedServiceType(brand.pipeline_stage || 'protocolado');
+                            }
+                          }}>
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue placeholder="Selecione uma marca" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientBrands.map(b => (
+                                <SelectItem key={b.id} value={b.id}>
+                                  {b.brand_name} {b.process_number ? `(${b.process_number})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
                       {/* Pipeline stage selector */}
                       <div className="rounded-2xl border border-border bg-card p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -2181,8 +2210,9 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                           <Select value={editData.pipeline_stage} onValueChange={async (v) => {
                             setEditData(prev => ({ ...prev, pipeline_stage: v }));
                             setSelectedServiceType(v);
-                            if (client.process_id) {
-                              await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', client.process_id);
+                            const targetProcessId = selectedServiceBrandId || client.process_id;
+                            if (targetProcessId) {
+                              await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', targetProcessId);
                               toast.success('Pipeline atualizado!');
                               onUpdate();
                             }
