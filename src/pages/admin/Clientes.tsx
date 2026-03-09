@@ -764,6 +764,7 @@ export default function AdminClientes() {
               open={detailOpen}
               onOpenChange={setDetailOpen}
               onUpdate={refreshClients}
+              focusProcessId={selectedClient?.process_id || undefined}
             />
           </Suspense>
         )}
