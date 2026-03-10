@@ -169,7 +169,11 @@ export function PublicacaoKanban({ publicacoes, processMap, clientMap, adminMap,
                 )}
                 {items.map(pub => {
                   const proc = pub.process_id ? processMap.get(pub.process_id) : null;
+                  // Fallback: try finding process by process_number_rpi
+                  const resolvedProc = proc || (pub.process_number_rpi ? processNumberMap.get(pub.process_number_rpi) : null);
                   const client = pub.client_id ? clientMap.get(pub.client_id) : null;
+                  // If no client from pub.client_id, try from the resolved process
+                  const resolvedClient = client || (resolvedProc?.user_id ? clientMap.get(resolvedProc.user_id) : null);
                   const admin = pub.admin_id ? adminMap.get(pub.admin_id) : null;
                   let deadlineDate = pub.proximo_prazo_critico;
                   if (!deadlineDate && pub.data_publicacao_rpi) {
