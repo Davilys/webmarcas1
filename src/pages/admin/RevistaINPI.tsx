@@ -1201,18 +1201,29 @@ export default function RevistaINPI() {
                                                          }).eq('id', entry.id);
                                                          if (error) throw error;
 
-                                                         // [SYNC] Propagate edits to publicacoes_marcas
-                                                         const { data: linkedPub } = await supabase.from('publicacoes_marcas')
-                                                           .select('id')
-                                                           .eq('rpi_entry_id', entry.id)
-                                                           .maybeSingle();
-                                                         if (linkedPub) {
-                                                           await supabase.from('publicacoes_marcas').update({
-                                                             brand_name_rpi: editForm.brand_name || null,
-                                                             process_number_rpi: editForm.process_number || null,
-                                                             updated_at: new Date().toISOString(),
-                                                           }).eq('id', linkedPub.id);
-                                                         }
+                                                          // [SYNC] Propagate edits to publicacoes_marcas (with fallback lookup)
+                                                          let linkedPub: { id: string } | null = null;
+                                                          const { data: pubByRpi } = await supabase.from('publicacoes_marcas')
+                                                            .select('id')
+                                                            .eq('rpi_entry_id', entry.id)
+                                                            .maybeSingle();
+                                                          linkedPub = pubByRpi || null;
+                                                          // Fallback: lookup by process_number_rpi if not found by rpi_entry_id
+                                                          if (!linkedPub && editForm.process_number) {
+                                                            const { data: pubByPn } = await supabase.from('publicacoes_marcas')
+                                                              .select('id')
+                                                              .eq('process_number_rpi', editForm.process_number)
+                                                              .maybeSingle();
+                                                            linkedPub = pubByPn || null;
+                                                          }
+                                                          if (linkedPub) {
+                                                            await supabase.from('publicacoes_marcas').update({
+                                                              brand_name_rpi: editForm.brand_name || null,
+                                                              process_number_rpi: editForm.process_number || null,
+                                                              ncl_class: nclArray.length > 0 ? nclArray.join(', ') : null,
+                                                              updated_at: new Date().toISOString(),
+                                                            }).eq('id', linkedPub.id);
+                                                          }
 
                                                          // [SYNC] Also update brand_processes if process_number changed
                                                          if (editForm.process_number && entry.matched_client_id) {
