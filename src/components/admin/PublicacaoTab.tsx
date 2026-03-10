@@ -929,9 +929,14 @@ export default function PublicacaoTab() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     let result = publicacoes.filter(pub => {
-      if (!pub.client_id || !clientMap.get(pub.client_id)) return false;
+      // Try resolving client: direct client_id OR via linked process's user_id
+      const directClient = pub.client_id ? clientMap.get(pub.client_id) : null;
       const proc = pub.process_id ? processMap.get(pub.process_id) : null;
-      const client = pub.client_id ? clientMap.get(pub.client_id) : null;
+      const procByNumber = !proc && (pub as any).process_number_rpi ? processes.find(p => p.process_number === (pub as any).process_number_rpi) : null;
+      const resolvedProc = proc || procByNumber;
+      const resolvedClient = directClient || (resolvedProc?.user_id ? clientMap.get(resolvedProc.user_id) : null);
+      if (!resolvedClient) return false;
+      const client = resolvedClient;
       if (search) {
         const q = search.toLowerCase();
         const matchName = proc?.brand_name?.toLowerCase().includes(q) || (pub as any).brand_name_rpi?.toLowerCase().includes(q);
