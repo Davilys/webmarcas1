@@ -719,7 +719,7 @@ export default function PublicacaoTab() {
     };
 
     doSync();
-  }, [isLoading, rpiEntries, publicacoes, processes, clients, queryClient]);
+  }, [isLoading, rpiEntries, publicacoes, processes, clients, queryClient, submittedRpiEntryIds]);
 
   // ─── Mutations ────
   const createMutation = useMutation({
