@@ -28,6 +28,7 @@ interface Publicacao {
   data_publicacao_rpi: string | null;
   brand_name_rpi?: string | null;
   process_number_rpi?: string | null;
+  ncl_class?: string | null;
 }
 
 interface Props {
