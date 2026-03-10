@@ -419,6 +419,7 @@ export default function PublicacaoTab() {
       if (error) return [];
       return data || [];
     },
+    staleTime: 60000,
   });
 
   const { data: rpiUploads = [] } = useQuery({
