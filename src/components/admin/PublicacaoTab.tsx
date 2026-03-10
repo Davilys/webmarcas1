@@ -396,6 +396,7 @@ export default function PublicacaoTab() {
       const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', adminIds);
       return profiles || [];
     },
+    staleTime: 60000,
   });
 
   const { data: logs = [] } = useQuery({
