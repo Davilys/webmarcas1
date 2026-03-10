@@ -465,7 +465,7 @@ export default function AdminContratos() {
 
   const CONTRACT_TABS = [
     { value: 'all', label: 'Todos' },
-    { value: 'padrao', label: 'Contrato Padrão' },
+    { value: 'padrao', label: 'Contrato Padrão - Registro de Marca INPI' },
     { value: 'premium', label: 'Contrato Premium' },
     { value: 'corporativo', label: 'Contrato Corporativo' },
     { value: 'procuracao', label: 'Procuração' },
