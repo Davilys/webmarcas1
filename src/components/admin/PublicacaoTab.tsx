@@ -1242,6 +1242,7 @@ export default function PublicacaoTab() {
   // ─── Create helpers ────
   const linkedProcessIds = useMemo(() => new Set(publicacoes.map(p => p.process_id)), [publicacoes]);
   const [isAutoLinking, setIsAutoLinking] = useState(false);
+  const [submittedRpiEntryIds, setSubmittedRpiEntryIds] = useState<Set<string>>(new Set());
 
   // ─── Auto-link clients via process_number + brand_name (#autolink) ────
   const handleAutoLinkClients = async () => {
