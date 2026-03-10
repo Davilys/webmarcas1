@@ -1261,9 +1261,8 @@ export default function PublicacaoTab() {
   }, [filtered, processMap, clientMap, adminMap, filterStatus, filterClient, filterPrazo]);
 
   // ─── Create helpers ────
-  const linkedProcessIds = useMemo(() => new Set(publicacoes.map(p => p.process_id)), [publicacoes]);
+  // linkedProcessIds and submittedRpiEntryIds moved above auto-sync useEffect
   const [isAutoLinking, setIsAutoLinking] = useState(false);
-  const [submittedRpiEntryIds, setSubmittedRpiEntryIds] = useState<Set<string>>(new Set());
 
   // ─── Auto-link clients via process_number + brand_name (#autolink) ────
   const handleAutoLinkClients = async () => {
