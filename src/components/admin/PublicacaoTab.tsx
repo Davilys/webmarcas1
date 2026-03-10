@@ -927,9 +927,16 @@ export default function PublicacaoTab() {
   // ─── Status counts ────
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    publicacoes.filter(p => !!p.client_id && !!clientMap.get(p.client_id)).forEach(p => { counts[p.status] = (counts[p.status] || 0) + 1; });
+    publicacoes.filter(p => {
+      const dc = p.client_id ? clientMap.get(p.client_id) : null;
+      if (dc) return true;
+      const pr = p.process_id ? processMap.get(p.process_id) : null;
+      const prByNum = !pr && (p as any).process_number_rpi ? processes.find(pp => pp.process_number === (p as any).process_number_rpi) : null;
+      const rp = pr || prByNum;
+      return rp?.user_id ? !!clientMap.get(rp.user_id) : false;
+    }).forEach(p => { counts[p.status] = (counts[p.status] || 0) + 1; });
     return counts;
-  }, [publicacoes, clientMap]);
+  }, [publicacoes, clientMap, processMap, processes]);
 
   // ─── Filtering + Sorting + Pagination ────
   const filtered = useMemo(() => {
