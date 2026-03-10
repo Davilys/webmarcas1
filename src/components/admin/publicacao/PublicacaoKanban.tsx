@@ -44,6 +44,15 @@ interface Props {
 
 export function PublicacaoKanban({ publicacoes, processMap, clientMap, adminMap, onSelect, selectedId, onStatusChange, resolveRpiNumber }: Props) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+
+  // Build a secondary lookup: process_number -> process for fallback resolution
+  const processNumberMap = useMemo(() => {
+    const map = new Map<string, any>();
+    processMap.forEach((proc) => {
+      if (proc.process_number) map.set(proc.process_number, proc);
+    });
+    return map;
+  }, [processMap]);
   const [dragOverStatus, setDragOverStatus] = useState<PubStatus | null>(null);
 
   const columns = useMemo(() => {
