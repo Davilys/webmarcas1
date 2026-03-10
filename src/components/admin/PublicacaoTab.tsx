@@ -555,10 +555,18 @@ export default function PublicacaoTab() {
       const toInsert: any[] = [];
       const toUpdate: { id: string; data: any }[] = [];
       let skipped = 0;
+      const syncedIds = new Set<string>();
 
       for (const entry of rpiEntries) {
         // Skip if already synced via rpi_entry_id
         if (existingRpiIds.has(entry.id)) {
+          skipped++;
+          syncedIds.add(entry.id);
+          continue;
+        }
+
+        // Skip if already submitted in this session
+        if (submittedRpiEntryIds.has(entry.id)) {
           skipped++;
           continue;
         }
@@ -618,13 +626,22 @@ export default function PublicacaoTab() {
         // Check if there's an existing publicação with the same process number → UPDATE
         if (entry.process_number && existingPubByProcessNumber.has(entry.process_number)) {
           const existingPub = existingPubByProcessNumber.get(entry.process_number)!;
-          // Only update if the RPI entry is newer (has publication date)
           const updateData: any = { ...pubData };
-          delete updateData.process_number_rpi; // keep original
+          delete updateData.process_number_rpi;
           toUpdate.push({ id: existingPub.id, data: updateData });
         } else {
           toInsert.push(pubData);
         }
+        syncedIds.add(entry.id);
+      }
+
+      // Mark all processed entries as submitted to prevent banner from showing
+      if (syncedIds.size > 0) {
+        setSubmittedRpiEntryIds(prev => {
+          const next = new Set(prev);
+          syncedIds.forEach(id => next.add(id));
+          return next;
+        });
       }
 
       // Process updates (with reverse sync for reactivated publications)
