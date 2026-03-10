@@ -1517,14 +1517,28 @@ export default function PublicacaoTab() {
             <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
               {availableRpiEntries.length} entrada(s) da RPI prontas para importar
             </p>
+            <Button
+              size="sm"
+              variant="default"
+              className="ml-auto text-xs"
+              onClick={() => {
+                availableRpiEntries.forEach(entry => handleAutoPopulateFromRPI(entry));
+              }}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Importar todas
+            </Button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {availableRpiEntries.slice(0, 5).map(entry => (
+            {availableRpiEntries.slice(0, 8).map(entry => (
               <Button key={entry.id} size="sm" variant="outline" className="text-xs border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40" onClick={() => handleAutoPopulateFromRPI(entry)}>
                 <Plus className="w-3 h-3 mr-1" />
                 {entry.brand_name || entry.process_number || 'Importar'}
               </Button>
             ))}
+            {availableRpiEntries.length > 8 && (
+              <span className="text-xs text-amber-600 self-center">+{availableRpiEntries.length - 8} mais</span>
+            )}
           </div>
         </motion.div>
       )}
