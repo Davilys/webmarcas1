@@ -466,6 +466,10 @@ export default function PublicacaoTab() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
+  // ─── Sync tracking state (must be before auto-sync useEffect) ────
+  const linkedProcessIds = useMemo(() => new Set(publicacoes.map(p => p.process_id)), [publicacoes]);
+  const [submittedRpiEntryIds, setSubmittedRpiEntryIds] = useState<Set<string>>(new Set());
+
   // ─── Auto-archive expired publications ────
   const autoArchiveRef = useRef(false);
   useEffect(() => {
@@ -555,10 +559,18 @@ export default function PublicacaoTab() {
       const toInsert: any[] = [];
       const toUpdate: { id: string; data: any }[] = [];
       let skipped = 0;
+      const syncedIds = new Set<string>();
 
       for (const entry of rpiEntries) {
         // Skip if already synced via rpi_entry_id
         if (existingRpiIds.has(entry.id)) {
+          skipped++;
+          syncedIds.add(entry.id);
+          continue;
+        }
+
+        // Skip if already submitted in this session
+        if (submittedRpiEntryIds.has(entry.id)) {
           skipped++;
           continue;
         }
@@ -618,13 +630,22 @@ export default function PublicacaoTab() {
         // Check if there's an existing publicação with the same process number → UPDATE
         if (entry.process_number && existingPubByProcessNumber.has(entry.process_number)) {
           const existingPub = existingPubByProcessNumber.get(entry.process_number)!;
-          // Only update if the RPI entry is newer (has publication date)
           const updateData: any = { ...pubData };
-          delete updateData.process_number_rpi; // keep original
+          delete updateData.process_number_rpi;
           toUpdate.push({ id: existingPub.id, data: updateData });
         } else {
           toInsert.push(pubData);
         }
+        syncedIds.add(entry.id);
+      }
+
+      // Mark all processed entries as submitted to prevent banner from showing
+      if (syncedIds.size > 0) {
+        setSubmittedRpiEntryIds(prev => {
+          const next = new Set(prev);
+          syncedIds.forEach(id => next.add(id));
+          return next;
+        });
       }
 
       // Process updates (with reverse sync for reactivated publications)
@@ -702,7 +723,7 @@ export default function PublicacaoTab() {
     };
 
     doSync();
-  }, [isLoading, rpiEntries, publicacoes, processes, clients, queryClient]);
+  }, [isLoading, rpiEntries, publicacoes, processes, clients, queryClient, submittedRpiEntryIds]);
 
   // ─── Mutations ────
   const createMutation = useMutation({
@@ -1240,9 +1261,8 @@ export default function PublicacaoTab() {
   }, [filtered, processMap, clientMap, adminMap, filterStatus, filterClient, filterPrazo]);
 
   // ─── Create helpers ────
-  const linkedProcessIds = useMemo(() => new Set(publicacoes.map(p => p.process_id)), [publicacoes]);
+  // linkedProcessIds and submittedRpiEntryIds moved above auto-sync useEffect
   const [isAutoLinking, setIsAutoLinking] = useState(false);
-  const [submittedRpiEntryIds, setSubmittedRpiEntryIds] = useState<Set<string>>(new Set());
 
   // ─── Auto-link clients via process_number + brand_name (#autolink) ────
   const handleAutoLinkClients = async () => {
@@ -1509,39 +1529,7 @@ export default function PublicacaoTab() {
       {/* ─── CHARTS (#2) ─── */}
       <PublicacaoCharts publicacoes={publicacoes} />
 
-      {/* ─── Auto-populate banner ─── */}
-      {availableRpiEntries.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-xl border border-amber-500/30 bg-amber-50 dark:bg-amber-900/20">
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="w-4 h-4 text-amber-600" />
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              {availableRpiEntries.length} entrada(s) da RPI prontas para importar
-            </p>
-            <Button
-              size="sm"
-              variant="default"
-              className="ml-auto text-xs"
-              onClick={() => {
-                availableRpiEntries.forEach(entry => handleAutoPopulateFromRPI(entry));
-              }}
-            >
-              <Plus className="w-3 h-3 mr-1" />
-              Importar todas
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {availableRpiEntries.slice(0, 8).map(entry => (
-              <Button key={entry.id} size="sm" variant="outline" className="text-xs border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40" onClick={() => handleAutoPopulateFromRPI(entry)}>
-                <Plus className="w-3 h-3 mr-1" />
-                {entry.brand_name || entry.process_number || 'Importar'}
-              </Button>
-            ))}
-            {availableRpiEntries.length > 8 && (
-              <span className="text-xs text-amber-600 self-center">+{availableRpiEntries.length - 8} mais</span>
-            )}
-          </div>
-        </motion.div>
-      )}
+      {/* Auto-sync is fully automatic — no manual banner needed */}
 
       {/* ─── Bulk Actions Bar (#4) ─── */}
       <AnimatePresence>
