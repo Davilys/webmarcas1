@@ -718,64 +718,9 @@ export default function PublicacaoTab() {
     doSync();
   }, [isLoading, rpiEntries, publicacoes, processes, clients, queryClient, submittedRpiEntryIds]);
 
-  // ─── Separate orphan reconciliation (runs independently of sync guard) ────
-  const orphanFixRef = useRef(false);
-  useEffect(() => {
-    if (orphanFixRef.current || isLoading || publicacoes.length === 0) return;
-
-    const orphans = publicacoes.filter(p => !p.client_id && (p as any).rpi_entry_id);
-    if (orphans.length === 0) return;
-
-    orphanFixRef.current = true;
-
-    const fixOrphans = async () => {
-      const orphanRpiIds = orphans.map(p => (p as any).rpi_entry_id as string);
-      const { data: linkedEntries } = await supabase
-        .from('rpi_entries')
-        .select('id, matched_client_id')
-        .in('id', orphanRpiIds)
-        .not('matched_client_id', 'is', null);
-
-      if (linkedEntries && linkedEntries.length > 0) {
-        let orphansFixed = 0;
-        for (const entry of linkedEntries) {
-          const { error } = await supabase
-            .from('publicacoes_marcas')
-            .update({ client_id: entry.matched_client_id })
-            .eq('rpi_entry_id', entry.id)
-            .is('client_id', null);
-          if (!error) orphansFixed++;
-        }
-        if (orphansFixed > 0) {
-          queryClient.invalidateQueries({ queryKey: ['publicacoes-marcas'] });
-          toast.success(`✅ ${orphansFixed} publicação(ões) vinculada(s) ao cliente automaticamente`);
-        }
-      }
-
-      // Also fix orphans via process_id → user_id lookup
-      const processOrphans = publicacoes.filter(p => !p.client_id && p.process_id);
-      if (processOrphans.length > 0) {
-        let fixed = 0;
-        for (const pub of processOrphans) {
-          const proc = processes.find(pr => pr.id === pub.process_id);
-          if (proc?.user_id) {
-            const { error } = await supabase
-              .from('publicacoes_marcas')
-              .update({ client_id: proc.user_id })
-              .eq('id', pub.id)
-              .is('client_id', null);
-            if (!error) fixed++;
-          }
-        }
-        if (fixed > 0) {
-          queryClient.invalidateQueries({ queryKey: ['publicacoes-marcas'] });
-          toast.success(`✅ ${fixed} publicação(ões) vinculada(s) via processo`);
-        }
-      }
-    };
-
-    fixOrphans();
-  }, [isLoading, publicacoes, processes, queryClient]);
+  // ─── Orphan reconciliation removed: orphans are no longer created ────
+  // When client is assigned in Revista INPI, the publicação is created with client_id.
+  // Auto-sync skips entries without matched_client_id.
 
   // ─── Mutations ────
   const createMutation = useMutation({
