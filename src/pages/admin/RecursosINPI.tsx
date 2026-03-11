@@ -1829,7 +1829,7 @@ export default function RecursosINPI() {
                 <Button variant="outline" onClick={() => setStep('select-agent')} className="rounded-xl">Voltar</Button>
                 <Button 
                   onClick={processDocument}
-                  disabled={!procuradorData.titular || !procuradorData.marca || !procuradorData.procurador_novo}
+                  disabled={!procuradorData.titular || !procuradorData.marca}
                   size="lg" 
                   className={`flex-1 gap-3 rounded-xl h-14 text-base shadow-xl bg-gradient-to-r ${agent.color} hover:opacity-90 transition-opacity`}
                 >

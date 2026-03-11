@@ -321,7 +321,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
     "brand_name": "${procuradorData.marca || ''}",
     "ncl_class": "${procuradorData.ncl_class || ''}",
     "holder": "${procuradorData.titular || ''}",
-    "examiner_or_opponent": "${procuradorData.procurador_novo || ''}",
+    "examiner_or_opponent": "Davilys Danques de Oliveira Cunha",
     "legal_basis": "Arts. 216 e 217 da Lei 9.279/96; Arts. 653 a 692 do CC"
   },
   "resource_content": "CONTEÚDO COMPLETO DA PETIÇÃO COM TODAS AS SEÇÕES (texto extenso, profundo e formatado)"
