@@ -346,8 +346,8 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
       pdf.setTextColor(80, 80, 80);
       pdf.text('Procurador', pageWidth / 2, yPos + 6, { align: 'center' });
 
-      if (!isNotif) {
-        // Only show CPF for INPI resources
+      if (!isNotif && !isProcuradorPetition) {
+        // Only show CPF for standard INPI appeal resources
         pdf.text('CPF 393.239.118-79', pageWidth / 2, yPos + 12, { align: 'center' });
       }
 
