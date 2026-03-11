@@ -1720,15 +1720,6 @@ export default function RecursosINPI() {
                           className="rounded-xl"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label>CPF</Label>
-                        <Input
-                          placeholder="000.000.000-00"
-                          value={procuradorData.cpf_procurador_antigo}
-                          onChange={(e) => setProcuradorData(prev => ({ ...prev, cpf_procurador_antigo: e.target.value }))}
-                          className="rounded-xl"
-                        />
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
