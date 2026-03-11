@@ -714,6 +714,7 @@ export default function RecursosINPI() {
     setNotificanteData({ nome: '', cpf_cnpj: '', endereco: '', processo_inpi: '', registro_marca: '', marca: '' });
     setNotificadoData({ nome: '', cpf_cnpj: '', endereco: '' });
     setUserInstructions('');
+    setProcuradorData({ marca: '', processo_inpi: '', ncl_class: '', titular: '', cpf_cnpj_titular: '', procurador_antigo: '', cpf_procurador_antigo: '', procurador_novo: '', cpf_procurador_novo: '', motivo: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (multiFileInputRef.current) multiFileInputRef.current.value = '';
   };
@@ -748,14 +749,21 @@ export default function RecursosINPI() {
     exigencia_merito: resources.filter(r => r.resource_type === 'exigencia_merito').length,
     oposicao: resources.filter(r => r.resource_type === 'oposicao').length,
     notificacao_extrajudicial: resources.filter(r => r.resource_type === 'notificacao_extrajudicial').length,
+    troca_procurador: resources.filter(r => r.resource_type === 'troca_procurador').length,
+    nomeacao_procurador: resources.filter(r => r.resource_type === 'nomeacao_procurador').length,
   };
-  const maxDispatch = Math.max(dispatchStats.indeferimento, dispatchStats.exigencia_merito, dispatchStats.oposicao, dispatchStats.notificacao_extrajudicial, 1);
+  const maxDispatch = Math.max(...Object.values(dispatchStats), 1);
+
+  const isProcuradorType = resourceType === 'troca_procurador' || resourceType === 'nomeacao_procurador';
 
   const getVisibleSteps = () => {
     if (resourceType === 'notificacao_extrajudicial') {
-      return STEPS_FLOW.filter(s => s.key !== 'upload');
+      return STEPS_FLOW.filter(s => s.key !== 'upload' && s.key !== 'procurador-data');
     }
-    return STEPS_FLOW.filter(s => s.key !== 'notificacao-data');
+    if (isProcuradorType) {
+      return STEPS_FLOW.filter(s => s.key !== 'upload' && s.key !== 'notificacao-data');
+    }
+    return STEPS_FLOW.filter(s => s.key !== 'notificacao-data' && s.key !== 'procurador-data');
   };
 
   const currentStepIndex = getVisibleSteps().findIndex(s => s.key === step);
