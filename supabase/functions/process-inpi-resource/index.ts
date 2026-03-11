@@ -10,7 +10,9 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
   indeferimento: 'RECURSO CONTRA INDEFERIMENTO',
   exigencia_merito: 'CUMPRIMENTO DE EXIGÊNCIA DE MÉRITO / RECURSO ADMINISTRATIVO',
   oposicao: 'MANIFESTAÇÃO À OPOSIÇÃO',
-  notificacao_extrajudicial: 'NOTIFICAÇÃO EXTRAJUDICIAL'
+  notificacao_extrajudicial: 'NOTIFICAÇÃO EXTRAJUDICIAL',
+  troca_procurador: 'PETIÇÃO DE TROCA DE PROCURADOR',
+  nomeacao_procurador: 'PETIÇÃO DE NOMEAÇÃO DE PROCURADOR'
 };
 
 function buildNotificacaoPrompt(
