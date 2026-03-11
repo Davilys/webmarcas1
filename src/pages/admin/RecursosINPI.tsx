@@ -648,7 +648,7 @@ export default function RecursosINPI() {
     }
   };
 
-
+  const handleRequestAdjustment = async () => {
     if (!adjustmentNotes.trim()) {
       toast.error('Por favor, descreva os ajustes desejados');
       return;
