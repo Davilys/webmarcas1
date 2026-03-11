@@ -83,7 +83,9 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
   indeferimento: 'Recurso contra Indeferimento',
   exigencia_merito: 'Exigência de Mérito',
   oposicao: 'Manifestação à Oposição',
-  notificacao_extrajudicial: 'Notificação Extrajudicial'
+  notificacao_extrajudicial: 'Notificação Extrajudicial',
+  troca_procurador: 'Troca de Procurador',
+  nomeacao_procurador: 'Nomeação de Procurador'
 };
 
 const RESOURCE_TYPE_CONFIG: Record<string, { icon: typeof Gavel; color: string; gradient: string; description: string }> = {
@@ -110,6 +112,18 @@ const RESOURCE_TYPE_CONFIG: Record<string, { icon: typeof Gavel; color: string; 
     color: 'text-purple-500',
     gradient: 'from-purple-500/10 to-purple-600/5 border-purple-500/20 hover:border-purple-500/40',
     description: 'Para notificar pessoa ou empresa que esteja usando sua marca indevidamente. Documento jurídico completo com fundamentação legal.'
+  },
+  troca_procurador: {
+    icon: UserMinus,
+    color: 'text-orange-500',
+    gradient: 'from-orange-500/10 to-orange-600/5 border-orange-500/20 hover:border-orange-500/40',
+    description: 'Para revogar procurador anterior e nomear novo procurador junto ao INPI. Petição completa com fundamentação na LPI.'
+  },
+  nomeacao_procurador: {
+    icon: UserCheck,
+    color: 'text-teal-500',
+    gradient: 'from-teal-500/10 to-teal-600/5 border-teal-500/20 hover:border-teal-500/40',
+    description: 'Para nomear procurador para representar o titular junto ao INPI. Petição com outorga de poderes e dados do constituinte.'
   }
 };
 
