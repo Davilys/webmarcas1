@@ -72,8 +72,6 @@ interface ProcuradorData {
   cpf_cnpj_titular: string;
   procurador_antigo: string;
   cpf_procurador_antigo: string;
-  procurador_novo: string;
-  cpf_procurador_novo: string;
   motivo: string;
 }
 
