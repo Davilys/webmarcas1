@@ -208,8 +208,11 @@ ${isTroca ? `PROCURADOR ANTERIOR (A SER REVOGADO):
 - CPF: ${procuradorData.cpf_procurador_antigo || 'Não informado'}
 ` : ''}
 NOVO PROCURADOR (A SER NOMEADO):
-- Nome: ${procuradorData.procurador_novo || 'Não informado'}
-- CPF: ${procuradorData.cpf_procurador_novo || 'Não informado'}
+- Nome: Davilys Danques de Oliveira Cunha
+- CPF: 393.239.118-79
+- RG: 50.688.779-0
+- Nacionalidade: Brasileiro, casado
+- Endereço: Av. Brigadeiro Luís Antônio, Nº 2696 - Centro, São Paulo/SP - CEP 01402-000
 
 #motivo_e_instrucoes
 ${procuradorData.motivo || 'O usuário não forneceu instruções adicionais.'}
