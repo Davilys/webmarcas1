@@ -624,7 +624,7 @@ export default function RecursosINPI() {
           brand_name: procuradorData.marca || null,
           ncl_class: procuradorData.ncl_class || null,
           holder: procuradorData.titular,
-          examiner_or_opponent: procuradorData.procurador_novo,
+          examiner_or_opponent: 'Davilys Danques de Oliveira Cunha',
           draft_content: data.resource_content,
           status: 'pending_review'
         })
