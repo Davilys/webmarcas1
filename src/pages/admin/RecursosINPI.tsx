@@ -2115,7 +2115,11 @@ export default function RecursosINPI() {
                 <FileText className="h-5 w-5 text-primary" />
                 {selectedResource?.resource_type === 'notificacao_extrajudicial' 
                   ? 'Notificação Extrajudicial — Papel Timbrado'
-                  : 'Recurso Administrativo — Papel Timbrado'
+                  : selectedResource?.resource_type === 'troca_procurador'
+                    ? 'Petição de Troca de Procurador — Papel Timbrado'
+                    : selectedResource?.resource_type === 'nomeacao_procurador'
+                      ? 'Petição de Nomeação de Procurador — Papel Timbrado'
+                      : 'Recurso Administrativo — Papel Timbrado'
                 }
               </DialogTitle>
             </DialogHeader>
