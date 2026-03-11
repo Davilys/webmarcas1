@@ -580,7 +580,75 @@ export default function RecursosINPI() {
     }
   };
 
-  const handleAdjustResource = async () => {
+  const processProcurador = async () => {
+    if (!procuradorData.titular || !procuradorData.marca) {
+      toast.error('Preencha pelo menos o nome do titular e da marca');
+      return;
+    }
+    setIsProcessing(true);
+    setStep('processing');
+
+    try {
+      const agent = AI_AGENTS[selectedAgent];
+
+      const filesBase64 = await Promise.all(
+        multipleFiles.map(async (f) => ({
+          base64: await fileToBase64(f),
+          type: f.type,
+          name: f.name,
+        }))
+      );
+
+      const { data, error } = await supabase.functions.invoke('process-inpi-resource', {
+        body: {
+          resourceType,
+          agentStrategy: agent.promptExtra,
+          agentName: agent.name,
+          procuradorData,
+          files: filesBase64,
+        }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Erro ao processar petição');
+
+      setExtractedData(data.extracted_data);
+      setDraftContent(data.resource_content);
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data: insertedResource, error: insertError } = await supabase
+        .from('inpi_resources')
+        .insert({
+          user_id: user?.id,
+          resource_type: resourceType,
+          process_number: procuradorData.processo_inpi || null,
+          brand_name: procuradorData.marca || null,
+          ncl_class: procuradorData.ncl_class || null,
+          holder: procuradorData.titular,
+          examiner_or_opponent: procuradorData.procurador_novo,
+          draft_content: data.resource_content,
+          status: 'pending_review'
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      setCurrentResourceId(insertedResource.id);
+      setProcessingProgress(100);
+      setTimeout(() => setStep('review'), 500);
+      const label = resourceType === 'troca_procurador' ? 'Troca de Procurador' : 'Nomeação de Procurador';
+      toast.success(`${label} gerada com sucesso pela estratégia ${agent.name}!`);
+    } catch (error) {
+      console.error('Error processing procurador:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao processar petição');
+      setStep('procurador-data');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+
     if (!adjustmentNotes.trim()) {
       toast.error('Por favor, descreva os ajustes desejados');
       return;
