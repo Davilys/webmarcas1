@@ -295,7 +295,7 @@ export default function RecursosINPI() {
   // Procurador state
   const [procuradorData, setProcuradorData] = useState<ProcuradorData>({
     marca: '', processo_inpi: '', ncl_class: '', titular: '', cpf_cnpj_titular: '',
-    procurador_antigo: '', cpf_procurador_antigo: '', procurador_novo: '', cpf_procurador_novo: '', motivo: ''
+    procurador_antigo: '', cpf_procurador_antigo: '', motivo: ''
   });
   useEffect(() => {
     if (clientSearchTimeoutRef.current) clearTimeout(clientSearchTimeoutRef.current);
