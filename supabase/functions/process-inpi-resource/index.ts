@@ -208,8 +208,11 @@ ${isTroca ? `PROCURADOR ANTERIOR (A SER REVOGADO):
 - CPF: ${procuradorData.cpf_procurador_antigo || 'Não informado'}
 ` : ''}
 NOVO PROCURADOR (A SER NOMEADO):
-- Nome: ${procuradorData.procurador_novo || 'Não informado'}
-- CPF: ${procuradorData.cpf_procurador_novo || 'Não informado'}
+- Nome: Davilys Danques de Oliveira Cunha
+- CPF: 393.239.118-79
+- RG: 50.688.779-0
+- Nacionalidade: Brasileiro, casado
+- Endereço: Av. Brigadeiro Luís Antônio, Nº 2696 - Centro, São Paulo/SP - CEP 01402-000
 
 #motivo_e_instrucoes
 ${procuradorData.motivo || 'O usuário não forneceu instruções adicionais.'}
@@ -318,7 +321,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
     "brand_name": "${procuradorData.marca || ''}",
     "ncl_class": "${procuradorData.ncl_class || ''}",
     "holder": "${procuradorData.titular || ''}",
-    "examiner_or_opponent": "${procuradorData.procurador_novo || ''}",
+    "examiner_or_opponent": "Davilys Danques de Oliveira Cunha",
     "legal_basis": "Arts. 216 e 217 da Lei 9.279/96; Arts. 653 a 692 do CC"
   },
   "resource_content": "CONTEÚDO COMPLETO DA PETIÇÃO COM TODAS AS SEÇÕES (texto extenso, profundo e formatado)"

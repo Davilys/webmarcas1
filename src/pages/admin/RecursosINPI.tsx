@@ -72,8 +72,6 @@ interface ProcuradorData {
   cpf_cnpj_titular: string;
   procurador_antigo: string;
   cpf_procurador_antigo: string;
-  procurador_novo: string;
-  cpf_procurador_novo: string;
   motivo: string;
 }
 
@@ -297,7 +295,7 @@ export default function RecursosINPI() {
   // Procurador state
   const [procuradorData, setProcuradorData] = useState<ProcuradorData>({
     marca: '', processo_inpi: '', ncl_class: '', titular: '', cpf_cnpj_titular: '',
-    procurador_antigo: '', cpf_procurador_antigo: '', procurador_novo: '', cpf_procurador_novo: '', motivo: ''
+    procurador_antigo: '', cpf_procurador_antigo: '', motivo: ''
   });
   useEffect(() => {
     if (clientSearchTimeoutRef.current) clearTimeout(clientSearchTimeoutRef.current);
@@ -626,7 +624,7 @@ export default function RecursosINPI() {
           brand_name: procuradorData.marca || null,
           ncl_class: procuradorData.ncl_class || null,
           holder: procuradorData.titular,
-          examiner_or_opponent: procuradorData.procurador_novo,
+          examiner_or_opponent: 'Davilys Danques de Oliveira Cunha',
           draft_content: data.resource_content,
           status: 'pending_review'
         })
@@ -714,7 +712,7 @@ export default function RecursosINPI() {
     setNotificanteData({ nome: '', cpf_cnpj: '', endereco: '', processo_inpi: '', registro_marca: '', marca: '' });
     setNotificadoData({ nome: '', cpf_cnpj: '', endereco: '' });
     setUserInstructions('');
-    setProcuradorData({ marca: '', processo_inpi: '', ncl_class: '', titular: '', cpf_cnpj_titular: '', procurador_antigo: '', cpf_procurador_antigo: '', procurador_novo: '', cpf_procurador_novo: '', motivo: '' });
+    setProcuradorData({ marca: '', processo_inpi: '', ncl_class: '', titular: '', cpf_cnpj_titular: '', procurador_antigo: '', cpf_procurador_antigo: '', motivo: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (multiFileInputRef.current) multiFileInputRef.current.value = '';
   };
@@ -1736,8 +1734,8 @@ export default function RecursosINPI() {
                 </Card>
               )}
 
-              {/* Novo Procurador */}
-              <Card className="border-emerald-500/20">
+              {/* Novo Procurador (fixo) */}
+              <Card className="border-emerald-500/20 bg-emerald-500/5">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <UserCheck className="h-5 w-5 text-emerald-500" />
@@ -1745,25 +1743,11 @@ export default function RecursosINPI() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Nome Completo *</Label>
-                      <Input
-                        placeholder="Nome do novo procurador"
-                        value={procuradorData.procurador_novo}
-                        onChange={(e) => setProcuradorData(prev => ({ ...prev, procurador_novo: e.target.value }))}
-                        className="rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>CPF</Label>
-                      <Input
-                        placeholder="000.000.000-00"
-                        value={procuradorData.cpf_procurador_novo}
-                        onChange={(e) => setProcuradorData(prev => ({ ...prev, cpf_procurador_novo: e.target.value }))}
-                        className="rounded-xl"
-                      />
-                    </div>
+                  <div className="p-4 rounded-xl bg-background border border-emerald-500/20">
+                    <p className="font-semibold text-foreground">Davilys Danques de Oliveira Cunha</p>
+                    <p className="text-sm text-muted-foreground mt-1">CPF: 393.239.118-79 | RG: 50.688.779-0</p>
+                    <p className="text-sm text-muted-foreground">Av. Brigadeiro Luís Antônio, Nº 2696 - Centro, São Paulo/SP</p>
+                    <p className="text-xs text-emerald-600 mt-2 font-medium">✓ Procurador institucional — dados preenchidos automaticamente</p>
                   </div>
                 </CardContent>
               </Card>
@@ -1845,7 +1829,7 @@ export default function RecursosINPI() {
                 <Button variant="outline" onClick={() => setStep('select-agent')} className="rounded-xl">Voltar</Button>
                 <Button 
                   onClick={processDocument}
-                  disabled={!procuradorData.titular || !procuradorData.marca || !procuradorData.procurador_novo}
+                  disabled={!procuradorData.titular || !procuradorData.marca}
                   size="lg" 
                   className={`flex-1 gap-3 rounded-xl h-14 text-base shadow-xl bg-gradient-to-r ${agent.color} hover:opacity-90 transition-opacity`}
                 >
