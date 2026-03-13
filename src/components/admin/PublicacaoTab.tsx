@@ -787,6 +787,7 @@ export default function PublicacaoTab() {
           data_publicacao_rpi: null,
           brand_name_rpi: proc.brand_name || null,
           process_number_rpi: proc.process_number || null,
+          ncl_class: proc.ncl_classes ? proc.ncl_classes.join(', ') : null,
         } as any);
         return pubData;
       });
