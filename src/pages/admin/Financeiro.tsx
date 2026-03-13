@@ -642,24 +642,80 @@ export default function AdminFinanceiro() {
           className="rounded-2xl border border-border/60 overflow-hidden bg-background/80 backdrop-blur-sm">
 
           {/* Table toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-border/60 bg-muted/20">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar por cliente, descrição..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-background/60 border-border/60 h-9" />
+          <div className="flex flex-col gap-3 p-4 border-b border-border/60 bg-muted/20">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar por número, assunto ou cliente..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-background/60 border-border/60 h-9" />
+              </div>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-full sm:w-36 h-9 bg-background/60 border-border/60">
+                  <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="paid">Pago</SelectItem>
+                  <SelectItem value="overdue">Vencido</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Date quick filters */}
+              <div className="flex items-center border rounded-lg bg-background/60 border-border/60 overflow-hidden">
+                <Button
+                  variant={dateFilter === 'today' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-none h-9 text-xs"
+                  onClick={() => setDateFilter(dateFilter === 'today' ? 'all' : 'today')}
+                >
+                  <Calendar className="h-3.5 w-3.5 mr-1" />
+                  Hoje
+                </Button>
+                <Button
+                  variant={dateFilter === 'week' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-none border-l border-border/60 h-9 text-xs"
+                  onClick={() => setDateFilter(dateFilter === 'week' ? 'all' : 'week')}
+                >
+                  <Calendar className="h-3.5 w-3.5 mr-1" />
+                  Semana
+                </Button>
+                <Button
+                  variant={dateFilter === 'month' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="rounded-none border-l border-border/60 h-9 text-xs"
+                  onClick={() => setDateFilter(dateFilter === 'month' ? 'all' : 'month')}
+                >
+                  <Calendar className="h-3.5 w-3.5 mr-1" />
+                  Mês
+                </Button>
+              </div>
+
+              {/* Month navigator */}
+              <div className="flex items-center border rounded-lg bg-background/60 border-border/60">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-r-none"
+                  onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="px-3 text-sm font-medium capitalize min-w-[120px] text-center">
+                  {format(selectedMonth, "MMM 'de' yyyy", { locale: ptBR })}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-l-none"
+                  onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full sm:w-40 h-9 bg-background/60 border-border/60">
-                <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos status</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="paid">Pago</SelectItem>
-                <SelectItem value="overdue">Vencido</SelectItem>
-                <SelectItem value="cancelled">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <Table>
