@@ -802,6 +802,28 @@ export default function PublicacaoTab() {
             }).eq('id', processId);
           }
         }
+
+        // [SYNC REVERSO] Update rpi_entries.dispatch_type when status changes in Publicações
+        const rpiEntryId = (original as any).rpi_entry_id as string | null;
+        if (rpiEntryId && computed.status && computed.status !== original.status) {
+          const dispatchTypeMap: Record<string, string> = {
+            '003': '003',
+            oposicao: 'Oposição',
+            exigencia_merito: 'Exigência de Mérito',
+            deferimento: 'Deferimento',
+            certificado: 'Certificado',
+            indeferimento: 'Indeferimento',
+            renovacao: 'Renovação',
+            arquivado: 'Arquivado',
+          };
+          const newDispatch = dispatchTypeMap[computed.status as string];
+          if (newDispatch) {
+            await supabase.from('rpi_entries').update({
+              dispatch_type: newDispatch,
+              updated_at: new Date().toISOString(),
+            }).eq('id', rpiEntryId);
+          }
+        }
       }
     },
     onSuccess: () => {

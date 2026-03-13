@@ -1263,16 +1263,27 @@ export default function RevistaINPI() {
                                                           const dispatchValue = matchedDispatch?.value || null;
                                                           const pipelineStage = dispatchValue ? (PUB_STATUS_TO_PIPELINE[dispatchValue] || dispatchValue) : null;
 
-                                                          const pubSyncData: Record<string, any> = {
-                                                            brand_name_rpi: editForm.brand_name || null,
-                                                            process_number_rpi: editForm.process_number || null,
-                                                            ncl_class: nclArray.length > 0 ? nclArray.join(', ') : null,
-                                                            client_id: entry.matched_client_id || null,
-                                                            data_publicacao_rpi: entry.publication_date || null,
-                                                            process_id: resolvedProcessId || null,
-                                                            updated_at: new Date().toISOString(),
-                                                          };
-                                                          if (dispatchValue) pubSyncData.status = dispatchValue;
+                                                           // Calculate deadlines
+                                                           const autoFieldsEdit = calcAutoFields({
+                                                             data_publicacao_rpi: entry.publication_date || null,
+                                                             status: (dispatchValue || '003') as any,
+                                                           }, entry.dispatch_type || null);
+
+                                                           const inlineRpiNumber = selectedUpload?.rpi_number || null;
+
+                                                           const pubSyncData: Record<string, any> = {
+                                                             brand_name_rpi: editForm.brand_name || null,
+                                                             process_number_rpi: editForm.process_number || null,
+                                                             ncl_class: nclArray.length > 0 ? nclArray.join(', ') : null,
+                                                             client_id: entry.matched_client_id || null,
+                                                             data_publicacao_rpi: entry.publication_date || null,
+                                                             process_id: resolvedProcessId || null,
+                                                             rpi_number: inlineRpiNumber,
+                                                             proximo_prazo_critico: autoFieldsEdit.proximo_prazo_critico || null,
+                                                             descricao_prazo: autoFieldsEdit.descricao_prazo || null,
+                                                             updated_at: new Date().toISOString(),
+                                                           };
+                                                           if (dispatchValue) pubSyncData.status = dispatchValue;
 
                                                           if (linkedPub) {
                                                             await supabase.from('publicacoes_marcas').update(pubSyncData).eq('id', linkedPub.id);
