@@ -511,14 +511,20 @@ export default function PublicacaoTab() {
     archiveAll();
   }, [publicacoes, isLoading, queryClient]);
 
+  const autoCreateFromProcessesRef = useRef(false);
   // Reset sync flag when rpiEntries change (new matches made in Revista INPI)
   const prevRpiCountRef = useRef(rpiEntries.length);
+  const prevProcessCountRef = useRef(processes.length);
   useEffect(() => {
     if (rpiEntries.length !== prevRpiCountRef.current) {
       hasSyncedRef.current = false;
       prevRpiCountRef.current = rpiEntries.length;
     }
-  }, [rpiEntries.length]);
+    if (processes.length !== prevProcessCountRef.current) {
+      autoCreateFromProcessesRef.current = false;
+      prevProcessCountRef.current = processes.length;
+    }
+  }, [rpiEntries.length, processes.length]);
 
   useEffect(() => {
     if (hasSyncedRef.current) return;
@@ -718,9 +724,71 @@ export default function PublicacaoTab() {
     doSync();
   }, [isLoading, rpiEntries, publicacoes, processes, clients, queryClient, submittedRpiEntryIds]);
 
-  // ─── Orphan reconciliation removed: orphans are no longer created ────
-  // When client is assigned in Revista INPI, the publicação is created with client_id.
-  // Auto-sync skips entries without matched_client_id.
+  // ─── Auto-create publicações for brand_processes in juridical stages without a Kanban card ────
+  // (ref declared above at line 514)
+  useEffect(() => {
+    if (autoCreateFromProcessesRef.current || isLoading || processes.length === 0) return;
+
+    const PIPELINE_TO_PUB: Record<string, PubStatus> = {
+      '003': '003',
+      oposicao: 'oposicao',
+      exigencia_merito: 'exigencia_merito',
+      indeferimento: 'indeferimento',
+      deferimento: 'deferimento',
+      certificados: 'certificado',
+      renovacao: 'renovacao',
+      distrato: 'arquivado',
+    };
+
+    // Set of process IDs already linked to a publicação
+    const linkedProcIds = new Set(publicacoes.map(p => p.process_id).filter(Boolean));
+
+    // Find brand_processes in juridical stages that have a client (user_id) but no publicação
+    const missing = processes.filter(proc =>
+      proc.user_id &&
+      proc.pipeline_stage &&
+      PIPELINE_TO_PUB[proc.pipeline_stage] &&
+      !linkedProcIds.has(proc.id)
+    );
+
+    if (missing.length === 0) return;
+    autoCreateFromProcessesRef.current = true;
+
+    const createMissing = async () => {
+      const toInsert = missing.map(proc => {
+        const status = PIPELINE_TO_PUB[proc.pipeline_stage!]!;
+        const pubData = calcAutoFields({
+          process_id: proc.id,
+          client_id: proc.user_id,
+          status,
+          tipo_publicacao: 'publicacao_rpi' as PubTipo,
+          data_deposito: proc.deposit_date || null,
+          data_publicacao_rpi: null,
+          brand_name_rpi: proc.brand_name || null,
+          process_number_rpi: proc.process_number || null,
+        } as any);
+        return pubData;
+      });
+
+      const batchSize = 50;
+      let inserted = 0;
+      for (let i = 0; i < toInsert.length; i += batchSize) {
+        const batch = toInsert.slice(i, i + batchSize);
+        const { error } = await supabase.from('publicacoes_marcas').insert(batch);
+        if (error) {
+          console.error('Auto-create from processes error:', error);
+          continue;
+        }
+        inserted += batch.length;
+      }
+      if (inserted > 0) {
+        queryClient.invalidateQueries({ queryKey: ['publicacoes-marcas'] });
+        toast.success(`✅ ${inserted} publicação(ões) criada(s) a partir de processos existentes`, { duration: 5000 });
+      }
+    };
+
+    createMissing();
+  }, [isLoading, processes, publicacoes, queryClient]);
 
   // ─── Mutations ────
   const createMutation = useMutation({
