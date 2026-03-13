@@ -67,6 +67,11 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
           body_text: e.body_text, body_html: e.body_html,
           is_read: e.is_read || false, is_starred: e.is_starred || false,
           received_at: e.received_at,
+          snippet: (e as any).snippet || undefined,
+          has_attachments: (e as any).has_attachments || false,
+          attachments: (e as any).attachments || [],
+          body_fetched_at: (e as any).body_fetched_at || undefined,
+          message_id: (e as any).message_id || undefined,
         })) as Email[];
       }
 
@@ -84,6 +89,11 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
           body_text: e.body_text, body_html: e.body_html,
           is_read: e.is_read || false, is_starred: e.is_starred || false,
           is_archived: true, received_at: e.received_at,
+          snippet: (e as any).snippet || undefined,
+          has_attachments: (e as any).has_attachments || false,
+          attachments: (e as any).attachments || [],
+          body_fetched_at: (e as any).body_fetched_at || undefined,
+          message_id: (e as any).message_id || undefined,
         })) as Email[];
       }
 
