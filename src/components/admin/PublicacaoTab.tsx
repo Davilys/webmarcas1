@@ -1072,8 +1072,8 @@ export default function PublicacaoTab() {
       const client = resolvedClient;
       if (search) {
         const q = search.toLowerCase();
-        const matchName = proc?.brand_name?.toLowerCase().includes(q) || (pub as any).brand_name_rpi?.toLowerCase().includes(q);
-        const matchProc = proc?.process_number?.toLowerCase().includes(q) || (pub as any).process_number_rpi?.toLowerCase().includes(q);
+        const matchName = resolvedProc?.brand_name?.toLowerCase().includes(q) || (pub as any).brand_name_rpi?.toLowerCase().includes(q);
+        const matchProc = resolvedProc?.process_number?.toLowerCase().includes(q) || (pub as any).process_number_rpi?.toLowerCase().includes(q);
         const matchClient = client?.full_name?.toLowerCase().includes(q);
         if (!matchName && !matchProc && !matchClient) return false;
       }
