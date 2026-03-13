@@ -1056,7 +1056,7 @@ export default function PublicacaoTab() {
       // Try resolving client: direct client_id OR via linked process's user_id
       const directClient = pub.client_id ? clientMap.get(pub.client_id) : null;
       const proc = pub.process_id ? processMap.get(pub.process_id) : null;
-      const procByNumber = !proc && (pub as any).process_number_rpi ? processes.find(p => p.process_number === (pub as any).process_number_rpi) : null;
+      const procByNumber = !proc && (pub as any).process_number_rpi ? processNumberMap.get(normalizeProcessNumber((pub as any).process_number_rpi)) : null;
       const resolvedProc = proc || procByNumber;
       const resolvedClient = directClient || (resolvedProc?.user_id ? clientMap.get(resolvedProc.user_id) : null);
       if (!resolvedClient) return false;
