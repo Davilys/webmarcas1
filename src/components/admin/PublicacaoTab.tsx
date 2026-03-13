@@ -785,9 +785,9 @@ export default function PublicacaoTab() {
         const processId = (changes.process_id || original.process_id) as string | null;
         if (processId) {
           const stageMap: Record<string, string> = {
-            '003': 'protocolado',
+            '003': '003',
             oposicao: 'oposicao',
-            exigencia_merito: 'protocolado',
+            exigencia_merito: 'exigencia_merito',
             deferimento: 'deferimento',
             certificado: 'certificados',
             indeferimento: 'indeferimento',

@@ -127,9 +127,9 @@ const PUB_STATUS_TO_PIPELINE: Record<string, string> = {
   exigencia_merito: 'exigencia_merito',
   indeferimento: 'indeferimento',
   deferimento: 'deferimento',
-  certificado: 'certificado',
+  certificado: 'certificados',
   renovacao: 'renovacao',
-  arquivado: 'arquivado',
+  arquivado: 'distrato',
 };
 
 function getDispatchBadge(dispatchType: string | null) {
