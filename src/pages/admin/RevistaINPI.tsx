@@ -532,29 +532,43 @@ export default function RevistaINPI() {
             updated_at: new Date().toISOString(),
           }).eq('id', selectedEntry.id);
 
-          // Sync to publicacoes_marcas
+          // Sync to publicacoes_marcas (with client_id + data_publicacao_rpi)
+          const resolvedProcId = await resolveBrandProcessId(selectedEntry.matched_process_id, selectedEntry.matched_client_id, editForm.process_number);
+          const currentRpiNum = selectedUpload?.rpi_number || null;
+
           const { data: linkedPubEdit } = await supabase.from('publicacoes_marcas')
             .select('id').eq('rpi_entry_id', selectedEntry.id).maybeSingle();
           if (linkedPubEdit) {
             await supabase.from('publicacoes_marcas').update({
               brand_name_rpi: editForm.brand_name || null,
               process_number_rpi: editForm.process_number || null,
+              client_id: selectedEntry.matched_client_id || null,
+              data_publicacao_rpi: selectedEntry.publication_date || null,
+              process_id: resolvedProcId || null,
+              rpi_number: currentRpiNum,
               updated_at: new Date().toISOString(),
             }).eq('id', linkedPubEdit.id);
           }
 
-          // Sync to brand_processes if linked
-          if (editForm.process_number && selectedEntry.matched_client_id) {
-            const { data: bp } = await supabase.from('brand_processes')
-              .select('id').eq('user_id', selectedEntry.matched_client_id)
-              .order('created_at', { ascending: false }).limit(1).maybeSingle();
-            if (bp) {
-              await supabase.from('brand_processes').update({
-                brand_name: editForm.brand_name,
-                process_number: editForm.process_number,
-                ncl_classes: nclArray.map(Number).filter(n => !isNaN(n)),
-                updated_at: new Date().toISOString(),
-              }).eq('id', bp.id);
+          // Sync to brand_processes using resolveBrandProcessId
+          if (resolvedProcId) {
+            const currentDispatchAuto = (selectedEntry.dispatch_type || '').toLowerCase();
+            const matchedDispatchAuto = DISPATCH_TYPE_OPTIONS.find(o => o.label.toLowerCase() === currentDispatchAuto || o.value === currentDispatchAuto);
+            const dispatchValAuto = matchedDispatchAuto?.value || null;
+            const pipelineStageAuto = dispatchValAuto ? (PUB_STATUS_TO_PIPELINE[dispatchValAuto] || dispatchValAuto) : null;
+
+            const bpUpdateAuto: Record<string, any> = {
+              brand_name: editForm.brand_name,
+              process_number: editForm.process_number,
+              ncl_classes: nclArray.map(Number).filter(n => !isNaN(n)),
+              updated_at: new Date().toISOString(),
+            };
+            if (pipelineStageAuto) bpUpdateAuto.pipeline_stage = pipelineStageAuto;
+            await supabase.from('brand_processes').update(bpUpdateAuto).eq('id', resolvedProcId);
+
+            // Store matched_process_id on rpi_entry
+            if (!selectedEntry.matched_process_id) {
+              await supabase.from('rpi_entries').update({ matched_process_id: resolvedProcId }).eq('id', selectedEntry.id);
             }
           }
 
