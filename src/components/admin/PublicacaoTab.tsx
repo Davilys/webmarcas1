@@ -1401,14 +1401,19 @@ export default function PublicacaoTab() {
         return;
       }
 
-      // Step 1: Match by process_number
-      const processByNumber = new Map(processes.filter(p => p.process_number).map(p => [p.process_number!, p]));
+      // Step 1: Match by process_number (normalized)
+      const processByNumber = new Map<string, (typeof processes)[number]>();
+      processes.forEach((proc) => {
+        const key = normalizeProcessNumber(proc.process_number);
+        if (key && !processByNumber.has(key)) processByNumber.set(key, proc);
+      });
       let linkedByProcess = 0;
       const stillOrphans: typeof allOrphans = [];
 
       for (const pub of allOrphans) {
-        if (pub.process_number_rpi) {
-          const proc = processByNumber.get(pub.process_number_rpi);
+        const key = normalizeProcessNumber(pub.process_number_rpi);
+        if (key) {
+          const proc = processByNumber.get(key);
           if (proc && proc.user_id) {
             const { error } = await supabase.from('publicacoes_marcas').update({ client_id: proc.user_id, process_id: proc.id }).eq('id', pub.id);
             if (!error) { linkedByProcess++; continue; }
