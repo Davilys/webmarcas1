@@ -1216,32 +1216,54 @@ export default function RevistaINPI() {
                                                               .maybeSingle();
                                                             linkedPub = pubByPn || null;
                                                           }
+                                                          // Resolve brand_process id for sync
+                                                          const resolvedProcessId = (editForm.process_number && entry.matched_client_id)
+                                                            ? await resolveBrandProcessId(entry.matched_process_id, entry.matched_client_id, editForm.process_number)
+                                                            : entry.matched_process_id || null;
+
+                                                          // Determine current dispatch_type mapped to pipeline_stage
+                                                          const currentDispatch = (entry.dispatch_type || '').toLowerCase();
+                                                          const matchedDispatch = DISPATCH_TYPE_OPTIONS.find(o => o.label.toLowerCase() === currentDispatch || o.value === currentDispatch);
+                                                          const dispatchValue = matchedDispatch?.value || null;
+                                                          const pipelineStage = dispatchValue ? (PUB_STATUS_TO_PIPELINE[dispatchValue] || dispatchValue) : null;
+
+                                                          const pubSyncData: Record<string, any> = {
+                                                            brand_name_rpi: editForm.brand_name || null,
+                                                            process_number_rpi: editForm.process_number || null,
+                                                            ncl_class: nclArray.length > 0 ? nclArray.join(', ') : null,
+                                                            client_id: entry.matched_client_id || null,
+                                                            data_publicacao_rpi: entry.publication_date || null,
+                                                            process_id: resolvedProcessId || null,
+                                                            updated_at: new Date().toISOString(),
+                                                          };
+                                                          if (dispatchValue) pubSyncData.status = dispatchValue;
+
                                                           if (linkedPub) {
-                                                            await supabase.from('publicacoes_marcas').update({
-                                                              brand_name_rpi: editForm.brand_name || null,
-                                                              process_number_rpi: editForm.process_number || null,
-                                                              ncl_class: nclArray.length > 0 ? nclArray.join(', ') : null,
-                                                              updated_at: new Date().toISOString(),
-                                                            }).eq('id', linkedPub.id);
+                                                            await supabase.from('publicacoes_marcas').update(pubSyncData).eq('id', linkedPub.id);
+                                                          } else if (entry.matched_client_id) {
+                                                            // Create publicacao if none exists and we have a client
+                                                            await supabase.from('publicacoes_marcas').insert({
+                                                              ...pubSyncData,
+                                                              status: dispatchValue || '003',
+                                                              tipo_publicacao: 'publicacao_rpi',
+                                                              rpi_entry_id: entry.id,
+                                                            });
                                                           }
 
-                                                         // [SYNC] Also update brand_processes if process_number changed
-                                                         if (editForm.process_number && entry.matched_client_id) {
-                                                           const resolvedProcessId = await resolveBrandProcessId(
-                                                             entry.matched_process_id, entry.matched_client_id, editForm.process_number
-                                                           );
-                                                           if (resolvedProcessId) {
-                                                             await supabase.from('brand_processes').update({
-                                                               brand_name: editForm.brand_name || undefined,
-                                                               process_number: editForm.process_number || undefined,
-                                                               updated_at: new Date().toISOString(),
-                                                             }).eq('id', resolvedProcessId);
-                                                             // Link process_id on publicacoes_marcas
-                                                             if (linkedPub) {
-                                                               await supabase.from('publicacoes_marcas').update({
-                                                                 process_id: resolvedProcessId,
-                                                               }).eq('id', linkedPub.id);
-                                                             }
+                                                         // [SYNC] Update brand_processes: name, number, NCL, and pipeline_stage
+                                                         if (resolvedProcessId) {
+                                                           const bpUpdate: Record<string, any> = {
+                                                             brand_name: editForm.brand_name || undefined,
+                                                             process_number: editForm.process_number || undefined,
+                                                             ncl_classes: nclArray.map(Number).filter(n => !isNaN(n)),
+                                                             updated_at: new Date().toISOString(),
+                                                           };
+                                                           if (pipelineStage) bpUpdate.pipeline_stage = pipelineStage;
+                                                           await supabase.from('brand_processes').update(bpUpdate).eq('id', resolvedProcessId);
+
+                                                           // Store matched_process_id on rpi_entry for future lookups
+                                                           if (!entry.matched_process_id) {
+                                                             await supabase.from('rpi_entries').update({ matched_process_id: resolvedProcessId }).eq('id', entry.id);
                                                            }
                                                          }
 
