@@ -384,30 +384,7 @@ export function EmailView({ email, onBack, onReply, onForward, onUseDraftFromAI 
 
                 {/* Attachments Section */}
                 {displayAttachments.length > 0 && (
-                  <div className="mt-4 p-3 rounded-lg border border-border/50 bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Paperclip className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-xs font-semibold text-foreground">
-                        {displayAttachments.length} anexo{displayAttachments.length > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {displayAttachments.map((att, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-2 p-2 rounded-md border border-border/50 bg-background hover:bg-muted/50 transition-colors"
-                        >
-                          <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{att.filename}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {att.content_type} · {Math.round(att.size / 1024)}KB
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <AttachmentSection emailId={email.id} attachments={displayAttachments} />
                 )}
 
                 {/* AI Draft Preview */}
