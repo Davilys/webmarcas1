@@ -301,10 +301,31 @@ export default function AdminFinanceiro() {
   const copyToClipboard = (text: string) => { navigator.clipboard.writeText(text); toast.success('Código copiado!'); };
 
   const filteredInvoices = invoices.filter(i => {
-    const matchSearch = i.description.toLowerCase().includes(search.toLowerCase()) ||
-      (i.profiles as any)?.full_name?.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase().replace(/[.\-\/]/g, '');
+    const clientName = (i.profiles as any)?.full_name?.toLowerCase() || '';
+    const clientEmail = (i.profiles as any)?.email?.toLowerCase() || '';
+    // Find CPF/CNPJ from clients list
+    const clientRecord = clients.find(c => c.id === i.user_id);
+    const clientCpfCnpj = (clientRecord?.cpf_cnpj || '').replace(/[.\-\/]/g, '').toLowerCase();
+    const matchSearch = !q || i.description.toLowerCase().includes(q) ||
+      clientName.includes(q) || clientEmail.includes(q) || clientCpfCnpj.includes(q);
     const matchStatus = filterStatus === 'all' || normalizeStatus(i.status) === filterStatus;
-    return matchSearch && matchStatus;
+
+    // Date filter
+    let matchDate = true;
+    if (dateFilter !== 'all') {
+      const invoiceDate = new Date(i.created_at || i.due_date);
+      const today = new Date();
+      if (dateFilter === 'today') {
+        matchDate = startOfDay(invoiceDate).getTime() === startOfDay(today).getTime();
+      } else if (dateFilter === 'week') {
+        matchDate = isWithinInterval(invoiceDate, { start: startOfWeek(today, { weekStartsOn: 1 }), end: endOfWeek(today, { weekStartsOn: 1 }) });
+      } else if (dateFilter === 'month') {
+        matchDate = isWithinInterval(invoiceDate, { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) });
+      }
+    }
+
+    return matchSearch && matchStatus && matchDate;
   });
 
   const clientProcesses = processes.filter(p => p.user_id === formData.user_id);
