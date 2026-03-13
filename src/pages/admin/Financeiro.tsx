@@ -128,6 +128,8 @@ export default function AdminFinanceiro() {
 
   const [stats, setStats] = useState({ total: 0, pending: 0, paid: 0, overdue: 0, pendingCount: 0, paidCount: 0, overdueCount: 0 });
   const [syncing, setSyncing] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const handleSyncAsaas = async () => {
     setSyncing(true);
