@@ -115,6 +115,11 @@ export function EmailList({ folder, onSelectEmail, accountId, accountEmail }: Em
         is_read: e.is_read || false,
         is_starred: e.is_starred || false,
         received_at: e.received_at,
+        snippet: (e as any).snippet || undefined,
+        has_attachments: (e as any).has_attachments || false,
+        attachments: (e as any).attachments || [],
+        body_fetched_at: (e as any).body_fetched_at || undefined,
+        message_id: (e as any).message_id || undefined,
       })) as Email[];
 
       // For sent folder, also merge emails from email_logs (sent via the app)
