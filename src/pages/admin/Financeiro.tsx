@@ -639,12 +639,12 @@ export default function AdminFinanceiro() {
         </div>
 
         {/* ── PROGRESS BAR ───────────────────────── */}
-        {stats.total > 0 && canViewFinancialValues && (
+        {filteredStats.total > 0 && canViewFinancialValues && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
             className="rounded-2xl border border-border/60 bg-muted/20 p-4 space-y-3">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-muted-foreground">Composição do Faturamento</span>
-              <span className="text-xs text-muted-foreground">R$ {fmt(stats.total)} total</span>
+              <span className="text-xs text-muted-foreground">R$ {fmt(filteredStats.total)} total</span>
             </div>
             <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/60 gap-0.5">
               <motion.div initial={{ width: 0 }} animate={{ width: `${paidPct}%` }} transition={{ duration: 1, ease: 'easeOut', delay: 0.4 }} className="h-full bg-emerald-500 rounded-l-full" />
@@ -654,7 +654,7 @@ export default function AdminFinanceiro() {
             <div className="flex gap-5 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />Recebido {paidPct.toFixed(0)}%</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />Pendente {pendingPct.toFixed(0)}%</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500/60 inline-block" />Vencido {stats.total > 0 ? ((stats.overdue / stats.total) * 100).toFixed(0) : 0}%</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500/60 inline-block" />Vencido {filteredStats.total > 0 ? ((filteredStats.overdue / filteredStats.total) * 100).toFixed(0) : 0}%</span>
             </div>
           </motion.div>
         )}
