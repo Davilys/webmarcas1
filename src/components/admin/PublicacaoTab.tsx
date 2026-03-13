@@ -989,6 +989,14 @@ export default function PublicacaoTab() {
   // ─── Maps ────
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
   const processMap = useMemo(() => new Map(processes.map(p => [p.id, p])), [processes]);
+  const processNumberMap = useMemo(() => {
+    const map = new Map<string, (typeof processes)[number]>();
+    processes.forEach((proc) => {
+      const key = normalizeProcessNumber(proc.process_number);
+      if (key && !map.has(key)) map.set(key, proc);
+    });
+    return map;
+  }, [processes]);
   const adminMap = useMemo(() => new Map(admins.map(a => [a.id, a])), [admins]);
 
   // ─── RPI resolution maps ────
