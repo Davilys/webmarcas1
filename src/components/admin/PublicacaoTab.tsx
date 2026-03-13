@@ -511,6 +511,7 @@ export default function PublicacaoTab() {
     archiveAll();
   }, [publicacoes, isLoading, queryClient]);
 
+  const autoCreateFromProcessesRef = useRef(false);
   // Reset sync flag when rpiEntries change (new matches made in Revista INPI)
   const prevRpiCountRef = useRef(rpiEntries.length);
   const prevProcessCountRef = useRef(processes.length);
