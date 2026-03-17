@@ -234,6 +234,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   // Optional payment dates for PIX and Boleto (Admin can customize)
   const [pixPaymentDate, setPixPaymentDate] = useState<Date | undefined>(undefined);
   const [boletoVencimentoDate, setBoletoVencimentoDate] = useState<Date | undefined>(undefined);
+  const [distratoMultaDueDate, setDistratoMultaDueDate] = useState<Date | undefined>(undefined);
 
   // Legacy form data for existing client flows
   const [formData, setFormData] = useState({
