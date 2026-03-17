@@ -2214,6 +2214,7 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
                           <Select value={editData.pipeline_stage} onValueChange={async (v) => {
                             setEditData(prev => ({ ...prev, pipeline_stage: v }));
                             setSelectedServiceType(v);
+                            setActiveTab('services');
                             const targetProcessId = selectedServiceBrandId || client.process_id;
                             if (targetProcessId) {
                               await supabase.from('brand_processes').update({ pipeline_stage: v }).eq('id', targetProcessId);
