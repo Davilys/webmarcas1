@@ -961,6 +961,46 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
 
       toast.success('Contrato criado com sucesso');
 
+      // Create Asaas charge for Distrato com Multa
+      if (isDistratoMulta && formData.penalty_value && parseFloat(formData.penalty_value) > 0 && userId) {
+        try {
+          const session = await supabase.auth.getSession();
+          const penaltyDueDate = distratoMultaDueDate 
+            ? distratoMultaDueDate.toISOString().split('T')[0]
+            : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // Default 3 days
+          
+          const invoiceRes = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-invoice`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.data.session?.access_token}`,
+              },
+              body: JSON.stringify({
+                clientId: userId,
+                description: `Multa Distrato - ${formData.brand_name || contractSubject}`,
+                value: parseFloat(formData.penalty_value),
+                dueDate: penaltyDueDate,
+                billingType: 'BOLETO',
+                installmentCount: parseInt(formData.penalty_installments) > 1 ? parseInt(formData.penalty_installments) : undefined,
+                contractId: contract.id,
+              }),
+            }
+          );
+          const invoiceResult = await invoiceRes.json();
+          if (invoiceRes.ok && !invoiceResult.error) {
+            toast.success(`Cobrança da multa de R$ ${parseFloat(formData.penalty_value).toFixed(2)} criada no Asaas`);
+          } else {
+            console.error('Error creating penalty invoice:', invoiceResult);
+            toast.warning('Distrato criado, mas houve erro ao criar cobrança da multa no Asaas');
+          }
+        } catch (invoiceErr) {
+          console.error('Error creating penalty invoice:', invoiceErr);
+          toast.warning('Distrato criado, mas houve erro ao criar cobrança da multa');
+        }
+      }
+
       // Check if it's a standard contract template that needs automatic link generation
       const isStandardContractTemplate = selectedTemplate?.name.toLowerCase().includes('registro de marca') ||
                                           selectedTemplate?.name.toLowerCase().includes('padrão');
