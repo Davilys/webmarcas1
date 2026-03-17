@@ -3222,7 +3222,41 @@ export function ClientDetailSheet({ client: clientProp, open, onOpenChange, onUp
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ─── CREATE INVOICE DIALOG ─── */}
+      {/* ─── DELETE BRAND CONFIRM ─── */}
+      <AlertDialog open={!!deletingBrandId} onOpenChange={(open) => { if (!open) setDeletingBrandId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" />Excluir Marca</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta marca e todos os dados vinculados (publicações, contratos, documentos)? Esta ação é irreversível.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingBrandId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!deletingBrandId) return;
+                try {
+                  // Delete linked publicacoes_marcas first
+                  await supabase.from('publicacoes_marcas').delete().eq('process_id', deletingBrandId);
+                  // Delete the brand process
+                  const { error } = await supabase.from('brand_processes').delete().eq('id', deletingBrandId);
+                  if (error) throw error;
+                  toast.success('Marca excluída com sucesso!');
+                  setDeletingBrandId(null);
+                  setExpandedBrandId(null);
+                  fetchClientData();
+                  onUpdate();
+                } catch (err: any) {
+                  toast.error('Erro ao excluir marca: ' + err.message);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <CreateInvoiceDialog
         open={showNewInvoiceDialog}
         onOpenChange={setShowNewInvoiceDialog}
