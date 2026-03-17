@@ -1130,6 +1130,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setPaymentMethod(null);
     setPixPaymentDate(undefined);
     setBoletoVencimentoDate(undefined);
+    setDistratoMultaDueDate(undefined);
     // Reset multiple brands state
     setBrandQuantity(1);
     setBrandsArray([{ brandName: '', businessArea: '', nclClass: '' }]);
