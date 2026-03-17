@@ -234,6 +234,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
   // Optional payment dates for PIX and Boleto (Admin can customize)
   const [pixPaymentDate, setPixPaymentDate] = useState<Date | undefined>(undefined);
   const [boletoVencimentoDate, setBoletoVencimentoDate] = useState<Date | undefined>(undefined);
+  const [distratoMultaDueDate, setDistratoMultaDueDate] = useState<Date | undefined>(undefined);
 
   // Legacy form data for existing client flows
   const [formData, setFormData] = useState({
@@ -889,20 +890,28 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                                selectedTemplate?.name.toLowerCase().includes('manutencao') ||
                                selectedTemplate?.name.toLowerCase().includes('manutenção');
 
+      // Detect distrato com multa
+      const isDistratoMulta = selectedTemplate ? getDocumentTypeFromTemplateName(selectedTemplate.name) === 'distrato_multa' : formData.document_type === 'distrato_multa';
+
       // Calculate contract value: for new clients OR existing clients with standard template, use calculated value
       // For monitoramento, force R$ 59.00
+      // For distrato com multa, use penalty_value
       const contractValue = isMonitoramento
         ? 59.00
-        : (isNewClient 
-          ? getContractValue() 
-          : (isStandardTemplate ? getContractValue() : (formData.contract_value ? parseFloat(formData.contract_value) : null)));
+        : isDistratoMulta && formData.penalty_value
+          ? parseFloat(formData.penalty_value)
+          : (isNewClient 
+            ? getContractValue() 
+            : (isStandardTemplate ? getContractValue() : (formData.contract_value ? parseFloat(formData.contract_value) : null)));
 
-      // Calculate custom due date based on payment method
-      const customDueDate = paymentMethod === 'avista' && pixPaymentDate 
-        ? pixPaymentDate.toISOString().split('T')[0]
-        : paymentMethod === 'boleto3x' && boletoVencimentoDate
-          ? boletoVencimentoDate.toISOString().split('T')[0]
-          : null;
+      // Calculate custom due date based on payment method or distrato multa
+      const customDueDate = isDistratoMulta && distratoMultaDueDate
+        ? distratoMultaDueDate.toISOString().split('T')[0]
+        : paymentMethod === 'avista' && pixPaymentDate 
+          ? pixPaymentDate.toISOString().split('T')[0]
+          : paymentMethod === 'boleto3x' && boletoVencimentoDate
+            ? boletoVencimentoDate.toISOString().split('T')[0]
+            : null;
 
       // Get current admin user to register as contract creator
       const { data: { user: adminUser } } = await supabase.auth.getUser();
@@ -951,6 +960,46 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       }
 
       toast.success('Contrato criado com sucesso');
+
+      // Create Asaas charge for Distrato com Multa
+      if (isDistratoMulta && formData.penalty_value && parseFloat(formData.penalty_value) > 0 && userId) {
+        try {
+          const session = await supabase.auth.getSession();
+          const penaltyDueDate = distratoMultaDueDate 
+            ? distratoMultaDueDate.toISOString().split('T')[0]
+            : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // Default 3 days
+          
+          const invoiceRes = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin-invoice`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.data.session?.access_token}`,
+              },
+              body: JSON.stringify({
+                clientId: userId,
+                description: `Multa Distrato - ${formData.brand_name || contractSubject}`,
+                value: parseFloat(formData.penalty_value),
+                dueDate: penaltyDueDate,
+                billingType: 'BOLETO',
+                installmentCount: parseInt(formData.penalty_installments) > 1 ? parseInt(formData.penalty_installments) : undefined,
+                contractId: contract.id,
+              }),
+            }
+          );
+          const invoiceResult = await invoiceRes.json();
+          if (invoiceRes.ok && !invoiceResult.error) {
+            toast.success(`Cobrança da multa de R$ ${parseFloat(formData.penalty_value).toFixed(2)} criada no Asaas`);
+          } else {
+            console.error('Error creating penalty invoice:', invoiceResult);
+            toast.warning('Distrato criado, mas houve erro ao criar cobrança da multa no Asaas');
+          }
+        } catch (invoiceErr) {
+          console.error('Error creating penalty invoice:', invoiceErr);
+          toast.warning('Distrato criado, mas houve erro ao criar cobrança da multa');
+        }
+      }
 
       // Check if it's a standard contract template that needs automatic link generation
       const isStandardContractTemplate = selectedTemplate?.name.toLowerCase().includes('registro de marca') ||
@@ -1129,6 +1178,7 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     setPaymentMethod(null);
     setPixPaymentDate(undefined);
     setBoletoVencimentoDate(undefined);
+    setDistratoMultaDueDate(undefined);
     // Reset multiple brands state
     setBrandQuantity(1);
     setBrandsArray([{ brandName: '', businessArea: '', nclClass: '' }]);
@@ -2256,13 +2306,13 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                       {formData.document_type === 'distrato_multa' && (
                         <>
                           <div className="space-y-2">
-                            <Label>Valor da Multa (R$)</Label>
+                            <Label>Valor da Multa (R$) *</Label>
                             <Input
                               type="number"
                               step="0.01"
                               value={formData.penalty_value}
                               onChange={(e) => setFormData({ ...formData, penalty_value: e.target.value })}
-                              placeholder="398.00"
+                              placeholder="398,00"
                             />
                           </div>
                           <div className="space-y-2">
@@ -2274,6 +2324,58 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                               placeholder="1"
                             />
                           </div>
+                          <div className="space-y-2 col-span-2">
+                            <Label>Data de Cobrança da Multa</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !distratoMultaDueDate && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {distratoMultaDueDate ? format(distratoMultaDueDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data de vencimento"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={distratoMultaDueDate}
+                                  onSelect={setDistratoMultaDueDate}
+                                  disabled={(date) => date < new Date()}
+                                  initialFocus
+                                  className={cn("p-3 pointer-events-auto")}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground">
+                              Se não selecionar, será usado vencimento em 3 dias.
+                            </p>
+                          </div>
+                          {formData.penalty_value && parseFloat(formData.penalty_value) > 0 && (
+                            <div className="col-span-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-2">
+                              <h4 className="font-semibold text-amber-800 dark:text-amber-200 text-sm">Resumo da Cobrança da Multa</h4>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <span className="text-muted-foreground">Valor da multa:</span>
+                                <span className="font-bold text-primary">
+                                  {parseInt(formData.penalty_installments) > 1 
+                                    ? `${formData.penalty_installments}x de R$ ${parseFloat(formData.penalty_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                    : `R$ ${parseFloat(formData.penalty_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                  }
+                                </span>
+                                <span className="text-muted-foreground">Vencimento:</span>
+                                <span className="font-medium">
+                                  {distratoMultaDueDate ? format(distratoMultaDueDate, "dd/MM/yyyy", { locale: ptBR }) : 'Em 3 dias (automático)'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                A cobrança será criada automaticamente no Asaas ao salvar.
+                              </p>
+                            </div>
+                          )}
                         </>
                       )}
 
