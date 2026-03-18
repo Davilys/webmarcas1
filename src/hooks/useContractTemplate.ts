@@ -230,7 +230,7 @@ CONTRATANTE:
 {{nome_cliente}}
 CPF/CNPJ: {{cpf_cnpj}}`;
 
-// Corporate contract template - R$1.194/mês recorrente + marcas ilimitadas
+// Corporate contract template - R$1.497/mês recorrente + marcas ilimitadas
 const CORPORATE_CONTRACT_TEMPLATE = `CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS CORPORATIVO PARA REGISTRO DE MARCA JUNTO AO INPI
 
 Por este instrumento particular de prestação de serviços, que fazem, de um lado:
