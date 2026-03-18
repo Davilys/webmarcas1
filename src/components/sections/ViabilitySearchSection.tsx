@@ -542,78 +542,82 @@ const ViabilitySearchSection = ({ compact = false }: { compact?: boolean }) => {
           isSearching ? (
             <INPISearchAnimation key="searching" brandName={brandName} />
           ) : (
-            <motion.form
+            <motion.div
               key="form"
-              onSubmit={handleSearch}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
-              className="p-6 md:p-8"
+              className="text-center"
             >
-              <h3 className="font-display text-lg md:text-xl font-bold text-foreground mb-1">
-                Consulte a viabilidade da sua <span className="gradient-text">marca</span>
-              </h3>
-              <p className="text-sm text-muted-foreground mb-6">
+              {/* Title */}
+              <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-2 leading-tight">
+                Consulte a viabilidade da sua{" "}
+                <span className="gradient-text">marca</span>
+              </h2>
+              <p className="text-sm md:text-base text-muted-foreground mb-8">
                 Pesquisa automática na base oficial do INPI em tempo real.
               </p>
 
-              {/* Mini Feature Cards */}
-              <div className="grid grid-cols-3 gap-2 mb-6">
+              {/* Feature Cards */}
+              <div className="grid grid-cols-3 gap-3 mb-8">
                 {FEATURE_CARDS.map((item, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/40 bg-muted/20 px-2 py-3 text-center">
-                    <item.icon className="w-5 h-5 text-primary" strokeWidth={1.5} />
-                    <p className="font-medium text-foreground text-xs leading-tight">{item.label}</p>
-                    <p className="text-[10px] text-muted-foreground leading-snug">{item.sub}</p>
+                  <div key={i} className="flex flex-col items-center gap-2 rounded-2xl border border-border/50 bg-card/50 px-3 py-4 text-center">
+                    <item.icon className="w-6 h-6 text-primary" strokeWidth={1.5} />
+                    <p className="font-semibold text-foreground text-sm leading-tight">{item.label}</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{item.sub}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="brandNameCompact" className="block text-sm font-bold text-foreground mb-2">
-                    Nome da Marca <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    id="brandNameCompact"
-                    type="text"
-                    value={brandName}
-                    onChange={(e) => setBrandName(e.target.value)}
-                    placeholder="Ex: WebMarcas, TechFlow, BioVida..."
-                    className="w-full h-12 rounded-xl border border-border/60 bg-muted/30 px-4 text-base text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all disabled:opacity-50"
+              {/* Form inside a card */}
+              <form onSubmit={handleSearch} className="rounded-2xl border border-border/50 bg-card/50 p-6 text-left">
+                <div className="space-y-5">
+                  <div>
+                    <label htmlFor="brandNameCompact" className="block text-sm font-bold text-foreground mb-2">
+                      Nome da Marca <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      id="brandNameCompact"
+                      type="text"
+                      value={brandName}
+                      onChange={(e) => setBrandName(e.target.value)}
+                      placeholder="Ex: WebMarcas, TechFlow, BioVida..."
+                      className="w-full h-12 rounded-xl border border-border/60 bg-background px-4 text-base text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all disabled:opacity-50"
+                      disabled={isSearching}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="businessAreaCompact" className="block text-sm font-bold text-foreground mb-2">
+                      Ramo de Atividade <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      id="businessAreaCompact"
+                      type="text"
+                      value={businessArea}
+                      onChange={(e) => setBusinessArea(e.target.value)}
+                      placeholder="Ex: Serviços Jurídicos, Alimentação, Tecnologia..."
+                      className="w-full h-12 rounded-xl border border-border/60 bg-background px-4 text-base text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all disabled:opacity-50"
+                      disabled={isSearching}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
                     disabled={isSearching}
-                  />
+                    className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold text-base flex items-center justify-center gap-2.5 hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Search className="w-5 h-5" />
+                    Consultar Viabilidade
+                  </button>
                 </div>
 
-                <div>
-                  <label htmlFor="businessAreaCompact" className="block text-sm font-bold text-foreground mb-2">
-                    Ramo de Atividade <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    id="businessAreaCompact"
-                    type="text"
-                    value={businessArea}
-                    onChange={(e) => setBusinessArea(e.target.value)}
-                    placeholder="Ex: Alimentação, Tecnologia..."
-                    className="w-full h-12 rounded-xl border border-border/60 bg-muted/30 px-4 text-base text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all disabled:opacity-50"
-                    disabled={isSearching}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSearching}
-                  className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold text-base flex items-center justify-center gap-2.5 hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <Search className="w-5 h-5" />
-                  Consultar Viabilidade
-                </button>
-              </div>
-
-              <p className="mt-4 text-center text-xs text-muted-foreground">
-                🔒 Consulta gratuita • Resultado em segundos
-              </p>
-            </motion.form>
+                <p className="mt-4 text-center text-xs text-muted-foreground">
+                  🔒 Consulta gratuita • Resultado em segundos • Sem cadastro necessário
+                </p>
+              </form>
+            </motion.div>
           )
         ) : (
           <motion.div
