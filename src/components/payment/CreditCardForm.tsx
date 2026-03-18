@@ -13,14 +13,16 @@ interface CreditCardFormProps {
   installmentValue: number;
   dueDate: string;
   customerId: string;
-  invoiceId: string; // Changed from paymentId to invoiceId (internal DB ID)
-  contractId?: string; // Optional contract ID to update
+  invoiceId: string;
+  contractId?: string;
   holderName: string;
   holderEmail: string;
   holderCpfCnpj: string;
   holderPostalCode: string;
   holderPhone?: string;
-  holderAddressNumber?: string; // Address number for Asaas
+  holderAddressNumber?: string;
+  plan?: 'essencial' | 'premium' | 'corporativo';
+  brandName?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
 }
