@@ -506,6 +506,12 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       case 'avista': return `PIX à vista - R$ ${(699 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
       case 'cartao6x': return `Cartão 6x de R$ ${(199 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(1194 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
       case 'boleto3x': return `Boleto 3x de R$ ${(399 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(1197 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
+      case 'recorrente_cartao': {
+        const tName = selectedTemplate?.name.toLowerCase() || '';
+        if (tName.includes('corporativo')) return 'Cartão Recorrente - R$ 1.497,00/mês (Corporativo)';
+        if (tName.includes('premium')) return `Cartão Recorrente - R$ ${(398 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês (Premium)${suffix}`;
+        return 'Cartão Recorrente';
+      }
       default: return 'Nenhuma (sem cobrança)';
     }
   };
