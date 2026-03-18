@@ -40,6 +40,7 @@ interface PaymentRequest {
   classDescriptions?: string[];
   suggestedClasses?: number[];
   suggestedClassDescriptions?: string[];
+  plan?: 'essencial' | 'premium' | 'corporativo';
 }
 
 interface ContractTemplate {
