@@ -112,6 +112,7 @@ interface PaymentData {
     bankSlipUrl?: string;
     pixQrCode?: string;
     pixPayload?: string;
+    plan?: string;
   };
 }
 

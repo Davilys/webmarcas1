@@ -24,6 +24,10 @@ interface AsaasData {
   invoiceUrl: string;
   bankSlipUrl?: string;
   dueDate?: string;
+  installmentCount?: number;
+  installmentValue?: number;
+  plan?: string;
+  isRecurringPlan?: boolean;
   pixQrCode?: {
     encodedImage?: string;
     payload?: string;
@@ -48,6 +52,7 @@ interface OrderData {
   leadId: string;
   contractId: string;
   invoiceId?: string;
+  plan?: string;
   asaas: AsaasData;
 }
 
