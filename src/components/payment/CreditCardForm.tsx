@@ -21,7 +21,7 @@ interface CreditCardFormProps {
   holderPostalCode: string;
   holderPhone?: string;
   holderAddressNumber?: string;
-  plan?: 'essencial' | 'premium' | 'corporativo';
+  plan?: string;
   brandName?: string;
   onSuccess: () => void;
   onError: (error: string) => void;
