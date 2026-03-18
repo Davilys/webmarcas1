@@ -76,28 +76,6 @@ const HeroSection = () => {
               {t("hero.subtitle")}
             </p>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-3 mb-5">
-              <Button variant="hero" size="xl" asChild>
-                <a href="#consultar" className="group">
-                  {t("hero.cta.check")}
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </a>
-              </Button>
-              <Button variant="hero-outline" size="xl" asChild>
-                <a href="#precos">
-                  {t("hero.cta.register")}
-                </a>
-              </Button>
-            </div>
-
-            {/* Urgency Banner */}
-            <div className="flex items-center justify-center lg:justify-start gap-2 p-3 rounded-xl bg-primary/10 border border-primary/20 max-w-md mx-auto lg:mx-0 mb-6">
-              <Flame className="w-5 h-5 text-destructive shrink-0" />
-              <p className="text-sm font-medium text-foreground">
-                {t("hero.urgency")} <span className="font-bold text-destructive">{getNextFridayFormatted()}</span>
-              </p>
-            </div>
 
             {/* Social Proof */}
             <div className="flex flex-col sm:flex-row items-center lg:items-start gap-3 rounded-2xl bg-primary p-4 max-w-md mx-auto lg:mx-0">
