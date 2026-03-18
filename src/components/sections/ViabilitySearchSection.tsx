@@ -549,7 +549,7 @@ const ViabilitySearchSection = ({ compact = false }: { compact?: boolean }) => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
-              className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-md shadow-xl p-6 md:p-8"
+              className="p-6 md:p-8"
             >
               <h3 className="font-display text-lg md:text-xl font-bold text-foreground mb-1">
                 Consulte a viabilidade da sua <span className="gradient-text">marca</span>
@@ -620,7 +620,7 @@ const ViabilitySearchSection = ({ compact = false }: { compact?: boolean }) => {
             key="result-compact"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-border/60 bg-card/80 backdrop-blur-md shadow-xl p-6 md:p-8 max-h-[70vh] overflow-y-auto"
+            className="p-6 md:p-8 max-h-[70vh] overflow-y-auto"
           >
             {/* Result Header */}
             {(() => {
