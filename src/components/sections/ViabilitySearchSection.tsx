@@ -309,7 +309,7 @@ function CommercialIntelligenceModule({ classes, businessArea, inpiTotal = 0, cn
   );
 }
 
-const ViabilitySearchSection = () => {
+const ViabilitySearchSection = ({ compact = false }: { compact?: boolean }) => {
   const [brandName, setBrandName] = useState("");
   const [businessArea, setBusinessArea] = useState("");
   const [isSearching, setIsSearching] = useState(false);
