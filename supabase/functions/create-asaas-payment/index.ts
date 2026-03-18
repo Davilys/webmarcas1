@@ -1168,6 +1168,8 @@ serve(async (req) => {
       installmentCount,
       installmentValue,
       dueDate: dueDateString,
+      plan: effectivePlan,
+      isRecurringPlan,
       // For card payments: no invoiceUrl or bankSlipUrl
       invoiceUrl: isCardPayment ? null : (paymentData.invoiceUrl || null),
       bankSlipUrl: isCardPayment ? null : (paymentData.bankSlipUrl || null),
