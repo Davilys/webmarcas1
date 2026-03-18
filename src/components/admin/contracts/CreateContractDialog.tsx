@@ -1281,6 +1281,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
                                    selectedTemplate?.name.toLowerCase().includes('manutencao') ||
                                    selectedTemplate?.name.toLowerCase().includes('manutenção');
 
+  // Detect Premium/Corporativo recurring plan templates
+  const isPremiumTemplate = selectedTemplate?.name.toLowerCase().includes('premium') && selectedTemplate?.name.toLowerCase().includes('registro');
+  const isCorporativoTemplate = selectedTemplate?.name.toLowerCase().includes('corporativo') && selectedTemplate?.name.toLowerCase().includes('registro');
+  const isRecurringTemplate = isPremiumTemplate || isCorporativoTemplate;
+
   // Show "Criar e Enviar Link" button for special documents OR standard contract templates OR monitoramento
   const isStandardContractTemplate = selectedTemplate?.name.toLowerCase().includes('registro de marca') ||
                                       selectedTemplate?.name.toLowerCase().includes('padrão') ||
