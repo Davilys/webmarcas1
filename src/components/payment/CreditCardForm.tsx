@@ -129,13 +129,15 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
       // Use supabase.functions.invoke for consistent auth handling
       const { data, error } = await supabase.functions.invoke('process-credit-card-payment', {
         body: {
-          invoiceId, // Internal invoice ID
+          invoiceId,
           customerId,
-          contractId, // For updating contract with Asaas payment ID
+          contractId,
           value,
           installmentCount,
           installmentValue,
           dueDate,
+          plan: plan || 'essencial',
+          brandName: brandName || '',
           creditCard: {
             holderName: cardHolderName.toUpperCase(),
             number: cardNumber.replace(/\s/g, ''),
