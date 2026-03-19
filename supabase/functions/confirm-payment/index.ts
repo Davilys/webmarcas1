@@ -140,7 +140,7 @@ serve(async (req) => {
     // ========================================
     // STEP 2: Create/Update profile
     // ========================================
-    const { data: existingProfile } = await supabaseAdmin
+    const { data: existingProfileById } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('id', userId)
