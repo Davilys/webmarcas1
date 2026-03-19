@@ -716,39 +716,62 @@ serve(async (req) => {
         }
       }
     } else {
-      // Standard INPI resource flow
-      const { fileBase64, fileType } = body;
-
-      if (!fileBase64 || !fileType) {
-        return new Response(
-          JSON.stringify({ error: 'Parâmetros obrigatórios ausentes (fileBase64, fileType)' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      // Standard INPI resource flow - supports multiple files
+      const { fileBase64, fileType, files: multiFiles } = body;
 
       const resourceTypeLabel = RESOURCE_TYPE_LABELS[resourceType] || 'RECURSO ADMINISTRATIVO';
       systemPrompt = buildSystemPrompt(resourceTypeLabel, currentDate, agentStrategy, agentName);
 
+      const fileCount = multiFiles ? multiFiles.length : (fileBase64 ? 1 : 0);
+      
       userContent.push({
         type: "text",
-        text: "Analise o documento PDF anexado do INPI e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras, seguindo rigorosamente TODAS as 8 seções obrigatórias com a extensão mínima especificada para cada uma. NÃO simplifique, NÃO encurte, NÃO produza texto genérico. Cada argumento deve ser desenvolvido em múltiplos parágrafos com profundidade jurídica real."
+        text: `Analise ${fileCount > 1 ? `os ${fileCount} documentos anexados` : 'o documento PDF anexado'} do INPI e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras, seguindo rigorosamente TODAS as 8 seções obrigatórias com a extensão mínima especificada para cada uma. NÃO simplifique, NÃO encurte, NÃO produza texto genérico. Cada argumento deve ser desenvolvido em múltiplos parágrafos com profundidade jurídica real.${fileCount > 1 ? ' Analise TODOS os documentos em conjunto para uma defesa mais robusta e detalhada.' : ''}`
       });
 
-      if (fileType === 'application/pdf') {
-        userContent.push({
-          type: "file",
-          file: {
-            filename: "documento_inpi.pdf",
-            file_data: `data:application/pdf;base64,${fileBase64}`
+      if (multiFiles && multiFiles.length > 0) {
+        // Multiple files flow
+        for (const file of multiFiles) {
+          if (file.type === 'application/pdf') {
+            userContent.push({
+              type: "file",
+              file: {
+                filename: file.name || "documento_inpi.pdf",
+                file_data: `data:application/pdf;base64,${file.base64}`
+              }
+            });
+          } else {
+            userContent.push({
+              type: "image_url",
+              image_url: {
+                url: `data:${file.type};base64,${file.base64}`
+              }
+            });
           }
-        });
+        }
+      } else if (fileBase64 && fileType) {
+        // Legacy single file flow (backward compatibility)
+        if (fileType === 'application/pdf') {
+          userContent.push({
+            type: "file",
+            file: {
+              filename: "documento_inpi.pdf",
+              file_data: `data:application/pdf;base64,${fileBase64}`
+            }
+          });
+        } else {
+          userContent.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${fileType};base64,${fileBase64}`
+            }
+          });
+        }
       } else {
-        userContent.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${fileType};base64,${fileBase64}`
-          }
-        });
+        return new Response(
+          JSON.stringify({ error: 'Nenhum arquivo fornecido' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
     }
 

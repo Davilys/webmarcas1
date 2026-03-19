@@ -416,14 +416,28 @@ export default function RecursosINPI() {
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      if (selectedFile.type !== 'application/pdf') {
-        toast.error('Por favor, selecione um arquivo PDF');
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files);
+      const invalidFiles = newFiles.filter(f => 
+        !['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'].includes(f.type)
+      );
+      if (invalidFiles.length > 0) {
+        toast.error('Formatos aceitos: PDF, JPG, PNG, GIF, WEBP');
         return;
       }
-      setFile(selectedFile);
-      setStep('upload');
+      const currentCount = multipleFiles.length;
+      const maxFiles = 10;
+      const remaining = maxFiles - currentCount;
+      if (remaining <= 0) {
+        toast.error('Máximo de 10 arquivos atingido');
+        return;
+      }
+      const filesToAdd = newFiles.slice(0, remaining);
+      setMultipleFiles(prev => [...prev, ...filesToAdd]);
+      if (filesToAdd.length < newFiles.length) {
+        toast.warning(`Apenas ${filesToAdd.length} arquivo(s) adicionado(s). Máximo de 10 arquivos.`);
+      }
     }
   };
 
@@ -458,16 +472,27 @@ export default function RecursosINPI() {
     if (resourceType === 'troca_procurador' || resourceType === 'nomeacao_procurador') {
       return processProcurador();
     }
-    if (!file || !resourceType) return;
+    if (multipleFiles.length === 0 || !resourceType) {
+      toast.error('Anexe pelo menos um documento para continuar');
+      return;
+    }
     setIsProcessing(true);
     setStep('processing');
 
     try {
-      const fileBase64 = await fileToBase64(file);
       const agent = AI_AGENTS[selectedAgent];
 
+      // Convert all files to base64
+      const filesBase64 = await Promise.all(
+        multipleFiles.map(async (f) => ({
+          base64: await fileToBase64(f),
+          type: f.type,
+          name: f.name,
+        }))
+      );
+
       const { data, error } = await supabase.functions.invoke('process-inpi-resource', {
-        body: { fileBase64, fileType: file.type, resourceType, agentStrategy: agent.promptExtra, agentName: agent.name }
+        body: { files: filesBase64, resourceType, agentStrategy: agent.promptExtra, agentName: agent.name }
       });
 
       if (error) throw error;
@@ -1308,17 +1333,16 @@ export default function RecursosINPI() {
                   </Button>
                 ) : (
                   <Button 
-                    onClick={() => fileInputRef.current?.click()} 
+                    onClick={() => setStep('upload')} 
                     size="lg" 
                     className={`flex-1 gap-3 rounded-xl h-14 text-base shadow-xl bg-gradient-to-r ${agent.color} hover:opacity-90 transition-opacity`}
                   >
                     <agent.icon className="h-5 w-5" />
-                    Usar {agent.name} e Anexar PDF
+                    Usar {agent.name} e Anexar Documentos
                     <ArrowRight className="h-4 w-4 ml-auto" />
                   </Button>
                 )}
               </div>
-              <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
             </motion.div>
           )}
 
@@ -1852,23 +1876,60 @@ export default function RecursosINPI() {
           )}
 
           {/* UPLOAD */}
-          {step === 'upload' && file && (
+          {step === 'upload' && (
             <motion.div key="upload" {...fadeIn}>
               <Card className="border-primary/20 shadow-lg shadow-primary/5">
                 <CardContent className="p-8 space-y-6">
-                  <div className="flex items-center gap-5 p-5 bg-primary/5 rounded-2xl border border-primary/10">
-                    <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <FileText className="h-7 w-7 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-base">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(2)} KB • {RESOURCE_TYPE_LABELS[resourceType]}</p>
-                    </div>
-                    <Badge variant="outline" className="gap-1 border-primary/30 text-primary">
-                      <FileCheck className="h-3 w-3" /> PDF Válido
-                    </Badge>
+                  <div className="text-center mb-2">
+                    <h2 className="text-xl font-bold">Anexar Documentos</h2>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      Anexe até 10 arquivos (PDF, JPG, PNG) para a IA analisar detalhadamente • {RESOURCE_TYPE_LABELS[resourceType]}
+                    </p>
                   </div>
-                  
+
+                  {/* File list */}
+                  {multipleFiles.length > 0 && (
+                    <div className="space-y-2">
+                      {multipleFiles.map((f, idx) => (
+                        <div key={idx} className="flex items-center gap-4 p-3 bg-primary/5 rounded-xl border border-primary/10">
+                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{f.name}</p>
+                            <p className="text-xs text-muted-foreground">{(f.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMultipleFiles(prev => prev.filter((_, i) => i !== idx))}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground text-center">{multipleFiles.length}/10 arquivo(s)</p>
+                    </div>
+                  )}
+
+                  {/* Drop zone to add more files */}
+                  {multipleFiles.length < 10 && (
+                    <>
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 rounded-xl cursor-pointer transition-colors hover:bg-muted/50"
+                      >
+                        <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground">Clique para adicionar arquivos</p>
+                        <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG • Até 10 arquivos</p>
+                      </div>
+                      <input 
+                        ref={fileInputRef} 
+                        type="file" 
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" 
+                        multiple 
+                        className="hidden" 
+                        onChange={handleFileSelect} 
+                      />
+                    </>
+                  )}
+
                   {/* Agent badge */}
                   <div className={`p-4 rounded-xl border-2 ${agent.borderColor} bg-gradient-to-r ${agent.color}/5`}>
                     <div className="flex items-center gap-3">
@@ -1888,7 +1949,8 @@ export default function RecursosINPI() {
                       <div className="text-sm">
                         <p className="font-medium mb-1">O que a IA irá fazer:</p>
                         <ul className="space-y-1 text-muted-foreground">
-                          <li>• Extrair dados do documento (nº processo, marca, classe NCL)</li>
+                          <li>• Analisar todos os documentos anexados detalhadamente</li>
+                          <li>• Extrair dados (nº processo, marca, classe NCL)</li>
                           <li>• Aplicar a estratégia {agent.style}</li>
                           <li>• Elaborar recurso com jurisprudência real (STJ, TRF-2, TRF-3)</li>
                           <li>• Incluir fundamentação da LPI e Manual de Marcas do INPI</li>
@@ -1898,10 +1960,14 @@ export default function RecursosINPI() {
                   </div>
 
                   <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => setStep('select-agent')} className="rounded-xl">Voltar</Button>
-                    <Button onClick={processDocument} className={`flex-1 gap-2 rounded-xl h-12 text-base shadow-lg bg-gradient-to-r ${agent.color} hover:opacity-90`}>
+                    <Button variant="outline" onClick={() => { setMultipleFiles([]); setStep('select-agent'); }} className="rounded-xl">Voltar</Button>
+                    <Button 
+                      onClick={processDocument} 
+                      disabled={multipleFiles.length === 0}
+                      className={`flex-1 gap-2 rounded-xl h-12 text-base shadow-lg bg-gradient-to-r ${agent.color} hover:opacity-90`}
+                    >
                       <Zap className="h-5 w-5" />
-                      Processar com {agent.name}
+                      Processar {multipleFiles.length} arquivo(s) com {agent.name}
                     </Button>
                   </div>
                 </CardContent>
