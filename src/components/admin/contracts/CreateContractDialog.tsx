@@ -467,6 +467,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
     return brandQuantity;
   };
 
+  // Detect plan type from selected template
+  const isPremiumTemplate = selectedTemplate?.name.toLowerCase().includes('premium') && selectedTemplate?.name.toLowerCase().includes('registro');
+  const isCorporativoTemplate = selectedTemplate?.name.toLowerCase().includes('corporativo') && selectedTemplate?.name.toLowerCase().includes('registro');
+  const isRecurringTemplate = isPremiumTemplate || isCorporativoTemplate;
+
   // Get contract value based on payment method - multiplied by quantity
   const getContractValue = (): number | null => {
     if (!paymentMethod) return null;
@@ -475,6 +480,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       case 'avista': return 699 * quantity;
       case 'cartao6x': return 1194 * quantity;
       case 'boleto3x': return 1197 * quantity;
+      case 'recorrente_cartao':
+      case 'recorrente_boleto':
+        if (isCorporativoTemplate) return 1621;
+        if (isPremiumTemplate) return 398 * quantity;
+        return null;
       default: return null;
     }
   };
@@ -486,6 +496,11 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       case 'avista': return 699;
       case 'cartao6x': return 1194;
       case 'boleto3x': return 1197;
+      case 'recorrente_cartao':
+      case 'recorrente_boleto':
+        if (isCorporativoTemplate) return 1621;
+        if (isPremiumTemplate) return 398;
+        return null;
       default: return null;
     }
   };
@@ -500,6 +515,14 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess, leadId }: 
       case 'avista': return `PIX à vista - R$ ${(699 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
       case 'cartao6x': return `Cartão 6x de R$ ${(199 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(1194 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
       case 'boleto3x': return `Boleto 3x de R$ ${(399 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} = R$ ${(1197 * qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}${suffix}`;
+      case 'recorrente_cartao': {
+        const val = isCorporativoTemplate ? 1621 : 398;
+        return `Cartão Recorrente - R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês`;
+      }
+      case 'recorrente_boleto': {
+        const val = isCorporativoTemplate ? 1621 : 398;
+        return `Boleto Recorrente - R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês`;
+      }
       default: return 'Nenhuma (sem cobrança)';
     }
   };
