@@ -56,11 +56,12 @@ function replaceContractVariables(
     personalData: PersonalData;
     brandData: BrandData;
     paymentMethod: string;
+    paymentValue?: number;
     selectedClasses?: number[];
     classDescriptions?: string[];
   }
 ): string {
-  const { personalData, brandData, paymentMethod } = data;
+  const { personalData, brandData, paymentMethod, paymentValue } = data;
 
   // Format current date in Portuguese
   const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
