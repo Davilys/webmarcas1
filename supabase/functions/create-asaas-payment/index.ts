@@ -552,6 +552,7 @@ serve(async (req) => {
         personalData,
         brandData,
         paymentMethod,
+        paymentValue,
         selectedClasses: selectedClasses || [],
         classDescriptions: classDescriptions || [],
       });
