@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 interface ConfirmPaymentRequest {
@@ -140,13 +140,13 @@ serve(async (req) => {
     // ========================================
     // STEP 2: Create/Update profile
     // ========================================
-    const { data: existingProfile } = await supabaseAdmin
+    const { data: existingProfileById } = await supabaseAdmin
       .from('profiles')
       .select('id')
       .eq('id', userId)
       .single();
 
-    if (existingProfile) {
+    if (existingProfileById) {
       // Update existing profile
       await supabaseAdmin
         .from('profiles')
