@@ -13,16 +13,14 @@ interface CreditCardFormProps {
   installmentValue: number;
   dueDate: string;
   customerId: string;
-  invoiceId: string;
-  contractId?: string;
+  invoiceId: string; // Changed from paymentId to invoiceId (internal DB ID)
+  contractId?: string; // Optional contract ID to update
   holderName: string;
   holderEmail: string;
   holderCpfCnpj: string;
   holderPostalCode: string;
   holderPhone?: string;
-  holderAddressNumber?: string;
-  plan?: string;
-  brandName?: string;
+  holderAddressNumber?: string; // Address number for Asaas
   onSuccess: () => void;
   onError: (error: string) => void;
 }
@@ -41,8 +39,6 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
   holderPostalCode,
   holderPhone,
   holderAddressNumber,
-  plan,
-  brandName,
   onSuccess,
   onError,
 }) => {
@@ -129,15 +125,13 @@ const CreditCardForm: React.FC<CreditCardFormProps> = ({
       // Use supabase.functions.invoke for consistent auth handling
       const { data, error } = await supabase.functions.invoke('process-credit-card-payment', {
         body: {
-          invoiceId,
+          invoiceId, // Internal invoice ID
           customerId,
-          contractId,
+          contractId, // For updating contract with Asaas payment ID
           value,
           installmentCount,
           installmentValue,
           dueDate,
-          plan: plan || 'essencial',
-          brandName: brandName || '',
           creditCard: {
             holderName: cardHolderName.toUpperCase(),
             number: cardNumber.replace(/\s/g, ''),

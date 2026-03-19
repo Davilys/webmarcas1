@@ -112,7 +112,6 @@ interface PaymentData {
     bankSlipUrl?: string;
     pixQrCode?: string;
     pixPayload?: string;
-    plan?: string;
   };
 }
 
@@ -613,8 +612,6 @@ export default function AssinarDocumento() {
                 holderCpfCnpj={paymentData.data.holderCpfCnpj || ''}
                 holderPostalCode={paymentData.data.holderPostalCode || ''}
                 holderPhone={paymentData.data.holderPhone}
-                plan={paymentData.data.plan || 'essencial'}
-                brandName={contract.subject || ''}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
               />

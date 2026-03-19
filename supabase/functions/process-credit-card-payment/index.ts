@@ -21,144 +21,95 @@ serve(async (req) => {
     }
 
     const {
-      invoiceId,
-      customerId,
+      invoiceId, // Internal invoice ID from our DB
+      customerId, // Asaas customer ID
       value,
       installmentCount,
       installmentValue,
       creditCard,
       creditCardHolderInfo,
       dueDate,
-      contractId,
-      plan, // 'essencial' | 'premium' | 'corporativo'
-      brandName, // For subscription description
+      contractId, // For updating contract with payment ID
     } = await req.json();
-
-    const effectivePlan = plan || 'essencial';
-    const isRecurringPlan = effectivePlan === 'premium' || effectivePlan === 'corporativo';
 
     console.log("=== CREDIT CARD PAYMENT START ===");
     console.log("Invoice ID:", invoiceId);
     console.log("Customer ID:", customerId);
     console.log("Value:", value);
-    console.log("Plan:", effectivePlan, "| Recurring:", isRecurringPlan);
     console.log("Installments:", installmentCount, "x", installmentValue);
     console.log("Contract ID:", contractId);
     console.log("Holder:", creditCardHolderInfo?.name);
+    console.log("CEP:", creditCardHolderInfo?.postalCode);
+    console.log("Address Number:", creditCardHolderInfo?.addressNumber);
 
+    // Get client IP for fraud prevention
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
                      req.headers.get("x-real-ip") || 
                      "unknown";
 
+    // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const cardData = {
-      holderName: creditCard.holderName,
-      number: creditCard.number.replace(/\s/g, ""),
-      expiryMonth: creditCard.expiryMonth,
-      expiryYear: creditCard.expiryYear,
-      ccv: creditCard.ccv,
+    // Create payment with credit card data directly in Asaas
+    // This is a SINGLE installment payment (parcelamento), NOT recurring
+    const paymentPayload: Record<string, unknown> = {
+      customer: customerId,
+      billingType: "CREDIT_CARD",
+      dueDate: dueDate || new Date().toISOString().split("T")[0],
+      description: "Registro de Marca - WebMarcas",
+      creditCard: {
+        holderName: creditCard.holderName,
+        number: creditCard.number.replace(/\s/g, ""),
+        expiryMonth: creditCard.expiryMonth,
+        expiryYear: creditCard.expiryYear,
+        ccv: creditCard.ccv,
+      },
+      creditCardHolderInfo: {
+        name: creditCardHolderInfo.name,
+        email: creditCardHolderInfo.email,
+        cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
+        postalCode: creditCardHolderInfo.postalCode.replace(/\D/g, ""),
+        addressNumber: creditCardHolderInfo.addressNumber || "S/N",
+        phone: creditCardHolderInfo.phone?.replace(/\D/g, "") || "",
+      },
+      remoteIp: clientIp,
     };
 
-    const holderData = {
-      name: creditCardHolderInfo.name,
-      email: creditCardHolderInfo.email,
-      cpfCnpj: creditCardHolderInfo.cpfCnpj.replace(/\D/g, ""),
-      postalCode: creditCardHolderInfo.postalCode.replace(/\D/g, ""),
-      addressNumber: creditCardHolderInfo.addressNumber || "S/N",
-      phone: creditCardHolderInfo.phone?.replace(/\D/g, "") || "",
-    };
-
-    let paymentData: Record<string, unknown>;
-    let paymentResponse: Response;
-
-    if (isRecurringPlan) {
-      // ============================
-      // RECURRING PLAN: Create SUBSCRIPTION in Asaas
-      // ============================
-      const subscriptionDescription = brandName 
-        ? `Plano ${effectivePlan === 'premium' ? 'Premium' : 'Corporativo'} - ${brandName}`
-        : `Plano ${effectivePlan === 'premium' ? 'Premium' : 'Corporativo'} - WebMarcas`;
-
-      const subscriptionPayload = {
-        customer: customerId,
-        billingType: "CREDIT_CARD",
-        value: value,
-        nextDueDate: dueDate || new Date().toISOString().split("T")[0],
-        cycle: "MONTHLY",
-        description: subscriptionDescription,
-        creditCard: cardData,
-        creditCardHolderInfo: holderData,
-        remoteIp: clientIp,
-        externalReference: `webmarcas_${effectivePlan}_${Date.now()}`,
-      };
-
-      console.log("Creating SUBSCRIPTION with payload (card masked):", JSON.stringify({
-        ...subscriptionPayload,
-        creditCard: { holderName: cardData.holderName, number: '****' },
-      }));
-
-      paymentResponse = await fetch("https://api.asaas.com/v3/subscriptions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "access_token": ASAAS_API_KEY,
-        },
-        body: JSON.stringify(subscriptionPayload),
-      });
-
-      paymentData = await paymentResponse.json();
-      console.log("=== ASAAS SUBSCRIPTION RESPONSE ===");
-      console.log("Status:", paymentData.status);
-      console.log("Subscription ID:", paymentData.id);
-      console.log("Full response:", JSON.stringify(paymentData, null, 2));
-
+    // Add installment info if applicable (parcelamento único, não recorrência)
+    // Use ONLY installmentCount and installmentValue - Asaas calculates total
+    if (installmentCount && installmentCount > 1) {
+      paymentPayload.installmentCount = installmentCount;
+      paymentPayload.installmentValue = installmentValue;
+      // Do NOT send 'value' when using installments - Asaas calculates it
     } else {
-      // ============================
-      // ESSENCIAL PLAN: One-time installment payment
-      // ============================
-      const paymentPayload: Record<string, unknown> = {
-        customer: customerId,
-        billingType: "CREDIT_CARD",
-        dueDate: dueDate || new Date().toISOString().split("T")[0],
-        description: "Registro de Marca - WebMarcas",
-        creditCard: cardData,
-        creditCardHolderInfo: holderData,
-        remoteIp: clientIp,
-      };
-
-      if (installmentCount && installmentCount > 1) {
-        paymentPayload.installmentCount = installmentCount;
-        paymentPayload.installmentValue = installmentValue;
-      } else {
-        paymentPayload.value = value;
-      }
-
-      console.log("Sending one-time payment to Asaas (card details masked)");
-
-      paymentResponse = await fetch("https://api.asaas.com/v3/payments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "access_token": ASAAS_API_KEY,
-        },
-        body: JSON.stringify(paymentPayload),
-      });
-
-      paymentData = await paymentResponse.json();
-      console.log("=== ASAAS RESPONSE ===");
-      console.log("Status:", paymentData.status);
-      console.log("Payment ID:", paymentData.id);
-      console.log("Full response:", JSON.stringify(paymentData, null, 2));
+      paymentPayload.value = value;
     }
 
+    console.log("Sending payment to Asaas (card details masked)");
+
+    const paymentResponse = await fetch("https://api.asaas.com/v3/payments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "access_token": ASAAS_API_KEY,
+      },
+      body: JSON.stringify(paymentPayload),
+    });
+
+    const paymentData = await paymentResponse.json();
+    console.log("=== ASAAS RESPONSE ===");
+    console.log("Status:", paymentData.status);
+    console.log("Payment ID:", paymentData.id);
+    console.log("Full response:", JSON.stringify(paymentData, null, 2));
+
     if (!paymentResponse.ok) {
-      console.error("Asaas error:", paymentData);
+      console.error("Asaas payment error:", paymentData);
       
+      // Map Asaas error messages to user-friendly messages
       let errorMessage = "Erro ao processar pagamento";
       
-      if (paymentData.errors && Array.isArray(paymentData.errors) && paymentData.errors.length > 0) {
-        const error = paymentData.errors[0] as Record<string, string>;
+      if (paymentData.errors && paymentData.errors.length > 0) {
+        const error = paymentData.errors[0];
         if (error.code === "invalid_creditCard") {
           errorMessage = "Dados do cartão inválidos. Verifique o número, validade e CVV.";
         } else if (error.code === "invalid_creditCardHolderInfo") {
@@ -181,14 +132,17 @@ serve(async (req) => {
       );
     }
 
-    // Check authorization status
-    const status = paymentData.status as string;
-    if (!isRecurringPlan && status === "REFUSED") {
+    // Check if payment was authorized
+    const isAuthorized = paymentData.status === "CONFIRMED" || 
+                         paymentData.status === "RECEIVED" ||
+                         paymentData.status === "PENDING";
+
+    if (!isAuthorized && paymentData.status === "REFUSED") {
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: "Pagamento recusado pela operadora do cartão. Tente outro cartão.",
-          status
+          status: paymentData.status
         }),
         { 
           status: 400, 
@@ -197,52 +151,55 @@ serve(async (req) => {
       );
     }
 
-    // Update invoice in database
-    const asaasId = paymentData.id as string;
-    if (asaasId && invoiceId) {
-      const isPaid = status === "CONFIRMED" || status === "RECEIVED" || (isRecurringPlan && status === "ACTIVE");
+    // Update invoice in database using INTERNAL invoiceId
+    // Set asaas_invoice_id NOW that we have it, and ensure NO boleto/pix codes
+    if (paymentData.id && invoiceId) {
       const { error: updateError } = await supabase
         .from("invoices")
         .update({
-          asaas_invoice_id: asaasId,
-          invoice_url: (paymentData.invoiceUrl as string) || null,
+          asaas_invoice_id: paymentData.id,
+          invoice_url: paymentData.invoiceUrl || null,
+          // CRITICAL: Do NOT set boleto_code or pix_code for card payments
           boleto_code: null,
           pix_code: null,
           payment_method: 'credit_card',
-          status: isPaid ? "paid" : "pending",
-          payment_date: isPaid ? new Date().toISOString() : null,
+          status: paymentData.status === "CONFIRMED" || paymentData.status === "RECEIVED" 
+            ? "paid" 
+            : "pending",
+          payment_date: paymentData.status === "CONFIRMED" || paymentData.status === "RECEIVED" 
+            ? new Date().toISOString() 
+            : null,
         })
         .eq("id", invoiceId);
 
       if (updateError) {
         console.error("Error updating invoice:", updateError);
       } else {
-        console.log("Updated invoice:", invoiceId, "with Asaas ID:", asaasId);
+        console.log("Updated invoice:", invoiceId, "with Asaas ID:", paymentData.id);
       }
     }
 
-    // Update contract with Asaas payment/subscription ID
-    if (asaasId && contractId) {
+    // Update contract with Asaas payment ID if provided
+    if (paymentData.id && contractId) {
       const { error: contractError } = await supabase
         .from("contracts")
         .update({
-          asaas_payment_id: asaasId,
+          asaas_payment_id: paymentData.id,
         })
         .eq("id", contractId);
 
       if (contractError) {
         console.error("Error updating contract:", contractError);
       } else {
-        console.log("Updated contract:", contractId, "with Asaas ID:", asaasId);
+        console.log("Updated contract:", contractId, "with Asaas payment ID:", paymentData.id);
       }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        paymentId: asaasId,
-        status: status,
-        isSubscription: isRecurringPlan,
+        paymentId: paymentData.id,
+        status: paymentData.status,
         invoiceUrl: paymentData.invoiceUrl,
         transactionReceiptUrl: paymentData.transactionReceiptUrl,
       }),

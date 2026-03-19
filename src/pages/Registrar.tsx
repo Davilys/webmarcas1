@@ -222,10 +222,6 @@ export default function Registrar() {
             invoiceUrl: data.invoiceUrl,
             bankSlipUrl: data.bankSlipUrl,
             pixQrCode: data.pixQrCode,
-            installmentCount: data.installmentCount,
-            installmentValue: data.installmentValue,
-            plan: data.plan || plan,
-            isRecurringPlan: data.isRecurringPlan,
           },
         };
         
