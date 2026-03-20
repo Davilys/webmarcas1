@@ -2191,6 +2191,7 @@ export default function RecursosINPI() {
                             brand_name: extractedData?.brand_name || null,
                             ncl_class: extractedData?.ncl_class || null,
                             holder: extractedData?.holder || null,
+                            examiner_or_opponent: extractedData?.examiner_or_opponent || null,
                             status: 'approved',
                             draft_content: null,
                             final_content: draftContent,
