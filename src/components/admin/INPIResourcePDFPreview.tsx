@@ -405,6 +405,19 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
       const trimmed = paragraph.trim();
       if (/^(Av\.\s*Brigadeiro|Tel:\s*\(11\))/.test(trimmed)) return null;
       
+      // Metadata block: render each line individually, no justify, no indent
+      const metaLines = trimmed.split('\n').filter(l => l.trim());
+      const hasMetadata = metaLines.some(l => isMetadataLine(l));
+      if (hasMetadata && metaLines.length > 1) {
+        return (
+          <div key={idx} className="mb-4 text-sm" style={{ color: '#444', lineHeight: '1.6' }}>
+            {metaLines.map((ml, mi) => (
+              <p key={mi} className="mb-0.5" style={{ textIndent: '0' }}>{ml.trim()}</p>
+            ))}
+          </div>
+        );
+      }
+
       if (isHeadingLine(trimmed)) {
         return (
           <h2 key={idx} className="text-base font-semibold mt-6 mb-3 pb-1" style={{ color: '#1e3a5f', borderBottom: '2px solid #c8af37' }}>
@@ -418,7 +431,13 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
         return <p key={idx} className="mb-3 pl-6" style={{ textIndent: '0' }}>{trimmed}</p>;
       }
       
-      return <p key={idx} className="mb-4 text-justify" style={{ textIndent: '2cm' }}>{trimmed}</p>;
+      // Short lines (e.g. "EXCELENTÍSSIMO...") should not be stretched by justify
+      const isShort = trimmed.length < 120;
+      return (
+        <p key={idx} className={`mb-4 ${isShort ? '' : 'text-justify'}`} style={{ textIndent: '2cm', textAlignLast: 'left' }}>
+          {trimmed}
+        </p>
+      );
     }).filter(Boolean);
   };
 
