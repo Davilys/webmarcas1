@@ -52,12 +52,30 @@ const cleanMarkdown = (text: string): string => {
 
 const stripOpeningMarkers = (text: string): string => {
   let cleaned = text;
+  // Remove structural markers
   cleaned = cleaned.replace(/^-{2,}\s*INÍCIO DO RECURSO\s*-{2,}\s*$/gm, '');
   cleaned = cleaned.replace(/^-{2,}\s*FIM DO RECURSO\s*-{2,}\s*$/gm, '');
-  // Only strip the ALL-CAPS duplicate title line (not metadata "Marca:" lines)
-  cleaned = cleaned.replace(/^\s*RECURSO ADMINISTRATIVO\s*[–—-]\s*.+$/m, '');
-  cleaned = cleaned.replace(/^\s*MARCA:\s*[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ\s]+$/m, '');
-  cleaned = cleaned.replace(/^\s*NOTIFICAÇÃO EXTRAJUDICIAL\s*$/im, '');
+  // Remove ALL occurrences of title lines (component renders these separately)
+  cleaned = cleaned.replace(/^\s*RECURSO ADMINISTRATIVO\s*[–—-]\s*.+$/gm, '');
+  cleaned = cleaned.replace(/^\s*MARCA:\s*[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ\s.]+$/gm, '');
+  cleaned = cleaned.replace(/^\s*NOTIFICAÇÃO EXTRAJUDICIAL\s*$/gim, '');
+  cleaned = cleaned.replace(/^\s*PETIÇÃO DE (TROCA|NOMEAÇÃO) DE PROCURADOR\s*$/gim, '');
+
+  // Deduplicate addressing + metadata block if it appears more than once
+  // Find the addressing block pattern
+  const addressingPattern = /EXCELENTÍSSIMO\s+SENHOR\s+PRESIDENTE[\s\S]*?Procurador:\s*Davilys\s+Danques[^\n]*/gi;
+  const matches = cleaned.match(addressingPattern);
+  if (matches && matches.length > 1) {
+    // Keep only the first occurrence, remove subsequent ones
+    let found = false;
+    cleaned = cleaned.replace(addressingPattern, (match) => {
+      if (!found) { found = true; return match; }
+      return '';
+    });
+  }
+
+  // Clean up excessive blank lines left by removals
+  cleaned = cleaned.replace(/\n{4,}/g, '\n\n');
   return cleaned.trim();
 };
 
