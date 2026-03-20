@@ -40,8 +40,9 @@ const stripOpeningMarkers = (text: string): string => {
   let cleaned = text;
   cleaned = cleaned.replace(/^-{2,}\s*INÍCIO DO RECURSO\s*-{2,}\s*$/gm, '');
   cleaned = cleaned.replace(/^-{2,}\s*FIM DO RECURSO\s*-{2,}\s*$/gm, '');
-  cleaned = cleaned.replace(/^\s*RECURSO ADMINISTRATIVO\s*[–—-]\s*.+$/im, '');
-  cleaned = cleaned.replace(/^\s*MARCA:\s*.+$/im, '');
+  // Only strip the ALL-CAPS duplicate title line (not metadata "Marca:" lines)
+  cleaned = cleaned.replace(/^\s*RECURSO ADMINISTRATIVO\s*[–—-]\s*.+$/m, '');
+  cleaned = cleaned.replace(/^\s*MARCA:\s*[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ\s]+$/m, '');
   cleaned = cleaned.replace(/^\s*NOTIFICAÇÃO EXTRAJUDICIAL\s*$/im, '');
   return cleaned.trim();
 };
