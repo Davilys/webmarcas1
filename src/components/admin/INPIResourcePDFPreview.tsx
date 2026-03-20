@@ -316,15 +316,17 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
           pdf.setTextColor(30, 30, 30);
           pdf.setFont('helvetica', 'normal');
 
-          const isList = /^[-–•]\s/.test(trimmedParagraph);
+          const isList = /^([-–•]\s|\d+[\.\)]\s|[a-z]\)\s)/i.test(trimmedParagraph);
           const indent = isList ? margin + 5 : margin;
           const lineWidth = isList ? contentWidth - 5 : contentWidth;
           
           const lines = pdf.splitTextToSize(trimmedParagraph, lineWidth);
           
-          for (const line of lines) {
+          for (let li = 0; li < lines.length; li++) {
             if (yPos > bottomLimit) { pdf.addPage(); yPos = margin; }
-            pdf.text(line, indent, yPos);
+            // First line of non-list paragraphs gets indent (simulates text-indent)
+            const x = (!isList && li === 0) ? indent + 10 : indent;
+            pdf.text(lines[li], x, yPos);
             yPos += 6;
           }
           yPos += 3;
