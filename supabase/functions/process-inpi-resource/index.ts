@@ -623,20 +623,24 @@ FORMATO DE RESPOSTA OBRIGATÓRIO:
 
 Responda EXCLUSIVAMENTE com um objeto JSON válido (sem markdown, sem texto antes ou depois do JSON).
 O campo "resource_content" DEVE conter o TEXTO JURÍDICO REAL E COMPLETO do recurso administrativo (mínimo 3.000 palavras REAIS).
-⚠️ ATENÇÃO CRÍTICA: NÃO coloque placeholder, resumo ou frase descritiva como "CONTEÚDO COMPLETO DO RECURSO...".
-Coloque o DOCUMENTO JURÍDICO INTEIRO com TODAS as 8 seções (I a VIII) desenvolvidas integralmente.
-Se o campo resource_content tiver menos de 2.500 palavras REAIS, sua resposta será REJEITADA automaticamente.
+⚠️ ATENÇÃO CRÍTICA: 
+- NÃO coloque placeholder, resumo ou frase descritiva
+- NÃO copie exemplos do prompt — escreva o recurso REAL baseado no documento analisado
+- PREENCHA todos os dados concretos (nome da marca, número do processo, classe, titular) extraídos do documento
+- NÃO deixe colchetes [] no texto final — substitua por dados reais do caso
+- Se o campo resource_content tiver menos de 2.500 palavras REAIS, sua resposta será REJEITADA automaticamente
+- O recurso deve começar com o subtítulo "RECURSO ADMINISTRATIVO – [TIPO]" seguido de "MARCA: [NOME]" e depois "EXCELENTÍSSIMO SENHOR..."
 
 {
   "extracted_data": {
-    "process_number": "número do processo extraído do documento",
-    "brand_name": "nome da marca extraído do documento",
-    "ncl_class": "classe NCL com descrição completa",
-    "holder": "nome do titular completo",
-    "examiner_or_opponent": "oponente identificado no documento",
-    "legal_basis": "fundamento legal utilizado pelo INPI"
+    "process_number": "preencher com número real extraído",
+    "brand_name": "preencher com nome real da marca",
+    "ncl_class": "preencher com classe NCL real e descrição",
+    "holder": "preencher com nome completo do titular",
+    "examiner_or_opponent": "preencher com oponente/examinador identificado",
+    "legal_basis": "preencher com fundamento legal usado pelo INPI"
   },
-  "resource_content": "AQUI_INSERIR_TEXTO_REAL_COMPLETO_DO_RECURSO_ADMINISTRATIVO_TODAS_8_SECOES_I_A_VIII"
+  "resource_content": "O texto jurídico completo do recurso com todas as 8 seções (I a VIII) integralmente desenvolvidas vai aqui. Deve começar com o subtítulo do recurso e terminar com os pedidos. Mínimo 3.000 palavras."
 }`;
 }
 
