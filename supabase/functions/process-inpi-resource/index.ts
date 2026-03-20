@@ -502,7 +502,10 @@ Procurador(a) Constituído(a)
 CPF: 393.239.118-79
 
 ⚠️ RESPONDA APENAS com o texto jurídico das Seções V a VIII + encerramento. SEM JSON. SEM explicações. SEM markdown. Apenas o texto jurídico profissional.
-⚠️ O texto desta parte deve ter NO MÍNIMO 3.400 palavras.`;
+⚠️ O texto desta parte deve ter NO MÍNIMO 3.400 palavras.
+⚠️ NÃO inclua marcadores como "---INÍCIO---" ou "---FIM---".
+⚠️ NÃO repita cabeçalho institucional, título do recurso, dados da marca ou informações do procurador — tudo isso já foi incluído na Parte 1 e no template do PDF.
+⚠️ Comece DIRETAMENTE pela "V – DA INEXISTÊNCIA DE CONFUSÃO OU ASSOCIAÇÃO INDEVIDA".`;
 }
 
 // ═══════════════════════════════════════════════════════════
