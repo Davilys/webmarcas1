@@ -857,7 +857,7 @@ serve(async (req) => {
     // Use Lovable AI Gateway for better PDF/file support
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     const aiUrl = LOVABLE_API_KEY 
-      ? 'https://ai-gateway.lovable.dev/v1/chat/completions'
+      ? 'https://ai.gateway.lovable.dev/v1/chat/completions'
       : 'https://api.openai.com/v1/chat/completions';
     const aiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
     const aiModel = LOVABLE_API_KEY ? 'openai/gpt-5' : 'gpt-4o';
