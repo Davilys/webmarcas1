@@ -987,11 +987,29 @@ serve(async (req) => {
 
     const resourceTypeLabel = RESOURCE_TYPE_LABELS[resourceType] || 'RECURSO ADMINISTRATIVO';
 
+    // Validate that the AI didn't return placeholder text
+    let finalContent = parsedResult.resource_content || content;
+    const placeholderPatterns = [
+      /^CONTEÚDO COMPLETO/i,
+      /^AQUI_INSERIR/i,
+      /^AQUI VOCÊ DEVE/i,
+      /TODAS AS \d+ SEÇÕES DESENVOLVIDAS/i,
+      /texto extenso, profundo e formatado/i,
+    ];
+    const isPlaceholder = placeholderPatterns.some(p => p.test(finalContent.trim()));
+    if (isPlaceholder || finalContent.trim().length < 500) {
+      console.error('AI returned placeholder or too-short content, length:', finalContent.length);
+      return new Response(
+        JSON.stringify({ error: 'A IA retornou um conteúdo incompleto. Por favor, tente novamente com o mesmo documento.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         extracted_data: parsedResult.extracted_data || {},
-        resource_content: parsedResult.resource_content || content,
+        resource_content: finalContent,
         resource_type: resourceType,
         resource_type_label: resourceTypeLabel
       }),
