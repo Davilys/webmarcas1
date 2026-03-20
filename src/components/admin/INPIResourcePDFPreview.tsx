@@ -253,32 +253,44 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
       pdf.line(margin, yPos + 1.5, pageWidth - margin, yPos + 1.5);
       yPos += 8;
 
-      // ── Document Title (left-aligned) ──
+      // ── Document Title Badge (centered) ──
       const typeLabel = getResourceTypeLabel(resourceType);
-      const fullTitle = isNotif
+      const badgeTitle = isNotif
         ? 'NOTIFICAÇÃO EXTRAJUDICIAL'
         : isProcuradorPetition
           ? documentTitleUpper
-          : typeLabel
-            ? `RECURSO ADMINISTRATIVO – ${typeLabel}`
-            : 'RECURSO ADMINISTRATIVO';
+          : 'RECURSO ADMINISTRATIVO';
 
-      pdf.setFontSize(13);
-      pdf.setTextColor(30, 58, 95);
+      // Draw navy badge
+      pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
-      const titleLines = pdf.splitTextToSize(fullTitle, contentWidth);
-      for (const tl of titleLines) {
-        pdf.text(tl, margin, yPos);
-        yPos += 7;
-      }
-      yPos += 2;
+      const badgeTextWidth = pdf.getTextWidth(badgeTitle);
+      const badgePadX = 12;
+      const badgeW = badgeTextWidth + badgePadX * 2;
+      const badgeH = 9;
+      const badgeX = (pageWidth - badgeW) / 2;
+      pdf.setFillColor(30, 58, 95);
+      pdf.roundedRect(badgeX, yPos - 1, badgeW, badgeH, 1.5, 1.5, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(badgeTitle, pageWidth / 2, yPos + 5, { align: 'center' });
+      yPos += badgeH + 5;
 
+      // Marca line centered
       if (resource.brand_name) {
         pdf.setFontSize(12);
         pdf.setTextColor(30, 58, 95);
         pdf.setFont('helvetica', 'bold');
-        pdf.text(`MARCA: ${resource.brand_name.toUpperCase()}`, margin, yPos);
-        yPos += 8;
+        pdf.text(`Marca: ${resource.brand_name}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 6;
+      }
+
+      // Process number centered
+      if (resource.process_number) {
+        pdf.setFontSize(10);
+        pdf.setTextColor(80, 80, 80);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(`Processo INPI nº ${resource.process_number}`, pageWidth / 2, yPos, { align: 'center' });
+        yPos += 6;
       }
       yPos += 4;
 
