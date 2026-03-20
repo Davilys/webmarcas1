@@ -87,7 +87,12 @@ const stripClosingFromContent = (text: string, resourceType?: string): string =>
 const isHeadingLine = (text: string): boolean => {
   const trimmed = text.trim();
   if (trimmed.length >= 100) return false;
-  return /^(I{1,4}V?\s*[–—-]|V?I{0,4}\s*[–—-]|[A-Z][A-Z\s–—-]{5,}$|DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT|RECURSO|EXCELENT|NOTIFICA)/i.test(trimmed);
+  if (trimmed.length < 4) return false;
+  // Section numbering patterns: "I – ...", "II – ...", "VIII – ..."
+  if (/^(I{1,4}V?|V?I{0,4})\s*[–—-]\s+\S/i.test(trimmed)) return true;
+  // All-caps short titles like "DOS PEDIDOS", "DA CONCLUSÃO"
+  if (/^(DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT)/i.test(trimmed) && trimmed === trimmed.toUpperCase()) return true;
+  return false;
 };
 
 const imageToBase64 = (src: string): Promise<string> => {
