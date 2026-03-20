@@ -36,6 +36,16 @@ const cleanMarkdown = (text: string): string => {
     .trim();
 };
 
+const stripOpeningMarkers = (text: string): string => {
+  let cleaned = text;
+  cleaned = cleaned.replace(/^-{2,}\s*INÍCIO DO RECURSO\s*-{2,}\s*$/gm, '');
+  cleaned = cleaned.replace(/^-{2,}\s*FIM DO RECURSO\s*-{2,}\s*$/gm, '');
+  cleaned = cleaned.replace(/^\s*RECURSO ADMINISTRATIVO\s*[–—-]\s*.+$/im, '');
+  cleaned = cleaned.replace(/^\s*MARCA:\s*.+$/im, '');
+  cleaned = cleaned.replace(/^\s*NOTIFICAÇÃO EXTRAJUDICIAL\s*$/im, '');
+  return cleaned.trim();
+};
+
 const stripClosingFromContent = (text: string, resourceType?: string): string => {
   let cleaned = text.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
   cleaned = cleaned.replace(/^Tel:?\s*\(11\).*$/gm, '');
@@ -53,7 +63,6 @@ const stripClosingFromContent = (text: string, resourceType?: string): string =>
   }
   cleaned = cleaned.replace(/\n\s*Termos em que,?\s*\n\s*Pede deferimento\.?\s*\n[\s\S]*$/i, '');
   
-  // For notificacao, also strip any AI-generated closing with signature
   if (isNotificacao(resourceType)) {
     cleaned = cleaned.replace(/\n\s*São Paulo,\s*\d{1,2}\s*de\s*\w+\s*de\s*\d{4}[\s\S]*$/i, '');
     cleaned = cleaned.replace(/\n\s*Davilys Danques[\s\S]*$/i, '');
