@@ -803,7 +803,26 @@ serve(async (req) => {
       
       userContent.push({
         type: "text",
-        text: `Analise ${fileCount > 1 ? `os ${fileCount} documentos anexados` : 'o documento PDF anexado'} do INPI e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções. O recurso deve ter no MÍNIMO 3.000 palavras, seguindo rigorosamente TODAS as 8 seções obrigatórias com a extensão mínima especificada para cada uma. NÃO simplifique, NÃO encurte, NÃO produza texto genérico. Cada argumento deve ser desenvolvido em múltiplos parágrafos com profundidade jurídica real.${fileCount > 1 ? ' Analise TODOS os documentos em conjunto para uma defesa mais robusta e detalhada.' : ''}`
+        text: `INSTRUÇÃO CRÍTICA: Analise ${fileCount > 1 ? `os ${fileCount} documentos anexados` : 'o documento PDF anexado'} do INPI e elabore o recurso administrativo COMPLETO, EXTENSO e ROBUSTO conforme as instruções.
+
+REQUISITOS OBRIGATÓRIOS DE EXTENSÃO:
+- O recurso COMPLETO deve ter NO MÍNIMO 3.000 palavras de conteúdo jurídico real
+- TODAS as 8 seções (I a VIII) devem ser desenvolvidas INTEGRALMENTE com a extensão mínima de cada uma
+- Seção I (Síntese): mínimo 400 palavras com cronologia detalhada
+- Seção III (Fundamentação): mínimo 600 palavras com citação textual de artigos
+- Seção IV (Análise Técnica): mínimo 500 palavras com análise fonética, visual e conceitual
+- Seção V (Inexistência de Confusão): mínimo 400 palavras
+- Seção VI (Precedentes): mínimo 500 palavras com precedentes da lista pré-validada
+- Seção VIII (Pedidos): usar formato de letras (a, b, c, d, e, f) com pedidos ESPECÍFICOS preenchidos para o caso concreto
+
+PROIBIÇÕES ABSOLUTAS:
+- NÃO simplifique ou encurte NENHUMA seção
+- NÃO deixe placeholders como "[especificação limitada quando aplicável]" — preencha com dados reais do caso
+- NÃO produza texto genérico — cada argumento deve ser ESPECÍFICO ao caso concreto
+- NÃO termine abruptamente — desenvolva CADA argumento em múltiplos parágrafos densos
+- O campo resource_content do JSON deve conter o DOCUMENTO INTEIRO, não um resumo
+
+${fileCount > 1 ? 'Analise TODOS os documentos em conjunto para uma defesa mais robusta e detalhada.' : ''}`
       });
 
       if (multiFiles && multiFiles.length > 0) {
