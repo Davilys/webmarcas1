@@ -395,17 +395,37 @@ export default function RecursosINPI() {
 
   const handleEditResource = (resource: INPIResource) => {
     setEditingResource(resource);
-    setDraftContent(resource.final_content || resource.draft_content || '');
-    setExtractedData({
+    let content = resource.final_content || resource.draft_content || '';
+    const data = {
       process_number: resource.process_number || '',
       brand_name: resource.brand_name || '',
       ncl_class: resource.ncl_class || '',
       holder: resource.holder || '',
-      examiner_or_opponent: '',
+      examiner_or_opponent: resource.examiner_or_opponent || '',
       legal_basis: '',
-    });
+    };
+    setExtractedData(data);
     setResourceType(resource.resource_type);
     setCurrentResourceId(resource.id);
+
+    // Legacy auto-fix: if draft starts with section I without the mandatory header, inject it
+    const RESOURCE_TYPE_LABELS_UPPER: Record<string, string> = {
+      indeferimento: 'RECURSO CONTRA INDEFERIMENTO',
+      exigencia_merito: 'CUMPRIMENTO DE EXIGÊNCIA DE MÉRITO / RECURSO ADMINISTRATIVO',
+      oposicao: 'MANIFESTAÇÃO À OPOSIÇÃO',
+    };
+    const startsWithSection = /^\s*(I\s*[–—\-\.]\s*)/m.test(content.substring(0, 200));
+    const hasHeader = /RECURSO ADMINISTRATIVO/i.test(content.substring(0, 300));
+    if (startsWithSection && !hasHeader && RESOURCE_TYPE_LABELS_UPPER[resource.resource_type]) {
+      const label = RESOURCE_TYPE_LABELS_UPPER[resource.resource_type];
+      const brandUpper = (data.brand_name || 'N/I').toUpperCase();
+      const header = `RECURSO ADMINISTRATIVO – ${label}\n\nMARCA: ${brandUpper}\n\nEXCELENTÍSSIMO SENHOR PRESIDENTE DA DIRETORIA DE MARCAS,\nPATENTES E DESENHOS INDUSTRIAIS DO INSTITUTO NACIONAL\nDA PROPRIEDADE INDUSTRIAL – INPI\n\nProcesso INPI nº: ${data.process_number || 'N/I'}\nMarca: ${data.brand_name || 'N/I'}\nClasse NCL (12ª Ed.): ${data.ncl_class || 'N/I'}\nTitular/Requerente: ${data.holder || 'N/I'}\nOponente: ${data.examiner_or_opponent || 'N/I'}\nProcurador: Davilys Danques de Oliveira Cunha – CPF 393.239.118-79`;
+      content = `${header}\n\n${content}`;
+      // Persist the fix
+      supabase.from('inpi_resources').update({ draft_content: content }).eq('id', resource.id).then();
+    }
+
+    setDraftContent(content);
     setStep('review');
   };
 
