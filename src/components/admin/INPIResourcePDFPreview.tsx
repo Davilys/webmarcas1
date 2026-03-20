@@ -37,7 +37,26 @@ const cleanMarkdown = (text: string): string => {
 };
 
 const stripClosingFromContent = (text: string, resourceType?: string): string => {
-  let cleaned = text.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
+  let cleaned = text;
+
+  // Strip document markers
+  cleaned = cleaned.replace(/^-{2,}[\s]*(INÍCIO|FIM)\s*(DO|DE)\s*(RECURSO|DOCUMENTO|NOTIFICAÇÃO|PETIÇÃO)[\s]*-{2,}$/gim, '');
+
+  // Strip duplicate header block (already shown in the badge/letterhead area)
+  cleaned = cleaned.replace(/^RECURSO\s+ADMINISTRATIVO\s*[–—-]\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^MARCA:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^NOTIFICAÇÃO\s+EXTRAJUDICIAL\s*$/gim, '');
+  cleaned = cleaned.replace(/^PETIÇÃO\s+DE\s+(TROCA|NOMEAÇÃO)\s+DE\s+PROCURADOR\s*$/gim, '');
+  cleaned = cleaned.replace(/^EXCELENT[ÍI]SSIMO[^]*?(?=\n\s*\n)/gim, '');
+  cleaned = cleaned.replace(/^Processo\s+INPI\s+n[ºo°]:\s*\d+.*$/gim, '');
+  cleaned = cleaned.replace(/^Marca:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^Classe\s+NCL\s*\(.+$/gim, '');
+  cleaned = cleaned.replace(/^Titular\/Requerente:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^Oponente(?:\/Citante)?:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^Procurador:\s*Davilys\s+Danques.*$/gim, '');
+
+  // Strip footer/address lines
+  cleaned = cleaned.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
   cleaned = cleaned.replace(/^Tel:?\s*\(11\).*$/gm, '');
   cleaned = cleaned.replace(/^[═─━╌╍┄┅┈┉▬%P\s]{3,}$/gm, '');
   cleaned = cleaned.replace(/^[\u2500-\u257F\u2580-\u259F\u2550-\u256C]{2,}.*$/gm, '');
@@ -58,6 +77,9 @@ const stripClosingFromContent = (text: string, resourceType?: string): string =>
     cleaned = cleaned.replace(/\n\s*São Paulo,\s*\d{1,2}\s*de\s*\w+\s*de\s*\d{4}[\s\S]*$/i, '');
     cleaned = cleaned.replace(/\n\s*Davilys Danques[\s\S]*$/i, '');
   }
+
+  // Collapse multiple blank lines into max 2
+  cleaned = cleaned.replace(/\n{4,}/g, '\n\n\n');
   
   return cleaned.trim();
 };
@@ -65,7 +87,12 @@ const stripClosingFromContent = (text: string, resourceType?: string): string =>
 const isHeadingLine = (text: string): boolean => {
   const trimmed = text.trim();
   if (trimmed.length >= 100) return false;
-  return /^(I{1,4}V?\s*[–—-]|V?I{0,4}\s*[–—-]|[A-Z][A-Z\s–—-]{5,}$|DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT|RECURSO|EXCELENT|NOTIFICA)/i.test(trimmed);
+  if (trimmed.length < 4) return false;
+  // Section numbering patterns: "I – ...", "II – ...", "VIII – ..."
+  if (/^(I{1,4}V?|V?I{0,4})\s*[–—-]\s+\S/i.test(trimmed)) return true;
+  // All-caps short titles like "DOS PEDIDOS", "DA CONCLUSÃO"
+  if (/^(DO[S]?\s|DA[S]?\s|CONCLUS|PEDIDO|FATOS|FUNDAMENT)/i.test(trimmed) && trimmed === trimmed.toUpperCase()) return true;
+  return false;
 };
 
 const imageToBase64 = (src: string): Promise<string> => {
@@ -289,23 +316,25 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
           pdf.setTextColor(30, 30, 30);
           pdf.setFont('helvetica', 'normal');
 
-          const isList = /^[-–•]\s/.test(trimmedParagraph);
+          const isList = /^([-–•]\s|\d+[\.\)]\s|[a-z]\)\s)/i.test(trimmedParagraph);
           const indent = isList ? margin + 5 : margin;
           const lineWidth = isList ? contentWidth - 5 : contentWidth;
           
           const lines = pdf.splitTextToSize(trimmedParagraph, lineWidth);
           
-          for (const line of lines) {
+          for (let li = 0; li < lines.length; li++) {
             if (yPos > bottomLimit) { pdf.addPage(); yPos = margin; }
-            pdf.text(line, indent, yPos);
+            // First line of non-list paragraphs gets indent (simulates text-indent)
+            const x = (!isList && li === 0) ? indent + 10 : indent;
+            pdf.text(lines[li], x, yPos);
             yPos += 6;
           }
           yPos += 3;
         }
       }
 
-      // ── Closing / Signature Block ──
-      if (yPos > pageHeight - 90) { pdf.addPage(); yPos = margin; }
+      // ── Closing / Signature Block — needs ~100mm space ──
+      if (yPos > pageHeight - 110) { pdf.addPage(); yPos = margin; }
       
       yPos += 10;
       pdf.setFontSize(11);
