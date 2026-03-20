@@ -42,6 +42,7 @@ interface INPIResource {
   brand_name: string | null;
   ncl_class: string | null;
   holder: string | null;
+  examiner_or_opponent: string | null;
   status: string;
   draft_content: string | null;
   final_content: string | null;
