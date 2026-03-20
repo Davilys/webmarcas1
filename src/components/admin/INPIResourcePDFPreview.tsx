@@ -275,6 +275,25 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
         if (!trimmedParagraph) continue;
         if (/^(Av\.\s*Brigadeiro|Tel:\s*\(11\))/.test(trimmedParagraph)) continue;
 
+        // Handle metadata block: split into individual lines rendered compactly
+        const metadataLines = trimmedParagraph.split('\n').filter(l => l.trim());
+        const hasMetadata = metadataLines.some(l => isMetadataLine(l));
+        
+        if (hasMetadata && metadataLines.length > 1) {
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(60, 60, 60);
+          for (const mLine of metadataLines) {
+            const ml = mLine.trim();
+            if (!ml) continue;
+            if (yPos > bottomLimit) { pdf.addPage(); yPos = margin; }
+            pdf.text(ml, margin, yPos);
+            yPos += 5.5;
+          }
+          yPos += 4;
+          continue;
+        }
+
         const heading = isHeadingLine(trimmedParagraph);
         
         if (heading) {
