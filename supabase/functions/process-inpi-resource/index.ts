@@ -319,7 +319,12 @@ EXIGÊNCIAS MÍNIMAS:
 4. A linguagem deve ser jurídica profissional formal
 5. O documento NÃO pode terminar abruptamente
 
-FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
+FORMATO DE RESPOSTA OBRIGATÓRIO:
+
+Responda EXCLUSIVAMENTE com um objeto JSON válido (sem markdown, sem texto antes ou depois do JSON).
+O campo "resource_content" DEVE conter o TEXTO JURÍDICO REAL E COMPLETO da petição (mínimo 1.500 palavras REAIS).
+⚠️ NÃO coloque placeholder, resumo ou frase descritiva — coloque o DOCUMENTO JURÍDICO INTEIRO com todas as seções.
+
 {
   "extracted_data": {
     "process_number": "${procuradorData.processo_inpi || ''}",
@@ -329,7 +334,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
     "examiner_or_opponent": "Davilys Danques de Oliveira Cunha",
     "legal_basis": "Arts. 216 e 217 da Lei 9.279/96; Arts. 653 a 692 do CC"
   },
-  "resource_content": "CONTEÚDO COMPLETO DA PETIÇÃO COM TODAS AS SEÇÕES (texto extenso, profundo e formatado)"
+  "resource_content": "AQUI_INSERIR_TEXTO_REAL_COMPLETO_DA_PETICAO_TODAS_SECOES"
 }`;
 }
 
