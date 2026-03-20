@@ -394,7 +394,11 @@ IV – ANÁLISE TÉCNICA DO CONJUNTO MARCÁRIO
 
 ⚠️ RESPONDA APENAS com o texto jurídico completo das Seções I a IV. SEM JSON. SEM explicações. SEM markdown. Apenas o texto jurídico profissional.
 ⚠️ NÃO termine com "continuação na próxima parte" ou similar — termine a Seção IV normalmente.
-⚠️ O texto desta parte deve ter NO MÍNIMO 3.800 palavras.`;
+⚠️ O texto desta parte deve ter NO MÍNIMO 3.800 palavras.
+⚠️ NÃO inclua marcadores como "---INÍCIO DO RECURSO---" ou "---FIM DO RECURSO---".
+⚠️ NÃO repita o cabeçalho institucional (WEBMARCAS, endereço, telefone, CNPJ) — ele já é inserido automaticamente pelo sistema.
+⚠️ NÃO inclua títulos como "RECURSO ADMINISTRATIVO" ou "MARCA: ..." no início — o sistema já gera o badge do título.
+⚠️ Comece DIRETAMENTE pela "I – SÍNTESE DOS FATOS E DO HISTÓRICO PROCESSUAL" sem preâmbulo.`;
 }
 
 // ═══════════════════════════════════════════════════════════
