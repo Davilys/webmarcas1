@@ -877,12 +877,40 @@ ${fileCount > 1 ? 'Analise TODOS os documentos em conjunto para uma defesa mais 
 
     console.log('Calling AI with prompt for:', resourceType, ', agent:', agentName || 'default');
 
-    // Use OpenAI directly for INPI resource generation
-    const aiUrl = 'https://api.openai.com/v1/chat/completions';
+    // Use OpenAI Responses API (native PDF support) for INPI resource generation
     const aiKey = OPENAI_API_KEY;
-    const aiModel = 'gpt-4o';
+    const aiModel = 'gpt-4o-2024-11-20';
 
-    const aiResponse = await fetch(aiUrl, {
+    // Build input for OpenAI Responses API
+    const inputMessages: any[] = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    // Convert userContent to Responses API format
+    const userParts: any[] = [];
+    for (const part of userContent) {
+      if (part.type === 'text') {
+        userParts.push({ type: 'input_text', text: part.text });
+      } else if (part.type === 'file') {
+        userParts.push({
+          type: 'input_file',
+          filename: part.file.filename,
+          file_data: part.file.file_data,
+        });
+      } else if (part.type === 'image_url') {
+        userParts.push({
+          type: 'input_image',
+          image_url: part.image_url.url,
+          detail: 'high',
+        });
+      }
+    }
+
+    inputMessages.push({ role: 'user', content: userParts });
+
+    console.log('Calling OpenAI Responses API for:', resourceType, ', agent:', agentName || 'default', ', parts:', userParts.length);
+
+    const aiResponse = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${aiKey}`,
@@ -890,18 +918,15 @@ ${fileCount > 1 ? 'Analise TODOS os documentos em conjunto para uma defesa mais 
       },
       body: JSON.stringify({
         model: aiModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent }
-        ],
-        max_tokens: 16000,
+        input: inputMessages,
+        max_output_tokens: 16000,
         temperature: 0.25,
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
+      console.error('OpenAI Responses API error:', aiResponse.status, errorText);
       
       if (aiResponse.status === 429) {
         return new Response(
@@ -917,17 +942,32 @@ ${fileCount > 1 ? 'Analise TODOS os documentos em conjunto para uma defesa mais 
       }
       
       return new Response(
-        JSON.stringify({ error: 'Erro ao processar documento com IA' }),
+        JSON.stringify({ error: `Erro ao processar documento com IA: ${aiResponse.status}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content;
+    console.log('OpenAI response status:', aiData.status, ', output items:', aiData.output?.length);
+    
+    // Extract content from Responses API format
+    let content = '';
+    if (aiData.output && Array.isArray(aiData.output)) {
+      for (const outputItem of aiData.output) {
+        if (outputItem.type === 'message' && outputItem.content) {
+          for (const contentPart of outputItem.content) {
+            if (contentPart.type === 'output_text') {
+              content += contentPart.text;
+            }
+          }
+        }
+      }
+    }
 
     if (!content) {
+      console.error('Empty AI response. Full response:', JSON.stringify(aiData).substring(0, 1000));
       return new Response(
-        JSON.stringify({ error: 'Resposta vazia da IA' }),
+        JSON.stringify({ error: 'Resposta vazia da IA. Tente novamente.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
