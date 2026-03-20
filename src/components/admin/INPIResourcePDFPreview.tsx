@@ -106,7 +106,7 @@ export function INPIResourcePDFPreview({ resource, content, resourceType }: INPI
 
   const isNotif = isNotificacao(resourceType);
   const isProcuradorPetition = resourceType === 'troca_procurador' || resourceType === 'nomeacao_procurador';
-  const cleanedContent = cleanMarkdown(content);
+  const cleanedContent = stripOpeningMarkers(cleanMarkdown(content));
   const bodyContent = stripClosingFromContent(cleanedContent, resourceType);
 
   const approvalDate = resource.approved_at 
