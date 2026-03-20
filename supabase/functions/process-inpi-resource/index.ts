@@ -597,13 +597,16 @@ EXIGÊNCIAS MÍNIMAS DE QUALIDADE — VERIFICAÇÃO OBRIGATÓRIA:
 1. O recurso completo deve ter NO MÍNIMO 3.000 palavras — NÃO ENCURTE
 2. Cada seção deve ter a extensão mínima especificada — RESPEITE os mínimos
 3. A argumentação deve ser ESPECÍFICA ao caso concreto — NUNCA genérica
-4. Toda jurisprudência citada deve ser REAL e verificável
-5. Toda legislação deve ser citada com artigo, inciso e alínea exatos
-6. O texto deve ter qualidade equivalente aos melhores escritórios de PI do Brasil
-7. A linguagem deve ser jurídica profissional formal, sem simplificações
-8. CADA argumento deve ser desenvolvido em no mínimo 2-3 parágrafos densos
-9. O recurso NÃO pode terminar abruptamente — deve ter TODAS as 8 seções completas
-10. Cite ao menos 6 precedentes jurisprudenciais reais com ementas
+4. FUNDAMENTAÇÃO PRINCIPAL = LPI + Manual de Marcas + Resoluções INPI
+5. Jurisprudência = APENAS reforço complementar, NUNCA argumento central
+6. Toda jurisprudência citada DEVE ser da LISTA PRÉ-VALIDADA ou de existência COMPROVADA
+7. Se houver DÚVIDA sobre um precedente → NÃO CITAR → usar fundamentação legal
+8. Toda legislação deve ser citada com artigo, inciso e alínea exatos
+9. O texto deve ter qualidade equivalente aos melhores escritórios de PI do Brasil
+10. A linguagem deve ser jurídica profissional formal, sem simplificações
+11. CADA argumento deve ser desenvolvido em no mínimo 2-3 parágrafos densos
+12. O recurso NÃO pode terminar abruptamente — deve ter TODAS as 8 seções completas
+13. A credibilidade do recurso depende da VERACIDADE JURÍDICA — uma jurisprudência incorreta COMPROMETE toda a peça
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
 {
