@@ -24,6 +24,20 @@ interface INPIResourcePDFPreviewProps {
 
 const isNotificacao = (type?: string) => type === 'notificacao_extrajudicial';
 
+const RESOURCE_TYPE_LABELS: Record<string, string> = {
+  oposicao: 'MANIFESTAÇÃO À OPOSIÇÃO',
+  indeferimento: 'RECURSO CONTRA INDEFERIMENTO',
+  exigencia_merito: 'CUMPRIMENTO DE EXIGÊNCIA DE MÉRITO',
+  notificacao_extrajudicial: 'NOTIFICAÇÃO EXTRAJUDICIAL',
+  troca_procurador: 'PETIÇÃO DE TROCA DE PROCURADOR',
+  nomeacao_procurador: 'PETIÇÃO DE NOMEAÇÃO DE PROCURADOR',
+};
+
+const getResourceTypeLabel = (resourceType?: string): string => {
+  if (!resourceType) return '';
+  return RESOURCE_TYPE_LABELS[resourceType] || resourceType.toUpperCase().replace(/_/g, ' ');
+};
+
 const cleanMarkdown = (text: string): string => {
   return text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
