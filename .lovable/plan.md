@@ -1,56 +1,62 @@
 
+Objetivo: garantir que, ao criar recurso (independente do agente Mazzola/Guerra/Nascimento), o rascunho sempre comece com o bloco formal obrigatório antes da Seção I, no formato jurídico que você mostrou na imagem.
 
-## Problem Analysis
+Diagnóstico confirmado no código e dados atuais:
+- O rascunho exibido em “Rascunho do Recurso” vem direto de `resource_content` retornado pela função de backend `process-inpi-resource`.
+- Hoje o cabeçalho está só como instrução de prompt (IA), sem validação pós-geração.
+- Resultado real já salvo no banco mostra casos iniciando direto em `I – SÍNTESE...`, sem o preâmbulo obrigatório.
 
-Comparing the **correct PDF** (image 2) with the **current output** (image 1), the issues are:
+Plano de correção
 
-1. **"---INÍCIO DO RECURSO---"** marker is being rendered literally in both web preview and PDF — should be stripped
-2. **Duplicated headers**: The AI now outputs "RECURSO ADMINISTRATIVO – MANIFESTAÇÃO À OPOSIÇÃO" and "MARCA: ASTROELETIVA" inside the content body, but the PDF template already renders these in the header badge area — causing redundancy
-3. **Process metadata block** (Processo, Marca, Classe, Titular, Oponente, Procurador) renders as a single justified paragraph with wide word gaps instead of clean line-by-line listing
-4. **Text justification on short lines** causes ugly word spacing in the web preview — "EXCELENTÍSSIMO SENHOR..." line is stretched across full width
+1) Tornar o cabeçalho obrigatório por código (não só por prompt) na geração principal
+- Arquivo: `supabase/functions/process-inpi-resource/index.ts`
+- Criar helpers:
+  - `buildMandatoryOpeningBlock(...)` para montar exatamente o bloco inicial:
+    - `RECURSO ADMINISTRATIVO – {tipo}`
+    - `MARCA: {marca em caixa alta}`
+    - endereçamento formal
+    - linhas de metadados (Processo, Marca, Classe, Titular/Requerente, Oponente, Procurador)
+  - `extractBodyFromSectionI(...)` para localizar o início real do conteúdo técnico (`I – ...`) e remover qualquer abertura inconsistente.
+  - `enforceMandatoryOpening(...)` para sempre reconstruir o documento como:
+    `bloco obrigatório + linha em branco + corpo desde a Seção I`.
+- Aplicar essa normalização:
+  - no fluxo normal (concatenação Passo 1 + Passo 2),
+  - e também no retorno parcial (quando Passo 2 falhar e hoje retorna só Passo 1).
 
-## Root Cause
+2) Garantir robustez dos dados do cabeçalho
+- No mesmo arquivo, adicionar fallback quando extração vier incompleta:
+  - usar `extractedData` como fonte principal;
+  - complementar por regex no texto gerado (processo/marca/classe/titular/oponente), se necessário;
+  - manter placeholders seguros (`N/I`) quando algo não existir.
+- Padronizar formatação:
+  - número de processo sem ruído visual,
+  - marca em caixa alta na linha de título (`MARCA:`),
+  - marca com natureza na linha de metadado (`Marca: ... (nominativa)` quando disponível).
 
-The `process-inpi-resource` edge function was updated to instruct the AI to prefix content with structured markers (`---INÍCIO DO RECURSO---`, resource type heading, brand name heading). These markers were not previously generated, and the `INPIResourcePDFPreview` component doesn't strip them.
+3) Blindar também o fluxo “Ajustar com IA”
+- Arquivo: `supabase/functions/adjust-inpi-resource/index.ts`
+- Após receber `adjusted_content`, aplicar a mesma `enforceMandatoryOpening(...)` para impedir que ajustes removam ou alterem o cabeçalho obrigatório.
+- Isso evita regressão após revisões sucessivas.
 
-Additionally, the AI now outputs process metadata as a single block paragraph instead of separate lines, breaking the layout.
+4) Enviar contexto necessário no ajuste pelo frontend
+- Arquivo: `src/pages/admin/RecursosINPI.tsx`
+- Em `handleRequestAdjustment`, enviar também `resourceType` e `extractedData` no payload da chamada de ajuste, para o backend conseguir reconstruir o cabeçalho com dados corretos do caso.
 
-## Plan
+5) Corrigir também recursos já existentes sem exigir nova geração
+- Arquivo: `src/pages/admin/RecursosINPI.tsx`
+- Ao abrir rascunho para revisão/edição, detectar rascunhos que começam em `I – ...` sem cabeçalho.
+- Aplicar normalização local imediata (mesma regra), atualizar `draftContent` e persistir em `draft_content` para não perder a correção do item já criado.
 
-### 1. Update content cleaning in `INPIResourcePDFPreview.tsx`
+6) Validação (checklist de aceite)
+- Gerar 3 recursos de “Manifestação à Oposição” (um por agente) e confirmar que todos iniciam com o bloco obrigatório completo.
+- Executar “Ajustar com IA” em cada um e validar que o cabeçalho permanece intacto.
+- Validar um recurso antigo já salvo sem cabeçalho: ao abrir para revisão, deve ser autocorrigido.
+- Conferir que o restante da peça continua com 10–20 páginas e sem perda de conteúdo técnico.
 
-Modify `stripClosingFromContent` (or add a new `stripOpeningMarkers` function) to remove:
-- `---INÍCIO DO RECURSO---` line
-- `RECURSO ADMINISTRATIVO – [TYPE]` line (already shown in badge)
-- `MARCA: [NAME]` line (already shown in header)
-- Any `---FIM DO RECURSO---` markers
-
-### 2. Fix process metadata block rendering
-
-Update `renderContent()` to detect the process metadata block (lines starting with `Processo INPI`, `Marca:`, `Classe NCL`, `Titular/Requerente:`, `Oponente:`, `Procurador:`) and render them as individual non-justified lines instead of a single justified paragraph.
-
-### 3. Fix PDF generator metadata block
-
-Apply the same metadata block detection in `handleDownloadPDF()` so the jsPDF output also renders these fields as separate left-aligned lines without justification stretching.
-
-### 4. Fix web preview justify on short content
-
-Add CSS to prevent `text-align: justify` from stretching single-line or very short paragraphs — use `text-align-last: left` or detect short paragraphs and skip justification.
-
-### Technical Details
-
-**File modified**: `src/components/admin/INPIResourcePDFPreview.tsx`
-
-- In `stripClosingFromContent`: Add regex patterns to strip opening markers:
-  ```
-  /^-{2,}INÍCIO DO RECURSO-{2,}$/gm
-  /^RECURSO ADMINISTRATIVO\s*[–—-]\s*.+$/gm  (first occurrence only)
-  /^MARCA:\s*.+$/gm  (first occurrence only, since header already shows it)
-  ```
-
-- In `renderContent()`: Add detection for metadata block lines (Processo/Marca/Classe/Titular/Oponente/Procurador) → render as `<p>` with no indent, no justify, line-height compact
-
-- In `handleDownloadPDF()`: Same detection → use `pdf.text()` left-aligned with tighter line spacing for metadata lines
-
-- Add `text-align-last: left` to justified paragraphs to prevent last-line stretching
-
+Detalhes técnicos essenciais
+- Arquivos-alvo:
+  - `supabase/functions/process-inpi-resource/index.ts`
+  - `supabase/functions/adjust-inpi-resource/index.ts`
+  - `src/pages/admin/RecursosINPI.tsx`
+- Estratégia principal: padronização determinística pós-IA (server-side) + fallback para itens legados no frontend.
+- Resultado esperado: início sempre coerente com o padrão jurídico institucional, independentemente do agente escolhido.
