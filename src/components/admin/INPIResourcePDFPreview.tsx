@@ -37,7 +37,26 @@ const cleanMarkdown = (text: string): string => {
 };
 
 const stripClosingFromContent = (text: string, resourceType?: string): string => {
-  let cleaned = text.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
+  let cleaned = text;
+
+  // Strip document markers
+  cleaned = cleaned.replace(/^-{2,}[\s]*(INÍCIO|FIM)\s*(DO|DE)\s*(RECURSO|DOCUMENTO|NOTIFICAÇÃO|PETIÇÃO)[\s]*-{2,}$/gim, '');
+
+  // Strip duplicate header block (already shown in the badge/letterhead area)
+  cleaned = cleaned.replace(/^RECURSO\s+ADMINISTRATIVO\s*[–—-]\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^MARCA:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^NOTIFICAÇÃO\s+EXTRAJUDICIAL\s*$/gim, '');
+  cleaned = cleaned.replace(/^PETIÇÃO\s+DE\s+(TROCA|NOMEAÇÃO)\s+DE\s+PROCURADOR\s*$/gim, '');
+  cleaned = cleaned.replace(/^EXCELENT[ÍI]SSIMO[^]*?(?=\n\s*\n)/gim, '');
+  cleaned = cleaned.replace(/^Processo\s+INPI\s+n[ºo°]:\s*\d+.*$/gim, '');
+  cleaned = cleaned.replace(/^Marca:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^Classe\s+NCL\s*\(.+$/gim, '');
+  cleaned = cleaned.replace(/^Titular\/Requerente:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^Oponente(?:\/Citante)?:\s*.+$/gim, '');
+  cleaned = cleaned.replace(/^Procurador:\s*Davilys\s+Danques.*$/gim, '');
+
+  // Strip footer/address lines
+  cleaned = cleaned.replace(/^Av\.\s*Brigadeiro.*$/gm, '');
   cleaned = cleaned.replace(/^Tel:?\s*\(11\).*$/gm, '');
   cleaned = cleaned.replace(/^[═─━╌╍┄┅┈┉▬%P\s]{3,}$/gm, '');
   cleaned = cleaned.replace(/^[\u2500-\u257F\u2580-\u259F\u2550-\u256C]{2,}.*$/gm, '');
@@ -58,6 +77,9 @@ const stripClosingFromContent = (text: string, resourceType?: string): string =>
     cleaned = cleaned.replace(/\n\s*São Paulo,\s*\d{1,2}\s*de\s*\w+\s*de\s*\d{4}[\s\S]*$/i, '');
     cleaned = cleaned.replace(/\n\s*Davilys Danques[\s\S]*$/i, '');
   }
+
+  // Collapse multiple blank lines into max 2
+  cleaned = cleaned.replace(/\n{4,}/g, '\n\n\n');
   
   return cleaned.trim();
 };
