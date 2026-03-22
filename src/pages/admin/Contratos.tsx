@@ -274,27 +274,23 @@ export default function AdminContratos() {
     }
   };
 
-  // Wait for auth session before fetching — fixes intermittent "0 contracts" bug
+  // Wait for auth session before fetching
   useEffect(() => {
     let mounted = true;
 
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted) return;
-
-      if (session) {
+    // Always listen for auth state — covers both immediate session and delayed hydration
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && mounted) {
         fetchContracts();
-      } else {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
-          if (sess && mounted) {
-            fetchContracts();
-            subscription.unsubscribe();
-          }
-        });
       }
-    };
+    });
 
-    init();
+    // Also try immediately in case session is already available
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && mounted) {
+        fetchContracts();
+      }
+    });
 
     // Realtime subscription — auto-refresh when contracts change
     const realtimeSub = supabase
@@ -306,6 +302,7 @@ export default function AdminContratos() {
 
     return () => {
       mounted = false;
+      subscription.unsubscribe();
       realtimeSub.unsubscribe();
     };
   }, []);
