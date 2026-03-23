@@ -28,14 +28,24 @@ export default function AdminLogin() {
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
           toast.error('Email ou senha incorretos');
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error('Email ainda não confirmado. Verifique sua caixa de entrada.');
         } else {
-          toast.error(error.message);
+          toast.error('Erro ao fazer login. Tente novamente.');
         }
         return;
       }
 
-      // Check if user is admin
-      if (data.user) {
+      if (!data.user) {
+        toast.error('Erro ao fazer login');
+        return;
+      }
+
+      const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
+
+      // Master admin - skip permission checks entirely
+      if (data.user.email === MASTER_ADMIN_EMAIL) {
+        // Just verify admin role exists (fast single query)
         const { data: roleData } = await supabase
           .from('user_roles')
           .select('role')
@@ -43,55 +53,65 @@ export default function AdminLogin() {
           .eq('role', 'admin')
           .maybeSingle();
 
-        if (roleData) {
-          // Master admin goes to dashboard directly
-          const MASTER_ADMIN_EMAIL = 'davillys@gmail.com';
-          if (data.user.email === MASTER_ADMIN_EMAIL) {
-            toast.success('Login de administrador realizado!');
-            navigate('/admin/dashboard');
-          } else {
-            // Fetch permissions to find first allowed route
-            const { data: perms } = await supabase
-              .from('admin_permissions')
-              .select('permission_key, can_view')
-              .eq('user_id', data.user.id)
-              .eq('can_view', true);
-
-            const PATH_MAP: Record<string, string> = {
-              dashboard: '/admin/dashboard',
-              leads: '/admin/leads',
-              clients: '/admin/clientes',
-              contracts: '/admin/contratos',
-              contract_templates: '/admin/modelos-contrato',
-              documents: '/admin/documentos',
-              financial: '/admin/financeiro',
-              emails: '/admin/emails',
-              live_chat: '/admin/chat-ao-vivo',
-              notifications: '/admin/notificacoes',
-              inpi_magazine: '/admin/revista-inpi',
-              publications: '/admin/publicacao',
-              inpi_resources: '/admin/recursos-inpi',
-              awards: '/admin/premiacao',
-              settings: '/admin/configuracoes',
-            };
-
-            // Ordered keys matching menu order
-            const orderedKeys = ['dashboard','leads','clients','contracts','contract_templates','documents','financial','emails','live_chat','notifications','inpi_magazine','publications','inpi_resources','awards','settings'];
-            const permSet = new Set(perms?.map(p => p.permission_key) || []);
-            const firstAllowed = orderedKeys.find(k => permSet.has(k));
-            const targetRoute = firstAllowed ? PATH_MAP[firstAllowed] : '/admin/configuracoes';
-
-            toast.success('Login de administrador realizado!');
-            navigate(targetRoute);
-          }
-        } else {
-          // Not an admin - sign out and show error
+        if (!roleData) {
           await supabase.auth.signOut();
           toast.error('Acesso negado. Esta área é restrita a administradores.');
+          return;
         }
+
+        toast.success('Login de administrador realizado!');
+        navigate('/admin/dashboard');
+        return;
       }
+
+      // Non-master: check role and permissions in parallel
+      const [roleResult, permsResult] = await Promise.all([
+        supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', data.user.id)
+          .eq('role', 'admin')
+          .maybeSingle(),
+        supabase
+          .from('admin_permissions')
+          .select('permission_key')
+          .eq('user_id', data.user.id)
+          .eq('can_view', true),
+      ]);
+
+      if (!roleResult.data) {
+        await supabase.auth.signOut();
+        toast.error('Acesso negado. Esta área é restrita a administradores.');
+        return;
+      }
+
+      const PATH_MAP: Record<string, string> = {
+        dashboard: '/admin/dashboard',
+        leads: '/admin/leads',
+        clients: '/admin/clientes',
+        contracts: '/admin/contratos',
+        contract_templates: '/admin/modelos-contrato',
+        documents: '/admin/documentos',
+        financial: '/admin/financeiro',
+        emails: '/admin/emails',
+        live_chat: '/admin/chat-ao-vivo',
+        notifications: '/admin/notificacoes',
+        inpi_magazine: '/admin/revista-inpi',
+        publications: '/admin/publicacao',
+        inpi_resources: '/admin/recursos-inpi',
+        awards: '/admin/premiacao',
+        settings: '/admin/configuracoes',
+      };
+
+      const orderedKeys = Object.keys(PATH_MAP);
+      const permSet = new Set(permsResult.data?.map(p => p.permission_key) || []);
+      const firstAllowed = orderedKeys.find(k => permSet.has(k));
+      const targetRoute = firstAllowed ? PATH_MAP[firstAllowed] : '/admin/configuracoes';
+
+      toast.success('Login de administrador realizado!');
+      navigate(targetRoute);
     } catch (error) {
-      toast.error('Erro ao fazer login');
+      toast.error('Erro ao fazer login. Verifique sua conexão.');
     } finally {
       setIsLoading(false);
     }
